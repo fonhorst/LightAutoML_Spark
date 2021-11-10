@@ -12,6 +12,17 @@ from lightautoml.transformers.numeric import NumpyTransformable
 import numpy as np
 
 
+@pytest.fixture(scope="session")
+def spark() -> SparkSession:
+    spark = SparkSession.builder.config("master", "local[1]").getOrCreate()
+
+    print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
+
+    yield spark
+
+    spark.stop()
+
+
 def compare_transformers_results(spark: SparkSession,
                                  ds: PandasDataset,
                                  t_lama: LAMLTransformer,
@@ -54,7 +65,7 @@ def compare_transformers_results(spark: SparkSession,
 
     # compare independent of feature ordering
     assert list(sorted(lama_np_ds.features)) == list(sorted(spark_np_ds.features)), \
-        "List of features are not equal"
+        f"List of features are not equal:\nLAMA = {list(sorted(lama_np_ds.features))}\nSPRK = {list(sorted(spark_np_ds.features))}"
 
     # compare roles equality for the columns
     assert lama_np_ds.roles == spark_np_ds.roles, "Roles are not equal"
