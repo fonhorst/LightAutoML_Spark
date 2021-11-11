@@ -4,7 +4,7 @@ import numpy as np
 from pandas import Series
 from pyspark.sql import functions as F
 
-from lightautoml.dataset.roles import CategoryRole
+from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.transformers.categorical import categorical_check
 
 from lightautoml.spark.dataset import SparkDataset
@@ -78,3 +78,37 @@ class LabelEncoder(SparkTransformer):
         output.set_data(df, self.features, self._output_role)
 
         return output
+
+
+class FreqEncoder(LabelEncoder):
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "freq"
+
+    _fillna_val = 1
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._output_role = NumericRole(np.float32)
+
+    def fit(self, dataset: SparkDataset) -> "FreqEncoder":
+
+        super().fit(dataset)
+
+        cached_dataset = dataset.data.cache()
+
+        self.dicts = {}
+        for i in cached_dataset.columns:
+            vals = cached_dataset \
+                .groupBy(i).count() \
+                .filter(F.col("count") > 1) \
+                .orderBy(["count", i], ascending=[False, True]) \
+                .select([i, "count"]) \
+                .toPandas()
+
+            self.dicts[i] = vals.set_index(i)["count"]
+
+        cached_dataset.unpersist()
+
+        return self
