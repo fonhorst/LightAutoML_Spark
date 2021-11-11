@@ -115,7 +115,7 @@ class SparkDataset(LAMLDataset):
     def to_pandas(self) -> PandasDataset:
         # TODO: need to fix type here
         # TODO: probably size check would be a nice feature here
-        raise NotImplementedError("not implemented yet")
+        # raise NotImplementedError("not implemented yet")
         data = self.data.toPandas()
         return PandasDataset(data=data, roles=self.roles, task=self.task)
 

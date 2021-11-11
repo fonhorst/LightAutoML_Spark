@@ -4,7 +4,7 @@ import pytest
 from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
-from lightautoml.dataset.roles import NumericRole
+from lightautoml.dataset.roles import NumericRole, TextRole
 from lightautoml.spark.transformers.decomposition import PCATransformer as SparkPCATransformer
 from lightautoml.spark.transformers.numeric import NaNFlags as SparkNaNFlags
 from lightautoml.transformers.decomposition import PCATransformer
@@ -65,5 +65,42 @@ def test_pca(spark: SparkSession):
     # doing minor content check
     assert all(spark_data.flatten()), f"Data should not contain None-s: {spark_data.flatten()}"
 
+
+def test_tokenizer(spark: SparkSession):
+    source_data = pd.DataFrame(data={
+        "a": ["This function is intended to compare", "two DataFrames and", "output any differences"],
+        "b": ["Is is mostly intended ", "for use in unit tests", "Additional parameters allow "],
+        "c": ["varying the strictness", "of the equality ", "checks performed"],
+        "d": ["This example shows comparing", "two DataFrames that are equal", "but with columns of differing dtypes"]
+    })
+
+    ds = PandasDataset(source_data, roles={name: TextRole(np.str) for name in source_data.columns})
+
+    from lightautoml.transformers.text import TokenizerTransformer
+    from lightautoml.transformers.text import SimpleEnTokenizer
+
+    lama_tokenizer_transformer = TokenizerTransformer(SimpleEnTokenizer(is_stemmer=False,to_string=False))
+    lama_tokenizer_transformer.fit(ds)
+    lama_result = lama_tokenizer_transformer.transform(ds)
+    print()
+    print("lama_result")
+    print(lama_result)
+
+    from lightautoml.spark.transformers.text import Tokenizer as SparkTokenizer
+    from lightautoml.spark.utils import from_pandas_to_spark
+
+    spark_tokenizer_transformer = SparkTokenizer()
+    spark_dataset = from_pandas_to_spark(ds, spark)
+    spark_tokenizer_transformer.fit(spark_dataset)
+    spark_result = spark_tokenizer_transformer.transform(spark_dataset)
+    spark_result = spark_result.to_pandas().data
+    print("spark_result")
+    print(spark_result)
+
+    from pandas._testing import assert_frame_equal
+    assert_frame_equal(lama_result.data, spark_result)
+
+
+    # compare_by_content(spark, ds, lama_tokenizer_transformer, spark_tokenizer_transformer)
 
 
