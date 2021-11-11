@@ -45,6 +45,8 @@ def compare_transformers_results(spark: SparkSession,
     t_lama.fit(ds)
     transformed_ds = t_lama.transform(ds)
 
+    # print(f"Transformed LAMA: {transformed_ds.data}")
+
     assert isinstance(transformed_ds, get_args(NumpyTransformable)), \
         f"The returned dataset doesn't belong numpy covertable types {NumpyTransformable} and " \
         f"thus cannot be checked againt the resulting spark dataset." \
@@ -52,10 +54,13 @@ def compare_transformers_results(spark: SparkSession,
 
     lama_np_ds = cast(NumpyTransformable, transformed_ds).to_numpy()
 
+    print(f"Transformed LAMA: {lama_np_ds}")
+
     t_spark.fit(sds)
     transformed_sds = t_spark.transform(sds)
 
     spark_np_ds = transformed_sds.to_numpy()
+    print(f"Transformed SPRK: {spark_np_ds}")
 
     # One can compare lists, sets and dicts in Python using '==' operator
     # For dicts, for instance, pythons checks presence of the same keya in both dicts
@@ -80,7 +85,16 @@ def compare_transformers_results(spark: SparkSession,
         trans_data_result: np.ndarray = spark_np_ds.data
         # TODO: fix type checking here
         # compare content equality of numpy arrays
-        assert (trans_data[:, features] == trans_data_result[:, features]).all(), \
+
+        # import pickle
+        # with open("lama.pickle", "wb") as lf:
+        #     pickle.dump(trans_data, lf)
+        #
+        # with open("spark.pickle", "wb") as sf:
+        #     pickle.dump(trans_data_result, sf)
+
+        # assert (trans_data[:, features] == trans_data_result[:, features]).all(), \
+        assert np.array_equal(trans_data[:, features], trans_data_result[:, features], equal_nan=True), \
             f"Results of the LAMA's transformer and the Spark based transformer are not equal: " \
             f"\n\nLAMA: \n{trans_data}" \
             f"\n\nSpark: \n{trans_data_result}"
