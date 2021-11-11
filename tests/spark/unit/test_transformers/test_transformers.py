@@ -82,6 +82,7 @@ def test_tokenizer(spark: SparkSession):
     lama_tokenizer_transformer = TokenizerTransformer(SimpleEnTokenizer(is_stemmer=False,to_string=False))
     lama_tokenizer_transformer.fit(ds)
     lama_result = lama_tokenizer_transformer.transform(ds)
+    lama_result = lama_result.data
     print()
     print("lama_result")
     print(lama_result)
@@ -98,7 +99,7 @@ def test_tokenizer(spark: SparkSession):
     print(spark_result)
 
     from pandas._testing import assert_frame_equal
-    assert_frame_equal(lama_result.data, spark_result)
+    assert_frame_equal(lama_result, spark_result)
 
 
     # compare_by_content(spark, ds, lama_tokenizer_transformer, spark_tokenizer_transformer)
