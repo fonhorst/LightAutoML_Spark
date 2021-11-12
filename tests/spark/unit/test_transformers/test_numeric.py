@@ -6,8 +6,9 @@ from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import NumericRole
-from lightautoml.spark.transformers.numeric import NaNFlags as SparkNaNFlags, FillInf as SparkFillInf
-from lightautoml.transformers.numeric import NaNFlags, FillInf
+from lightautoml.spark.transformers.numeric import NaNFlags as SparkNaNFlags, FillInf as SparkFillInf, \
+    FillnaMedian as SparkFillnaMedian
+from lightautoml.transformers.numeric import NaNFlags, FillInf, FillnaMedian
 
 from . import compare_by_content, compare_by_metadata, spark
 
@@ -71,3 +72,10 @@ def test_fill_inf(spark: SparkSession, dataset: DatasetForTest):
 
     compare_by_content(spark, ds, FillInf(), SparkFillInf())
 
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_fillna_median(spark: SparkSession, dataset: DatasetForTest):
+
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles)
+
+    compare_by_content(spark, ds, FillnaMedian(), SparkFillnaMedian())
