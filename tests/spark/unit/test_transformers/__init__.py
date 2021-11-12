@@ -54,13 +54,13 @@ def compare_transformers_results(spark: SparkSession,
 
     lama_np_ds = cast(NumpyTransformable, transformed_ds).to_numpy()
 
-    print(f"Transformed LAMA: {lama_np_ds}")
+    print(f"\nTransformed LAMA: {lama_np_ds}")
 
     t_spark.fit(sds)
     transformed_sds = t_spark.transform(sds)
 
     spark_np_ds = transformed_sds.to_numpy()
-    print(f"Transformed SPRK: {spark_np_ds}")
+    print(f"\nTransformed SPRK: {spark_np_ds}")
 
     # One can compare lists, sets and dicts in Python using '==' operator
     # For dicts, for instance, pythons checks presence of the same keya in both dicts

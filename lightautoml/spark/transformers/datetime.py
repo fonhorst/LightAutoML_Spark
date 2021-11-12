@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List
 from collections import defaultdict
 from itertools import chain, combinations
 import numpy as np
@@ -12,14 +12,7 @@ from lightautoml.spark.dataset import SparkDataset
 from lightautoml.spark.transformers.base import SparkTransformer
 
 
-class TimeToNum(SparkTransformer):
-    """
-    Basic conversion strategy, used in selection one-to-one transformers.
-    Datetime converted to difference
-    with basic_date (``basic_date == '2020-01-01'``).
-    """
-
-    basic_time = "2020-01-01"
+class SparkDatetimeTransformer(SparkTransformer):
 
     basic_interval = "D"
 
@@ -36,9 +29,14 @@ class TimeToNum(SparkTransformer):
         "Y": 60*60*24*365
     }
 
-    _fname_prefix = "dtdiff"
     _fit_checks = (datetime_check,)
     _transform_checks = ()
+
+
+class TimeToNum(SparkDatetimeTransformer):
+
+    basic_time = "2020-01-01"
+    _fname_prefix = "dtdiff"
 
     def transform(self, dataset: SparkDataset) -> SparkDataset:
 
@@ -56,6 +54,60 @@ class TimeToNum(SparkTransformer):
 
         output = dataset.empty()
         output.set_data(df, self.features, NumericRole(np.float32))
+
+        return output
+
+
+class BaseDiff(SparkDatetimeTransformer):
+
+    _fname_prefix = "basediff"
+
+    @property
+    def features(self) -> List[str]:
+        return self._features
+
+    def __init__(self,
+                 base_names: Sequence[str],
+                 diff_names: Sequence[str],
+                 basic_interval: Optional[str] = "D"):
+
+        self.base_names = base_names
+        self.diff_names = diff_names
+        self.basic_interval = basic_interval
+
+    def fit(self, dataset: SparkDataset) -> "SparkTransformer":
+
+        # FIXME SPARK-LAMA: Возможно это можно будет убрать, т.к. у датасета будут колонки
+        self._features = []
+        for col in self.base_names:
+            self._features.extend([f"{self._fname_prefix}_{col}__{x}" for x in self.diff_names])
+
+        for check_func in self._fit_checks:
+            check_func(dataset)
+
+        return self
+
+    def transform(self, dataset: SparkDataset) -> SparkDataset:
+
+        super().transform(dataset)
+
+        df = dataset.data
+
+        for dif in self.diff_names:
+            for base in self.base_names:
+                df = df.withColumn(
+                    f"{self._fname_prefix}_{base}__{dif}",
+                    (
+                        F.to_timestamp(F.col(dif)).cast("long") - F.to_timestamp(F.col(base)).cast("long")
+                    ) / self._interval_mapping[self.basic_interval]
+                )
+
+        df = df.select(
+            [f"{self._fname_prefix}_{base}__{dif}" for base in self.base_names for dif in self.diff_names]
+        )
+
+        output = dataset.empty()
+        output.set_data(df, self.features, NumericRole(dtype=np.float32))
 
         return output
 
