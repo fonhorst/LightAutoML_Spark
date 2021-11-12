@@ -92,7 +92,7 @@ class LabelEncoder(SparkTransformer):
 
         super().transform(dataset)
 
-        df = dataset.data.cache()
+        df = dataset.data
 
         for i in df.columns:
 
