@@ -1,7 +1,7 @@
 """Image feature extractors based on color histograms and CNN embeddings."""
 
 from copy import copy
-from typing import Any, Generic, TypeVar
+from typing import Any
 from typing import Callable
 from typing import List
 from typing import Optional
@@ -221,15 +221,12 @@ class EffNetImageEmbedder(nn.Module):
         return out[:, :, 0, 0]
 
 
-T = TypeVar('T', str, np.ndarray)
-
-
-class ImageDataset(Generic[T]):
+class ImageDataset:
     """Image Dataset Class."""
 
     def __init__(
         self,
-        data: Sequence[T],
+        data: Sequence[str],
         is_advprop: bool = True,
         loader: Callable = pil_loader,
     ):
@@ -261,7 +258,7 @@ class ImageDataset(Generic[T]):
         return len(self.X)
 
 
-class DeepImageEmbedder(TransformerMixin, Generic[T]):
+class DeepImageEmbedder(TransformerMixin):
     """Transformer for image embeddings."""
 
     def __init__(
@@ -274,7 +271,6 @@ class DeepImageEmbedder(TransformerMixin, Generic[T]):
         weights_path: Optional[str] = None,
         batch_size: int = 128,
         verbose: bool = True,
-        image_loader: Callable = pil_loader
     ):
         """Pytorch Dataset for :class:`~lightautoml.image.EffNetImageEmbedder`.
 
@@ -298,7 +294,6 @@ class DeepImageEmbedder(TransformerMixin, Generic[T]):
         self.is_advprop = is_advprop
         self.batch_size = batch_size
         self.verbose = verbose
-        self.image_loader = image_loader
         seed_everything(random_state)
 
         self.model = EffNetImageEmbedder(model_name, weights_path, self.is_advprop, self.device)
@@ -307,7 +302,7 @@ class DeepImageEmbedder(TransformerMixin, Generic[T]):
         return self
 
     @torch.no_grad()
-    def transform(self, data: Sequence[T]) -> np.ndarray:
+    def transform(self, data: Sequence[str]) -> np.ndarray:
         """Calculate image embeddings from pathes.
 
         Args:
@@ -318,7 +313,7 @@ class DeepImageEmbedder(TransformerMixin, Generic[T]):
 
         """
 
-        data = ImageDataset(data, self.is_advprop, loader=self.image_loader)
+        data = ImageDataset(data, self.is_advprop)
         loader = DataLoader(data, batch_size=self.batch_size, shuffle=False, num_workers=self.n_jobs)
 
         result = []
