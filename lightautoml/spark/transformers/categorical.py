@@ -1,9 +1,10 @@
-from typing import Optional
+from typing import Optional, Sequence
 from collections import defaultdict
-from itertools import chain
+from itertools import chain, combinations
 import numpy as np
 from pandas import Series
-from pyspark.sql import functions as F, types as SparkTypes
+from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame
+from sklearn.utils.murmurhash import murmurhash3_32
 
 from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.transformers.categorical import categorical_check
@@ -11,7 +12,10 @@ from lightautoml.transformers.categorical import categorical_check
 from lightautoml.spark.dataset import SparkDataset
 from lightautoml.spark.transformers.base import SparkTransformer
 
-import copy
+
+# FIXME SPARK-LAMA: np.nan in str representation is 'nan' while Spark's NaN is 'NaN'. It leads to different hashes.
+# FIXME SPARK-LAMA: If udf is defined inside the class, it not works properly.
+murmurhash3_32_udf = F.udf(lambda value: murmurhash3_32(value.replace("NaN", "nan"), seed=42), SparkTypes.IntegerType())
 
 
 class LabelEncoder(SparkTransformer):
@@ -150,7 +154,7 @@ class FreqEncoder(LabelEncoder):
 
     def fit(self, dataset: SparkDataset) -> "FreqEncoder":
 
-        super().fit(dataset)
+        SparkTransformer.fit(self, dataset)
 
         cached_dataset = dataset.data.cache()
 
@@ -166,8 +170,6 @@ class FreqEncoder(LabelEncoder):
             self.dicts[i] = vals.set_index(i)["count"]
 
         cached_dataset.unpersist()
-
-        print(f"FreqFit: {self.dicts}")
 
         return self
 
@@ -194,11 +196,10 @@ class OrdinalEncoder(LabelEncoder):
         super().__init__(*args, **kwargs)
         self._output_role = NumericRole(np.float32)
 
-    def fit(self, dataset: SparkDataset):
+    def fit(self, dataset: SparkDataset) -> "OrdinalEncoder":
 
-        super().fit(dataset)
+        SparkTransformer.fit(self, dataset)
 
-        # convert to accepted dtype and get attributes
         roles = dataset.roles
 
         cached_dataset = dataset.data.cache()
@@ -226,3 +227,70 @@ class OrdinalEncoder(LabelEncoder):
         print(f"OrdinalFit SPRK: {self.dicts}")
 
         return self
+
+
+class CatIntersectstions(LabelEncoder):
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "inter"
+
+    def __init__(self,
+                 intersections: Optional[Sequence[Sequence[str]]] = None,
+                 max_depth: int = 2):
+
+        super().__init__()
+        self.intersections = intersections
+        self.max_depth = max_depth
+
+    @staticmethod
+    def _make_category(df: SparkDataFrame, cols: Sequence[str]) -> SparkDataFrame:
+
+        return df.withColumn(
+            f"({cols[0]}__{cols[1]})",
+            murmurhash3_32_udf(
+                F.concat(F.col(cols[0]), F.lit("_"), F.col(cols[1]))
+            )
+        )
+
+    def _build_df(self, dataset: SparkDataset) -> SparkDataset:
+
+        cached_dataset = dataset.data.cache()
+
+        roles = {}
+
+        for comb in self.intersections:
+            cached_dataset = self._make_category(cached_dataset, comb)
+            roles[f"({comb[0]}__{comb[1]})"] = CategoryRole(
+                object,
+                unknown=max((dataset.roles[x].unknown for x in comb)),
+                label_encoded=True,
+            )
+
+        cached_dataset = cached_dataset.select(
+            [f"({comb[0]}__{comb[1]})" for comb in self.intersections]
+        )
+
+        output = dataset.empty()
+        output.set_data(cached_dataset, cached_dataset.columns, roles)
+
+        cached_dataset.unpersist()
+
+        return output
+
+    def fit(self, dataset: SparkDataset):
+
+        SparkTransformer.fit(self, dataset)
+
+        if self.intersections is None:
+            self.intersections = []
+            for i in range(2, min(self.max_depth, len(dataset.features)) + 1):
+                self.intersections.extend(list(combinations(dataset.features, i)))
+
+        inter_dataset = self._build_df(dataset)
+        return super().fit(inter_dataset)
+
+    def transform(self, dataset: SparkDataset) -> SparkDataset:
+
+        inter_dataset = self._build_df(dataset)
+        return super().transform(inter_dataset)

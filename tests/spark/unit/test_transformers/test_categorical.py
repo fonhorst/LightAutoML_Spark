@@ -8,9 +8,9 @@ from pyspark.sql import SparkSession
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
 
-from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder
+from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
-    FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder
+    FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, CatIntersectstions as SparkCatIntersectstions
 
 from . import compare_by_content, compare_by_metadata, spark
 
@@ -69,3 +69,11 @@ def test_ordinal_encoder(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles)
 
     compare_by_content(spark, ds, OrdinalEncoder(), SparkOrdinalEncoder())
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_cat_intersectstions(spark: SparkSession, dataset: DatasetForTest):
+
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles)
+
+    compare_by_content(spark, ds, CatIntersectstions(), SparkCatIntersectstions())
