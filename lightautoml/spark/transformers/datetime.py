@@ -1,15 +1,47 @@
 from typing import Optional, Sequence, List
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from itertools import chain, combinations
+from datetime import datetime
+import holidays
 import numpy as np
+import pandas as pd
 from pandas import Series
 from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame
 
-from lightautoml.dataset.roles import CategoryRole, NumericRole
+from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.transformers.datetime import datetime_check, date_attrs
 
 from lightautoml.spark.dataset import SparkDataset
 from lightautoml.spark.transformers.base import SparkTransformer
+
+
+def is_holiday(timestamp: int,
+               country: str,
+               state: Optional[str] = None,
+               prov: Optional[str] = None) -> int:
+
+    date = datetime.fromtimestamp(timestamp)
+    return 1 if date in holidays.CountryHoliday(
+        years=date.year,
+        country=country,
+        prov=prov,
+        state=state
+    ) else 0
+
+
+def get_timestamp_attr(timestamp: int, attr: str) -> int:
+
+    date = pd.to_datetime(datetime.fromtimestamp(timestamp))
+    at = getattr(date, attr)
+    try:
+        return at()
+    except TypeError:
+        return at
+
+
+
+is_holiday_udf = F.udf(lambda *args, **kwargs: is_holiday(*args, **kwargs), SparkTypes.IntegerType())
+get_timestamp_attr_udf = F.udf(lambda *args, **kwargs: get_timestamp_attr(*args, **kwargs), SparkTypes.IntegerType())
 
 
 class SparkDatetimeTransformer(SparkTransformer):
@@ -108,6 +140,82 @@ class BaseDiff(SparkDatetimeTransformer):
 
         output = dataset.empty()
         output.set_data(df, self.features, NumericRole(dtype=np.float32))
+
+        return output
+
+
+class DateSeasons(SparkDatetimeTransformer):
+
+    _fname_prefix = "season"
+
+    @property
+    def features(self) -> List[str]:
+        return self._features
+
+    def __init__(self, output_role: Optional[ColumnRole] = None):
+
+        self.output_role = output_role
+        if output_role is None:
+            self.output_role = CategoryRole(np.int32)
+
+    def fit(self, dataset: SparkDataset) -> "SparkTransformer":
+
+        for check_func in self._fit_checks:
+            check_func(dataset)
+
+        feats = dataset.features
+        roles = dataset.roles
+        self._features = []
+        self.transformations = OrderedDict()
+
+        for col in feats:
+            seas = roles[col].seasonality
+            self.transformations[col] = seas
+            for s in seas:
+                self._features.append(f"{self._fname_prefix}_{s}__{col}")
+            if roles[col].country is not None:
+                self._features.append(f"{self._fname_prefix}_hol__{col}")
+
+        return self
+
+    def transform(self, dataset: SparkDataset) -> SparkDataset:
+
+        super().transform(dataset)
+
+        df = dataset.data
+        roles = dataset.roles
+
+        for col in dataset.features:
+
+            df = df.withColumn(col, F.to_timestamp(F.col(col)).cast("long"))
+
+            for seas in self.transformations[col]:
+                df = df \
+                    .withColumn(
+                        f"{self._fname_prefix}_{seas}__{col}",
+                        F.when(F.isnan(F.col(col)), F.col(col))
+                        .otherwise(
+                            get_timestamp_attr_udf(F.col(col), F.lit(date_attrs[seas]))
+                        )
+                    )
+
+            if roles[col].country is not None:
+                df = df.withColumn(
+                    f"{self._fname_prefix}_hol__{col}",
+                    is_holiday_udf(
+                        F.col(col),
+                        F.lit(roles[col].country),
+                        F.lit(roles[col].state),
+                        F.lit(roles[col].prov)
+                    )
+                )
+
+        df = df.select(
+            [col for col in self.features]
+        )
+
+        output = dataset.empty()
+        output.set_data(df, self.features, self.output_role)
 
         return output
 
