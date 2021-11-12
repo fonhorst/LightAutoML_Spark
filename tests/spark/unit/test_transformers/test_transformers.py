@@ -105,3 +105,42 @@ def test_tokenizer(spark: SparkSession):
     # compare_by_content(spark, ds, lama_tokenizer_transformer, spark_tokenizer_transformer)
 
 
+def test_concat_text_transformer(spark: SparkSession):
+    source_data = pd.DataFrame(data={
+        "a": ["This function is intended to compare", "two DataFrames and", "output any differences"],
+        "b": ["Is is mostly intended ", "for use in unit tests", "Additional parameters allow "],
+        "c": ["varying the strictness", "of the equality ", "checks performed"],
+        "d": ["This example shows comparing", "two DataFrames that are equal", "but with columns of differing dtypes"]
+    })
+
+    ds = PandasDataset(source_data, roles={name: TextRole(np.str) for name in source_data.columns})
+
+    from lightautoml.transformers.text import ConcatTextTransformer
+
+    lama_transformer = ConcatTextTransformer()
+    lama_transformer.fit(ds)
+    lama_result = lama_transformer.transform(ds)
+    lama_result = lama_result.data
+    print()
+    print("lama_result:")
+    print(lama_result)
+
+    from lightautoml.spark.transformers.text import ConcatTextTransformer as SparkConcatTextTransformer
+    from lightautoml.spark.utils import from_pandas_to_spark
+
+    spark_tokenizer_transformer = SparkConcatTextTransformer()
+    spark_dataset = from_pandas_to_spark(ds, spark)
+    spark_tokenizer_transformer.fit(spark_dataset)
+    spark_result = spark_tokenizer_transformer.transform(spark_dataset)
+    spark_result = spark_result.to_pandas().data
+    print()
+    print("spark_result:")
+    print(spark_result)
+
+    from pandas._testing import assert_frame_equal
+    assert_frame_equal(lama_result, spark_result)
+
+
+    # compare_by_content(spark, ds, lama_tokenizer_transformer, spark_tokenizer_transformer)
+
+

@@ -3,6 +3,7 @@ from typing import Optional
 import numpy as np
 from pyspark.ml.param import Param
 from pyspark.sql import functions as F
+from pyspark.sql.functions import collect_list, concat, concat_ws
 from pyspark.sql.types import FloatType
 from pyspark.ml.feature import Tokenizer as PysparkTokenizer
 from pyspark.ml.feature import RegexTokenizer as PysparkRegexTokenizer
@@ -43,5 +44,33 @@ class Tokenizer(SparkTransformer):
 
         output = dataset.empty()
         output.set_data(spark_data_frame, self.features, TextRole(np.str))
+
+        return output
+
+
+class ConcatTextTransformer(SparkTransformer):
+    _fit_checks = (text_check,)
+    _transform_checks = ()
+    _fname_prefix = "concated"
+
+    def __init__(self, special_token: str = " [SEP] "):
+        """
+
+        Args:
+            special_token: Add special token between columns.
+
+        """
+        self.special_token = special_token
+
+    def transform(self, dataset: SparkDataset) -> SparkDataset:
+        spark_data_frame = dataset.data
+        spark_column_names = spark_data_frame.schema.names
+
+        colum_name = self._fname_prefix + "__" + "__".join(spark_column_names)
+        concatExpr = concat_ws(self.special_token, *spark_column_names).alias(colum_name)
+        concated = spark_data_frame.select(concatExpr)
+
+        output = dataset.empty()
+        output.set_data(concated, self.features, TextRole(np.str))
 
         return output
