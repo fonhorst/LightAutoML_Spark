@@ -92,15 +92,15 @@ class LabelEncoder(SparkTransformer):
 
         super().transform(dataset)
 
-        cached_dataset = dataset.data.cache()
+        df = dataset.data.cache()
 
-        for i in cached_dataset.columns:
+        for i in df.columns:
 
             # FIXME SPARK-LAMA: Dirty hot-fix
 
             role = dataset.roles[i]
 
-            cached_dataset = cached_dataset.withColumn(i, F.col(i).cast(self._ad_hoc_types_mapper[role.dtype.__name__]))
+            df = df.withColumn(i, F.col(i).cast(self._ad_hoc_types_mapper[role.dtype.__name__]))
 
             if i in self.dicts:
 
@@ -109,33 +109,31 @@ class LabelEncoder(SparkTransformer):
                     labels = F.create_map([F.lit(x) for x in chain(*self.dicts[i].to_dict().items())])
 
                     if np.issubdtype(role.dtype, np.number):
-                        cached_dataset = cached_dataset \
-                                            .withColumn(i, F.when(F.col(i).isNull(), np.nan)
-                                                            .otherwise(F.col(i))
-                                                        ) \
-                                            .withColumn(i, labels[F.col(i)])
+                        df = df \
+                            .withColumn(i, F.when(F.col(i).isNull(), np.nan)
+                                            .otherwise(F.col(i))
+                                        ) \
+                            .withColumn(i, labels[F.col(i)])
                     else:
                         if None in self.dicts[i].index:
-                            cached_dataset = cached_dataset \
-                                                .withColumn(i, F.when(F.col(i).isNull(), self.dicts[i][None])
-                                                                .otherwise(labels[F.col(i)])
-                                                            )
+                            df = df \
+                                .withColumn(i, F.when(F.col(i).isNull(), self.dicts[i][None])
+                                                .otherwise(labels[F.col(i)])
+                                            )
                         else:
-                            cached_dataset = cached_dataset \
+                            df = df \
                                 .withColumn(i, labels[F.col(i)])
                 else:
-                    cached_dataset = cached_dataset \
+                    df = df \
                         .withColumn(i, F.lit(self._fillna_val))
 
-            cached_dataset = cached_dataset.fillna(self._fillna_val, subset=[i]) \
+            df = df.fillna(self._fillna_val, subset=[i]) \
                 .withColumn(i, F.col(i).cast(self._ad_hoc_types_mapper[self._output_role.dtype.__name__])) \
                 .withColumnRenamed(i, f"{self._fname_prefix}__{i}")
                 # FIXME SPARK-LAMA: Probably we have to write a converter numpy/python/pandas types => spark types?
 
         output: SparkDataset = dataset.empty()
-        output.set_data(cached_dataset, self.features, self._output_role)
-
-        cached_dataset.unpersist()
+        output.set_data(df, self.features, self._output_role)
 
         return output
 
@@ -255,26 +253,24 @@ class CatIntersectstions(LabelEncoder):
 
     def _build_df(self, dataset: SparkDataset) -> SparkDataset:
 
-        cached_dataset = dataset.data.cache()
+        df = dataset.data
 
         roles = {}
 
         for comb in self.intersections:
-            cached_dataset = self._make_category(cached_dataset, comb)
+            df = self._make_category(df, comb)
             roles[f"({comb[0]}__{comb[1]})"] = CategoryRole(
                 object,
                 unknown=max((dataset.roles[x].unknown for x in comb)),
                 label_encoded=True,
             )
 
-        cached_dataset = cached_dataset.select(
+        df = df.select(
             [f"({comb[0]}__{comb[1]})" for comb in self.intersections]
         )
 
         output = dataset.empty()
-        output.set_data(cached_dataset, cached_dataset.columns, roles)
-
-        cached_dataset.unpersist()
+        output.set_data(df, df.columns, roles)
 
         return output
 

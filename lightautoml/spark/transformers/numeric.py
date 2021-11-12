@@ -60,3 +60,31 @@ class NaNFlags(SparkTransformer):
         output.set_data(new_sdf, self.features, NumericRole(np.float32))
 
         return output
+
+
+class FillInf(SparkTransformer):
+
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    _fname_prefix = "fillinf"
+
+    def transform(self, dataset: SparkDataset) -> SparkDataset:
+
+        super().transform(dataset)
+
+        df = dataset.data
+
+        for i in df.columns:
+            df = df \
+                .withColumn(i,
+                            F.when(
+                                F.col(i).isin([F.lit("+Infinity").cast("double"), F.lit("-Infinity").cast("double")]),
+                                np.nan)
+                            .otherwise(F.col(i))
+                            ) \
+                .withColumnRenamed(i, f"{self._fname_prefix}__{i}")
+
+        output = dataset.empty()
+        output.set_data(df, self.features, NumericRole(np.float32))
+
+        return output
