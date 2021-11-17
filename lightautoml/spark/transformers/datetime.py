@@ -39,8 +39,13 @@ def get_timestamp_attr(timestamp: int, attr: str) -> int:
         return at
 
 
-
+# TODO SPARK-LAMA: Replace with pandas_udf.
+# They should be more efficient and arrow optimization is possible for them.
+# https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749551873
 is_holiday_udf = F.udf(lambda *args, **kwargs: is_holiday(*args, **kwargs), SparkTypes.IntegerType())
+
+# TODO SPARK-LAMA: It should to fail.
+# https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749610253
 get_timestamp_attr_udf = F.udf(lambda *args, **kwargs: get_timestamp_attr(*args, **kwargs), SparkTypes.IntegerType())
 
 
@@ -70,16 +75,23 @@ class TimeToNum(SparkDatetimeTransformer):
     basic_time = "2020-01-01"
     _fname_prefix = "dtdiff"
 
-    def transform(self, dataset: SparkDataset) -> SparkDataset:
-
-        super().transform(dataset)
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         df = dataset.data
 
+        # TODO SPARK-LAMA: It can be done easier without witColumn and withColumnRenamed.
+        # Use .alias instead of the latter one.
+        # https://github.com/fonhorst/LightAutoML/pull/57/files#r749549078
         for i in df.columns:
             df = df.withColumn(
                 i,
                 (
+                    # TODO SPARK-LAMA: Spark gives wrong timestamp for parsed string even if we specify Timezone
+
+                    # TODO SPARK-LAMA: Actually, you can just subtract a python var without 'F.to_timestamp(F.lit(self.basic_time)).cast("long")'
+                    # basic_time_in_ts = datetime.to_unixtimestamp()
+                    # (F.to_timestamp(i).cast("long") - basic_time_in_ts) / ...
+                    # https://github.com/fonhorst/LightAutoML/pull/57/files#r749548681
                     F.to_timestamp(F.col(i)).cast("long") - F.to_timestamp(F.lit(self.basic_time)).cast("long")
                 ) / self._interval_mapping[self.basic_interval]
             ).withColumnRenamed(i, f"{self._fname_prefix}__{i}")
@@ -107,21 +119,16 @@ class BaseDiff(SparkDatetimeTransformer):
         self.diff_names = diff_names
         self.basic_interval = basic_interval
 
-    def fit(self, dataset: SparkDataset) -> "SparkTransformer":
+    def _fit(self, dataset: SparkDataset) -> "SparkTransformer":
 
         # FIXME SPARK-LAMA: Возможно это можно будет убрать, т.к. у датасета будут колонки
         self._features = []
         for col in self.base_names:
             self._features.extend([f"{self._fname_prefix}_{col}__{x}" for x in self.diff_names])
 
-        for check_func in self._fit_checks:
-            check_func(dataset)
-
         return self
 
-    def transform(self, dataset: SparkDataset) -> SparkDataset:
-
-        super().transform(dataset)
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         df = dataset.data
 
@@ -158,10 +165,7 @@ class DateSeasons(SparkDatetimeTransformer):
         if output_role is None:
             self.output_role = CategoryRole(np.int32)
 
-    def fit(self, dataset: SparkDataset) -> "SparkTransformer":
-
-        for check_func in self._fit_checks:
-            check_func(dataset)
+    def _fit(self, dataset: SparkDataset) -> "SparkTransformer":
 
         feats = dataset.features
         roles = dataset.roles
@@ -178,9 +182,7 @@ class DateSeasons(SparkDatetimeTransformer):
 
         return self
 
-    def transform(self, dataset: SparkDataset) -> SparkDataset:
-
-        super().transform(dataset)
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         df = dataset.data
         roles = dataset.roles

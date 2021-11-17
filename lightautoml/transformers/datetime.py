@@ -269,6 +269,7 @@ class DateSeasons(LAMLTransformer):
                     prov=roles[col].prov,
                     state=roles[col].state,
                 )
+                # TODO SPARK-LAMA: Fixed
                 new_arr[:, n] = df[col].dt.date.isin(hol)
                 n += 1
 

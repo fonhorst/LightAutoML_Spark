@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List
 from collections import defaultdict
 from itertools import chain, combinations
 import numpy as np
@@ -7,7 +7,7 @@ from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkD
 from sklearn.utils.murmurhash import murmurhash3_32
 
 from lightautoml.dataset.roles import CategoryRole, NumericRole
-from lightautoml.transformers.categorical import categorical_check
+from lightautoml.transformers.categorical import categorical_check, multiclass_task_check, encoding_check
 
 from lightautoml.spark.dataset import SparkDataset
 from lightautoml.spark.transformers.base import SparkTransformer
@@ -15,6 +15,8 @@ from lightautoml.spark.transformers.base import SparkTransformer
 
 # FIXME SPARK-LAMA: np.nan in str representation is 'nan' while Spark's NaN is 'NaN'. It leads to different hashes.
 # FIXME SPARK-LAMA: If udf is defined inside the class, it not works properly.
+# "if murmurhash3_32 can be applied to a whole pandas Series, it would be better to make it via pandas_udf"
+# https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749534669
 murmurhash3_32_udf = F.udf(lambda value: murmurhash3_32(value.replace("NaN", "nan"), seed=42), SparkTypes.IntegerType())
 
 
@@ -57,9 +59,7 @@ class LabelEncoder(SparkTransformer):
     def __init__(self, *args, **kwargs):
         self._output_role = CategoryRole(np.int32, label_encoded=True)
 
-    def fit(self, dataset: SparkDataset) -> "LabelEncoder":
-
-        super().fit(dataset)
+    def _fit(self, dataset: SparkDataset) -> "LabelEncoder":
 
         roles = dataset.roles
 
@@ -73,9 +73,12 @@ class LabelEncoder(SparkTransformer):
             co = role.unknown
 
             # FIXME SPARK-LAMA: Possible OOM point
+            # TODO SPARK-LAMA: Can be implemented without multiple groupby and thus shuffling using custom UDAF.
+            # May be an alternative it there would be performance problems.
+            # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749539901
             vals = cached_dataset \
                 .groupBy(i).count() \
-                .filter(F.col("count") > co) \
+                .where(F.col("count") > co) \
                 .orderBy(["count", i], ascending=[False, True]) \
                 .select(i) \
                 .toPandas()
@@ -88,15 +91,15 @@ class LabelEncoder(SparkTransformer):
 
         return self
 
-    def transform(self, dataset: SparkDataset) -> SparkDataset:
-
-        super().transform(dataset)
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         df = dataset.data
 
         for i in df.columns:
 
             # FIXME SPARK-LAMA: Dirty hot-fix
+            # TODO SPARK-LAMA: It can be done easier with only one select and without withColumn but a single select.
+            # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749506973
 
             role = dataset.roles[i]
 
@@ -150,9 +153,7 @@ class FreqEncoder(LabelEncoder):
         super().__init__(*args, **kwargs)
         self._output_role = NumericRole(np.float32)
 
-    def fit(self, dataset: SparkDataset) -> "FreqEncoder":
-
-        SparkTransformer.fit(self, dataset)
+    def _fit(self, dataset: SparkDataset) -> "FreqEncoder":
 
         cached_dataset = dataset.data.cache()
 
@@ -160,7 +161,7 @@ class FreqEncoder(LabelEncoder):
         for i in cached_dataset.columns:
             vals = cached_dataset \
                 .groupBy(i).count() \
-                .filter(F.col("count") > 1) \
+                .where(F.col("count") > 1) \
                 .orderBy(["count", i], ascending=[False, True]) \
                 .select([i, "count"]) \
                 .toPandas()
@@ -194,9 +195,7 @@ class OrdinalEncoder(LabelEncoder):
         super().__init__(*args, **kwargs)
         self._output_role = NumericRole(np.float32)
 
-    def fit(self, dataset: SparkDataset) -> "OrdinalEncoder":
-
-        SparkTransformer.fit(self, dataset)
+    def _fit(self, dataset: SparkDataset) -> "OrdinalEncoder":
 
         roles = dataset.roles
 
@@ -212,9 +211,7 @@ class OrdinalEncoder(LabelEncoder):
 
                 cnts = cached_dataset \
                     .groupBy(i).count() \
-                    .filter(F.col("count") > co) \
-                    .na.replace(np.nan, None) \
-                    .filter(F.col(i).isNotNull()) \
+                    .where((F.col("count") > co) & F.col(i).isNotNull() & ~F.isnan(F.col(i))) \
                     .select(i) \
                     .toPandas()
 
@@ -222,7 +219,6 @@ class OrdinalEncoder(LabelEncoder):
                 self.dicts[i] = cnts.append(Series([cnts.shape[0] + 1], index=[np.nan])).drop_duplicates()
 
         cached_dataset.unpersist()
-        print(f"OrdinalFit SPRK: {self.dicts}")
 
         return self
 
@@ -274,9 +270,7 @@ class CatIntersectstions(LabelEncoder):
 
         return output
 
-    def fit(self, dataset: SparkDataset):
-
-        SparkTransformer.fit(self, dataset)
+    def _fit(self, dataset: SparkDataset):
 
         if self.intersections is None:
             self.intersections = []
@@ -284,7 +278,7 @@ class CatIntersectstions(LabelEncoder):
                 self.intersections.extend(list(combinations(dataset.features, i)))
 
         inter_dataset = self._build_df(dataset)
-        return super().fit(inter_dataset)
+        return super()._fit(inter_dataset)
 
     def transform(self, dataset: SparkDataset) -> SparkDataset:
 

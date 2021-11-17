@@ -13,23 +13,7 @@ from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabe
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, CatIntersectstions as SparkCatIntersectstions
 
 from . import compare_by_content, compare_by_metadata, spark
-
-
-class DatasetForTest:
-
-    def __init__(self, path: str,
-                 columns: Optional[List[str]] = None,
-                 roles: Optional[Dict] = None,
-                 default_role: Optional[CategoryRole] = None):
-
-        self.dataset = pd.read_csv(path)
-        if columns is not None:
-            self.dataset = self.dataset[columns]
-
-        if roles is None:
-            self.roles = {name: default_role for name in self.dataset.columns}
-        else:
-            self.roles = roles
+from .datasets import DatasetForTest
 
 
 DATASETS = [

@@ -11,6 +11,7 @@ from lightautoml.spark.transformers.numeric import NaNFlags as SparkNaNFlags, Fi
 from lightautoml.transformers.numeric import NaNFlags, FillInf, FillnaMedian
 
 from . import compare_by_content, compare_by_metadata, spark
+from .datasets import DatasetForTest
 
 # Note:
 # -s means no stdout capturing thus allowing one to see what happens in reality
@@ -18,23 +19,6 @@ from . import compare_by_content, compare_by_metadata, spark
 # IMPORTANT !
 # The test requires env variable PYSPARK_PYTHON to be set
 # for example: PYSPARK_PYTHON=/home/<user>/.conda/envs/LAMA/bin/python
-
-
-class DatasetForTest:
-
-    def __init__(self, path: str,
-                 columns: Optional[List[str]] = None,
-                 roles: Optional[Dict] = None,
-                 default_role: Optional[NumericRole] = None):
-
-        self.dataset = pd.read_csv(path)
-        if columns is not None:
-            self.dataset = self.dataset[columns]
-
-        if roles is None:
-            self.roles = {name: default_role for name in self.dataset.columns}
-        else:
-            self.roles = roles
 
 
 DATASETS = [

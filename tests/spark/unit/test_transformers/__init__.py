@@ -98,6 +98,7 @@ def compare_transformers_results(spark: SparkSession,
         #     pickle.dump(trans_data_result, sf)
 
         # assert (trans_data[:, features] == trans_data_result[:, features]).all(), \
+        # assert np.allclose(trans_data[:, features], trans_data_result[:, features], equal_nan=True), \
         assert np.array_equal(trans_data[:, features], trans_data_result[:, features], equal_nan=True), \
             f"Results of the LAMA's transformer and the Spark based transformer are not equal: " \
             f"\n\nLAMA: \n{trans_data}" \

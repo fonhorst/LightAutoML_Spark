@@ -29,10 +29,7 @@ class NaNFlags(SparkTransformer):
         self.nan_cols: Optional[str] = None
         self._features: Optional[str] = None
 
-    def fit(self, dataset: SparkDataset) -> "NaNFlags":
-        # TODO: can be in the base class (SparkTransformer)
-        for check_func in self._fit_checks:
-            check_func(dataset)
+    def _fit(self, dataset: SparkDataset) -> "NaNFlags":
 
         sdf = dataset.data
 
@@ -45,10 +42,7 @@ class NaNFlags(SparkTransformer):
 
         return self
 
-    def transform(self, dataset: SparkDataset) -> SparkDataset:
-        # TODO: can be in the base class (SparkTransformer)
-        # checks here
-        super().transform(dataset)
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         sdf = dataset.data
 
@@ -69,9 +63,7 @@ class FillInf(SparkTransformer):
     _transform_checks = ()
     _fname_prefix = "fillinf"
 
-    def transform(self, dataset: SparkDataset) -> SparkDataset:
-
-        super().transform(dataset)
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         df = dataset.data
 
@@ -97,14 +89,11 @@ class FillnaMedian(SparkTransformer):
     _transform_checks = ()
     _fname_prefix = "fillnamed"
 
-    def fit(self, dataset: SparkDataset) -> "FillnaMedian":
+    def _fit(self, dataset: SparkDataset) -> "FillnaMedian":
 
-        super().fit(dataset)
         return self
 
-    def transform(self, dataset: SparkDataset) -> SparkDataset:
-
-        super().transform(dataset)
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         df = dataset.data
 
