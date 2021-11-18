@@ -11,7 +11,7 @@ from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkD
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.transformers.datetime import datetime_check, date_attrs
 
-from lightautoml.spark.dataset import SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.transformers.base import SparkTransformer
 
 

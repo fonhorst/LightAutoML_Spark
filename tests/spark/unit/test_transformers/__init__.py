@@ -1,15 +1,21 @@
-from typing import Tuple, get_args, cast, List
+from typing import Tuple, get_args, cast, List, Optional, Dict
 
 import pytest
 from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
+from lightautoml.dataset.roles import ColumnRole
 from lightautoml.spark.transformers.base import SparkTransformer
 from lightautoml.spark.utils import from_pandas_to_spark
 from lightautoml.transformers.base import LAMLTransformer
 from lightautoml.transformers.numeric import NumpyTransformable
 
 import numpy as np
+import pandas as pd
+
+# NOTE!!!
+# All tests require PYSPARK_PYTHON env variable to be set
+# for example: PYSPARK_PYTHON=/home/nikolay/.conda/envs/LAMA/bin/python
 
 
 @pytest.fixture(scope="session")
@@ -74,13 +80,15 @@ def compare_transformers_results(spark: SparkSession,
 
     # compare independent of feature ordering
     assert list(sorted(lama_np_ds.features)) == list(sorted(spark_np_ds.features)), \
-        f"List of features are not equal:\nLAMA = {list(sorted(lama_np_ds.features))}\nSPRK = {list(sorted(spark_np_ds.features))}"
+        f"List of features are not equal\n" \
+        f"LAMA: {sorted(lama_np_ds.features)}\n" \
+        f"SPARK: {sorted(spark_np_ds.features)}"
 
     # compare roles equality for the columns
     assert lama_np_ds.roles == spark_np_ds.roles, "Roles are not equal"
 
     # compare shapes
-    assert lama_np_ds.shape == spark_np_ds.shape, "Shape are not equals"
+    assert lama_np_ds.shape == spark_np_ds.shape, "Shapes are not equals"
 
     if not compare_metadata_only:
         features: List[int] = [i for i, _ in sorted(enumerate(transformed_ds.features), key=lambda x: x[1])]
@@ -89,17 +97,7 @@ def compare_transformers_results(spark: SparkSession,
         trans_data_result: np.ndarray = spark_np_ds.data
         # TODO: fix type checking here
         # compare content equality of numpy arrays
-
-        # import pickle
-        # with open("lama.pickle", "wb") as lf:
-        #     pickle.dump(trans_data, lf)
-        #
-        # with open("spark.pickle", "wb") as sf:
-        #     pickle.dump(trans_data_result, sf)
-
-        # assert (trans_data[:, features] == trans_data_result[:, features]).all(), \
-        # assert np.allclose(trans_data[:, features], trans_data_result[:, features], equal_nan=True), \
-        assert np.array_equal(trans_data[:, features], trans_data_result[:, features], equal_nan=True), \
+        assert np.allclose(trans_data[:, features], trans_data_result[:, features], equal_nan=True), \
             f"Results of the LAMA's transformer and the Spark based transformer are not equal: " \
             f"\n\nLAMA: \n{trans_data}" \
             f"\n\nSpark: \n{trans_data_result}"
@@ -125,9 +123,9 @@ def compare_by_content(spark: SparkSession,
 
 
 def compare_by_metadata(spark: SparkSession,
-                       ds: PandasDataset,
-                       t_lama: LAMLTransformer,
-                       t_spark: SparkTransformer) -> Tuple[NumpyDataset, NumpyDataset]:
+                        ds: PandasDataset,
+                        t_lama: LAMLTransformer,
+                        t_spark: SparkTransformer) -> Tuple[NumpyDataset, NumpyDataset]:
     """
 
         Args:
@@ -143,3 +141,35 @@ def compare_by_metadata(spark: SparkSession,
         This function should be used only to compare stochastic-based transformers
     """
     return compare_transformers_results(spark, ds, t_lama, t_spark, compare_metadata_only=True)
+
+
+def smoke_check(spark: SparkSession, ds: PandasDataset, t_spark: SparkTransformer) -> NumpyDataset:
+    sds = from_pandas_to_spark(ds, spark)
+
+    t_spark.fit(sds)
+    transformed_sds = t_spark.transform(sds)
+
+    spark_np_ds = transformed_sds.to_numpy()
+
+    return spark_np_ds
+
+
+class DatasetForTest:
+    def __init__(self, path: Optional[str] = None,
+                 df: Optional[pd.DataFrame] = None,
+                 columns: Optional[List[str]] = None,
+                 roles: Optional[Dict] = None,
+                 default_role: Optional[ColumnRole] = None):
+
+        if path is not None:
+            self.dataset = pd.read_csv(path)
+        else:
+            self.dataset = df
+
+        if columns is not None:
+            self.dataset = self.dataset[columns]
+
+        if roles is None:
+            self.roles = {name: default_role for name in self.dataset.columns}
+        else:
+            self.roles = roles

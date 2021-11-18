@@ -6,15 +6,7 @@ from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import NumericRole
 from lightautoml.spark.transformers.decomposition import PCATransformer as SparkPCATransformer
 from lightautoml.transformers.decomposition import PCATransformer
-
-from . import compare_by_content, compare_by_metadata, spark
-
-# Note:
-# -s means no stdout capturing thus allowing one to see what happens in reality
-
-# IMPORTANT !
-# The test requires env variable PYSPARK_PYTHON to be set
-# for example: PYSPARK_PYTHON=/home/<user>/.conda/envs/LAMA/bin/python
+from . import compare_by_metadata, spark
 
 
 def test_pca(spark: SparkSession):

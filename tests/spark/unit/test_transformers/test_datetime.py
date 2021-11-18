@@ -1,18 +1,16 @@
-from typing import Optional, List, Dict
-import pytest
+from typing import List
+
 import numpy as np
 import pandas as pd
+import pytest
 from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import DatetimeRole
-from lightautoml.transformers.datetime import TimeToNum, BaseDiff, DateSeasons
 from lightautoml.spark.transformers.datetime import TimeToNum as SparkTimeToNum, BaseDiff as SparkBaseDiff, \
     DateSeasons as SparkDateSeasons
-
-from . import compare_by_content, compare_by_metadata, spark
-from .datasets import DatasetForTest
-
+from lightautoml.transformers.datetime import TimeToNum, BaseDiff, DateSeasons
+from . import compare_by_content, DatasetForTest, spark
 
 DATASETS = [
 

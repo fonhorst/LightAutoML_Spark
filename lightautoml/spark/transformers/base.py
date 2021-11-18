@@ -1,7 +1,7 @@
 from typing import cast
 
 from lightautoml.dataset.base import LAMLDataset
-from lightautoml.spark.dataset import SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.transformers.base import LAMLTransformer
 
 
@@ -9,9 +9,9 @@ class SparkTransformer(LAMLTransformer):
 
     _features = []
 
-    def fit(self, dataset: LAMLDataset) -> "SparkTransformer":
+    def fit(self, dataset: SparkDataset) -> "SparkTransformer":
 
-        self.features = dataset.features
+        self._features = dataset.features
         for check_func in self._fit_checks:
             check_func(dataset)
 
