@@ -1,198 +1,55 @@
-"""Base classes for machine learning algorithms."""
-
 import logging
+from typing import Tuple, cast, List, Optional
+
 import numpy as np
-from abc import ABC, abstractmethod
-from copy import copy
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
+from pyspark.ml import Model
+from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.sql import functions as F
 
-from lightautoml.dataset.roles import NumericRole
-from lightautoml.utils.timer import PipelineTimer, TaskTimer
-
-from lightautoml.spark.validation.base import TrainValidIterator
-from lightautoml.spark.dataset.base import SparkDataset
-
+from lightautoml.ml_algo.base import MLAlgo
+from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
+from lightautoml.utils.timer import TaskTimer
+from lightautoml.validation.base import TrainValidIterator
 
 logger = logging.getLogger(__name__)
-SparkTabularDataset = SparkDataset
 
 
-class SparkMLAlgo(ABC):
-    """
-    Abstract class for machine learning algorithm.
-    Assume that features are already selected,
-    but parameters my be tuned and set before training.
-    """
+class TabularMLAlgo(MLAlgo):
+    """Machine learning algorithms that accepts numpy arrays as input."""
 
-    _default_params: Dict = {}
-    optimization_search_space: Dict = {}
-    # TODO: add checks here
-    _fit_checks: Tuple = ()
-    _transform_checks: Tuple = ()
-    _params: Dict = None
-    _name = "AbstractAlgo"
+    _name: str = "TabularAlgo"
+    _default_prediction_column_name: str = "prediction"
 
-    @property
-    def name(self) -> str:
-        """Get model name."""
-        return self._name
+    def __init__(
+            self,
+            default_params: Optional[dict] = None,
+            freeze_defaults: bool = True,
+            timer: Optional[TaskTimer] = None,
+            optimization_search_space: Optional[dict] = {},
+    ):
+        super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
+        self.n_classes: Optional[int] = None
 
     @property
-    def features(self) -> List[str]:
-        """Get list of features."""
-        return self._features
+    def prediction_column(self) -> str:
+        return self._default_prediction_column_name
 
-    @features.setter
-    def features(self, val: Sequence[str]):
-        """List of features."""
-        self._features = list(val)
-
-    @property
-    def is_fitted(self) -> bool:
-        """Get flag is the model fitted or not."""
-        return self.features is not None
-
-    @property
-    def params(self) -> dict:
-        """Get model's params dict."""
-        if self._params is None:
-            self._params = copy(self.default_params)
-        return self._params
-
-    @params.setter
-    def params(self, new_params: dict):
-        assert isinstance(new_params, dict)
-        self._params = {**self.params, **new_params}
-
-    def init_params_on_input(self, train_valid_iterator: TrainValidIterator) -> dict:
-
-        return self.params
-
-    # TODO: Think about typing
-    def __init__(self,
-                 default_params: Optional[dict] = None,
-                 freeze_defaults: bool = True,
-                 timer: Optional[TaskTimer] = None,
-                 optimization_search_space: Optional[dict] = {}):
-
-        self.task = None
-        self.optimization_search_space = optimization_search_space
-
-        self.freeze_defaults = freeze_defaults
-        if default_params is None:
-            default_params = {}
-
-        self.default_params = {**self._default_params, **default_params}
-
-        self.models = []
-        self._features = None
-
-        self.timer = timer
-        if timer is None:
-            self.timer = PipelineTimer().start().get_task_timer()
-
-        self._nan_rate = None
-
-    @abstractmethod
     def fit_predict(self, train_valid_iterator: TrainValidIterator) -> SparkDataset:
-        """Abstract method.
+        """Fit and then predict accordig the strategy that uses train_valid_iterator.
 
-        Fit new algo on iterated datasets and predict on valid parts.
+        If item uses more then one time it will
+        predict mean value of predictions.
+        If the element is not used in training then
+        the prediction will be ``numpy.nan`` for this item
 
         Args:
             train_valid_iterator: Classic cv-iterator.
-
-        """
-        # self._features = train_valid_iterator.features
-
-    @abstractmethod
-    def predict(self, test: SparkDataset) -> SparkDataset:
-        """Predict target for input data.
-
-        Args:
-            test: Dataset on test.
 
         Returns:
             Dataset with predicted values.
 
         """
-
-    def score(self, dataset: SparkDataset) -> float:
-        """Score prediction on dataset with defined metric.
-
-        Args:
-            dataset: Dataset with ground truth and predictions.
-
-        Returns:
-            Metric value.
-
-        """
-        assert self.task is not None, "No metric defined. Should be fitted on dataset first."
-        metric = self.task.get_dataset_metric()
-
-        return metric(dataset, dropna=True)
-
-    def set_prefix(self, prefix: str):
-        """Set prefix to separate models from different levels/pipelines.
-
-        Args:
-            prefix: String with prefix.
-
-        """
-        self._name = "_".join([prefix, self._name])
-
-    def set_timer(self, timer: TaskTimer) -> "SparkMLAlgo":
-        """Set timer."""
-        self.timer = timer
-
-        return self
-
-
-class SparkTabularMLAlgo(SparkMLAlgo):
-    """Machine learning algorithms that accepts numpy arrays as input."""
-
-    _name: str = "TabularAlgo"
-
-    # TODO SPARK-LAMA: Probably we can pass one Spark dataset and column name with predictions?
-    # TODO SPARK-LAMA: Do we really need this method? In case of SparkDataset it do nothing
-    def _set_prediction(self, dataset: SparkDataset, preds_arr: SparkDataset) -> SparkDataset:
-        """Insert predictions to dataset with. Inplace transformation.
-
-        Args:
-            dataset: Dataset to transform.
-            preds_arr: Array with predicted values.
-
-        Returns:
-            Transformed dataset.
-
-        """
-
-        prefix = "{0}_prediction".format(self._name)
-        prob = self.task.name in ["binary", "multiclass"]
-
-        # TODO SPARK-LAMA: Possible join? I hope it can be done bu .withColumn during the prediction
-        dataset.set_data(preds_arr.data, prefix, NumericRole(np.float32, force_input=True, prob=prob))
-
-        return dataset
-
-    def fit_predict_single_fold(self,
-                                train: SparkTabularDataset,
-                                valid: SparkTabularDataset) -> Tuple[Any, SparkDataset]:
-        """Train on train dataset and predict on holdout dataset.
-
-        Args:
-            train: Train Dataset.
-            valid: Validation Dataset.
-
-        Returns:
-            Target predictions for valid dataset.
-
-        """
-        raise NotImplementedError
-
-    def fit_predict(self, train_valid_iterator: TrainValidIterator) -> SparkDataset:
-
         self.timer.start()
 
         assert self.is_fitted is False, "Algo is already fitted"
@@ -210,21 +67,29 @@ class SparkTabularMLAlgo(SparkMLAlgo):
         # get metric and loss if None
         self.task = train_valid_iterator.train.task
 
-        # TODO SPARK-LAMA: Do we need this variable?
-        preds_ds = train_valid_iterator.get_validation_data().empty()
+        preds_ds = cast(SparkDataset, train_valid_iterator.get_validation_data())
 
+        # spark
         outp_dim = 1
         if self.task.name == "multiclass":
-            # TODO SPARK-LAMA: Think about avoiding this agg (probably metadata?)
-            # TODO SPARK-LAMA: Provide target column name
-            target_column = "target"
-            outp_dim = preds_ds.agg(F.max(F.col(target_column).cast("long"))).collect()[0][0] + 1
+            # TODO: SPARK-LAMA working with target should be reflected in SparkDataset
+            tdf: SparkDataFrame = preds_ds.target
+            outp_dim = tdf.select(F.max(preds_ds.target_column).alias("max")).first()
+            outp_dim = outp_dim["max"] + 1
 
         self.n_classes = outp_dim
 
-        preds_arr = np.zeros((preds_ds.shape[0], outp_dim), dtype=np.float32)
-        counter_arr = np.zeros((preds_ds.shape[0], 1), dtype=np.float32)
+        # preds_arr = np.zeros((preds_ds.shape[0], outp_dim), dtype=np.float32)
+        # counter_arr = np.zeros((preds_ds.shape[0], 1), dtype=np.float32)
 
+        preds_dfs: List[SparkDataFrame] = []
+
+        pred_col_prefix = "prediction"
+
+        # TODO: SPARK-LAMA - we need to cache the "parent" dataset of the train_valid_iterator
+        # train_valid_iterator.cache()
+
+        # TODO: Make parallel version later
         for n, (idx, train, valid) in enumerate(train_valid_iterator):
             if iterator_len > 1:
                 logger.info2(
@@ -232,10 +97,13 @@ class SparkTabularMLAlgo(SparkMLAlgo):
                 )
             self.timer.set_control_point()
 
-            model, pred = self.fit_predict_single_fold(train, valid)
+            model, pred, prediction_column = self.fit_predict_single_fold(train, valid)
+            pred = pred.select(
+                SparkDataset.ID_COLUMN,
+                F.col(prediction_column).alias(f"{pred_col_prefix}_{n}")
+            )
             self.models.append(model)
-            preds_arr[idx] += pred.reshape((pred.shape[0], -1))
-            counter_arr[idx] += 1
+            preds_dfs.append(pred)
 
             self.timer.write_run_info()
 
@@ -245,36 +113,149 @@ class SparkTabularMLAlgo(SparkMLAlgo):
                     logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
                     break
 
-        preds_arr /= np.where(counter_arr == 0, 1, counter_arr)
-        preds_arr = np.where(counter_arr == 0, np.nan, preds_arr)
+        # combine predictions of all models and make them into the single one
+        full_preds_df = self._average_predictions(preds_ds, preds_dfs, pred_col_prefix)
 
-        preds_ds = self._set_prediction(preds_ds, preds_arr)
+        # TODO: send the "parent" dataset of the train_valid_iterator for unwinding later
+        #       e.g. from the train_valid_iterator
+        preds_ds = self._set_prediction(preds_ds, full_preds_df)
 
         if iterator_len > 1:
-            logger.info(f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(preds_ds)}\x1b[0m")
+            logger.info(
+                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(preds_ds)}\x1b[0m")
 
         if iterator_len > 1 or "Tuned" not in self._name:
             logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
         return preds_ds
 
-    def predict_single_fold(self, model: Any, dataset: SparkTabularDataset) -> SparkDataset:
+    def fit_predict_single_fold(self, train: SparkDataset, valid: SparkDataset) -> Tuple[Model, SparkDataFrame, str]:
+        """Train on train dataset and predict on holdout dataset.
 
+        Args:
+            train: Train Dataset.
+            valid: Validation Dataset.
+
+        Returns:
+            Target predictions for valid dataset.
+
+        """
         raise NotImplementedError
 
-    def predict(self, dataset: SparkTabularDataset) -> SparkDataset:
+    def predict_single_fold(self, model: Model, dataset: SparkDataset) -> SparkDataFrame:
+        """Implements prediction on single fold.
 
+        Args:
+            model: Model uses to predict.
+            dataset: Dataset used for prediction.
+
+        Returns:
+            Predictions for input dataset.
+
+        """
+        raise NotImplementedError
+
+    def predict(self, dataset: SparkDataset) -> SparkDataset:
+        """Mean prediction for all fitted models.
+
+        Args:
+            dataset: Dataset used for prediction.
+
+        Returns:
+            Dataset with predicted values.
+
+        """
         assert self.models != [], "Should be fitted first."
-        preds_ds = dataset.empty().to_numpy()
-        preds_arr = None
 
-        for model in self.models:
-            if preds_arr is None:
-                preds_arr = self.predict_single_fold(model, dataset)
-            else:
-                preds_arr += self.predict_single_fold(model, dataset)
+        pred_col_prefix = "prediction"
+        preds_dfs = [
+            self.predict_single_fold(model, dataset).select(
+                SparkDataset.ID_COLUMN,
+                F.col(model.prediction_column).alias(f"{pred_col_prefix}_{i}")
+            ) for i, model in enumerate(self.models)
+        ]
 
-        preds_arr /= len(self.models)
-        preds_arr = preds_arr.reshape((preds_arr.shape[0], -1))
-        preds_ds = self._set_prediction(preds_ds, preds_arr)
+        predict_sdf = self._average_predictions(dataset, preds_dfs, pred_col_prefix)
+
+        preds_ds = dataset.empty()
+        preds_ds = self._set_prediction(preds_ds, predict_sdf)
 
         return preds_ds
+
+    def _average_predictions(self, preds_ds: SparkDataset, preds_dfs: List[SparkDataFrame], pred_col_prefix: str) -> SparkDataFrame:
+        # TODO: SPARK-LAMA probably one may write a scala udf function to join multiple arrays/vectors into the one
+        # TODO: reg and binary cases probably should be treated without arrays summation
+        # we need counter here for EACH row, because for some models there may be no predictions
+        # for some rows that means:
+        # 1. we need to do left_outer instead of inner join (because the right frame may not contain all rows)
+        # 2. we would like to find a mean prediction for each row, but the number of predictiosn may be variable,
+        #    that is why we need a counter for each row
+        # 3. this counter should depend on if there is None for the right row or not
+        # 4. we also need to substitute None's of the right dataframe with empty arrays
+        #    to provide uniformity for summing operations
+        # 5. we also convert output from vector to an array to combine them
+        counter_col_name = "counter"
+        empty_pred = F.lit(np.zeros(self.n_classes))
+        full_preds_df = preds_ds.data.select(
+            SparkDataset.ID_COLUMN,
+            F.lit(0).alias(counter_col_name),
+            empty_pred
+        )
+        for i, pred_df in enumerate(preds_dfs):
+            pred_col = f"{pred_col_prefix}_{i}"
+            full_preds_df = (
+                full_preds_df
+                .join(pred_df, on=SparkDataset.ID_COLUMN, how="left_outer")
+                .select(
+                    full_preds_df[SparkDataset.ID_COLUMN],
+                    F.when(F.col(pred_col).isNull(), empty_pred)
+                        .otherwise(vector_to_array(F.col(pred_col))).alias(pred_col),
+                    F.when(F.col(pred_col).isNull(), F.col(counter_col_name))
+                        .otherwise(F.col(counter_col_name) + 1).alias(counter_col_name)
+                )
+                .select(
+                    full_preds_df[SparkDataset.ID_COLUMN],
+                    counter_col_name,
+                    F.transform(
+                        F.arrays_zip(full_preds_df[pred_col_prefix], f"{pred_col_prefix}_{i}"),
+                        lambda x, y: x + y
+                    ).alias(pred_col_prefix),
+                )
+            )
+
+        full_preds_df = full_preds_df.select(
+            SparkDataset.ID_COLUMN,
+            array_to_vector(F.transform(pred_col_prefix, lambda x: x / F.col("counter"))).alias(pred_col_prefix)
+        )
+
+        return full_preds_df
+
+    def _set_prediction(self, dataset: SparkDataset,  preds: SparkDataFrame) -> SparkDataset:
+        """Insert predictions to dataset with. Inplace transformation.
+
+        Args:
+            dataset: Dataset to transform.
+            preds: A spark dataframe  with predicted values.
+
+        Returns:
+            Transformed dataset.
+
+        """
+        prefix = f"{self._name}_prediction"
+        prob = self.task.name in ["binary", "multiclass"]
+        role = NumericVectorOrArrayRole(size=self.n_classes,
+                                        element_col_name_template=prefix + "_{}",
+                                        dtype=np.float32,
+                                        force_input=True,
+                                        prob=prob)
+        dataset.set_data(preds, [prefix], role)
+
+        return dataset
+
+    @staticmethod
+    def _make_sdf_with_target(train: SparkDataset) -> SparkDataFrame:
+        """ Adds target column to the train data frame"""
+        sdf = train.data
+        t_sdf = train.target.select(SparkDataset.ID_COLUMN, train.target_column)
+        if train.target_column not in train.data.columns:
+            sdf = sdf.join(t_sdf, SparkDataset.ID_COLUMN).drop(t_sdf[SparkDataset.ID_COLUMN])
+        return sdf

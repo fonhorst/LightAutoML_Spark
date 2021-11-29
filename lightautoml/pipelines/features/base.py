@@ -105,7 +105,7 @@ class FeaturesPipeline:
         """Create pipeline and then fit on train data and then transform.
 
         Args:
-            train: Dataset with train data.
+            train: Dataset with train data.n
 
         Returns:
             Dataset with new features.
@@ -114,6 +114,9 @@ class FeaturesPipeline:
         # TODO: Think about input/output features attributes
         self._input_features = train.features
         self._pipeline = self._merge_seq(train) if self.sequential else self._merge(train)
+
+        # TODO: LAMA-SPARK a place with potential duplicate computations
+        #        need to think carefully about it
 
         return self._pipeline.fit_transform(train)
 
