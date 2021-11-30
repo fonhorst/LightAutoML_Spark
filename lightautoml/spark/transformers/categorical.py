@@ -476,7 +476,7 @@ class TargetEncoder(SparkTransformer):
             self.encs[col_name] = enc
 
         output = dataset.empty()
-        self.output_role = NumericRole(np.float32)
+        self.output_role = NumericRole(np.float32, prob=True)
         self.feats = self.feats.drop(*data.columns)
         output.set_data(self.feats, self.features, self.output_role)
 
