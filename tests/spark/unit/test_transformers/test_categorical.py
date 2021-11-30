@@ -9,10 +9,10 @@ from lightautoml.tasks.base import Task
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
-    TargetEncoder as SparkTargetEncoder
+    TargetEncoder as SparkTargetEncoder, MultiClassTargetEncoder as SparkMultiClassTargetEncoder
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
-    OHEEncoder, TargetEncoder
-from lightautoml.spark.utils import from_pandas_to_spark
+    OHEEncoder, TargetEncoder, MultiClassTargetEncoder
+from . import from_pandas_to_spark
 from . import compare_by_content, compare_by_metadata, DatasetForTest, spark
 
 DATASETS = [
@@ -130,4 +130,55 @@ def test_target_encoder(spark: SparkSession):
     assert lama_np_ds.shape == spark_np_ds.shape, "Shapes are not equals"
 
 
+
+def test_multiclass_target_encoder(spark: SparkSession):
+    df = pd.read_csv("test_transformers/resources/datasets/house_prices.csv")[
+        ["Id", 'MSSubClass', 'MSZoning', 'LotFrontage', 'WoodDeckSF']
+    ]
+    # %%
+    ds = PandasDataset(df.head(50),
+                       roles={
+                           "Id": CategoryRole(np.int32),
+                           "MSSubClass": CategoryRole(np.int32),
+                           "MSZoning": CategoryRole(str),
+                           "LotFrontage": CategoryRole(np.float32),
+                           "WoodDeckSF": CategoryRole(np.int32)
+                       },
+                       task=Task("multiclass")
+                       )
+
+    lt = LabelEncoder()
+    lt.fit(ds)
+    labeled_ds = lt.transform(ds)
+
+    ds = NumpyDataset(
+        data=labeled_ds.data,
+        features=labeled_ds.features,
+        roles=labeled_ds.roles,
+        task=labeled_ds.task,
+        target=labeled_ds.data[:, -1],
+        folds=labeled_ds.data[:, 2]
+    )
+
+    lama_transformer = MultiClassTargetEncoder()
+    lama_result = lama_transformer.fit_transform(ds)
+
+    spark_data = from_pandas_to_spark(ds.to_pandas(), spark)
+    spark_data.task = Task("multiclass")
+    spark_transformer = SparkMultiClassTargetEncoder()
+    spark_result = spark_transformer.fit_transform(spark_data, target_column='le__WoodDeckSF', folds_column='le__MSZoning')
+
+    lama_np_ds = lama_result.to_numpy()
+    spark_np_ds = spark_result.to_numpy()
+
+    assert list(sorted(lama_np_ds.features)) == list(sorted(spark_np_ds.features)), \
+        f"List of features are not equal\n" \
+        f"LAMA: {sorted(lama_np_ds.features)}\n" \
+        f"SPARK: {sorted(spark_np_ds.features)}"
+
+    # compare roles equality for the columns
+    assert lama_np_ds.roles == spark_np_ds.roles, "Roles are not equal"
+
+    # compare shapes
+    assert lama_np_ds.shape == spark_np_ds.shape, "Shapes are not equals"
 
