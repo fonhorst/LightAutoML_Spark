@@ -1,9 +1,10 @@
 import logging
+from itertools import chain
 from typing import Optional, Any
 
 import numpy as np
 from pyspark.sql import functions as F
-from pyspark.sql.types import IntegerType
+from pyspark.sql.types import IntegerType, NumericType, StringType
 
 from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
@@ -116,7 +117,7 @@ class SparkToSparkReader(Reader):
             Dataset with selected features.
 
         """
-        logger.info("\x1b[1mTrain data shape: {}\x1b[0m\n".format(train_data.shape))
+        logger.info(f"\x1b[1mTrain data columns: {train_data.columns}\x1b[0m\n")
 
         if SparkDataset.ID_COLUMN not in train_data.columns:
             train_data = train_data.withColumn(SparkDataset.ID_COLUMN, F.monotonically_increasing_id())
@@ -149,10 +150,18 @@ class SparkToSparkReader(Reader):
             # add new role
             parsed_roles[feat] = r
 
-        assert "target" in kwargs, "Target should be defined"
-        self.target = kwargs["target"]
+        if "target" in kwargs:
+            self.target = kwargs["target"]
+        elif "target" in train_data.columns:
+            self.target = "target"
+        elif "TARGET" in train_data.columns:
+            self.target = "TARGET"
+        else:
+            assert False,  "Target should be defined"
+        # assert "target" in kwargs or "target" in [c.lower() for c in train_data.columns], "Target should be defined"
+        # self.target = kwargs["target"] if "target" in kwargs else "target"
 
-        train_data = self._create_target(train_data, target_col=kwargs["target"])
+        train_data = self._create_target(train_data, target_col=self.target)
 
         # get subsample if it needed
         subsample = train_data
@@ -277,23 +286,41 @@ class SparkToSparkReader(Reader):
         """
         self.class_mapping = None
 
-        rows = sdf.where(F.isnan(target_col)).first().collect()
-        assert len(rows) == 0, "Nan in target detected"
+        nan_count = sdf.where(F.isnan(target_col)).count()
+        assert nan_count == 0, "Nan in target detected"
 
         if self.task.name != "reg":
-            srtd = sdf.select(target_col).distinct().sort().collect()
-            srtd = np.array([r[target_col] for r in srtd])
-            self._n_classes = len(srtd)
+            uniques = sdf.select(target_col).distinct().collect()
+            uniques = [r[target_col] for r in uniques]
+            self._n_classes = len(uniques)
+            # dict(sdf.dtypes)[target_col]
 
-            if (np.arange(srtd.shape[0]) == srtd).all():
+            # TODO: make it pretty
+            # 1. check the column type if it is numeric or not
+            # 2. if it is string can i convert it to num?
+            if isinstance(sdf.schema[target_col], NumericType):
+                srtd = np.ndarray(sorted(uniques))
+            # elif isinstance(sdf.schema[target_col], StringType):
+            #     try:
+            #         srtd = np.ndarray(sorted([int(el) for el in uniques]))
+            #         sdf = sdf
+            #     except ValueError:
+            #         srtd = None
+            else:
+                srtd = None
+
+            if srtd and (np.arange(srtd.shape[0]) == srtd).all():
 
                 assert srtd.shape[0] > 1, "Less than 2 unique values in target"
                 if self.task.name == "binary":
                     assert srtd.shape[0] == 2, "Binary task and more than 2 values in target"
                 return sdf
 
-            self.class_mapping = {x: i for i, x in enumerate(srtd)}
-            sdf_with_proc_target = sdf.na.replace(self.class_mapping, subset=[target_col])
+            self.class_mapping = {x: i for i, x in enumerate(uniques)}
+            # tmap = F.lit(self.class_mapping)
+            tmap = F.create_map(*[F.lit(v).alias(k) for k, v in self.class_mapping.items()])
+            # sdf_with_proc_target = sdf.na.replace(self.class_mapping, subset=[target_col])
+            sdf_with_proc_target = sdf.withColumn(target_col, tmap.getItem(target_col)).drop(sdf[target_col])
 
             return sdf_with_proc_target
 
@@ -374,7 +401,7 @@ class SparkToSparkReader(Reader):
         row = train_data.select(
             F.mean(F.isnan(feature).astype(IntegerType())).alias(f"{feature}_nan_rate"),
             (F.count_distinct(feature) / F.count(feature)).alias(f"{feature}_constant_rate")
-        ).collect()[0]
+        ).first()
 
         return (row[f"{feature}_nan_rate"] < self.max_nan_rate) \
                and (row[f"{feature}_constant_rate"] < self.max_constant_rate)
