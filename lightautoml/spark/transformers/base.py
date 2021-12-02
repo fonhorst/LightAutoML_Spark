@@ -175,9 +175,9 @@ class UnionTransformer(SparkTransformer):
         with dataset.applying_temporary_caching():
             for trf in self.transformer_list:
                 ds = trf.fit_transform(dataset)
-                if ds:
-                    res.append(ds)
-                    actual_transformers.append(trf)
+                # if ds:
+                res.append(ds)
+                actual_transformers.append(trf)
 
         # this concatenate operations also propagates all dependencies
         result = SparkDataset.concatenate(res) if len(res) > 0 else None
