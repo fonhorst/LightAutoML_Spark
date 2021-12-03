@@ -84,7 +84,6 @@ def test_ohe(spark: SparkSession):
     _, _ = compare_by_metadata(spark, ds, OHEEncoder(make_sparse), SparkOHEEncoder(make_sparse))
 
 
-
 @pytest.mark.parametrize("dataset", [DATASETS[1]])
 def test_mock_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     from lightautoml.transformers.categorical import TargetEncoder
@@ -97,7 +96,6 @@ def test_mock_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     labeled_ds = label_encoder.transform(ds)
 
     n_ds = NumpyDataset(
-        distributed/master
         data=labeled_ds.data,
         features=labeled_ds.features,
         roles=labeled_ds.roles,
@@ -106,11 +104,22 @@ def test_mock_target_encoder(spark: SparkSession, dataset: DatasetForTest):
         folds=labeled_ds.data[:, 2]
     )
 
+    sds = SparkDataset.from_lama(n_ds, spark)
+
+    target_encoder = TargetEncoder()
+    lama_output = target_encoder.fit_transform(n_ds)
+
+    mock_encoder = MockTargetEncoder()
+    mock_output = mock_encoder.fit_transform(sds)
+
+    compare_obtained_datasets(lama_output, mock_output)
+
+
 # def test_target_encoder(spark: SparkSession):
 #     df = pd.read_csv("test_transformers/resources/datasets/house_prices.csv")[
 #         ["Id", 'MSSubClass', 'MSZoning', 'LotFrontage', 'WoodDeckSF']
 #     ]
-#     # %%
+
 #     ds = PandasDataset(df.head(50),
 #                        roles={
 #                            "Id": CategoryRole(np.int32),
@@ -158,12 +167,11 @@ def test_mock_target_encoder(spark: SparkSession, dataset: DatasetForTest):
 #     assert lama_np_ds.shape == spark_np_ds.shape, "Shapes are not equals"
 
 
-
 # def test_multiclass_target_encoder(spark: SparkSession):
 #     df = pd.read_csv("test_transformers/resources/datasets/house_prices.csv")[
 #         ["Id", 'MSSubClass', 'MSZoning', 'LotFrontage', 'WoodDeckSF']
 #     ]
-#     # %%
+
 #     ds = PandasDataset(df.head(50),
 #                        roles={
 #                            "Id": CategoryRole(np.int32),
@@ -179,17 +187,14 @@ def test_mock_target_encoder(spark: SparkSession, dataset: DatasetForTest):
 #     lt.fit(ds)
 #     labeled_ds = lt.transform(ds)
 
-#     ds = NumpyDataset(
-
-    sds = SparkDataset.from_lama(n_ds, spark)
-
-    target_encoder = TargetEncoder()
-    lama_output = target_encoder.fit_transform(n_ds)
-
-    mock_encoder = MockTargetEncoder()
-    mock_output = mock_encoder.fit_transform(sds)
-
-    compare_obtained_datasets(lama_output, mock_output)
+    # ds = NumpyDataset(
+    #     data=labeled_ds.data,
+    #     features=labeled_ds.features,
+    #     roles=labeled_ds.roles,
+    #     task=labeled_ds.task,
+    #     target=labeled_ds.data[:, -1],
+    #     folds=labeled_ds.data[:, 2]
+    # )
 
 #     lama_transformer = MultiClassTargetEncoder()
 #     lama_result = lama_transformer.fit_transform(ds)
