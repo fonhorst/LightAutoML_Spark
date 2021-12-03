@@ -26,12 +26,12 @@ def spark() -> SparkSession:
 
 def test_smoke_linear_bgfs(spark: SparkSession):
     with open("test_ml_algo/datasets/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
-        data, features, roles = pickle.load(f)
+        data, target, features, roles = pickle.load(f)
 
     nds = NumpyDataset(data, features, roles, task=Task("binary"))
     pds = nds.to_pandas()
 
-    iterator = DummyIterator(train=from_pandas_to_spark(pds, spark))
+    iterator = DummyIterator(train=from_pandas_to_spark(pds, spark, target))
 
     ml_algo = LinearLBFGS()
     predicted = ml_algo.fit_predict(iterator).data
