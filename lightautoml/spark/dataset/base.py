@@ -181,7 +181,7 @@ class SparkDataset(LAMLDataset):
 
     @property
     def dependencies(self) -> Optional[List['SparkDataset']]:
-        return list(self._dependencies) if self._dependencies else None
+        return self._dependencies
 
     @dependencies.setter
     def dependencies(self, val: List['SparkDataset']) -> None:
@@ -333,7 +333,29 @@ class SparkDataset(LAMLDataset):
 
     def to_numpy(self) -> NumpyDataset:
         data, roles = self._materialize_to_pandas()
-        return NumpyDataset(data=data.to_numpy(), features=list(data.columns), roles=roles, task=self.task)
+
+        try:
+            target = self.target
+            if isinstance(target, pd.Series):
+                target = target.to_numpy()
+        except AttributeError:
+            target = None
+
+        try:
+            folds = self.folds
+            if isinstance(folds, pd.Series):
+                folds = folds.to_numpy()
+        except AttributeError:
+            folds = None
+
+        return NumpyDataset(
+            data=data.to_numpy(),
+            features=list(data.columns),
+            roles=roles,
+            task=self.task,
+            target=target,
+            folds=folds
+        )
 
     @staticmethod
     def _hstack(datasets: Sequence[Any]) -> Any:
@@ -345,3 +367,34 @@ class SparkDataset(LAMLDataset):
     @staticmethod
     def _get_cols(data, k: IntIdx) -> Any:
         raise NotImplementedError("It is not yet ready")
+
+    @staticmethod
+    def from_lama(dataset: Union[NumpyDataset, PandasDataset], spark: SparkSession) -> "SparkDataset":
+        dataset: PandasDataset = dataset.to_pandas()
+        pdf = cast(pd.DataFrame, dataset.data)
+        pdf = pdf.copy()
+        pdf[SparkDataset.ID_COLUMN] = pdf.index
+        sdf = spark.createDataFrame(data=pdf)
+
+        try:
+            target = dataset.target
+            if isinstance(target, pd.Series):
+                target = target.to_numpy()
+        except AttributeError:
+            target = None
+
+        try:
+            folds = dataset.folds
+            if isinstance(folds, pd.Series):
+                folds = folds.to_numpy()
+        except AttributeError:
+            folds = None
+
+        return SparkDataset(
+            data=sdf,
+            roles=dataset.roles,
+            task=dataset.task,
+            dependencies=[],
+            target=target,
+            folds=folds
+        )

@@ -1,28 +1,34 @@
+from typing import cast, List
+
 import numpy as np
 import pandas as pd
 import pytest
 from pyspark.sql import SparkSession
 
-from lightautoml.dataset.np_pd_dataset import PandasDataset
+from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     OHEEncoder
-from . import compare_by_content, compare_by_metadata, DatasetForTest, spark
+from lightautoml.tasks import Task
+
+from . import compare_by_content, compare_by_metadata, DatasetForTest, spark, NumpyTransformable, compare_obtained_datasets
+from lightautoml.spark.dataset.base import SparkDataset
 
 DATASETS = [
 
     DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
     DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
-                   columns=["Id", "MSSubClass", "MSZoning", "LotFrontage"],
+                   columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
                        "MSSubClass": CategoryRole(np.int32),
                        "MSZoning": CategoryRole(str),
-                       "LotFrontage": CategoryRole(np.float32)
+                       "LotFrontage": CategoryRole(np.float32),
+                       "WoodDeckSF": CategoryRole(bool)
                    })
 ]
 
@@ -73,3 +79,34 @@ def test_ohe(spark: SparkSession):
         for name in source_data.columns
     })
     _, _ = compare_by_metadata(spark, ds, OHEEncoder(make_sparse), SparkOHEEncoder(make_sparse))
+
+
+@pytest.mark.parametrize("dataset", [DATASETS[1]])
+def test_mock_target_encoder(spark: SparkSession, dataset: DatasetForTest):
+    from lightautoml.transformers.categorical import TargetEncoder
+    from lightautoml.spark.transformers.categorical import MockTargetEncoder
+
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
+
+    label_encoder = LabelEncoder()
+    label_encoder.fit(ds)
+    labeled_ds = label_encoder.transform(ds)
+
+    n_ds = NumpyDataset(
+        data=labeled_ds.data,
+        features=labeled_ds.features,
+        roles=labeled_ds.roles,
+        task=labeled_ds.task,
+        target=labeled_ds.data[:, -1],
+        folds=labeled_ds.data[:, 2]
+    )
+
+    sds = SparkDataset.from_lama(n_ds, spark)
+
+    target_encoder = TargetEncoder()
+    lama_output = target_encoder.fit_transform(n_ds)
+
+    mock_encoder = MockTargetEncoder()
+    mock_output = mock_encoder.fit_transform(sds)
+
+    compare_obtained_datasets(lama_output, mock_output)

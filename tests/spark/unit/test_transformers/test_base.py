@@ -11,22 +11,24 @@ from lightautoml.dataset.roles import CategoryRole
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     OrdinalEncoder as SparkOrdinalEncoder, CatIntersectstions as SparkCatIntersectstions
 from lightautoml.transformers.categorical import LabelEncoder, OrdinalEncoder, CatIntersectstions
-from lightautoml.transformers.base import SequentialTransformer, UnionTransformer
+from lightautoml.transformers.base import SequentialTransformer, UnionTransformer, ColumnsSelector
 from lightautoml.spark.transformers.base import SequentialTransformer as SparkSequentialTransformer, \
-    UnionTransformer as SparkUnionTransformer
-from . import compare_by_content, from_pandas_to_spark, DatasetForTest, spark
+    UnionTransformer as SparkUnionTransformer, ColumnsSelector as SparkColumnsSelector
+from . import compare_by_content, from_pandas_to_spark, DatasetForTest, spark, compare_obtained_datasets
+from lightautoml.spark.dataset.base import SparkDataset
 
 DATASETS = [
 
     DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
     DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
-                   columns=["Id", "MSSubClass", "MSZoning", "LotFrontage"],
+                   columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
                        "MSSubClass": CategoryRole(np.int32),
                        "MSZoning": CategoryRole(str),
-                       "LotFrontage": CategoryRole(np.float32)
+                       "LotFrontage": CategoryRole(np.float32),
+                       "WoodDeckSF": CategoryRole(bool)
                    })
 ]
 
@@ -130,4 +132,23 @@ def test_union_transformer(spark: SparkSession, dataset: DatasetForTest):
         f"Results of the LAMA's transformer and the Spark based transformer are not equal: " \
         f"\n\nLAMA: \n{lama_data}" \
         f"\n\nSpark: \n{spark_data}"
+
+
+@pytest.mark.parametrize("dataset", [DATASETS[1]])
+def test_column_selector(spark: SparkSession, dataset: DatasetForTest):
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles)
+    sds = SparkDataset.from_lama(ds, spark)
+
+    selector = ColumnsSelector(ds.features)
+    selector.fit(ds)
+    lama_output = selector.transform(ds)
+
+    spark_selector = SparkColumnsSelector(sds.features)
+    spark_selector.fit(sds)
+    spark_output = spark_selector.transform(sds)
+
+    assert lama_output.features == spark_output.features
+
+
+
 

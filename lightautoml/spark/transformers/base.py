@@ -2,7 +2,8 @@ from typing import cast, Sequence
 
 from lightautoml.dataset.utils import concatenate
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LAMAColumnsSelector
+from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LAMAColumnsSelector, \
+    ChangeRoles as LAMAChangeRoles
 
 
 class SparkTransformer(LAMLTransformer):
@@ -190,3 +191,8 @@ class UnionTransformer(SparkTransformer):
 
 class ColumnsSelector(LAMAColumnsSelector, SparkTransformer):
     _can_unwind_parents = False
+
+
+class ChangeRoles(LAMAChangeRoles, SparkTransformer):
+    _can_unwind_parents = False
+
