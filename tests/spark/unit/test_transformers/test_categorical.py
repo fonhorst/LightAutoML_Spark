@@ -65,7 +65,17 @@ def test_cat_intersectstions(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles)
 
-    compare_by_content(spark, ds, CatIntersectstions(), SparkCatIntersectstions())
+    sds = SparkDataset.from_lama(ds, spark)
+
+    lama_transformer = CatIntersectstions()
+    lama_transformer.fit(ds)
+    lama_output = lama_transformer.transform(ds)
+
+    spark_transformer = SparkCatIntersectstions()
+    spark_transformer.fit(sds)
+    spark_output = spark_transformer.transform(sds)
+
+    compare_obtained_datasets(lama_output, spark_output)
 
 
 def test_ohe(spark: SparkSession):
