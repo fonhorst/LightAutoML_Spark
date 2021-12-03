@@ -1,9 +1,12 @@
 import logging
+from collections import defaultdict
+from copy import copy
 from itertools import chain
 from typing import Optional, Any
 
 import numpy as np
-from pyspark.sql import functions as F
+from bidict import bidict
+from pyspark.sql import functions as F, Column
 from pyspark.sql.types import IntegerType, NumericType, StringType
 
 from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
@@ -14,6 +17,32 @@ from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.tasks import Task
 
 logger = logging.getLogger(__name__)
+
+dtype2Stype ={
+    "str": "string",
+    "bool": "boolean",
+    "int": "int",
+    "int8": "int",
+    "int16": "int",
+    "int32": "int",
+    "int64": "int",
+    "int128": "bigint",
+    "int256": "bigint",
+    "integer": "int",
+    "uint8": "int",
+    "uint16": "int",
+    "uint32": "int",
+    "uint64": "int",
+    "uint128": "bigint",
+    "uint256": "bigint",
+    "longlong": "long",
+    "ulonglong": "long",
+    "float16": "float",
+    "float": "float",
+    "float32": "float",
+    "float64": "double",
+    "float128": "double"
+}
 
 
 class SparkToSparkReader(Reader):
@@ -151,6 +180,9 @@ class SparkToSparkReader(Reader):
             parsed_roles[feat] = r
 
         if "target" in kwargs:
+            assert isinstance(kwargs["target"], (str, Column)), \
+                f"Target must be a column or column name, but it is {type(kwargs['target'])}"
+            assert str(kwargs["target"]) in train_data.columns, "Target must be a part of dataframe"
             self.target = kwargs["target"]
         elif "target" in train_data.columns:
             self.target = "target"
@@ -249,8 +281,11 @@ class SparkToSparkReader(Reader):
 
         # get dataset
         # TODO: SPARK-LAMA send parent for unwinding
+        kwargs = copy(kwargs)
+        kwargs["target"] = self.target
+
         dataset = SparkDataset(
-            train_data.select(SparkDataset.ID_COLUMN, self.used_features),
+            train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
             self.roles,
             task=self.task,
             **kwargs
@@ -317,10 +352,10 @@ class SparkToSparkReader(Reader):
                 return sdf
 
             self.class_mapping = {x: i for i, x in enumerate(uniques)}
-            # tmap = F.lit(self.class_mapping)
-            tmap = F.create_map(*[F.lit(v).alias(k) for k, v in self.class_mapping.items()])
-            # sdf_with_proc_target = sdf.na.replace(self.class_mapping, subset=[target_col])
-            sdf_with_proc_target = sdf.withColumn(target_col, tmap.getItem(target_col)).drop(sdf[target_col])
+
+            remap = F.udf(lambda x: self.class_mapping[x], returnType=IntegerType())
+            rest_cols = [c for c in sdf.columns if c != target_col]
+            sdf_with_proc_target = sdf.select(*rest_cols, remap(target_col).alias(target_col))
 
             return sdf_with_proc_target
 
@@ -359,6 +394,8 @@ class SparkToSparkReader(Reader):
 
         """
         inferred_dtype = next(dtyp for fname, dtyp in data.dtypes if fname == feature)
+        # numpy doesn't understand 'string' but 'str' is ok
+        inferred_dtype = 'str' if inferred_dtype == 'string' else inferred_dtype
         inferred_dtype = np.dtype(inferred_dtype)
 
         # testing if it can be numeric or not
@@ -368,7 +405,12 @@ class SparkToSparkReader(Reader):
         if np.issubdtype(inferred_dtype, np.number):
             return NumericRole(num_dtype)
 
-        can_cast_to_numeric = F.col(feature).cast(num_dtype).isNotNull().astype(IntegerType())
+        can_cast_to_numeric = (
+            F.col(feature)
+            .cast(dtype2Stype[num_dtype.__name__])
+            .isNotNull()
+            .astype(IntegerType())
+        )
 
         # TODO: utc handling here?
         can_cast_to_datetime = F.to_timestamp(feature, format=date_format).isNotNull().astype(IntegerType())
