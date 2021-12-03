@@ -13,6 +13,7 @@ from lightautoml.transformers.numeric import NumpyTransformable
 
 import numpy as np
 import pandas as pd
+from scipy.stats import normaltest, ks_2samp
 
 # NOTE!!!
 # All tests require PYSPARK_PYTHON env variable to be set
@@ -186,3 +187,82 @@ def from_pandas_to_spark(p: PandasDataset, spark: SparkSession) -> SparkDataset:
     sdf = spark.createDataFrame(data=pdf)
     # dummy target
     return SparkDataset(sdf, roles=p.roles, target=dummy_target)
+
+def test_for_normalcy(spark: SparkSession,
+                      ds: PandasDataset,
+                      t_spark: SparkTransformer,
+                      n_iters: int = 10,
+                      exp_pval = 0.05) -> None:
+    """
+    Args:
+        spark: session to be used for calculating the example
+        ds: a dataset to be transformered by LAMA and Spark transformers
+        t_spark: spark's version of the transformer
+        n_iters: number of iterations
+        exp_pval: expected p_value to check null hypothesys
+
+    Returns:
+        Bool if result of a transformer is a normal distribution
+    """
+    sds = from_pandas_to_spark(ds, spark)
+
+    # print(f"Transformed LAMA: {transformed_ds.data}")
+
+    t_datasets = []
+
+    for _ in range(n_iters):
+        t_spark.fit(sds)
+        transformed_sds = t_spark.transform(sds)
+
+        spark_np_ds = transformed_sds.to_numpy()
+        t_datasets.append(spark_np_ds.data)
+
+    final_array = np.asarray(t_datasets)
+    stat, pval = normaltest(a=final_array, axis=0)
+    assert pval.mean() < exp_pval
+
+def test_for_same_distribution(spark: SparkSession,
+                               ds: PandasDataset,
+                               t_lama: LAMLTransformer,
+                               t_spark: SparkTransformer,
+                               n_iters: int = 10,
+                               exp_pval = 0.05):
+    """
+    Args:
+        spark: session to be used for calculating the example
+        ds: a dataset to be transformered by LAMA and Spark transformers
+        t_spark: spark's version of the transformer
+        n_iters: number of iterations
+        exp_pval: expected p_value to check null hypothesys
+
+    Returns:
+        Bool if result of a transformer is a normal distribution
+    """
+    sds = from_pandas_to_spark(ds, spark)
+
+    # print(f"Transformed LAMA: {transformed_ds.data}")
+
+    tl_datasets = []
+    ts_datasets = []
+
+    for _ in range(n_iters):
+        t_lama.fit(ds)
+        transformed_ds = t_lama.transform(ds)
+        lama_np_ds = transformed_ds.data
+        tl_datasets.append(lama_np_ds)
+
+        t_spark.fit(sds)
+        transformed_sds = t_spark.transform(sds)
+
+        spark_np_ds = transformed_sds.to_numpy()
+        ts_datasets.append(spark_np_ds.data)
+
+    final_larray = np.asarray(tl_datasets)
+    final_sarray = np.asarray(ts_datasets)
+    stat, pval = ks_2samp(data1=final_sarray.reshape(-1), data2=final_larray.reshape(-1))
+    assert pval.mean() < exp_pval
+
+
+
+
+

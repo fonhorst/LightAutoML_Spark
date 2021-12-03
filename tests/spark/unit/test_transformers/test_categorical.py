@@ -12,7 +12,7 @@ from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabe
     TargetEncoder as SparkTargetEncoder, MultiClassTargetEncoder as SparkMultiClassTargetEncoder
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     OHEEncoder, TargetEncoder, MultiClassTargetEncoder
-from . import from_pandas_to_spark
+from . import from_pandas_to_spark, test_for_normalcy, test_for_same_distribution
 from . import compare_by_content, compare_by_metadata, DatasetForTest, spark
 
 DATASETS = [
@@ -78,12 +78,43 @@ def test_ohe(spark: SparkSession):
     _, _ = compare_by_metadata(spark, ds, OHEEncoder(make_sparse), SparkOHEEncoder(make_sparse))
 
 
+def test_ohe_normalcy(spark: SparkSession):
+    make_sparse = False
+    source_data = pd.DataFrame(data={
+        "a": [1, 4, 5, 4, 2, 3],
+        "b": [1, 4, 4, 4, 2, 3],
+        "c": [1, 1, 1, 1, 1, 1],
+        "d": [3, 1, 3, 2, 2, 1]
+    })
+
+    ds = PandasDataset(source_data, roles={
+        name: CategoryRole(dtype=np.int32, label_encoded=True)
+        for name in source_data.columns
+    })
+    test_for_normalcy(spark, ds, SparkOHEEncoder(make_sparse))
+
+def test_ohe_similarity(spark: SparkSession):
+    make_sparse = False
+    source_data = pd.DataFrame(data={
+        "a": [1, 4, 5, 4, 2, 3],
+        "b": [1, 4, 4, 4, 2, 3],
+        "c": [1, 1, 1, 1, 1, 1],
+        "d": [3, 1, 3, 2, 2, 1]
+    })
+
+    ds = PandasDataset(source_data, roles={
+        name: CategoryRole(dtype=np.int32, label_encoded=True)
+        for name in source_data.columns
+    })
+    test_for_same_distribution(spark, ds, OHEEncoder(make_sparse), SparkOHEEncoder(make_sparse))
+
+
 def test_target_encoder(spark: SparkSession):
     df = pd.read_csv("test_transformers/resources/datasets/house_prices.csv")[
         ["Id", 'MSSubClass', 'MSZoning', 'LotFrontage', 'WoodDeckSF']
     ]
     # %%
-    ds = PandasDataset(df.head(50),
+    ds = PandasDataset(df,
                        roles={
                            "Id": CategoryRole(np.int32),
                            "MSSubClass": CategoryRole(np.int32),
@@ -129,6 +160,17 @@ def test_target_encoder(spark: SparkSession):
     # compare shapes
     assert lama_np_ds.shape == spark_np_ds.shape, "Shapes are not equals"
 
+    # features: List[int] = [i for i, _ in sorted(enumerate(lama_result.features), key=lambda x: x[1])]
+
+    # trans_data: np.ndarray = lama_np_ds.data
+    # trans_data_result: np.ndarray = spark_np_ds.data
+    # # TODO: fix type checking here
+    # # compare content equality of numpy arrays
+    # assert np.allclose(trans_data[:, features], trans_data_result[:, features], equal_nan=True), \
+    #     f"Results of the LAMA's transformer and the Spark based transformer are not equal: " \
+    #     f"\n\nLAMA: \n{trans_data}" \
+    #     f"\n\nSpark: \n{trans_data_result}"
+
 
 
 def test_multiclass_target_encoder(spark: SparkSession):
@@ -136,7 +178,7 @@ def test_multiclass_target_encoder(spark: SparkSession):
         ["Id", 'MSSubClass', 'MSZoning', 'LotFrontage', 'WoodDeckSF']
     ]
     # %%
-    ds = PandasDataset(df.head(50),
+    ds = PandasDataset(df,
                        roles={
                            "Id": CategoryRole(np.int32),
                            "MSSubClass": CategoryRole(np.int32),
