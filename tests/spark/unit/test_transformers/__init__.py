@@ -181,10 +181,19 @@ def from_pandas_to_spark(p: PandasDataset, spark: SparkSession) -> SparkDataset:
     pdf = cast(pd.DataFrame, p.data)
     pdf = pdf.copy()
     pdf[SparkDataset.ID_COLUMN] = pdf.index
-    dummy_target = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "target": np.zeros(pdf.shape[0])})
+
+    target_col = None
+    if "target" in pdf.columns.names:
+        target_col = "target"
+    elif "TARGET" in pdf.columns.names:
+        target_col = "TARGET"
+    else:
+        target_col = "target"
+        pdf[target_col] = np.zeros(pdf.shape[0])
+    # dummy_target = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "target": })
     sdf = spark.createDataFrame(data=pdf)
     # dummy target
-    return SparkDataset(sdf, roles=p.roles, target=dummy_target)
+    return SparkDataset(sdf, roles=p.roles, target=target_col)
 
 
 def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):
