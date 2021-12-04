@@ -45,36 +45,3 @@ def test_smoke_linear_bgfs(spark: SparkSession):
     assert len(pred_ds.features) == 1
     assert pred_ds.features[0].endswith("_prediction")
     assert pred_ds.features[0] in predicted_sdf.columns
-
-####################################
-# import os
-# os.environ['PYSPARK_PYTHON'] = '/home/nikolay/.conda/envs/LAMA/bin/python'
-#
-# from pyspark.sql import SparkSession
-# from pyspark.ml.regression import LinearRegression
-# from pyspark.ml.linalg import Vectors
-# from pyspark.sql import functions as F
-#
-# spark = SparkSession.builder.master("local[1]").getOrCreate()
-#
-# df = spark.createDataFrame([
-#     (1.0, 2.0, Vectors.dense(1.0)),
-#     (0.0, 2.0, Vectors.sparse(1, [], []))], ["label", "weight", "features"])
-# lr = LinearRegression(regParam=0.0, solver="normal", weightCol="weight")
-# lr.setMaxIter(5)
-# lr.setRegParam(0.1)
-#
-# model = lr.fit(df)
-# model.setFeaturesCol("features")
-# model.setPredictionCol("newPrediction")
-#
-# test0 = spark.createDataFrame([(Vectors.dense(-1.0),)], ["features"])
-# model.transform(test0)
-# abs(model.predict(test0.head().features) - (-1.0)) < 0.001
-# True
-# abs(model.transform(test0).head().newPrediction - (-1.0)) < 0.001
-# True
-# abs(model.coefficients[0] - 1.0) < 0.001
-# True
-# abs(model.intercept - 0.0) < 0.001
-
