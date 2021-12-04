@@ -4,6 +4,7 @@ import pytest
 from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import NumpyDataset
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
 from lightautoml.tasks import Task
 from lightautoml.validation.base import DummyIterator
@@ -35,9 +36,15 @@ def test_smoke_linear_bgfs(spark: SparkSession):
     iterator = DummyIterator(train=sds)
 
     ml_algo = LinearLBFGS()
-    predicted = ml_algo.fit_predict(iterator).data
+    pred_ds = ml_algo.fit_predict(iterator)
 
-    predicted.show(10)
+    predicted_sdf = pred_ds.data
+    predicted_sdf.show(10)
+
+    assert SparkDataset.ID_COLUMN in predicted_sdf.columns
+    assert len(pred_ds.features) == 1
+    assert pred_ds.features[0].endswith("_prediction")
+    assert pred_ds.features[0] in predicted_sdf.columns
 
 ####################################
 # import os

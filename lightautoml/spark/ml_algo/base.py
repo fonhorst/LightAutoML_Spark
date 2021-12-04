@@ -6,6 +6,7 @@ from pyspark.ml import Model
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.sql import functions as F, Column
 
+from lightautoml.dataset.roles import NumericRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
@@ -84,7 +85,7 @@ class TabularMLAlgo(MLAlgo):
 
         preds_dfs: List[SparkDataFrame] = []
 
-        pred_col_prefix = "prediction"
+        pred_col_prefix = self._predict_feature_name()
 
         # TODO: SPARK-LAMA - we need to cache the "parent" dataset of the train_valid_iterator
         # train_valid_iterator.cache()
@@ -166,7 +167,7 @@ class TabularMLAlgo(MLAlgo):
         """
         assert self.models != [], "Should be fitted first."
 
-        pred_col_prefix = "prediction"
+        pred_col_prefix = self._predict_feature_name()
         preds_dfs = [
             self.predict_single_fold(model, dataset).select(
                 SparkDataset.ID_COLUMN,
@@ -225,7 +226,7 @@ class TabularMLAlgo(MLAlgo):
                 return (F.col(pred_col_prefix) + F.col(f"{pred_col_prefix}_{i}")).alias(pred_col_prefix)
 
             def avg_preds_sum_col() -> Column:
-                return F.col(pred_col_prefix) / F.col("counter")
+                return (F.col(pred_col_prefix) / F.col("counter")).alias(pred_col_prefix)
 
         full_preds_df = preds_ds.data.select(
             SparkDataset.ID_COLUMN,
@@ -259,6 +260,9 @@ class TabularMLAlgo(MLAlgo):
 
         return full_preds_df
 
+    def _predict_feature_name(self):
+        return f"{self._name}_prediction"
+
     def _set_prediction(self, dataset: SparkDataset,  preds: SparkDataFrame) -> SparkDataset:
         """Insert predictions to dataset with. Inplace transformation.
 
@@ -270,14 +274,19 @@ class TabularMLAlgo(MLAlgo):
             Transformed dataset.
 
         """
-        prefix = f"{self._name}_prediction"
+
         prob = self.task.name in ["binary", "multiclass"]
-        role = NumericVectorOrArrayRole(size=self.n_classes,
-                                        element_col_name_template=prefix + "_{}",
-                                        dtype=np.float32,
-                                        force_input=True,
-                                        prob=prob)
-        dataset.set_data(preds, [prefix], role)
+
+        if self.task.name == "multiclass":
+            role = NumericVectorOrArrayRole(size=self.n_classes,
+                                            element_col_name_template=self._predict_feature_name() + "_{}",
+                                            dtype=np.float32,
+                                            force_input=True,
+                                            prob=prob)
+        else:
+            role = NumericRole(dtype=np.float32, force_input=True, prob=prob)
+
+        dataset.set_data(preds, [self._predict_feature_name()], role)
 
         return dataset
 
