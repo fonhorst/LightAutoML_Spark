@@ -4,7 +4,7 @@ from typing import Tuple, cast, List, Optional
 import numpy as np
 from pyspark.ml import Model
 from pyspark.ml.functions import vector_to_array, array_to_vector
-from pyspark.sql import functions as F
+from pyspark.sql import functions as F, Column
 
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
@@ -194,11 +194,43 @@ class TabularMLAlgo(MLAlgo):
         #    to provide uniformity for summing operations
         # 5. we also convert output from vector to an array to combine them
         counter_col_name = "counter"
-        empty_pred = F.lit(np.zeros(self.n_classes))
+
+        if self.task.name == "multiclass":
+            empty_pred = F.array(*[F.lit(0) for _ in range(self.n_classes)])
+
+            def convert_col(prediction_column: str) -> Column:
+                return vector_to_array(F.col(prediction_column))
+
+            # full_preds_df
+            def sum_predictions_col() -> Column:
+                # curr_df[pred_col_prefix]
+                return F.transform(
+                    F.arrays_zip(pred_col_prefix, f"{pred_col_prefix}_{i}"),
+                    lambda x, y: x + y
+                ).alias(pred_col_prefix)
+
+            def avg_preds_sum_col() -> Column:
+                return array_to_vector(
+                    F.transform(pred_col_prefix, lambda x: x / F.col("counter"))
+                ).alias(pred_col_prefix)
+        else:
+            empty_pred = F.lit(0)
+
+            # trivial operator in this case
+            def convert_col(prediction_column: str) -> Column:
+                return F.col(prediction_column)
+
+            def sum_predictions_col() -> Column:
+                # curr_df[pred_col_prefix]
+                return (F.col(pred_col_prefix) + F.col(f"{pred_col_prefix}_{i}")).alias(pred_col_prefix)
+
+            def avg_preds_sum_col() -> Column:
+                return F.col(pred_col_prefix) / F.col("counter")
+
         full_preds_df = preds_ds.data.select(
             SparkDataset.ID_COLUMN,
             F.lit(0).alias(counter_col_name),
-            empty_pred
+            empty_pred.alias(pred_col_prefix)
         )
         for i, pred_df in enumerate(preds_dfs):
             pred_col = f"{pred_col_prefix}_{i}"
@@ -207,24 +239,22 @@ class TabularMLAlgo(MLAlgo):
                 .join(pred_df, on=SparkDataset.ID_COLUMN, how="left_outer")
                 .select(
                     full_preds_df[SparkDataset.ID_COLUMN],
+                    pred_col_prefix,
                     F.when(F.col(pred_col).isNull(), empty_pred)
-                        .otherwise(vector_to_array(F.col(pred_col))).alias(pred_col),
+                        .otherwise(convert_col(pred_col)).alias(pred_col),
                     F.when(F.col(pred_col).isNull(), F.col(counter_col_name))
                         .otherwise(F.col(counter_col_name) + 1).alias(counter_col_name)
                 )
                 .select(
                     full_preds_df[SparkDataset.ID_COLUMN],
                     counter_col_name,
-                    F.transform(
-                        F.arrays_zip(full_preds_df[pred_col_prefix], f"{pred_col_prefix}_{i}"),
-                        lambda x, y: x + y
-                    ).alias(pred_col_prefix),
+                    sum_predictions_col()
                 )
             )
 
         full_preds_df = full_preds_df.select(
             SparkDataset.ID_COLUMN,
-            array_to_vector(F.transform(pred_col_prefix, lambda x: x / F.col("counter"))).alias(pred_col_prefix)
+            avg_preds_sum_col()
         )
 
         return full_preds_df

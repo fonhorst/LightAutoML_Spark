@@ -182,7 +182,7 @@ def from_pandas_to_spark(p: PandasDataset, spark: SparkSession, target: Optional
     pdf = pdf.copy()
     pdf[SparkDataset.ID_COLUMN] = pdf.index
 
-    if target:
+    if target is not None:
         # TODO: you may have an array in the input cols, so probably it should be transformed into the vector
         tpdf = target.to_frame("target")
         tpdf[SparkDataset.ID_COLUMN] = pdf.index
@@ -193,7 +193,7 @@ def from_pandas_to_spark(p: PandasDataset, spark: SparkSession, target: Optional
     target_sdf = spark.createDataFrame(data=tpdf)
 
     sdf = spark.createDataFrame(data=pdf)
-    return SparkDataset(sdf, roles=p.roles, target=target_sdf)
+    return SparkDataset(sdf, roles=p.roles, target=target_sdf, task=p.task)
 
 
 def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):
