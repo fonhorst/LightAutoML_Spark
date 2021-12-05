@@ -586,7 +586,7 @@ class TargetEncoder(SparkTransformer):
                         for i in range(0, len(self.alphas))
                     ]
                 ).collect()[0]
-            )).argmin()
+            ), dtype=np.float64).argmin()
 
             # "Приклеиваем" лучшего кандидата к исходному датафрейму и дропаем колонку со старыми значениями
             df = df.join(
