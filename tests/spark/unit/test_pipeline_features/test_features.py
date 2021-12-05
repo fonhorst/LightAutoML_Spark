@@ -23,8 +23,9 @@ from . import DatasetForTest, spark, compare_obtained_datasets
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures as SparkLinearFeatures
 
-from lightautoml.pipelines.features.lgb_pipeline import LGBSimpleFeatures
-from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures as SparkLGBSimpleFeatures
+from lightautoml.pipelines.features.lgb_pipeline import LGBSimpleFeatures, LGBAdvancedPipeline
+from lightautoml.spark.pipelines.features.lgb_pipeline import \
+    LGBSimpleFeatures as SparkLGBSimpleFeatures, LGBAdvancedPipeline as SparkLGBAdvancedPipeline
 
 from lightautoml.spark.dataset.base import SparkDataset
 from ..test_transformers import from_pandas_to_spark
@@ -97,16 +98,42 @@ def test_lgb_simple_features(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
     # sds = SparkDataset.from_lama(ds, spark)
-    sds = SparkDataset.from_lama(ds, spark, ds.target)
+    sds = from_pandas_to_spark(ds, spark, ds.target)
 
     lgb_features = LGBSimpleFeatures()
 
     lama_transformer = lgb_features.create_pipeline(ds)
-    lama_ds = lama_transformer.fit_transform(ds)
 
     spark_lgb_features = SparkLGBSimpleFeatures()
-
     spark_transformer = spark_lgb_features.create_pipeline(sds)
-    spark_ds = spark_transformer.fit_transform(sds)
+
+    with print_exec_time():
+        lama_ds = lama_transformer.fit_transform(ds)
+
+    with print_exec_time():
+        spark_ds = spark_transformer.fit_transform(sds)
+
+    compare_obtained_datasets(lama_ds, spark_ds)
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_lgb_advanced_features(spark: SparkSession, dataset: DatasetForTest):
+
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
+    # sds = SparkDataset.from_lama(ds, spark)
+    sds = from_pandas_to_spark(ds, spark, ds.target)
+
+    lgb_features = LGBAdvancedPipeline()
+
+    lama_transformer = lgb_features.create_pipeline(ds)
+
+    spark_lgb_features = SparkLGBAdvancedPipeline()
+    spark_transformer = spark_lgb_features.create_pipeline(sds)
+
+    with print_exec_time():
+        lama_ds = lama_transformer.fit_transform(ds)
+
+    with print_exec_time():
+        spark_ds = spark_transformer.fit_transform(sds)
 
     compare_obtained_datasets(lama_ds, spark_ds)
