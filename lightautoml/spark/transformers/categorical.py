@@ -17,13 +17,13 @@ from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.transformers.base import SparkTransformer
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
     multiclass_task_check
+from lightautoml.transformers.base import LAMLTransformer
+
 
 # FIXME SPARK-LAMA: np.nan in str representation is 'nan' while Spark's NaN is 'NaN'. It leads to different hashes.
 # FIXME SPARK-LAMA: If udf is defined inside the class, it not works properly.
 # "if murmurhash3_32 can be applied to a whole pandas Series, it would be better to make it via pandas_udf"
 # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749534669
-from lightautoml.transformers.base import LAMLTransformer
-
 murmurhash3_32_udf = F.udf(lambda value: murmurhash3_32(value.replace("NaN", "nan"), seed=42), SparkTypes.IntegerType())
 
 
