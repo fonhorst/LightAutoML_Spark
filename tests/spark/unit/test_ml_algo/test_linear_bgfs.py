@@ -25,7 +25,7 @@ def spark() -> SparkSession:
 
 
 def test_smoke_linear_bgfs(spark: SparkSession):
-    with open("unit/test_ml_algo/datasets/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
+    with open("datasets/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
         data, target, features, roles = pickle.load(f)
 
     nds = NumpyDataset(data, features, roles, task=Task("binary"))

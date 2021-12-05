@@ -15,7 +15,7 @@ from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.transformers.categorical import FreqEncoder, OrdinalEncoder, LabelEncoder, \
-    MockTargetEncoder as TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
+    TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
 from lightautoml.spark.transformers.datetime import BaseDiff, DateSeasons
 from lightautoml.spark.transformers.base import SequentialTransformer, ColumnsSelector, ChangeRoles, \
     UnionTransformer, SparkTransformer

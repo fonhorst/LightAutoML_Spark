@@ -16,7 +16,7 @@ from ..test_transformers import from_pandas_to_spark
 
 def test_smoke_boost_lgbm_v2(spark: SparkSession):
 
-    with open("unit/test_ml_algo/datasets/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
+    with open("datasets/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
         data, target, features, roles = pickle.load(f)
 
     nds = NumpyDataset(data[4000:, :], features, roles, task=Task("binary"))
