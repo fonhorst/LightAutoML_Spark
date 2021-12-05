@@ -5,7 +5,6 @@ from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import CategoryRole
-from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
@@ -13,14 +12,14 @@ from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabe
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     OHEEncoder, TargetEncoder
-from . import compare_by_content, compare_by_metadata, DatasetForTest, compare_obtained_datasets, from_pandas_to_spark
-from . import spark
+from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_datasets, compare_by_metadata, \
+    compare_by_content
 
 DATASETS = [
 
-    # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
+    # DatasetForTest("../resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
+    DatasetForTest("../resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),

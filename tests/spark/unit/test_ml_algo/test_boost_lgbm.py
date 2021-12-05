@@ -11,12 +11,12 @@ from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM
 from lightautoml.spark.dataset.base import SparkDataset
 
 from . import spark
-from ..test_transformers import from_pandas_to_spark
+from .. import from_pandas_to_spark
 
 
 def test_smoke_boost_lgbm_v2(spark: SparkSession):
 
-    with open("datasets/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
+    with open("../resources/datasets/dump_tabular_automl_lgb_cb_linear/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
         data, target, features, roles = pickle.load(f)
 
     nds = NumpyDataset(data[4000:, :], features, roles, task=Task("binary"))

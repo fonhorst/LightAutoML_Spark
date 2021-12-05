@@ -1,40 +1,23 @@
-import time
-from contextlib import contextmanager
-from datetime import datetime
-
 import numpy as np
-import pandas as pd
 import pytest
 from pyspark.sql import SparkSession
 
-from typing import cast, List
-from lightautoml.transformers.numeric import NumpyTransformable
-from lightautoml.tasks import Task
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
-from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
-    OrdinalEncoder as SparkOrdinalEncoder, CatIntersectstions as SparkCatIntersectstions
-from lightautoml.transformers.categorical import LabelEncoder, OrdinalEncoder, CatIntersectstions
-from lightautoml.transformers.base import SequentialTransformer, UnionTransformer
-from lightautoml.spark.transformers.base import SequentialTransformer as SparkSequentialTransformer, \
-    UnionTransformer as SparkUnionTransformer, print_exec_time
-from . import DatasetForTest, spark, compare_obtained_datasets
-
-from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
-from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures as SparkLinearFeatures
-
 from lightautoml.pipelines.features.lgb_pipeline import LGBSimpleFeatures, LGBAdvancedPipeline
+from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.spark.pipelines.features.lgb_pipeline import \
     LGBSimpleFeatures as SparkLGBSimpleFeatures, LGBAdvancedPipeline as SparkLGBAdvancedPipeline
-
-from lightautoml.spark.dataset.base import SparkDataset
-from ..test_transformers import from_pandas_to_spark
+from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures as SparkLinearFeatures
+from lightautoml.spark.transformers.base import print_exec_time
+from lightautoml.tasks import Task
+from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_datasets
 
 DATASETS = [
 
     # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
+    DatasetForTest("../resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
@@ -90,7 +73,7 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
         spark_ds = spark_transformer.fit_transform(sds)
 
     # time.sleep(600)
-    # compare_obtained_datasets(lama_ds, spark_ds)
+    compare_obtained_datasets(lama_ds, spark_ds)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

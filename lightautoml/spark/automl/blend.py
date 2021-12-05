@@ -16,10 +16,11 @@ import numpy as np
 
 
 class BlenderMixin(Blender, ABC):
-    def score(self, dataset: LAMLDataset) -> float:
-        # TODO: SPARK-LAMA convert self._score to a required metric
-
-        raise NotImplementedError()
+    pass
+    # def score(self, dataset: LAMLDataset) -> float:
+    #     # TODO: SPARK-LAMA convert self._score to a required metric
+    #
+    #     raise NotImplementedError()
 
 
 class BestModelSelector(BlenderMixin, LAMABestModelSelector):

@@ -8,7 +8,8 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
 from lightautoml.tasks import Task
 from lightautoml.validation.base import DummyIterator
-from ..test_transformers import from_pandas_to_spark
+from .. import from_pandas_to_spark
+from . import spark
 
 import pandas as pd
 
@@ -25,7 +26,7 @@ def spark() -> SparkSession:
 
 
 def test_smoke_linear_bgfs(spark: SparkSession):
-    with open("datasets/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
+    with open("../resources/datasets/dump_tabular_automl_lgb_cb_linear/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
         data, target, features, roles = pickle.load(f)
 
     nds = NumpyDataset(data, features, roles, task=Task("binary"))

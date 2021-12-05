@@ -11,7 +11,7 @@ from lightautoml.spark.transformers.numeric import LogOdds as SparkLogOdds, Stan
 from lightautoml.spark.transformers.numeric import NaNFlags as SparkNaNFlags, FillInf as SparkFillInf, \
     FillnaMedian as SparkFillnaMedian
 from lightautoml.transformers.numeric import NaNFlags, FillnaMedian, StandardScaler, LogOdds, QuantileBinning, FillInf
-from . import compare_by_content, compare_by_metadata, DatasetForTest, spark
+from .. import DatasetForTest, spark, compare_by_content, compare_by_metadata
 
 # Note:
 # -s means no stdout capturing thus allowing one to see what happens in reality
@@ -23,9 +23,9 @@ from . import compare_by_content, compare_by_metadata, DatasetForTest, spark
 
 DATASETS = [
 
-    # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=NumericRole(np.int32)),
+    # DatasetForTest("../resources/datasets/dataset_23_cmc.csv", default_role=NumericRole(np.int32)),
 
-    DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
+    DatasetForTest("../resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "LotFrontage"],
                    roles={
                        "Id": NumericRole(np.int32),
