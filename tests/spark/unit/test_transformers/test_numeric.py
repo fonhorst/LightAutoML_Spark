@@ -92,7 +92,7 @@ def test_standard_scaler(spark: SparkSession):
     assert ~np.isnan(spark_np_ds.data).all()
 
 
-@pytest.mark.skip("Need to check implementation again")
+# @pytest.mark.skip("Need to check implementation again")
 def test_logodds(spark: SparkSession):
     source_data = pd.DataFrame(data={
         "a": [0.1, 34.7, float(1e-10), 2.01, 5.0],

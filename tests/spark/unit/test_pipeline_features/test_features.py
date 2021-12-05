@@ -23,12 +23,13 @@ from lightautoml.pipelines.features.lgb_pipeline import LGBSimpleFeatures
 from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures as SparkLGBSimpleFeatures
 
 from lightautoml.spark.dataset.base import SparkDataset
+from ..test_transformers import from_pandas_to_spark
 
 DATASETS = [
 
     # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("../test_transformers/resources/datasets/house_prices.csv",
+    DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
@@ -44,7 +45,8 @@ DATASETS = [
 def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
-    sds = SparkDataset.from_lama(ds, spark)
+    # sds = SparkDataset.from_lama(ds, spark)
+    sds = from_pandas_to_spark(ds, spark, ds.target)
 
     linear_features = LinearFeatures(
         output_categories=True,
@@ -56,7 +58,6 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
     )
 
     lama_transformer = linear_features.create_pipeline(ds)
-    lama_ds = lama_transformer.fit_transform(ds)
 
     spark_linear_features = SparkLinearFeatures(
         output_categories=True,
@@ -68,8 +69,15 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
     )
 
     spark_transformer = spark_linear_features.create_pipeline(sds)
-    spark_ds = spark_transformer.fit_transform(sds)
 
+    # print()
+    # print(spark_transformer.print_structure())
+    # print()
+    # print()
+    # print(spark_transformer.print_tr_types())
+
+    lama_ds = lama_transformer.fit_transform(ds).to_numpy()
+    spark_ds = spark_transformer.fit_transform(sds)
 
     compare_obtained_datasets(lama_ds, spark_ds)
 
@@ -78,7 +86,8 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
 def test_lgb_simple_features(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
-    sds = SparkDataset.from_lama(ds, spark)
+    # sds = SparkDataset.from_lama(ds, spark)
+    sds = SparkDataset.from_lama(ds, spark, ds.target)
 
     lgb_features = LGBSimpleFeatures()
 
