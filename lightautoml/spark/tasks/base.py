@@ -38,13 +38,10 @@ class SparkMetric(LAMLMetric):
         self._metric_params = metric_params
 
     def __call__(self, dataset: SparkDataset, dropna: bool = False):
-        # TODO: params processing and dropna
-        pred_cols = [f for f in dataset.features if "_prediction_" in f]
-        assert len(pred_cols) == 1, \
-            f"Cannot identify prediction column. There should be exactly one prediction column." \
-            f"Columns with predictions: {pred_cols}"
+        assert len(dataset.features) == 1, \
+            f"Dataset should contain only one feature that would be interpretated as a prediction"
 
-        prediction_column = pred_cols[0]
+        prediction_column = dataset.features[0]
 
         sdf = dataset.data.dropna() if dropna else dataset.data
         sdf = (

@@ -239,10 +239,13 @@ def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):
         f"SPARK: {sorted(spark_np_ds.features)}"
 
     # compare roles equality for the columns
-    assert lama_np_ds.roles == spark_np_ds.roles, "Roles are not equal"
+    assert lama_np_ds.roles == spark_np_ds.roles, \
+        f"Roles are not equal.\n" \
+        f"LAMA: {lama_np_ds.roles}\n" \
+        f"Spark: {spark_np_ds.roles}"
 
     # compare shapes
-    assert lama_np_ds.shape == spark_np_ds.shape, "Shapes are not equals"
+    assert lama_np_ds.shape == spark_np_ds.shape
 
     lama_data: np.ndarray = lama_np_ds.data
     spark_data: np.ndarray = spark_np_ds.data

@@ -64,4 +64,4 @@ def test_best_blender(spark: SparkSession):
 
 
 def test_weighted_blender(spark: SparkSession):
-    do_compare_blenders(spark, WeightedBlender(), SparkWeightedBlender(), to_vector=True)
+    do_compare_blenders(spark, WeightedBlender(), SparkWeightedBlender())
