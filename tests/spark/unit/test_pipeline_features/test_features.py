@@ -1,3 +1,7 @@
+import time
+from contextlib import contextmanager
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -13,7 +17,7 @@ from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabe
 from lightautoml.transformers.categorical import LabelEncoder, OrdinalEncoder, CatIntersectstions
 from lightautoml.transformers.base import SequentialTransformer, UnionTransformer
 from lightautoml.spark.transformers.base import SequentialTransformer as SparkSequentialTransformer, \
-    UnionTransformer as SparkUnionTransformer
+    UnionTransformer as SparkUnionTransformer, print_exec_time
 from . import DatasetForTest, spark, compare_obtained_datasets
 
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
@@ -70,16 +74,22 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
 
     spark_transformer = spark_linear_features.create_pipeline(sds)
 
-    # print()
-    # print(spark_transformer.print_structure())
-    # print()
-    # print()
-    # print(spark_transformer.print_tr_types())
+    print()
+    print(spark_transformer.print_structure())
+    print()
+    print()
+    print(spark_transformer.print_tr_types())
 
-    lama_ds = lama_transformer.fit_transform(ds).to_numpy()
-    spark_ds = spark_transformer.fit_transform(sds)
+    # raise NotImplementedError()
 
-    compare_obtained_datasets(lama_ds, spark_ds)
+    with print_exec_time():
+        lama_ds = lama_transformer.fit_transform(ds).to_numpy()
+
+    with print_exec_time():
+        spark_ds = spark_transformer.fit_transform(sds)
+
+    # time.sleep(600)
+    # compare_obtained_datasets(lama_ds, spark_ds)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

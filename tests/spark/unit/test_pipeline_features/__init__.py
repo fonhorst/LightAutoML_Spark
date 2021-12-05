@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Tuple, get_args, cast, List, Optional, Dict
 
 import pytest
@@ -28,6 +29,7 @@ def spark() -> SparkSession:
 
     yield spark
 
+    time.sleep(600)
     spark.stop()
 
 
@@ -42,6 +44,10 @@ class DatasetForTest:
             self.dataset = pd.read_csv(path)
         else:
             self.dataset = df
+
+        # TODO: don;t forget to remove the end
+        self.dataset = self.dataset.iloc[:100]
+        print(f"Datatset shape: {self.dataset.shape}")
 
         if columns is not None:
             self.dataset = self.dataset[columns]

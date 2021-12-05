@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Tuple, get_args, cast, List, Optional, Dict
 
 import pytest
@@ -28,6 +29,7 @@ def spark() -> SparkSession:
 
     yield spark
 
+    time.sleep(600)
     spark.stop()
 
 

@@ -108,6 +108,7 @@ class FillnaMedian(SparkTransformer):
 
         """
 
+        print("I'm in fit")
         sdf = dataset.data
 
         rows = sdf\
@@ -133,7 +134,7 @@ class FillnaMedian(SparkTransformer):
             SparkDataset with replaced NaN with medians
 
         """
-
+        print("I'm in transform")
         sdf = dataset.data
 
         new_sdf = sdf.select(*dataset.service_columns, *[

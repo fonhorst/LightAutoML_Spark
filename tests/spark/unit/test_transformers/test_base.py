@@ -33,7 +33,7 @@ DATASETS = [
 ]
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
+@pytest.mark.parametrize("dataset", [DATASETS[1]])
 def test_seq_transformer(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles)

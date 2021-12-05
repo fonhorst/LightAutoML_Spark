@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import pandas as pd
 import pytest
@@ -22,7 +23,7 @@ from . import compare_by_content, compare_by_metadata, DatasetForTest, spark
 
 DATASETS = [
 
-    DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=NumericRole(np.int32)),
+    # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=NumericRole(np.int32)),
 
     DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "LotFrontage"],
@@ -64,15 +65,18 @@ def test_nan_flags(spark: SparkSession):
     compare_by_content(spark, ds, NaNFlags(nan_rate), SparkNaNFlags(nan_rate))
 
 
-def test_fillna_medians(spark: SparkSession):
-    source_data = pd.DataFrame(data={
-        "a": [0.1, 34.7, float("nan"), 2.01, 5.0],
-        "b": [0.12, 1.7, 28.38, 0.002, 1.4],
-        "c": [0.11, 12.67, 89.1, float("nan"), -0.99],
-        "d": [0.001, 0.003, 0.5, 0.991, 0.1]
-    })
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_fillna_medians(spark: SparkSession, dataset: DatasetForTest):
+    # source_data = pd.DataFrame(data={
+    #     "a": [0.1, 34.7, float("nan"), 2.01, 5.0],
+    #     "b": [0.12, 1.7, 28.38, 0.002, 1.4],
+    #     "c": [0.11, 12.67, 89.1, float("nan"), -0.99],
+    #     "d": [0.001, 0.003, 0.5, 0.991, 0.1]
+    # })
+    # ds = PandasDataset(source_data, roles={name: NumericRole(np.float32) for name in source_data.columns})
 
-    ds = PandasDataset(source_data, roles={name: NumericRole(np.float32) for name in source_data.columns})
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles)
+
     _, spark_np_ds = compare_by_metadata(spark, ds, FillnaMedian(), SparkFillnaMedian())
 
     assert ~np.isnan(spark_np_ds.data).all()

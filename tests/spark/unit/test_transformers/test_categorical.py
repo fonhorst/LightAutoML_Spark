@@ -18,7 +18,7 @@ from . import spark
 
 DATASETS = [
 
-    DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
+    # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
     DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
@@ -88,10 +88,12 @@ def test_ohe(spark: SparkSession):
         name: CategoryRole(dtype=np.int32, label_encoded=True)
         for name in source_data.columns
     })
+
+    # ds = PandasDataset(dataset.dataset, roles=dataset.roles)
     _, _ = compare_by_metadata(spark, ds, OHEEncoder(make_sparse), SparkOHEEncoder(make_sparse))
 
 
-@pytest.mark.parametrize("dataset", [DATASETS[1]])
+@pytest.mark.parametrize("dataset", DATASETS)
 def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
