@@ -137,7 +137,8 @@ def test_union_transformer(spark: SparkSession, dataset: DatasetForTest):
 @pytest.mark.parametrize("dataset", [DATASETS[1]])
 def test_column_selector(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles)
-    sds = SparkDataset.from_lama(ds, spark)
+    # sds = SparkDataset.from_lama(ds, spark)
+    sds = from_pandas_to_spark(ds, spark, ds.target)
 
     selector = ColumnsSelector(ds.features)
     selector.fit(ds)

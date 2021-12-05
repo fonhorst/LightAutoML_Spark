@@ -28,7 +28,7 @@ DATASETS = [
 
     # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("test_transformers/resources/datasets/house_prices.csv",
+    DatasetForTest("../test_transformers/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),

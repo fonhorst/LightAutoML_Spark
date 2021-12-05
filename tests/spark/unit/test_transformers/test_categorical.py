@@ -1,5 +1,3 @@
-from typing import cast, List
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,19 +5,16 @@ from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import CategoryRole
-from lightautoml.tasks.base import Task
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
-    TargetEncoder as SparkTargetEncoder, MultiClassTargetEncoder as SparkMultiClassTargetEncoder
-from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
-    OHEEncoder, TargetEncoder, MultiClassTargetEncoder
+    TargetEncoder as SparkTargetEncoder
 from lightautoml.tasks import Task
-
-from . import compare_by_content, compare_by_metadata, DatasetForTest, spark, NumpyTransformable, \
-    compare_obtained_datasets, from_pandas_to_spark
-from lightautoml.spark.dataset.base import SparkDataset
-
+from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
+    OHEEncoder, TargetEncoder
+from . import compare_by_content, compare_by_metadata, DatasetForTest, compare_obtained_datasets, from_pandas_to_spark
+from . import spark
 
 DATASETS = [
 
@@ -66,7 +61,8 @@ def test_cat_intersectstions(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles)
 
-    sds = SparkDataset.from_lama(ds, spark)
+    # sds = SparkDataset.from_lama(ds, spark)
+    sds = from_pandas_to_spark(ds, spark, ds.target)
 
     lama_transformer = CatIntersectstions()
     lama_transformer.fit(ds)

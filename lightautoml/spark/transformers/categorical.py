@@ -519,7 +519,7 @@ class TargetEncoder(SparkTransformer):
                 .withColumn(
                     "_candidates",
                     F.array(
-                        [
+                        *[
                             (F.col("_oof_sum") + a * F.col("_folds_prior"))
                             / (F.col("_oof_count") + a)
                             for a in self.alphas
