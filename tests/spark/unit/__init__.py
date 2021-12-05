@@ -1,13 +1,16 @@
+from copy import copy
 from typing import Tuple, get_args, cast, List, Optional, Dict
 
 import numpy as np
 import pandas as pd
 import pytest
 from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import ColumnRole, CategoryRole
 from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.transformers.base import SparkTransformer
 from lightautoml.transformers.base import LAMLTransformer
@@ -182,10 +185,13 @@ def from_pandas_to_spark(p: PandasDataset,
                          spark: SparkSession,
                          target: Optional[pd.Series] = None,
                          folds: Optional[pd.Series] = None,
-                         task: Optional[SparkTask] = None) -> SparkDataset:
+                         task: Optional[SparkTask] = None,
+                         to_vector: bool = False) -> SparkDataset:
     pdf = cast(pd.DataFrame, p.data)
     pdf = pdf.copy()
     pdf[SparkDataset.ID_COLUMN] = pdf.index
+
+    roles = copy(p.roles)
 
     if target is not None:
         # TODO: you may have an array in the input cols, so probably it should be transformed into the vector
@@ -212,7 +218,15 @@ def from_pandas_to_spark(p: PandasDataset,
     folds_sdf = spark.createDataFrame(data=fpdf)
 
     sdf = spark.createDataFrame(data=pdf)
-    return SparkDataset(sdf, roles=p.roles, target=target_sdf, folds=folds_sdf, task=task if task else p.task)
+
+    if to_vector:
+        cols = [c for c in pdf.columns if c != SparkDataset.ID_COLUMN]
+        # TODO: cols[0] should be fixed
+        general_feat = cols[0]
+        sdf = sdf.select(SparkDataset.ID_COLUMN, F.array(*cols).alias(general_feat))
+        roles = {general_feat: NumericVectorOrArrayRole(len(cols), f"{general_feat}_{{}}", dtype=roles[cols[0]].dtype)}
+
+    return SparkDataset(sdf, roles=roles, target=target_sdf, folds=folds_sdf, task=task if task else p.task)
 
 
 def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):

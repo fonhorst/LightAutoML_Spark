@@ -14,6 +14,8 @@ from pyspark.sql import functions as F
 
 import numpy as np
 
+from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
+
 
 class BlenderMixin(Blender, ABC):
     pass
@@ -31,19 +33,29 @@ class WeightedBlender(BlenderMixin, LAMAWeightedBlender):
     def _get_weighted_pred(self, splitted_preds: Sequence[SparkDataset], wts: Optional[np.ndarray]) -> SparkDataset:
         length = len(splitted_preds)
         if wts is None:
-            wts = np.ones(length, dtype=np.float32) / length
+            # wts = np.ones(length, dtype=np.float32) / length
+            wts = [1.0 / length for _ in range(length)]
+        else:
+            wts = [float(el) for el in wts]
 
-        assert splitted_preds[0].features[0] == 1, \
-            "There should be only one feature containing predictions in the form of array"
+        assert len(splitted_preds[0].features) == 1, \
+            f"There should be only one feature containing predictions in the form of array, " \
+            f"but: {splitted_preds[0].features}"
 
         feat = splitted_preds[0].features[0]
+
+        assert isinstance(splitted_preds[0].roles[feat], NumericVectorOrArrayRole), \
+            f"The prediction should be an array or vector, but {type(splitted_preds[0].roles[feat])}"
+
+        role = splitted_preds[0].roles[feat]
+
         nan_feat = f"{feat}_nan_conf"
 
         sdfs = [
             x.data.select(
                 SparkDataset.ID_COLUMN,
-                F.transform(feat, lambda x: x * w).alias(feat),
-                ((~F.array_contains(feat, np.nan)).astype(FloatType()) * w).alias(nan_feat)
+                F.transform(feat, lambda x: F.when(F.isnan(x), 0.0).otherwise(x * w)).alias(feat),
+                F.when(F.array_contains(feat, float('nan')), 0.0).otherwise(w).alias(nan_feat)
             )
             for (x, w) in zip(splitted_preds, wts)
         ]
@@ -64,14 +76,18 @@ class WeightedBlender(BlenderMixin, LAMAWeightedBlender):
 
         wfeat_name = f"WeightedBlend_{feat}"
 
+        # TODO: SPARK-LAMA potentially this is a bad place check it later:
+        #  1. equality condition double types
+        #  2. None instead of nan (in the origin)
+        #  due to Spark doesn't allow to mix types in the same column
         weighted_sdf = sum_sdf.select(
             SparkDataset.ID_COLUMN,
-            F.when(F.col(nan_feat) == 0.0, np.nan)
-                .otherwise(F.col(feat) / F.col(nan_feat))
+            F.when(F.col(nan_feat) == 0.0, None)
+                .otherwise(F.transform(feat, lambda x: x / F.col(nan_feat)))
                 .alias(wfeat_name)
         )
 
         output = splitted_preds[0].empty()
-        output.set_data(weighted_sdf, [wfeat_name], NumericRole(np.float32, prob=self._outp_prob))
+        output.set_data(weighted_sdf, [wfeat_name], role)
 
         return output

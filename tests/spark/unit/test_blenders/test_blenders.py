@@ -17,7 +17,7 @@ from lightautoml.tasks import Task
 from .. import from_pandas_to_spark, spark, compare_obtained_datasets
 
 
-def do_compare_blenders(spark: SparkSession, lama_blender: Blender, spark_blender: Blender):
+def do_compare_blenders(spark: SparkSession, lama_blender: Blender, spark_blender: Blender, to_vector: bool = False):
     with open("../resources/datasets/dump_tabular_automl_lgb_linear/Lpred_0_before_blender_before_blender.pickle", "rb") as f:
         data_1, target_1, features_1, roles_1 = pickle.load(f)
         target_1 = pd.Series(target_1)
@@ -33,7 +33,8 @@ def do_compare_blenders(spark: SparkSession, lama_blender: Blender, spark_blende
         nds_1.to_pandas(),
         spark,
         target_1,
-        task=SparkTask(name="binary")
+        task=SparkTask(name="binary"),
+        to_vector=to_vector
     )]
 
     linear_l2_model = SparkLinearLBFGS()
@@ -63,4 +64,4 @@ def test_best_blender(spark: SparkSession):
 
 
 def test_weighted_blender(spark: SparkSession):
-    do_compare_blenders(spark, WeightedBlender(), SparkWeightedBlender())
+    do_compare_blenders(spark, WeightedBlender(), SparkWeightedBlender(), to_vector=True)
