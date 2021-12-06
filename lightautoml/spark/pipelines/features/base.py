@@ -19,8 +19,8 @@ from lightautoml.spark.transformers.categorical import FreqEncoder, OrdinalEncod
 from lightautoml.spark.transformers.datetime import BaseDiff, DateSeasons
 from lightautoml.spark.transformers.base import SequentialTransformer, ColumnsSelector, ChangeRoles, \
     UnionTransformer, SparkTransformer
-from lightautoml.transformers.numeric import QuantileBinning
 from lightautoml.pipelines.utils import map_pipeline_names
+from lightautoml.spark.transformers.numeric import QuantileBinning
 
 
 class FeaturesPipeline:

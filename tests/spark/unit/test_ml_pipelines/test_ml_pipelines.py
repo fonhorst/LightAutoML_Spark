@@ -1,9 +1,11 @@
 import pickle
+from typing import cast
 
 from pyspark.sql.session import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import NumpyDataset, PandasDataset
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures
@@ -66,5 +68,7 @@ def test_nested_tabular_ml_pipeline_with_linear_bgfs(spark: SparkSession):
     )
 
     spark_ds = ml_pipe.fit_predict(iterator)
+    spark_ds = cast(SparkDataset, spark_ds)
 
+    res_ds = spark_ds.data.toPandas()
     pass
