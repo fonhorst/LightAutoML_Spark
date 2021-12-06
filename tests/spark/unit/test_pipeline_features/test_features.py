@@ -13,6 +13,7 @@ from lightautoml.spark.transformers.base import print_exec_time
 from lightautoml.tasks import Task
 from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_datasets
 
+
 DATASETS = [
 
     # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),

@@ -8,21 +8,9 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
 from lightautoml.tasks import Task
 from lightautoml.validation.base import DummyIterator
-from .. import from_pandas_to_spark
-from . import spark
+from .. import from_pandas_to_spark, spark
 
 import pandas as pd
-
-
-@pytest.fixture(scope="session")
-def spark() -> SparkSession:
-    spark = SparkSession.builder.master("local[1]").getOrCreate()
-
-    print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
-
-    yield spark
-
-    spark.stop()
 
 
 def test_smoke_linear_bgfs(spark: SparkSession):
