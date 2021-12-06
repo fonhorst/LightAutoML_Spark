@@ -9,8 +9,8 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
 from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
+from lightautoml.spark.tasks.base import Task
 from lightautoml.spark.utils import spark_session
-from lightautoml.tasks import Task
 
 import numpy as np
 
@@ -22,7 +22,11 @@ if __name__ == "__main__":
         train_data, test_data = train_test_split(data, test_size=0.2, stratify=data["TARGET"], random_state=42)
 
         # run automl
-        automl = TabularAutoML(spark=spark, task=Task("binary"))
+        automl = TabularAutoML(
+            spark=spark,
+            task=Task("binary"),
+            general_params={"use_algos": ["lgb", "linear_l2"]}
+        )
         oof_predictions = automl.fit_predict(train_data, roles={"target": "TARGET", "drop": ["SK_ID_CURR"]})
         # raise
         te_pred = automl.predict(test_data)

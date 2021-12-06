@@ -44,6 +44,16 @@ dtype2Stype ={
     "float128": "double"
 }
 
+stype2dtype = {
+    "string": "str",
+    "boolean": "bool",
+    "int": "int",
+    "bigint": "longlong",
+    "long": "long",
+    "float": "float",
+    "double": "float64"
+}
+
 
 class SparkToSparkReader(Reader):
     """
@@ -174,18 +184,19 @@ class SparkToSparkReader(Reader):
                 # TODO: Think, what if multilabel or multitask? Multiple column target ..
                 # TODO: Maybe for multilabel/multitask make target only avaliable in kwargs??
                 self._used_array_attrs[attrs_dict[r.name]] = feat
-                kwargs[attrs_dict[r.name]] = train_data[feat]
+                kwargs[attrs_dict[r.name]] = feat
                 r = DropRole()
 
             # add new role
             parsed_roles[feat] = r
 
         if "target" in kwargs:
-            assert isinstance(kwargs["target"], (str, Column)), \
+            assert isinstance(kwargs["target"], str), \
                 f"Target must be a column or column name, but it is {type(kwargs['target'])}"
-            assert str(kwargs["target"]) in train_data.columns, "Target must be a part of dataframe"
+            assert kwargs["target"] in train_data.columns, \
+                f"Target must be a part of dataframe. Target: {kwargs['target']}"
             # self.target = kwargs["target"]
-            self.target_col = str(kwargs["target"])
+            self.target_col = kwargs["target"]
         elif "target" in train_data.columns:
             # self.target = "target"
             self.target_col = "target"
@@ -369,11 +380,13 @@ class SparkToSparkReader(Reader):
                     assert srtd.shape[0] == 2, "Binary task and more than 2 values in target"
                 return sdf
 
-            self.class_mapping = {x: i for i, x in enumerate(uniques)}
+            mapping = {x: i for i, x in enumerate(uniques)}
 
-            remap = F.udf(lambda x: self.class_mapping[x], returnType=IntegerType())
+            remap = F.udf(lambda x: mapping[x], returnType=IntegerType())
             rest_cols = [c for c in sdf.columns if c != target_col]
             sdf_with_proc_target = sdf.select(*rest_cols, remap(target_col).alias(target_col))
+
+            self.class_mapping = mapping
 
             return sdf_with_proc_target
 
@@ -414,13 +427,15 @@ class SparkToSparkReader(Reader):
         guessed_cols = dict()
         cols_to_check = []
         check_columns = []
+
+        feat2dtype = dict(data.dtypes)
+
         for feature, ok in features:
             if not ok:
                 guessed_cols[feature] = DropRole()
-            inferred_dtype = next(dtyp for fname, dtyp in data.dtypes if fname == feature)
+            inferred_dtype = feat2dtype[feature]
             # numpy doesn't understand 'string' but 'str' is ok
-            inferred_dtype = 'str' if inferred_dtype == 'string' else inferred_dtype
-            inferred_dtype = np.dtype(inferred_dtype)
+            inferred_dtype = np.dtype(stype2dtype[inferred_dtype])
 
             # testing if it can be numeric or not
             num_dtype = self._get_default_role_from_str("numeric").dtype
