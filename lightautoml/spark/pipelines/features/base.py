@@ -182,6 +182,7 @@ class TabularDataFeatures:
             **kwargs: Additional parameters.
 
         """
+        print("spark tdf ctr")
         self.multiclass_te_co = 3
         self.top_intersections = 5
         self.max_intersection_depth = 3
