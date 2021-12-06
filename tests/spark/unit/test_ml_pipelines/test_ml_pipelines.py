@@ -2,7 +2,7 @@ import pickle
 
 from pyspark.sql.session import SparkSession
 
-from lightautoml.dataset.np_pd_dataset import NumpyDataset
+from lightautoml.dataset.np_pd_dataset import NumpyDataset, PandasDataset
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
@@ -23,11 +23,10 @@ def test_nested_tabular_ml_pipeline_with_linear_bgfs(spark: SparkSession):
     with open("unit/resources/datasets/dump_tabular_automl_lgb_linear/Lvl_1_Pipe_0_before_pre_selection.pickle", "rb") as f:
         data, target, features, roles = pickle.load(f)
 
-    nds = NumpyDataset(data, features, roles, task=Task("binary"))
-    pds = nds.to_pandas()
+    pds = PandasDataset(data, roles, task=Task("binary"))
     target = pd.Series(target)
-
     sds = from_pandas_to_spark(pds, spark, target)
+
     iterator = DummyIterator(train=sds)
 
     # dumped from simple_tabular_classification.py

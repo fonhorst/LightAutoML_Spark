@@ -497,7 +497,7 @@ class TabularDataFeatures:
 
         # TODO: LAMA-SPARK: should be conditioned on a global setting
         #       producing either an error or warning
-        assert not train.data.is_cached, "The train dataset should be cached before executing this operation"
+        # assert not train.data.is_cached, "The train dataset should be cached before executing this operation"
 
         sdf = train.data.select(feats)
 
