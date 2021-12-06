@@ -9,9 +9,9 @@ from lightautoml.validation.base import DummyIterator
 from lightautoml.dataset.np_pd_dataset import NumpyDataset
 from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM
 from lightautoml.spark.dataset.base import SparkDataset
+from .. import from_pandas_to_spark, spark_with_deps
 
-from . import spark
-from .. import from_pandas_to_spark
+spark = spark_with_deps
 
 
 def test_smoke_boost_lgbm_v2(spark: SparkSession):

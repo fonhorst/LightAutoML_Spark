@@ -33,39 +33,49 @@ DATASETS = [
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
 
+    # difference in folds ??
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
     # sds = SparkDataset.from_lama(ds, spark)
     sds = from_pandas_to_spark(ds, spark, ds.target)
 
+    kwargs = {
+        'auto_unique_co': 50,
+        'feats_imp': None,
+        'kwargs': {},
+        'max_bin_count': 10,
+        'max_intersection_depth': 3,
+        'multiclass_te_co': 3,
+        'output_categories': True,
+        'sparse_ohe': 'auto',
+        'subsample': 100000,
+        'top_intersections': 4
+    }
+
     linear_features = LinearFeatures(
-        output_categories=True,
-        top_intersections=4,
-        max_intersection_depth=3,
-        subsample=100000,
-        auto_unique_co=50,
-        multiclass_te_co=3
+        **kwargs
     )
 
     lama_transformer = linear_features.create_pipeline(ds)
 
     spark_linear_features = SparkLinearFeatures(
-        output_categories=True,
-        top_intersections=4,
-        max_intersection_depth=3,
-        subsample=100000,
-        auto_unique_co=50,
-        multiclass_te_co=3
+        **kwargs
     )
 
     spark_transformer = spark_linear_features.create_pipeline(sds)
+
+    print()
+    print(lama_transformer.print_structure())
+    print()
+    print()
+    print(lama_transformer.print_tr_types())
+
+    print("===================================================")
 
     print()
     print(spark_transformer.print_structure())
     print()
     print()
     print(spark_transformer.print_tr_types())
-
-    # raise NotImplementedError()
 
     with print_exec_time():
         lama_ds = lama_transformer.fit_transform(ds).to_numpy()

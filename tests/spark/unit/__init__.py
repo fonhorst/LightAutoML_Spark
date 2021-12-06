@@ -32,7 +32,22 @@ def spark() -> SparkSession:
 
     yield spark
 
-    time.sleep(600)
+    # time.sleep(600)
+    spark.stop()
+
+
+@pytest.fixture(scope="session")
+def spark_with_deps() -> SparkSession:
+    spark = SparkSession.builder.appName("LAMA-test-app")\
+        .master("local[1]") \
+        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4") \
+        .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven") \
+        .getOrCreate()
+
+    print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
+
+    yield spark
+
     spark.stop()
 
 
@@ -187,7 +202,8 @@ def from_pandas_to_spark(p: PandasDataset,
                          target: Optional[pd.Series] = None,
                          folds: Optional[pd.Series] = None,
                          task: Optional[SparkTask] = None,
-                         to_vector: bool = False) -> SparkDataset:
+                         to_vector: bool = False,
+                         fill_folds_with_zeros_if_not_present: bool= False) -> SparkDataset:
     pdf = cast(pd.DataFrame, p.data)
     pdf = pdf.copy()
     pdf[SparkDataset.ID_COLUMN] = pdf.index
@@ -213,11 +229,10 @@ def from_pandas_to_spark(p: PandasDataset,
             fpdf = p.folds.to_frame("folds")
             fpdf[SparkDataset.ID_COLUMN] = pdf.index
         except AttributeError:
-            fpdf = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "folds": np.zeros(pdf.shape[0])})
+            fpdf = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "folds": np.zeros(pdf.shape[0])}) \
+                if fill_folds_with_zeros_if_not_present else None
 
     target_sdf = spark.createDataFrame(data=tpdf)
-    folds_sdf = spark.createDataFrame(data=fpdf)
-
     sdf = spark.createDataFrame(data=pdf)
 
     if to_vector:
@@ -227,7 +242,12 @@ def from_pandas_to_spark(p: PandasDataset,
         sdf = sdf.select(SparkDataset.ID_COLUMN, F.array(*cols).alias(general_feat))
         roles = {general_feat: NumericVectorOrArrayRole(len(cols), f"{general_feat}_{{}}", dtype=roles[cols[0]].dtype)}
 
-    return SparkDataset(sdf, roles=roles, target=target_sdf, folds=folds_sdf, task=task if task else p.task)
+    kwargs = dict()
+    if fpdf:
+        folds_sdf = spark.createDataFrame(data=fpdf)
+        kwargs["folds"] = folds_sdf
+
+    return SparkDataset(sdf, roles=roles, target=target_sdf, task=task if task else p.task, **kwargs)
 
 
 def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):

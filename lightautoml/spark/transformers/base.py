@@ -54,24 +54,6 @@ class SparkTransformer(LAMLTransformer):
 
         return result
 
-    def print_structure(self, indent: str = "") -> str:
-        content = ''
-        if "transformer_list" in self.__dict__:
-            content = '\n'.join([tr.print_structure(indent + "  ") for tr in self.transformer_list])
-        name = self._fname_prefix if self._fname_prefix else str(type(self))
-
-        return f"{indent}{name}\n{content}\n" if len(content) > 0 else f"{indent}{name}"
-
-    def print_tr_types(self) -> Set[str]:
-        name = self._fname_prefix if self._fname_prefix else str(type(self))
-
-        trs = {name}
-        if "transformer_list" in self.__dict__:
-            for tr in self.transformer_list:
-                trs.update(tr.print_tr_types())
-
-        return trs
-
 
 class SequentialTransformer(SparkTransformer):
     """

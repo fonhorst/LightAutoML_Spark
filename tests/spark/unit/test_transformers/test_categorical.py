@@ -116,7 +116,7 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
         folds=lpds.data[folds_col].to_numpy()
     )
 
-    sds = from_pandas_to_spark(n_ds.to_pandas(), spark)
+    sds = from_pandas_to_spark(n_ds.to_pandas(), spark, fill_folds_with_zeros_if_not_present=True)
 
     target_encoder = TargetEncoder()
     lama_output = target_encoder.fit_transform(n_ds)
