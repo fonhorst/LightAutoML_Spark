@@ -14,7 +14,7 @@ import pandas as pd
 
 
 def test_smoke_linear_bgfs(spark: SparkSession):
-    with open("../resources/datasets/dump_tabular_automl_lgb_cb_linear/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
+    with open("unit/resources/datasets/dump_tabular_automl_lgb_cb_linear/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
         data, target, features, roles = pickle.load(f)
 
     nds = NumpyDataset(data, features, roles, task=Task("binary"))

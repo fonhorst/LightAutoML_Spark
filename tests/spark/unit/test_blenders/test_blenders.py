@@ -18,7 +18,7 @@ from .. import from_pandas_to_spark, spark, compare_obtained_datasets
 
 
 def do_compare_blenders(spark: SparkSession, lama_blender: Blender, spark_blender: Blender, to_vector: bool = False):
-    with open("../resources/datasets/dump_tabular_automl_lgb_linear/Lpred_0_before_blender_before_blender.pickle", "rb") as f:
+    with open("unit/resources/datasets/dump_tabular_automl_lgb_linear/Lpred_0_before_blender_before_blender.pickle", "rb") as f:
         data_1, target_1, features_1, roles_1 = pickle.load(f)
         target_1 = pd.Series(target_1)
         nds_1 = NumpyDataset(data_1, features_1, roles_1, task=Task("binary"), target=target_1)

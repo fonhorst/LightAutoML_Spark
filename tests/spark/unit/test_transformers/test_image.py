@@ -16,8 +16,8 @@ from .. import spark, smoke_check, compare_by_content
 @pytest.fixture
 def image_dataset() -> PandasDataset:
     source_data = pd.DataFrame(data={
-        "path_a": [f"../resources/images/cat_{i + 1}.jpg" for i in range(3)],
-        "path_b": [f"../resources/images/cat_{i + 1}.jpg" for i in range(3)]
+        "path_a": [f"unit/resources/images/cat_{i + 1}.jpg" for i in range(3)],
+        "path_b": [f"unit/resources/images/cat_{i + 1}.jpg" for i in range(3)]
     })
 
     ds = PandasDataset(source_data, roles={name: PathRole() for name in source_data.columns})

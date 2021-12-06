@@ -17,9 +17,9 @@ from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_dat
 
 DATASETS = [
 
-    # DatasetForTest("../resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
+    # DatasetForTest("unit/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("../resources/datasets/house_prices.csv",
+    DatasetForTest("unit/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),

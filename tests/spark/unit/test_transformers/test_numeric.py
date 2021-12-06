@@ -23,9 +23,9 @@ from .. import DatasetForTest, spark, compare_by_content, compare_by_metadata
 
 DATASETS = [
 
-    # DatasetForTest("../resources/datasets/dataset_23_cmc.csv", default_role=NumericRole(np.int32)),
+    # DatasetForTest("unit/resources/datasets/dataset_23_cmc.csv", default_role=NumericRole(np.int32)),
 
-    DatasetForTest("../resources/datasets/house_prices.csv",
+    DatasetForTest("unit/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "LotFrontage"],
                    roles={
                        "Id": NumericRole(np.int32),

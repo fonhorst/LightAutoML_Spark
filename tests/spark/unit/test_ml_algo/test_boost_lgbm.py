@@ -16,7 +16,7 @@ spark = spark_with_deps
 
 def test_smoke_boost_lgbm_v2(spark: SparkSession):
 
-    with open("../resources/datasets/dump_tabular_automl_lgb_cb_linear/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
+    with open("unit/resources/datasets/dump_tabular_automl_lgb_cb_linear/Lvl_0_Pipe_0_apply_selector.pickle", "rb") as f:
         data, target, features, roles = pickle.load(f)
 
     nds = NumpyDataset(data[4000:, :], features, roles, task=Task("binary"))

@@ -18,7 +18,7 @@ DATASETS = [
 
     # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("../resources/datasets/house_prices.csv",
+    DatasetForTest("unit/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
@@ -52,15 +52,11 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
         'top_intersections': 4
     }
 
-    linear_features = LinearFeatures(
-        **kwargs
-    )
+    linear_features = LinearFeatures(**kwargs)
 
     lama_transformer = linear_features.create_pipeline(ds)
 
-    spark_linear_features = SparkLinearFeatures(
-        **kwargs
-    )
+    spark_linear_features = SparkLinearFeatures(**kwargs)
 
     spark_transformer = spark_linear_features.create_pipeline(sds)
 
@@ -79,10 +75,10 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
     print(spark_transformer.print_tr_types())
 
     with print_exec_time():
-        lama_ds = lama_transformer.fit_transform(ds).to_numpy()
+        lama_ds = linear_features.fit_transform(ds).to_numpy()
 
     with print_exec_time():
-        spark_ds = spark_transformer.fit_transform(sds)
+        spark_ds = spark_linear_features.fit_transform(sds)
 
     # time.sleep(600)
     compare_obtained_datasets(lama_ds, spark_ds)
@@ -104,10 +100,10 @@ def test_lgb_simple_features(spark: SparkSession, dataset: DatasetForTest):
     spark_transformer = spark_lgb_features.create_pipeline(sds)
 
     with print_exec_time():
-        lama_ds = lama_transformer.fit_transform(ds)
+        lama_ds = lgb_features.fit_transform(ds)
 
     with print_exec_time():
-        spark_ds = spark_transformer.fit_transform(sds)
+        spark_ds = spark_lgb_features.fit_transform(sds)
 
     compare_obtained_datasets(lama_ds, spark_ds)
 
@@ -131,17 +127,16 @@ def test_lgb_advanced_features(spark: SparkSession, dataset: DatasetForTest):
         'top_intersections': 4
     }
 
-    lgb_features = LGBAdvancedPipeline()
-
+    lgb_features = LGBAdvancedPipeline(**kwargs)
     lama_transformer = lgb_features.create_pipeline(ds)
 
-    spark_lgb_features = SparkLGBAdvancedPipeline()
+    spark_lgb_features = SparkLGBAdvancedPipeline(**kwargs)
     spark_transformer = spark_lgb_features.create_pipeline(sds)
 
     with print_exec_time():
-        lama_ds = lama_transformer.fit_transform(ds)
+        lama_ds = lgb_features.fit_transform(ds)
 
     with print_exec_time():
-        spark_ds = spark_transformer.fit_transform(sds)
+        spark_ds = spark_lgb_features.fit_transform(sds)
 
     compare_obtained_datasets(lama_ds, spark_ds)
