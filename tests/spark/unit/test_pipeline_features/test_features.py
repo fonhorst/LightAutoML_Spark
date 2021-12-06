@@ -38,6 +38,7 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
     # sds = SparkDataset.from_lama(ds, spark)
     sds = from_pandas_to_spark(ds, spark, ds.target)
 
+    # dumped from simple_tabular_classification.py
     kwargs = {
         'auto_unique_co': 50,
         'feats_imp': None,
@@ -94,6 +95,7 @@ def test_lgb_simple_features(spark: SparkSession, dataset: DatasetForTest):
     # sds = SparkDataset.from_lama(ds, spark)
     sds = from_pandas_to_spark(ds, spark, ds.target)
 
+    # no args in simple_tabular_classification.py
     lgb_features = LGBSimpleFeatures()
 
     lama_transformer = lgb_features.create_pipeline(ds)
@@ -116,6 +118,18 @@ def test_lgb_advanced_features(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
     # sds = SparkDataset.from_lama(ds, spark)
     sds = from_pandas_to_spark(ds, spark, ds.target)
+
+    # dumped from simple_tabular_classification.py
+    kwargs = {
+        'ascending_by_cardinality': False,
+        'auto_unique_co': 10,
+        'feats_imp': None,
+        'max_intersection_depth': 3,
+        'multiclass_te_co': 3,
+        'output_categories': False,
+        'subsample': 100000,
+        'top_intersections': 4
+    }
 
     lgb_features = LGBAdvancedPipeline()
 
