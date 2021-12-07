@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 from pyspark.sql import SparkSession
 from sklearn.model_selection import train_test_split
@@ -29,13 +31,18 @@ def test_spark_reader(spark: SparkSession, cv: int):
     assert all(f in sds.data.columns for f in sds.features)
     assert "folds" in sds.__dict__ and sds.folds
 
-    assert len(sds.folds) == cv
+    assert isinstance(sds.folds, SparkDataFrame)
+    folds_sdf = cast(SparkDataFrame, sds.folds)
+    assert len(folds_sdf.columns) == 2
+    assert SparkDataset.ID_COLUMN in folds_sdf.columns and sds.folds_column in folds_sdf.columns
 
-    correct_folds = (
-        (SparkDataset.ID_COLUMN in train.columns) and (SparkDataset.ID_COLUMN in val.columns)
-        for train, val in sds.folds
-    )
-
-    assert all(correct_folds), "ID_COLUMN should be presented everywhere"
+    # assert len(sds.folds) == cv
+    #
+    # correct_folds = (
+    #     (SparkDataset.ID_COLUMN in train.columns) and (SparkDataset.ID_COLUMN in val.columns)
+    #     for train, val in sds.folds
+    # )
+    #
+    # assert all(correct_folds), "ID_COLUMN should be presented everywhere"
 
 

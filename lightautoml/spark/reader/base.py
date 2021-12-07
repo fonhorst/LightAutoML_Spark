@@ -325,8 +325,7 @@ class SparkToSparkReader(Reader):
 
         return dataset
 
-    def _create_folds(self, sdf: SparkDataFrame, kwargs: dict) \
-            -> List[Tuple[SparkDataFrame, SparkDataFrame]]:
+    def _create_folds(self, sdf: SparkDataFrame, kwargs: dict) -> SparkDataFrame:
         if "folds" in kwargs:
             folds_col = kwargs["folds"]
 
@@ -342,31 +341,40 @@ class SparkToSparkReader(Reader):
             assert cols_dtypes[folds_col] == 'int', \
                 f"Folds column should be of integer type, but it is {cols_dtypes[folds_col]}"
 
-            # TODO: need to validate the column
-            df = sdf
-            datasets = []
-            for i in range(self.cv):
-                condition = sdf[folds_col] == i
-                # filtering and dropping folds col
-                validation = df.filter(condition).drop(folds_col)
-                train = df.filter(~condition).drop(folds_col)
-                datasets.append((train, validation))
-            return datasets
+            folds_sdf = sdf.select(SparkDataset.ID_COLUMN, folds_col)
+            return folds_sdf
+
+            # # TODO: need to validate the column
+            # df = sdf
+            # datasets = []
+            # for i in range(self.cv):
+            #     condition = sdf[folds_col] == i
+            #     # filtering and dropping folds col
+            #     validation = df.filter(condition).drop(folds_col)
+            #     train = df.filter(~condition).drop(folds_col)
+            #     datasets.append((train, validation))
+            # return datasets
 
         h = 1.0 / self.cv
-        rands_col = "fold_random_num"
-        df = sdf.select('*', F.rand(self.random_state).alias(rands_col))
-        datasets = []
-        for i in range(self.cv):
-            validateLB = i * h
-            validateUB = (i + 1) * h
-            condition = (df[rands_col] >= validateLB) & (df[rands_col] < validateUB)
-            # filtering and dropping rand num col
-            validation = df.filter(condition).drop(rands_col)
-            train = df.filter(~condition).drop(rands_col)
-            datasets.append((train, validation))
-
-        return datasets
+        folds_sdf = sdf.select(
+            SparkDataset.ID_COLUMN,
+            F.floor(F.rand(self.random_state) * h).alias("reader_fold_num")
+        )
+        return folds_sdf
+        # h = 1.0 / self.cv
+        # rands_col = "fold_random_num"
+        # df = sdf.select('*', F.rand(self.random_state).alias(rands_col))
+        # datasets = []
+        # for i in range(self.cv):
+        #     validateLB = i * h
+        #     validateUB = (i + 1) * h
+        #     condition = (df[rands_col] >= validateLB) & (df[rands_col] < validateUB)
+        #     # filtering and dropping rand num col
+        #     validation = df.filter(condition).drop(rands_col)
+        #     train = df.filter(~condition).drop(rands_col)
+        #     datasets.append((train, validation))
+        #
+        # return datasets
 
     def _create_target(self, sdf: SparkDataFrame, target_col: str = "target"):
         """Validate target column and create class mapping is needed

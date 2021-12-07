@@ -1,7 +1,7 @@
 import logging
 import os
 from copy import deepcopy, copy
-from typing import Optional, Sequence, Iterable, cast, Union, Tuple
+from typing import Optional, Sequence, Iterable, cast, Union, Tuple, Callable
 
 import numpy as np
 import pandas as pd
@@ -688,4 +688,10 @@ class TabularAutoML(AutoMLPreset):
         assert all(isinstance(ds, SparkDataset) for ds in datasets)
         sdss = [cast(SparkDataset, ds) for ds in datasets]
         return SparkDataset.concatenate(sdss)
+
+    def _create_validation_iterator(self, train: LAMLDataset, valid: Optional[LAMLDataset], n_folds: Optional[int],
+                                    cv_iter: Optional[Callable]):
+        return super()._create_validation_iterator(train, valid, n_folds, cv_iter)
+
+
 
