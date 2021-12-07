@@ -30,7 +30,7 @@ class SparkDataset(LAMLDataset):
 
     def empty(self) -> "SparkDataset":
 
-        dataset = super().empty()
+        dataset = cast(SparkDataset, super().empty())
         dataset._dependencies = []
 
         return dataset
@@ -91,12 +91,21 @@ class SparkDataset(LAMLDataset):
 
         self._folds_column = None
         if "folds" in kwargs:
-            folds_sdf = kwargs["folds"]
-            assert isinstance(folds_sdf, pyspark.sql.DataFrame), "Folds should be a spark dataframe"
-            assert len(folds_sdf.columns) == 2, "Only 2 columns should be in the folds spark dataframe"
-            assert SparkDataset.ID_COLUMN in folds_sdf.columns, \
-                f"id column {SparkDataset.ID_COLUMN} should be presented in the folds spark dataframe"
-            self._folds_column: str = next(c for c in folds_sdf.columns if c != SparkDataset.ID_COLUMN)
+            folds = kwargs["folds"]
+            assert isinstance(folds, list)
+
+            correct_folds = (
+                (self.ID_COLUMN in train.columns) and (self.ID_COLUMN in val.columns)
+                for train, val in folds
+            )
+
+            assert all(correct_folds), "ID_COLUMN should be presented everywhere"
+
+            # assert isinstance(folds_sdf, pyspark.sql.DataFrame), "Folds should be a spark dataframe"
+            # assert len(folds_sdf.columns) == 2, "Only 2 columns should be in the folds spark dataframe"
+            # assert SparkDataset.ID_COLUMN in folds_sdf.columns, \
+            #     f"id column {SparkDataset.ID_COLUMN} should be presented in the folds spark dataframe"
+            # self._folds_column: str = next(c for c in folds_sdf.columns if c != SparkDataset.ID_COLUMN)
 
         # TODO: SPARK-LAMA there is a clear problem with this target
         #       we either need to bring this column through all datasets(e.g. duplication)
@@ -199,7 +208,8 @@ class SparkDataset(LAMLDataset):
 
     @property
     def folds_column(self) -> str:
-        return self._folds_column
+        raise NotImplementedError("It is unsupported now")
+        # return self._folds_column
 
     @property
     def dependencies(self) -> Optional[List['SparkDataset']]:
