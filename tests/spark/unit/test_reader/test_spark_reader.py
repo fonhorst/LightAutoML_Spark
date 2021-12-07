@@ -1,9 +1,11 @@
+import pickle
 from typing import cast
 
 import pytest
 from pyspark.sql import SparkSession
 from sklearn.model_selection import train_test_split
 
+from lightautoml.dataset.roles import CategoryRole
 from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.reader.base import SparkToSparkReader
@@ -12,7 +14,8 @@ from . import spark
 import pandas as pd
 
 
-@pytest.mark.parametrize("cv", [1, 5, 10])
+# @pytest.mark.parametrize("cv", [1, 5, 10])
+@pytest.mark.parametrize("cv", [1])
 def test_spark_reader(spark: SparkSession, cv: int):
     df = spark.read.csv("../../examples/data/sampled_app_train.csv", header=True)
     sreader = SparkToSparkReader(task=Task("binary"), cv=cv)
@@ -21,6 +24,16 @@ def test_spark_reader(spark: SparkSession, cv: int):
     # 1. it should have _id
     # 2. it should have target
     # 3. it should have roles for all columns
+
+    # category_feats_and_roles = [(feat, role) for feat, role in sds.roles.items() if isinstance(role, CategoryRole)]
+    # category_feats = [feat for feat, _ in category_feats_and_roles]
+    # category_roles = {feat: role for feat, role in category_feats_and_roles}
+    #
+    # data = sds.data.select(*category_feats).toPandas()
+    # target_data = sds.target.toPandas()
+    # with open("unit/resources/datasets/dataset_after_reader_dump.pickle", "wb") as f:
+    #     dmp = (data, category_feats, category_roles, target_data)
+    #     pickle.dump(dmp, f)
 
     assert sds.target_column not in sds.data.columns
     assert isinstance(sds.target, SparkDataFrame) \
