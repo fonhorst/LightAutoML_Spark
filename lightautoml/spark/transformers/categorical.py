@@ -473,6 +473,8 @@ class TargetEncoder(SparkTransformer):
             .join(dataset.folds, SparkDataset.ID_COLUMN)
 
         cached_df = df.cache()
+        # cached_rdd = df.rdd.cache()
+        # cached_df = df.sql_ctx.createDataFrame(cached_rdd, df.schema)
 
         _fc = F.col(dataset.folds_column)
         _tc = F.col(dataset.target_column)
