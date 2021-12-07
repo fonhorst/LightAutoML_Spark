@@ -294,22 +294,9 @@ class SparkToSparkReader(Reader):
         # assert len(self.used_array_attrs) > 0, 'At least target should be defined in train dataset'
         # create folds
 
-        # TODO: LAMA-SPARK remove it from here
-        # we will use CrossValidation from Spark
-        # folds = set_sklearn_folds(
-        #     self.task,
-        #     kwargs["target"].values,
-        #     cv=self.cv,
-        #     random_state=self.random_state,
-        #     group=None if "group" not in kwargs else kwargs["group"],
-        # )
-        # if folds is not None:
-        #     kwargs["folds"] = Series(folds, index=train_data.index)
-
+        kwargs["folds"] = self._create_folds(train_data, kwargs)
         # get dataset
-
         # replace data target with freshly created spark dataframe
-        kwargs = copy(kwargs)
         kwargs["target"] = self.target
 
         # TODO: SPARK-LAMA send parent for unwinding
@@ -337,6 +324,49 @@ class SparkToSparkReader(Reader):
         #     )
 
         return dataset
+
+    def _create_folds(self, sdf: SparkDataFrame, kwargs: dict) \
+            -> List[Tuple[SparkDataFrame, SparkDataFrame]]:
+        if "folds" in kwargs:
+            folds_col = kwargs["folds"]
+
+            assert isinstance(folds_col, str), \
+                f"If kwargs contains 'folds' it should be of type str and contain folds column." \
+                f"But kwargs['folds'] has type {type(folds_col)} and contains {folds_col}"
+
+            assert folds_col in sdf.columns, \
+                f"Folds column ({folds_col}) should be presented in the train dataframe," \
+                f"but it is not possible to find the column among {sdf.columns}"
+
+            cols_dtypes = dict(sdf.dtypes)
+            assert cols_dtypes[folds_col] == 'int', \
+                f"Folds column should be of integer type, but it is {cols_dtypes[folds_col]}"
+
+            # TODO: need to validate the column
+            df = sdf
+            datasets = []
+            for i in range(self.cv):
+                condition = sdf[folds_col] == i
+                # filtering and dropping folds col
+                validation = df.filter(condition).drop(folds_col)
+                train = df.filter(~condition).drop(folds_col)
+                datasets.append((train, validation))
+            return datasets
+
+        h = 1.0 / self.cv
+        rands_col = "fold_random_num"
+        df = sdf.select('*', F.rand(self.random_state).alias(rands_col))
+        datasets = []
+        for i in range(self.cv):
+            validateLB = i * h
+            validateUB = (i + 1) * h
+            condition = (df[rands_col] >= validateLB) & (df[rands_col] < validateUB)
+            # filtering and dropping rand num col
+            validation = df.filter(condition).drop(rands_col)
+            train = df.filter(~condition).drop(rands_col)
+            datasets.append((train, validation))
+
+        return datasets
 
     def _create_target(self, sdf: SparkDataFrame, target_col: str = "target"):
         """Validate target column and create class mapping is needed
