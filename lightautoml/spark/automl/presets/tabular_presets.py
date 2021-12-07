@@ -8,7 +8,7 @@ import pandas as pd
 from pyspark.sql import SparkSession
 
 from lightautoml.automl.presets.base import AutoMLPreset, upd_params
-from lightautoml.dataset.base import RolesDict
+from lightautoml.dataset.base import RolesDict, LAMLDataset
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.pipelines.selection.base import SelectionPipeline
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
@@ -683,3 +683,9 @@ class TabularAutoML(AutoMLPreset):
         #     top_n_classes,
         #     datetime_level,
         # )
+
+    def _concatenate_datasets(self, datasets: Sequence[LAMLDataset]) -> LAMLDataset:
+        assert all(isinstance(ds, SparkDataset) for ds in datasets)
+        sdss = [cast(SparkDataset, ds) for ds in datasets]
+        return SparkDataset.concatenate(sdss)
+

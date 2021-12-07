@@ -6,7 +6,14 @@ from pyspark.sql import SparkSession
 
 @contextmanager
 def spark_session(parallelism: int = 1) -> SparkSession:
-    spark = SparkSession.builder.config("master", f"local[{parallelism}]").getOrCreate()
+    spark = (
+        SparkSession
+        .builder
+        .master(f"local[{parallelism}]")
+        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
+        .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+        .getOrCreate()
+    )
 
     print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
 
