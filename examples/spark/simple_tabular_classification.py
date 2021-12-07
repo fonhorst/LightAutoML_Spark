@@ -3,6 +3,7 @@
 """
 Simple example for binary classification on tabular data.
 """
+import logging
 
 import pandas as pd
 from sklearn.metrics import roc_auc_score
@@ -13,6 +14,8 @@ from lightautoml.spark.tasks.base import Task
 from lightautoml.spark.utils import spark_session
 
 import numpy as np
+
+logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
     with spark_session(parallelism=1) as spark:

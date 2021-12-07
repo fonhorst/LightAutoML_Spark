@@ -435,3 +435,8 @@ class SparkDataset(LAMLDataset):
             target=target,
             folds=folds
         )
+
+    @staticmethod
+    def from_dataset(dataset: "LAMLDataset") -> "LAMLDataset":
+        assert isinstance(dataset, SparkDataset), "Can only convert from SparkDataset"
+        return dataset

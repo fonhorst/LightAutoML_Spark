@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 
 from decorator import contextmanager
@@ -17,9 +18,11 @@ def spark_session(parallelism: int = 1) -> SparkSession:
 
     print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
 
-    yield spark
-
-    spark.stop()
+    try:
+        yield spark
+    finally:
+        # time.sleep(600)
+        spark.stop()
 
 
 @contextmanager
