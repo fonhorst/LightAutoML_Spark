@@ -13,6 +13,7 @@ def spark_session(parallelism: int = 1) -> SparkSession:
         .master(f"local[{parallelism}]")
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+        .config("spark.driver.memory", "6g")
         .getOrCreate()
     )
 

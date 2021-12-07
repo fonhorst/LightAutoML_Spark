@@ -18,9 +18,10 @@ import numpy as np
 logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
-    with spark_session(parallelism=1) as spark:
+    with spark_session(parallelism=4) as spark:
         # load and prepare data
         data = pd.read_csv("../data/sampled_app_train.csv")
+
 
         train_data, test_data = train_test_split(data, test_size=0.2, stratify=data["TARGET"], random_state=42)
 
