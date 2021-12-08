@@ -83,6 +83,8 @@ torchvision = [
 weasyprint = {version = "^52.5", optional = true}
 cffi = {version = "^1.14.5", optional = true}
 pyspark = "^3.2.0"
+synapse = "^2.73.0"
+synapseml = "^0.9.4"
 
 
 [tool.poetry.dev-dependencies]
