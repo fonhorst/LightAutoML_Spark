@@ -14,8 +14,8 @@ from . import spark
 import pandas as pd
 
 
-# @pytest.mark.parametrize("cv", [1, 5, 10])
-@pytest.mark.parametrize("cv", [1])
+@pytest.mark.parametrize("cv", [1, 5, 10])
+# @pytest.mark.parametrize("cv", [1])
 def test_spark_reader(spark: SparkSession, cv: int):
     df = spark.read.csv("../../examples/data/sampled_app_train.csv", header=True)
     sreader = SparkToSparkReader(task=Task("binary"), cv=cv)
