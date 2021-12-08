@@ -113,13 +113,15 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     target_col = "le__WoodDeckSF"
 
     lpds = labeled_ds.to_pandas()
+    _trg = lpds.data[target_col]
+    _trg[_trg == 2] = 0
 
     n_ds = NumpyDataset(
         data=lpds.data[cols].to_numpy(),
         features=cols,
         roles=[labeled_ds.roles[col] for col in cols],
         task=labeled_ds.task,
-        target=lpds.data[target_col].to_numpy(),
+        target=_trg,
         folds=lpds.data[folds_col].to_numpy()
     )
     # n_ds = labeled_ds

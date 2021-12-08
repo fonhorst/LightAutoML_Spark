@@ -503,6 +503,7 @@ class TargetEncoder(SparkTransformer):
         ).collect()
 
         folds_prior_map = {fold: prior for fold, prior in folds_prior_pdf}
+        rest_features = dataset.features
 
         for col_name in dataset.features:
             _cur_col = F.col(col_name)
@@ -524,20 +525,20 @@ class TargetEncoder(SparkTransformer):
                 candidates = [(oof_sum + a * folds_prior_map[fold]) / (oof_count + a) for a in self.alphas]
                 return candidates
 
-            candidates_pdf_2['_candidates'] = candidates_pdf_2[[col_name, 'folds', '_fsum', '_tsum', '_fcount', '_tcount']] \
+            candidates_pdf_2['_candidates'] = candidates_pdf_2[[col_name, dataset.folds_column, '_fsum', '_tsum', '_fcount', '_tcount']] \
                 .apply(make_candidates, axis=1)
 
-            cand_sdf = dataset.spark_session.createDataFrame(candidates_pdf_2[[col_name, 'folds', '_candidates']])
+            cand_sdf = dataset.spark_session.createDataFrame(candidates_pdf_2[[col_name, dataset.folds_column, '_candidates']])
 
             score_df = (
                 cached_df.join(F.broadcast(cand_sdf), [dataset.folds_column, col_name])
-                .drop(cand_sdf['folds'], cand_sdf[col_name])
             )
 
             if dataset.task.name == "binary":
                 enc_candidates_cols =[
                     ((_tc * F.log(F.col("_candidates").getItem(i)))
-                    + (F.lit(1) - _tc) * (F.log(F.lit(1) - F.col("_candidates").getItem(i)))).alias(f"_candidate_{i}")
+                    + (F.lit(1) - _tc) * (F.log(F.lit(1) - F.col("_candidates").getItem(i)))
+                     ).alias(f"_candidate_{i}")
                     for i in range(len(self.alphas))
                 ]
             else:
@@ -550,7 +551,7 @@ class TargetEncoder(SparkTransformer):
                 F.mean(c).alias(f"_candidate_{i}") for i, c in enumerate(enc_candidates_cols)
             ]
 
-            score_df = score_df.select('*', *enc_candidates_cols).drop().cache()
+            score_df = score_df.select('*', *enc_candidates_cols).cache()
 
             row = score_df.select(*mean_scores_candidates).first()
             idx = np.array(row).argmin()
@@ -558,10 +559,12 @@ class TargetEncoder(SparkTransformer):
             # we do unpersist first because score_df is already cached due to .first() call
             # on aggregate select
             cached_df.unpersist()
-            feats = [feat for feat in dataset.features if feat != col_name]
+            rest_features = [feat for feat in rest_features if feat != col_name]
             score_df = score_df.select(
                 *dataset.service_columns,
-                *feats,
+                _fc,
+                _tc,
+                *rest_features,
                 F.col(f"_candidate_{idx}").alias(f"{self._fname_prefix}__{col_name}")
             )
             cached_df = get_cached_df_through_rdd(score_df)
@@ -626,7 +629,7 @@ class TargetEncoder(SparkTransformer):
         #     # +-------------+---------------+--------------+----------+--------------------+
         #     # | <folds_col> | <current_col> | <target_col> |_trg_count|         _candidates|
         #     # +-------------+---------------+--------------+----------+--------------------+
-        #     # |            1|              0|             2|         9|[1.52941176470588...|
+        #     # |            1|              0|             2   |         9|[1.52941176470588...|
         #     # |            2|              0|             2|         8|[1.26315789473684...|
         #     # |            0|              0|             2|         1|[1.37777777777777...|
         #     # |            2|              0|             1|         4|[1.26315789473684...|
