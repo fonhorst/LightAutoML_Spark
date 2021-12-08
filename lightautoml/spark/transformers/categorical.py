@@ -504,6 +504,7 @@ class TargetEncoder(SparkTransformer):
 
         folds_prior_map = {fold: prior for fold, prior in folds_prior_pdf}
         rest_features = dataset.features
+        new_features = []
 
         for col_name in dataset.features:
             _cur_col = F.col(col_name)
@@ -560,13 +561,16 @@ class TargetEncoder(SparkTransformer):
             # on aggregate select
             cached_df.unpersist()
             rest_features = [feat for feat in rest_features if feat != col_name]
+            new_col = f"{self._fname_prefix}__{col_name}"
             score_df = score_df.select(
                 *dataset.service_columns,
                 _fc,
                 _tc,
                 *rest_features,
-                F.col(f"_candidate_{idx}").alias(f"{self._fname_prefix}__{col_name}")
+                *new_features,
+                F.col(f"_candidate_{idx}").alias(new_col)
             )
+            new_features.append(new_col)
             cached_df = get_cached_df_through_rdd(score_df)
 
         # for col_name in dataset.features:
@@ -703,12 +707,12 @@ class TargetEncoder(SparkTransformer):
         # Также непонятно, насколько оправдано использование бродкастов. Возможно,
         # простым collect'ом + columnMap всё будет гораздо быстрее работать
 
-        cached_df.unpersist()
-        df = df.drop(dataset.folds_column, dataset.target_column)
+        # cached_df.unpersist()
+        cached_df = cached_df.drop(dataset.folds_column, dataset.target_column)
 
         output = dataset.empty()
         self.output_role = NumericRole(np.float32, prob=output.task.name == "binary")
-        output.set_data(df, self.features, self.output_role)
+        output.set_data(cached_df, self.features, self.output_role)
         return output
 
 
