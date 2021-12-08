@@ -537,9 +537,9 @@ class TargetEncoder(SparkTransformer):
 
             if dataset.task.name == "binary":
                 enc_candidates_cols =[
-                    ((_tc * F.log(F.col("_candidates").getItem(i)))
+                    (F.lit(-1) * ((_tc * F.log(F.col("_candidates").getItem(i)))
                     + (F.lit(1) - _tc) * (F.log(F.lit(1) - F.col("_candidates").getItem(i)))
-                     ).alias(f"_candidate_{i}")
+                     )).alias(f"_candidate_{i}")
                     for i in range(len(self.alphas))
                 ]
             else:
