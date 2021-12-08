@@ -42,6 +42,7 @@ def test_spark_reader(spark: SparkSession, cv: int):
     assert SparkDataset.ID_COLUMN in sds.data.columns
     assert set(sds.features).issubset(sds.roles.keys())
     assert all(f in sds.data.columns for f in sds.features)
+    
     assert "folds" in sds.__dict__ and sds.folds
 
     assert isinstance(sds.folds, SparkDataFrame)
@@ -57,5 +58,3 @@ def test_spark_reader(spark: SparkSession, cv: int):
     # )
     #
     # assert all(correct_folds), "ID_COLUMN should be presented everywhere"
-
-
