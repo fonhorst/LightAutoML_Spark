@@ -7,10 +7,14 @@ from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import CategoryRole
+from lightautoml.pipelines.utils import get_columns_by_role
+from lightautoml.spark.reader.base import SparkToSparkReader
+from lightautoml.spark.transformers.base import ColumnsSelector
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
     TargetEncoder as SparkTargetEncoder
+from lightautoml.spark.utils import print_exec_time
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     OHEEncoder, TargetEncoder
@@ -118,7 +122,6 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     labeled_ds = label_encoder.transform(ds)
 
     cols = ["le__Id", "le__MSSubClass", "le__LotFrontage"]
-    # cols = ["le__Id"]
     folds_col = "le__MSZoning"
     target_col = "le__WoodDeckSF"
 
@@ -134,18 +137,41 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
         target=_trg,
         folds=lpds.data[folds_col].to_numpy()
     )
-    # n_ds = labeled_ds
+    n_ds = n_ds.to_pandas()
+    # n_ds = labeled_ds.to_pandas()
 
-    sds = from_pandas_to_spark(n_ds.to_pandas(), spark, fill_folds_with_zeros_if_not_present=True)
+    sds = from_pandas_to_spark(n_ds, spark, fill_folds_with_zeros_if_not_present=True)
 
-    target_encoder = TargetEncoder()
-    lama_output = target_encoder.fit_transform(n_ds)
+    with print_exec_time():
+        target_encoder = TargetEncoder()
+        lama_output = target_encoder.fit_transform(n_ds)
 
-    spark_encoder = SparkTargetEncoder()
-    spark_output = spark_encoder.fit_transform(sds)
+    with print_exec_time():
+        spark_encoder = SparkTargetEncoder()
+        spark_output = spark_encoder.fit_transform(sds)
 
     compare_obtained_datasets(lama_output, spark_output)
 
+
+# def test_target_encoder_2(spark: SparkSession):
+#     df = spark.read.csv("../../examples/data/sampled_app_train.csv", header=True)
+#
+#     with print_exec_time():
+#         sreader = SparkToSparkReader(task=Task("binary"), cv=5)
+#         sds = sreader.fit_read(df)
+#
+#     feats_to_select = get_columns_by_role(sds, "Category")
+#     with print_exec_time():
+#         cs = ColumnsSelector(keys=feats_to_select)
+#         cs_sds = cs.fit_transform(sds)
+#
+#     with print_exec_time():
+#         slabel_encoder = SparkLabelEncoder()
+#         labeled_sds = slabel_encoder.fit_transform(cs_sds)
+#
+#     with print_exec_time():
+#         spark_encoder = SparkTargetEncoder()
+#         spark_output = spark_encoder.fit_transform(labeled_sds)
 
 # def test_multiclass_target_encoder(spark: SparkSession):
 #     df = pd.read_csv("test_transformers/resources/datasets/house_prices.csv")[
