@@ -4,6 +4,8 @@ from datetime import datetime
 from decorator import contextmanager
 from pyspark.sql import SparkSession
 
+from lightautoml.spark.dataset.base import SparkDataFrame
+
 
 @contextmanager
 def spark_session(parallelism: int = 1) -> SparkSession:
@@ -33,3 +35,9 @@ def print_exec_time():
     end = datetime.now()
     duration = (end - start).total_seconds()
     print(f"Exec time: {duration}")
+
+
+def get_cached_df_through_rdd(df: SparkDataFrame) -> SparkDataFrame:
+    cached_rdd = df.rdd.cache()
+    cached_df = df.sql_ctx.createDataFrame(cached_rdd, df.schema)
+    return cached_df
