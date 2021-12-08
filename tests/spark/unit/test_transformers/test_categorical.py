@@ -21,24 +21,24 @@ DATASETS = [
 
     # DatasetForTest("unit/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    # DatasetForTest("unit/resources/datasets/house_prices.csv",
-    #                columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
-    #                roles={
-    #                    "Id": CategoryRole(np.int32),
-    #                    "MSSubClass": CategoryRole(np.int32),
-    #                    "MSZoning": CategoryRole(str),
-    #                    "LotFrontage": CategoryRole(np.float32),
-    #                    "WoodDeckSF": CategoryRole(bool)
-    #                })
-
-
     DatasetForTest("unit/resources/datasets/house_prices.csv",
-                   columns=["Id", "MSZoning", "WoodDeckSF"],
+                   columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
+                       "MSSubClass": CategoryRole(np.int32),
                        "MSZoning": CategoryRole(str),
+                       "LotFrontage": CategoryRole(np.float32),
                        "WoodDeckSF": CategoryRole(bool)
                    })
+
+
+    # DatasetForTest("unit/resources/datasets/house_prices.csv",
+    #                columns=["Id", "MSZoning", "WoodDeckSF"],
+    #                roles={
+    #                    "Id": CategoryRole(np.int32),
+    #                    "MSZoning": CategoryRole(str),
+    #                    "WoodDeckSF": CategoryRole(bool)
+    #                })
 ]
 
 
@@ -117,8 +117,8 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     label_encoder.fit(ds)
     labeled_ds = label_encoder.transform(ds)
 
-    # cols = ["le__Id", "le__MSSubClass", "le__LotFrontage"]
-    cols = ["le__Id"]
+    cols = ["le__Id", "le__MSSubClass", "le__LotFrontage"]
+    # cols = ["le__Id"]
     folds_col = "le__MSZoning"
     target_col = "le__WoodDeckSF"
 
