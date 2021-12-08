@@ -1,3 +1,4 @@
+import pickle
 from collections import defaultdict
 from itertools import chain, combinations
 from typing import Optional, Sequence, List, Tuple, Dict, Union, cast
@@ -532,7 +533,7 @@ class TargetEncoder(SparkTransformer):
             cand_sdf = dataset.spark_session.createDataFrame(candidates_pdf_2[[col_name, dataset.folds_column, '_candidates']])
 
             score_df = (
-                cached_df.join(F.broadcast(cand_sdf), [dataset.folds_column, col_name])
+                cached_df.join(F.broadcast(cand_sdf), [dataset.folds_column, col_name]).cache()
             )
 
             if dataset.task.name == "binary":
@@ -552,10 +553,22 @@ class TargetEncoder(SparkTransformer):
                 F.mean(c).alias(f"_candidate_{i}") for i, c in enumerate(enc_candidates_cols)
             ]
 
-            score_df = score_df.select('*', *enc_candidates_cols).cache()
+            # score_df = score_df.select('*', *enc_candidates_cols).cache()
+            # row = score_df.select(*mean_scores_candidates).first()
 
-            row = score_df.select(*mean_scores_candidates).first()
-            idx = np.array(row).argmin()
+            row = (
+                score_df
+                .select(*mean_scores_candidates)
+                .first()
+            )
+
+            idx = int(np.array(row).argmin())
+
+            # with open("SPARK_scores.pickle", "wb") as f:
+            #     scores = score_df.select(f"_candidate_{idx}").toPandas().to_numpy()
+            #     pickle.dump(scores, f)
+            #
+            # print(f"Scores(binary task, Spark): {list(row)}")
 
             # we do unpersist first because score_df is already cached due to .first() call
             # on aggregate select
@@ -568,7 +581,8 @@ class TargetEncoder(SparkTransformer):
                 _tc,
                 *rest_features,
                 *new_features,
-                F.col(f"_candidate_{idx}").alias(new_col)
+                F.col("_candidates").getItem(idx).alias(new_col)
+                # F.col(f"_candidate_{idx}").alias(new_col)
             )
             new_features.append(new_col)
             cached_df = get_cached_df_through_rdd(score_df)

@@ -1,5 +1,5 @@
 """Categorical features transformerrs."""
-
+import pickle
 from itertools import combinations
 from typing import List
 from typing import Optional
@@ -398,8 +398,11 @@ class TargetEncoder(LAMLTransformer):
 
         """
         target = target[:, np.newaxis]
-        scores = -(target * np.log(candidates) + (1 - target) * np.log(1 - candidates)).mean(axis=0)
+        cand_scores = -(target * np.log(candidates) + (1 - target) * np.log(1 - candidates))
+        scores = cand_scores.mean(axis=0)
         idx = scores.argmin()
+
+        print(f"Scores(binary task, LAMA): {scores}")
 
         return idx
 
@@ -488,6 +491,10 @@ class TargetEncoder(LAMLTransformer):
 
             # write best alpha
             oof_feats[:, n] = candidates[:, idx]
+
+            with open("LAMA_scores.pickle", "wb") as f:
+                pickle.dump(candidates[:, idx], f)
+
             # calc best encoding
             enc = ((t_sum[:, 0] + alphas[0, idx] * prior) / (t_count[:, 0] + alphas[0, idx])).astype(np.float32)
 
