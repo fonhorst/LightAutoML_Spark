@@ -16,7 +16,7 @@ from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import spark_session, print_exec_time
 
-data = pd.read_csv("../data/tiny_used_cars_data.csv")
+data = pd.read_csv("examples/data/tiny_used_cars_data.csv")
 train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
 
 # run automl
@@ -27,9 +27,9 @@ if __name__ == "__main__":
         automl = TabularAutoML(
             spark=spark,
             task=task,
-            general_params={"use_algos": ["lgb", "linear_l2"]}
+            # general_params={"use_algos": ["lgb", "linear_l2"]}
             # general_params={"use_algos": ["linear_l2"]}
-            # general_params={"use_algos": ["lgb"]}
+            general_params={"use_algos": ["lgb"]}
         )
 
         with print_exec_time():

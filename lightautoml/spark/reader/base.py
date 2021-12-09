@@ -1,13 +1,9 @@
 import logging
-from collections import defaultdict
-from copy import copy
-from itertools import chain
 from typing import Optional, Any, List, Dict, Tuple
 
 import numpy as np
-from bidict import bidict
-from pyspark.sql import functions as F, Column
-from pyspark.sql.types import IntegerType, NumericType, StringType
+from pyspark.sql import functions as F
+from pyspark.sql.types import IntegerType, NumericType
 
 from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
