@@ -191,11 +191,13 @@ def test_just_a_test(spark: SparkSession):
 
     df = spark.table("data")
 
-    target = df.select("_id", "a")#.cache()
-    # target.count()
+    target = df.select("_id", "a").cache()
+    # target = df.sql_ctx.createDataFrame(target.rdd, target.schema)
+    target.count()
 
-    trans_df = df.select("_id", "b")#.cache()
-    # trans_df.count()
+    trans_df = df.select("_id", "b").cache()
+    # trans_df = df.sql_ctx.createDataFrame(trans_df.rdd, trans_df.schema)
+    trans_df.count()
 
     res_df = trans_df.join(target, '_id')
     res_df.count()
