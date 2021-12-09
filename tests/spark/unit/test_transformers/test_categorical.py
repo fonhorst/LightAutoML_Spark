@@ -3,7 +3,9 @@ import pickle
 import numpy as np
 import pandas as pd
 import pytest
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Window
+
+from pyspark.sql import functions as F
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import CategoryRole
@@ -181,28 +183,91 @@ def test_target_encoder_2(spark: SparkSession):
     res.data.to_csv("res_SPARK.csv")
 
 
-def test_just_a_test(spark: SparkSession):
-    df = spark.createDataFrame(data=[
-        {"_id": i, "a": i * 10, "b": i * 100, "c": i * 1000} for i in range(20)
-    ])
-
-    df.write.bucketBy(3, '_id').sortBy('_id').saveAsTable("data")
-    # df.write.saveAsTable("data")
-
-    df = spark.table("data")
-
-    target = df.select("_id", "a").cache()
-    # target = df.sql_ctx.createDataFrame(target.rdd, target.schema)
-    target.count()
-
-    trans_df = df.select("_id", "b").cache()
-    # trans_df = df.sql_ctx.createDataFrame(trans_df.rdd, trans_df.schema)
-    trans_df.count()
-
-    res_df = trans_df.join(target, '_id')
-    res_df.count()
-
-    pass
+# def test_just_a_test(spark: SparkSession):
+#     df = spark.createDataFrame(data=[
+#         {"_id": i, "a": i * 10, "b": i * 100, "c": i * 1000} for i in range(20)
+#     ])
+#
+#     df.write.bucketBy(3, '_id').sortBy('_id').saveAsTable("data")
+#     # df.write.saveAsTable("data")
+#
+#     df = spark.table("data")
+#
+#     target = df.select("_id", "a")#.cache()
+#     # target = df.sql_ctx.createDataFrame(target.rdd, target.schema)
+#     #target.count()
+#
+#     trans_df = df.select("_id", "b").groupby('_id').count()#.cache()
+#     # trans_df = df.sql_ctx.createDataFrame(trans_df.rdd, trans_df.schema)
+#     #trans_df.count()
+#
+#     res_df = trans_df.join(target, '_id')
+#     res_df.count()
+#
+#     pass
+#
+#
+# class NewLabelEncoder:
+#     min_count = 5
+#
+#     _fillna_val = 0
+#     _fname_prefix = "le"
+#
+#     def fit(self, df):
+#         self.dicts = {}
+#
+#         df = df.drop('').cache()
+#
+#         w = Window.orderBy(F.col("_fcount"))
+#
+#         for i in df.columns:
+#             print(f"Fitting on column {i}")
+#             res = df \
+#                 .groupBy(i) \
+#                 .agg(F.count(i).alias("_fcount")) \
+#                 .where(F.col("_fcount") > self.min_count) \
+#                 .select(i, F.row_number().over(w).alias("_label"))
+#
+#             self.dicts[i] = res.toPandas()
+#
+#     def transform(self, df):
+#
+#         cached_rdd = df.rdd.cache()
+#         cached_df = df.sql_ctx.createDataFrame(cached_rdd, df.schema)
+#
+#         for i in df.columns:
+#             print(f"Transforming on column {i}")
+#             _i = f"_label"
+#             labeled = self.dicts[i]
+#             labeled = df.sql_ctx.createDataFrame(labeled)
+#             cached_df = cached_df \
+#                 .join(F.broadcast(labeled), i, "left_outer")
+#
+#             k =0
+#
+#             cached_df = cached_df \
+#                 .drop(F.col(_i)) \
+#                 .drop(labeled[i]) \
+#                 # .fillna(self._fillna_val, subset=[i])
+#             cached_df = cached_df.sql_ctx.createDataFrame(cached_df.rdd.cache(), cached_df.schema)
+#
+#         return cached_df
+#
+#
+# def test_new_label_encoder(spark: SparkSession):
+#     data = pd.read_csv("../../examples/data/sampled_app_train.csv")
+#     data = data.fillna(np.nan).replace([np.nan], [None])
+#     spark = SparkSession.builder.appName("LAMA-test-LE").master("local[1]").getOrCreate()
+#     spark.sparkContext.setLogLevel("ERROR")
+#     sdf = spark.createDataFrame(data)
+#
+#     sdf = sdf.drop('SK_ID_CURR', 'EXT_SOURCE_1')
+#
+#     nole = NewLabelEncoder()
+#     nole.fit(sdf)
+#     nresult = nole.transform(sdf)
+#     nresult.printSchema()
+#     # v = nresult.collect()
 
 # def test_target_encoder_2(spark: SparkSession):
 #     df = spark.read.csv("../../examples/data/sampled_app_train.csv", header=True)

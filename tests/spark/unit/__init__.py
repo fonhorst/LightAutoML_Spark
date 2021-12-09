@@ -31,7 +31,7 @@ def spark() -> SparkSession:
         .builder
         .appName("LAMA-test-app")
         .master("local[1]")
-        .config("spark.sql.autoBroadcastJoinThreshold", "-1")
+        # .config("spark.sql.autoBroadcastJoinThreshold", "-1")
         .getOrCreate()
     )
 
@@ -39,7 +39,7 @@ def spark() -> SparkSession:
 
     yield spark
 
-    time.sleep(600)
+    # time.sleep(600)
     spark.stop()
 
 
