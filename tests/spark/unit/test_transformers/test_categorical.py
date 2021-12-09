@@ -180,6 +180,28 @@ def test_target_encoder_2(spark: SparkSession):
     res = spark_output.to_pandas()
     res.data.to_csv("res_SPARK.csv")
 
+
+def test_just_a_test(spark: SparkSession):
+    df = spark.createDataFrame(data=[
+        {"_id": i, "a": i * 10, "b": i * 100, "c": i * 1000} for i in range(20)
+    ])
+
+    df.write.bucketBy(3, '_id').sortBy('_id').saveAsTable("data")
+    # df.write.saveAsTable("data")
+
+    df = spark.table("data")
+
+    target = df.select("_id", "a")#.cache()
+    # target.count()
+
+    trans_df = df.select("_id", "b")#.cache()
+    # trans_df.count()
+
+    res_df = trans_df.join(target, '_id')
+    res_df.count()
+
+    pass
+
 # def test_target_encoder_2(spark: SparkSession):
 #     df = spark.read.csv("../../examples/data/sampled_app_train.csv", header=True)
 #
