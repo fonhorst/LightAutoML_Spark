@@ -463,6 +463,16 @@ class TargetEncoder(SparkTransformer):
 
         return result
 
+    @staticmethod
+    def score_func_binary(target, candidate) -> float:
+        return -(
+            target * np.log(candidate) + (1 - target) * np.log(1 - candidate)
+        )
+
+    @staticmethod
+    def score_func_reg(target, candidate) -> float:
+        return (target - candidate) ** 2
+
     def _fit_transform(self, dataset: SparkDataset) -> SparkDataset:
         LAMLTransformer.fit(self, dataset)
 
@@ -491,25 +501,33 @@ class TargetEncoder(SparkTransformer):
         ).collect()
 
         folds_prior_map = {fold: prior for fold, prior in folds_prior_pdf}
-        rest_features = dataset.features
-        new_features = []
 
         join_score_df: Optional[SparkDataFrame] = None
+
+        cols_to_select = []
 
         for col_name in dataset.features:
             _cur_col = F.col(col_name)
 
-            candidates_pdf = (
+            _agg = (
                 cached_df
-                .groupBy(_fc, _cur_col)
-                .agg(F.sum(_tc).alias("_fsum"), F.count(_fc).alias("_fcount"))
-                .toPandas()
+                    .groupBy(_fc, _tc, _cur_col)
+                    .agg(F.sum(_tc).alias("_psum"), F.count(_tc).alias("_pcount"))
+                    .toPandas()
             )
+
+            candidates_pdf = _agg.groupby(
+                by=[dataset.folds_column, col_name]
+            )["_psum", "_pcount"].sum().reset_index().rename(columns={"_psum": "_fsum", "_pcount": "_fcount"})
 
             if join_score_df is not None:
                 join_score_df.unpersist()
 
-            t_df = candidates_pdf.groupby(col_name).agg(_tsum=('_fsum', 'sum'), _tcount=('_fcount', 'sum')).reset_index()
+            t_df = candidates_pdf.groupby(col_name).agg(
+                _tsum=('_fsum', 'sum'),
+                _tcount=('_fcount', 'sum')
+            ).reset_index()
+
             candidates_pdf_2 = candidates_pdf.merge(t_df, on=col_name, how='inner')
 
             def make_candidates(x):
@@ -519,63 +537,58 @@ class TargetEncoder(SparkTransformer):
                 candidates = [(oof_sum + a * folds_prior_map[fold]) / (oof_count + a) for a in self.alphas]
                 return candidates
 
-            candidates_pdf_2['_candidates'] = candidates_pdf_2[[col_name, dataset.folds_column, '_fsum', '_tsum', '_fcount', '_tcount']] \
-                .apply(make_candidates, axis=1)
+            candidates_pdf_2['_candidates'] = candidates_pdf_2[
+                [col_name, dataset.folds_column, '_fsum', '_tsum', '_fcount', '_tcount']
+            ].apply(make_candidates, axis=1)
 
-            cand_sdf = dataset.spark_session.createDataFrame(candidates_pdf_2[[col_name, dataset.folds_column, '_candidates']])
+            scores = []
 
-            join_score_df = (
-                cached_df.join(F.broadcast(cand_sdf), [dataset.folds_column, col_name]).cache()
+            def calculate_scores(pd_row):
+                folds, target, col, psum, pcount, candidates = pd_row
+                score_func = self.score_func_binary if dataset.task.name == "binary" else self.score_func_reg
+                scores.append(
+                    [score_func(target, c) * pcount for c in candidates]
+                )
+
+            candidates_pdf_3 = _agg.merge(
+                candidates_pdf_2[[dataset.folds_column, col_name, "_candidates"]],
+                on=[dataset.folds_column, col_name]
             )
 
-            if dataset.task.name == "binary":
-                enc_candidates_cols =[
-                    (F.lit(-1) * ((_tc * F.log(F.col("_candidates").getItem(i)))
-                    + (F.lit(1) - _tc) * (F.log(F.lit(1) - F.col("_candidates").getItem(i)))
-                     )).alias(f"_candidate_{i}")
-                    for i in range(len(self.alphas))
-                ]
-            else:
-                enc_candidates_cols = [
-                    F.pow((_tc - F.col("_candidates").getItem(i)), F.lit(2)).alias(f"_candidate_{i}")
-                    for i in range(len(self.alphas))
-                ]
+            candidates_pdf_3.apply(calculate_scores, axis=1)
 
-            mean_scores_candidates = [
-                F.mean(c).alias(f"_candidate_{i}") for i, c in enumerate(enc_candidates_cols)
-            ]
+            _sum = np.array(scores, dtype=np.float64).sum(axis=0)
+            _mean = _sum / total_count
+            idx = _mean.argmin()
 
-            row = (
-                join_score_df
-                .select(*mean_scores_candidates)
-                .first()
-            )
+            mapping = {}
 
-            cached_rdd.unpersist(blocking=True)
+            def create_mapping(pd_row):
+                folds, col, candidates = pd_row
+                mapping[f"{folds}_{col}"] = candidates[idx]
 
-            idx = int(np.array(row).argmin())
+            candidates_pdf_3[
+                [dataset.folds_column, col_name, "_candidates"]
+            ].drop_duplicates(subset=[dataset.folds_column, col_name]).apply(create_mapping, axis=1)
 
-            rest_features = [feat for feat in rest_features if feat != col_name]
-            new_col = f"{self._fname_prefix}__{col_name}"
-            score_df = join_score_df.select(
-                *dataset.service_columns,
-                _fc,
-                _tc,
-                *rest_features,
-                *new_features,
-                F.col("_candidates").getItem(idx).alias(new_col)
-            )
-            new_features.append(new_col)
-            cached_df, cached_rdd = get_cached_df_through_rdd(score_df, name=f"{self._fname_prefix}_ft_{col_name}")
+            best_candidate = F.create_map(*[F.lit(x) for x in chain(*mapping.items())])
 
-        cached_df = cached_df.drop(dataset.folds_column, dataset.target_column)
+            col_select = best_candidate[F.concat(_fc, F.lit("_"), _cur_col)]
 
-        if join_score_df is not None:
-            join_score_df.unpersist()
+            cols_to_select.append(col_select.alias(f"{self._fname_prefix}__{col_name}"))
 
         output = dataset.empty()
         self.output_role = NumericRole(np.float32, prob=output.task.name == "binary")
-        output.set_data(cached_df, self.features, self.output_role)
+        output.set_data(
+            cached_df.select(
+                *dataset.service_columns,
+                *cols_to_select
+            ),
+            self.features,
+            self.output_role
+        )
+
+        cached_df.unpersist()
 
         # TODO: set cached_rdd as a dependency if it is not None
         output.dependencies = []
