@@ -577,6 +577,18 @@ class TargetEncoder(SparkTransformer):
 
             cols_to_select.append(col_select.alias(f"{self._fname_prefix}__{col_name}"))
 
+            _column_agg_dicts: dict = candidates_pdf.groupby(by=[col_name]).agg(
+                _csum=("_fsum", "sum"), _ccount=("_fcount", "sum")
+            ).to_dict()
+
+            self.encodings.append(
+                {
+                    col_value: (_column_agg_dicts["_csum"][col_value] + self.alphas[idx] * prior)
+                               / (_column_agg_dicts["_ccount"][col_value] + self.alphas[idx])
+                               for col_value in _column_agg_dicts["_csum"].keys()
+                }
+            )
+
         output = dataset.empty()
         self.output_role = NumericRole(np.float32, prob=output.task.name == "binary")
         output.set_data(
@@ -593,6 +605,30 @@ class TargetEncoder(SparkTransformer):
         # TODO: set cached_rdd as a dependency if it is not None
         output.dependencies = []
 
+        return output
+
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
+
+        cols_to_select = []
+        # TODO SPARK-LAMA: Нужно что-то придумать, чтобы ориентироваться по именам колонок, а не их индексу
+        # Просто взять и забираться из dataset.features е вариант, т.к. в transform может прийти другой датасет
+        # В оригинальной ламе об этом не парились, т.к. сразу переходили в numpy. Если прислали датасет не с тем
+        # порядком строк - ну штоош, это проблемы того, кто датасет этот сюда вкинул. Стоит ли нам тоже придерживаться
+        # этой логики?
+        for i, col_name in enumerate(dataset.features):
+            _cur_col = F.col(col_name)
+            labels = F.create_map(*[F.lit(x) for x in chain(*self.encodings[i].items())])
+            cols_to_select.append(labels[_cur_col].alias(f"{self._fname_prefix}__{col_name}"))
+
+        output = dataset.empty()
+        output.set_data(
+            dataset.data.select(
+                *dataset.service_columns,
+                *cols_to_select
+            ),
+            self.features,
+            self.output_role
+        )
         return output
 
 
