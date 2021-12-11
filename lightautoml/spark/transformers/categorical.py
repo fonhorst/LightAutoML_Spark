@@ -185,15 +185,19 @@ class LabelEncoder(SparkTransformer):
 
                         labels = sc.broadcast(vals)
 
+                        # _udf = F.udf(
+                        #     lambda value: labels.value.get(value, None)
+                        # )
+
                         if type(df.schema[i].dataType) in self._spark_numeric_types:
                             col = F.when(_ic.isNull(), null_value) \
                                 .otherwise(
                                     F.when(F.isnan(_ic), nan_value)
-                                     .otherwise(dict_udf(labels)(_ic))
+                                     .otherwise(dict_udf(labels)(_ic)).cast("float")
                                 )
                         else:
                             col = F.when(_ic.isNull(), null_value) \
-                                   .otherwise(dict_udf(labels)(_ic))
+                                   .otherwise(dict_udf(labels)(_ic)).cast("float")
 
                         # labels = F.create_map(*[F.lit(x) for x in chain(*vals.items())])
                         #
