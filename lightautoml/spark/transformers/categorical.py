@@ -207,8 +207,6 @@ class LabelEncoder(SparkTransformer):
                         #     col = F.when(_ic.isNull(), null_value) \
                         #         .otherwise(labels[F.col(i)])
 
-
-
             cols_to_select.append(col.alias(f"{self._fname_prefix}__{i}"))
 
         output: SparkDataset = dataset.empty()
