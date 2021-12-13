@@ -9,6 +9,8 @@ import time
 import logging
 import sys
 
+from lightautoml.spark.reader.base import SparkToSparkReader
+
 formatter = logging.Formatter(
     fmt='%(asctime)s %(name)s {%(module)s:%(lineno)d} %(levelname)s:%(message)s',
     datefmt='%Y-%m-%d %H:%M:%S %p'
@@ -49,8 +51,9 @@ def spark_session() -> SparkSession:
         SparkSession
         .builder
         .appName("SPARK-LAMA-app")
-        .master("spark://node4.bdcl:7077")
-        .config("spark.driver.host", "node4.bdcl")
+        .master("local[4]")
+        # .master("spark://node4.bdcl:7077")
+        # .config("spark.driver.host", "node4.bdcl")
         .config("spark.driver.cores", "4")
         .config("spark.driver.memory", "16g")
         .config("spark.cores.max", "16")
@@ -77,23 +80,37 @@ def spark_session() -> SparkSession:
 # run automl
 if __name__ == "__main__":
     with spark_session() as spark:
+        # data = spark.read.csv(os.path.join("file:///opt/1x_dataset.csv"), header=True, escape="\"")
+        #
+        # sreader = SparkToSparkReader(task=SparkTask("reg"), cv=1)
+        # sds = sreader.fit_read(data, roles={
+        #             "target": "price",
+        #             "drop": ["dealer_zip", "description", "listed_date", "year"],
+        #             "numeric": ['latitude', 'longitude', 'mileage']
+        #         })
+
         task = SparkTask("reg")
 
         # data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"), header=True, escape="\"")
-        data = spark.read.csv(os.path.join("file:///spark_data/tiny_used_cars_data.csv"), header=True, escape="\"")
+        # data = spark.read.csv(os.path.join("file:///spark_data/tiny_used_cars_data.csv"), header=True, escape="\"")
+        data = spark.read.csv(os.path.join("file:///opt/0125l_dataset.csv"), header=True, escape="\"")
         data = data.cache()
         train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
 
         automl = TabularAutoML(
             spark=spark,
             task=task,
-            general_params={"use_algos": ["lgb", "linear_l2"]}
+            # general_params={"use_algos": ["lgb", "linear_l2"]}
             # general_params={"use_algos": ["linear_l2"]}
-            # general_params={"use_algos": ["lgb"]}
+            general_params={"use_algos": ["lgb"]}
         )
 
         with print_exec_time():
             oof_predictions = automl.fit_predict(
                 train_data,
-                roles={"target": "price", "drop": ["dealer_zip", "description", "listed_date", "year"]}
+                roles={
+                    "target": "price",
+                    "drop": ["dealer_zip", "description", "listed_date", "year"],
+                    "numeric": ['latitude', 'longitude', 'mileage']
+                }
             )
