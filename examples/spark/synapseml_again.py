@@ -12,7 +12,7 @@ import sys
 from typing import cast
 
 from pyspark.ml.feature import VectorAssembler
-from skimage.metrics import mean_squared_error
+# from skimage.metrics import mean_squared_error
 from synapse.ml.lightgbm import LightGBMRegressor, LightGBMClassifier
 
 from pyspark.sql import functions as F
@@ -57,15 +57,15 @@ spark = (
     SparkSession
         .builder
         .appName("SPARK-LAMA-app")
-        .master("local[4]")
-        # .master("spark://node4.bdcl:7077")
-        # .config("spark.driver.host", "node4.bdcl")
+        # .master("local[4]")
+        .master("spark://node4.bdcl:7077")
+        .config("spark.driver.host", "node4.bdcl")
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.driver.cores", "4")
         .config("spark.driver.memory", "16g")
-        .config("spark.cores.max", "16")
-        .config("spark.executor.instances", "4")
+        .config("spark.cores.max", "8")
+        .config("spark.executor.instances", "2")
         .config("spark.executor.memory", "16g")
         .config("spark.executor.cores", "4")
         .config("spark.memory.fraction", "0.6")
@@ -92,8 +92,8 @@ if __name__ == "__main__":
     with spark_session() as spark:
 
         # /mnt/ess_storage/DN_1/storage/sber_LAMA/kaggle_used_cars_dataset
-        # base_path = '/spark_data/dumps_05x'
-        base_path = '/opt'
+        base_path = '/spark_data/dumps_05x'
+        # base_path = '/opt'
 
         logger.info("Start to read data from local file")
         with open(os.path.join(base_path, 'lama_train_lgb'), 'rb') as f:
@@ -110,8 +110,9 @@ if __name__ == "__main__":
         cols = train_data.columns
         train_data = (
             train_data
-            .withColumn("dummy", F.explode(F.array(*[F.lit(i) for i in range(2)])))
+            .withColumn("dummy", F.explode(F.array(*[F.lit(i) for i in range(1)])))
             .select(cols)
+            .repartition(200)
             .cache()
         )
 
@@ -156,7 +157,7 @@ if __name__ == "__main__":
             minDataInLeaf=3,
             earlyStoppingRound=100,
             metric="mse",
-            numIterations=1
+            numIterations=2000
         )
 
         if is_reg:
@@ -175,8 +176,8 @@ if __name__ == "__main__":
             val_pred = ml_model.transform(temp_sdf)
             val_pred_pdf = val_pred.select('price', 'predict').toPandas()
 
-        print(f"Score for train:{mean_squared_error(train_pred_pdf['predict'].values, train_pred_pdf['price'].values)}")
-        print(f"Score for hold-out:{mean_squared_error(val_pred_pdf['predict'].values, val_pred_pdf['price'].values)}")
+        # print(f"Score for train:{mean_squared_error(train_pred_pdf['predict'].values, train_pred_pdf['price'].values)}")
+        # print(f"Score for hold-out:{mean_squared_error(val_pred_pdf['predict'].values, val_pred_pdf['price'].values)}")
 
         time.sleep(600)
         # print(f"Score for out-of-fold predictions: {roc_auc_score(train_data['TARGET'].values, oof_predictions.data[:, 0])}")
