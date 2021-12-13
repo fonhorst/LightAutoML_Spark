@@ -236,7 +236,8 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             minDataInLeaf=3,
             earlyStoppingRound=100,
             metric="mse",
-            numIterations=2000
+            # numIterations=2000
+            numIterations=1
         )
 
         logger.info(f"In GBM with params: {lgbm.params}")

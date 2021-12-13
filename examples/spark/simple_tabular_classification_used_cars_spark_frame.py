@@ -15,14 +15,31 @@ formatter = logging.Formatter(
     fmt='%(asctime)s %(name)s {%(module)s:%(lineno)d} %(levelname)s:%(message)s',
     datefmt='%Y-%m-%d %H:%M:%S %p'
 )
+
+logging.basicConfig(level=logging.INFO)
 # set up logging to console
 console = logging.StreamHandler(sys.stdout)
 console.setLevel(logging.DEBUG)
 console.setFormatter(formatter)
 
-root_logger = logging.getLogger()
+# root_logger = logging.getLogger('')
+root_logger = logging.getLogger('lightautoml.spark')
 root_logger.setLevel(logging.INFO)
 root_logger.addHandler(console)
+
+# root_logger = logging.getLogger('')
+root_logger = logging.getLogger('lightautoml')
+root_logger.setLevel(logging.INFO)
+root_logger.addHandler(console)
+
+
+# root_logger = logging.getLogger('')
+root_logger = logging.getLogger('lightautoml.ml_algo')
+root_logger.setLevel(logging.INFO)
+root_logger.addHandler(console)
+
+
+
 
 from contextlib import contextmanager
 
@@ -39,11 +56,11 @@ from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import print_exec_time
 
-loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict if name.startswith('lightautoml')]
-for logger in loggers:
-    logger.setLevel(logging.INFO)
-    # logger.addHandler(console)
-
+# loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict if name.startswith('lightautoml')]
+#
+# for logger in loggers:
+#     logger.setLevel(logging.DEBUG)
+#     # logger.addHandler(console)
 
 @contextmanager
 def spark_session() -> SparkSession:
@@ -54,6 +71,8 @@ def spark_session() -> SparkSession:
         .master("local[4]")
         # .master("spark://node4.bdcl:7077")
         # .config("spark.driver.host", "node4.bdcl")
+        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
+        .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.driver.cores", "4")
         .config("spark.driver.memory", "16g")
         .config("spark.cores.max", "16")
@@ -91,9 +110,9 @@ if __name__ == "__main__":
 
         task = SparkTask("reg")
 
-        # data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"), header=True, escape="\"")
+        data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///spark_data/tiny_used_cars_data.csv"), header=True, escape="\"")
-        data = spark.read.csv(os.path.join("file:///opt/0125l_dataset.csv"), header=True, escape="\"")
+        # data = spark.read.csv(os.path.join("file:///opt/0125l_dataset.csv"), header=True, escape="\"")
         data = data.cache()
         train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
 
