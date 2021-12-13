@@ -298,11 +298,17 @@ class SparkToSparkReader(Reader):
 
         # TODO: SPARK-LAMA send parent for unwinding
         ff = [
-            F.col(f).astype(FloatType()).alias(f) if isinstance(self.roles[f], NumericRole) else f
+            F.when(F.isnull(f), float('nan')).otherwise(F.col(f).astype(FloatType())).alias(f) if isinstance(self.roles[f], NumericRole) else f
             for f in self.used_features
         ]
+
+        train_data = (
+            train_data
+            .select(SparkDataset.ID_COLUMN, *ff)
+        )
+
         dataset = SparkDataset(
-            train_data.select(SparkDataset.ID_COLUMN, *ff),
+            train_data,
             self.roles,
             task=self.task,
             **kwargs

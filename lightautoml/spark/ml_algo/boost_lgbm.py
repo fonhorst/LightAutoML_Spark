@@ -196,6 +196,16 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         train_sdf = self._make_sdf_with_target(train)
         valid_sdf = valid.data
 
+        # from pyspark.sql import functions as F
+        # dump_sdf = train_sdf.select([F.col(c).alias(c.replace('(', '___').replace(')', '___')) for c in train.data.columns])
+        # # dump_sdf.coalesce(1).write.parquet("file:///spark_data/tmp_selector_lgbm_0125l.parquet", mode="overwrite")
+        # dump_pdf = dump_sdf.toPandas()#.write.parquet("file:///spark_data/tmp_selector_lgbm_0125l.parquet", mode="overwrite")
+        #
+        # import pickle
+        # with open("/spark_data/dump_selector_lgbm_0125l.pickle", "wb") as f:
+        #     pickle.dump(dump_pdf, f)
+
+        logger.info(f"Input cols for the vector assembler: {train.features}")
         # TODO: reconsider using of 'keep' as a handleInvalid value
         assembler = VectorAssembler(
             inputCols=train.features,

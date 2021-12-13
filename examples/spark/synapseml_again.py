@@ -111,7 +111,18 @@ if __name__ == "__main__":
         # train_data = spark.createDataFrame(temp_data).drop('Unnamed: 0')
         # features = train_data_pdf.features
 
-        train_data = spark.read.parquet(path)
+        # train_data = spark.read.parquet(path)
+
+        import pandas as pd
+        import random
+        with open("/opt/dump_selector_lgbm_0125l.pickle", "rb") as f:
+            train_data = pickle.load(f)
+            train_data['price'] = pd.Series([ random.randint(0, 1) for _ in range(train_data.shape[0])])
+            train_data = spark.createDataFrame(train_data)
+
+        train_data = train_data.select(*[F.when(F.isnull(c), float('nan')).otherwise(F.col(c).astype('float')).alias(c) for c in train_data.columns])
+        train_data = train_data.cache()
+
         features = train_data.columns
 
         cols = train_data.columns
@@ -164,7 +175,7 @@ if __name__ == "__main__":
             minDataInLeaf=3,
             earlyStoppingRound=100,
             metric="mse",
-            numIterations=2000
+            numIterations=10
         )
 
         if is_reg:

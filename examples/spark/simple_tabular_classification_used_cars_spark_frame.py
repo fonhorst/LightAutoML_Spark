@@ -9,7 +9,10 @@ import time
 import logging
 import sys
 
+from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.reader.base import SparkToSparkReader
+from lightautoml.spark.transformers.categorical import LabelEncoder
+from lightautoml.transformers.base import ColumnsSelector
 
 formatter = logging.Formatter(
     fmt='%(asctime)s %(name)s {%(module)s:%(lineno)d} %(levelname)s:%(message)s',
@@ -68,21 +71,21 @@ def spark_session() -> SparkSession:
         SparkSession
         .builder
         .appName("SPARK-LAMA-app")
-        .master("local[4]")
-        # .master("spark://node4.bdcl:7077")
-        # .config("spark.driver.host", "node4.bdcl")
+        # .master("local[4]")
+        .master("spark://node4.bdcl:7077")
+        .config("spark.driver.host", "node4.bdcl")
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.driver.cores", "4")
         .config("spark.driver.memory", "16g")
-        .config("spark.cores.max", "16")
-        .config("spark.executor.instances", "4")
+        .config("spark.cores.max", "48")
+        .config("spark.executor.instances", "12")
         .config("spark.executor.memory", "16g")
         .config("spark.executor.cores", "4")
         .config("spark.memory.fraction", "0.6")
         .config("spark.memory.storageFraction", "0.5")
         .config("spark.sql.autoBroadcastJoinThreshold", "100MB")
-        .config("spark.sql.execution.arrow.pyspark.enabled", "false")
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
         .getOrCreate()
     )
 
@@ -92,26 +95,42 @@ def spark_session() -> SparkSession:
     try:
         yield spark
     finally:
-        # time.sleep(600)
+        time.sleep(600)
         spark.stop()
 
 
 # run automl
 if __name__ == "__main__":
     with spark_session() as spark:
-        # data = spark.read.csv(os.path.join("file:///opt/1x_dataset.csv"), header=True, escape="\"")
+        # data = spark.read.csv(os.path.join("file:///opt/0125l_dataset.csv"), header=True, escape="\"")
         #
         # sreader = SparkToSparkReader(task=SparkTask("reg"), cv=1)
         # sds = sreader.fit_read(data, roles={
-        #             "target": "price",
-        #             "drop": ["dealer_zip", "description", "listed_date", "year"],
-        #             "numeric": ['latitude', 'longitude', 'mileage']
-        #         })
+        #     "target": "price",
+        #     "drop": ["dealer_zip", "description", "listed_date", "year"],
+        #     "numeric": ['latitude', 'longitude', 'mileage']
+        # })
+        #
+        # colsel = ColumnsSelector(keys=get_columns_by_role(sds, "Category"))
+        # enc_sds = colsel.fit_transform(sds)
+        #
+        # enc = LabelEncoder()
+        # enc_sds = enc.fit_transform(enc_sds)
+        # enc_sds.cache()
+        #
+        # import pprint
+        # from pyspark.sql import functions as F
+        # num_cols = get_columns_by_role(sds, "Numeric")
+        # row = sds.data.select(*[F.sum(F.isnull(c).astype('int')).alias(c) for c in num_cols]).first()
+        # pprint.pprint(row.asDict())
+        #
+        # raise NotImplementedError()
 
         task = SparkTask("reg")
 
-        data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"), header=True, escape="\"")
+        # data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///spark_data/tiny_used_cars_data.csv"), header=True, escape="\"")
+        data = spark.read.csv(os.path.join("file:///spark_data/derivative_datasets/0125l_dataset.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///opt/0125l_dataset.csv"), header=True, escape="\"")
         data = data.cache()
         train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
@@ -120,8 +139,8 @@ if __name__ == "__main__":
             spark=spark,
             task=task,
             # general_params={"use_algos": ["lgb", "linear_l2"]}
-            general_params={"use_algos": ["linear_l2"]}
-            # general_params={"use_algos": ["lgb"]}
+            # general_params={"use_algos": ["linear_l2"]}
+            general_params={"use_algos": ["lgb"]}
         )
 
         with print_exec_time():
@@ -129,7 +148,7 @@ if __name__ == "__main__":
                 train_data,
                 roles={
                     "target": "price",
-                    "drop": ["dealer_zip", "description", "listed_date", "year"],
+                    "drop": ["dealer_zip", "description", "listed_date", "year", '_c0'],
                     "numeric": ['latitude', 'longitude', 'mileage']
                 }
             )
