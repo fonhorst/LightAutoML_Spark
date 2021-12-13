@@ -538,8 +538,8 @@ class TargetEncoder(SparkTransformer):
             .join(dataset.target, SparkDataset.ID_COLUMN) \
             .join(dataset.folds, SparkDataset.ID_COLUMN)
 
-        cached_df = df.cache()
-        # cached_df, cached_rdd = get_cached_df_through_rdd(df, name=f"{self._fname_prefix}_ft_entry")
+        # cached_df = df.cache()
+        cached_df, cached_rdd = get_cached_df_through_rdd(df, name=f"{self._fname_prefix}_ft_entry")
 
         _fc = F.col(dataset.folds_column)
         _tc = F.col(dataset.target_column)
