@@ -120,8 +120,8 @@ if __name__ == "__main__":
             spark=spark,
             task=task,
             # general_params={"use_algos": ["lgb", "linear_l2"]}
-            # general_params={"use_algos": ["linear_l2"]}
-            general_params={"use_algos": ["lgb"]}
+            general_params={"use_algos": ["linear_l2"]}
+            # general_params={"use_algos": ["lgb"]}
         )
 
         with print_exec_time():
@@ -133,3 +133,5 @@ if __name__ == "__main__":
                     "numeric": ['latitude', 'longitude', 'mileage']
                 }
             )
+
+        # time.sleep(600)
