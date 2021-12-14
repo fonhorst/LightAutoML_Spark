@@ -78,8 +78,8 @@ def spark_session() -> SparkSession:
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.driver.cores", "4")
         .config("spark.driver.memory", "16g")
-        .config("spark.cores.max", "80")
-        .config("spark.executor.instances", "20")
+        .config("spark.cores.max", "4")
+        .config("spark.executor.instances", "1")
         .config("spark.executor.memory", "16g")
         .config("spark.executor.cores", "4")
         .config("spark.memory.fraction", "0.6")
@@ -131,7 +131,7 @@ if __name__ == "__main__":
         # data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///spark_data/tiny_used_cars_data.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///spark_data/derivative_datasets/0125x_cleaned.csv"), header=True, escape="\"")
-        data = spark.read.csv(os.path.join("file:///spark_data/derivative_datasets/4x_cleaned.csv"), header=True, escape="\"")
+        data = spark.read.csv(os.path.join("file:///spark_data/derivative_datasets/025x_cleaned.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///opt/0125l_dataset.csv"), header=True, escape="\"")
         data = data.cache()
         train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
@@ -139,9 +139,9 @@ if __name__ == "__main__":
         automl = TabularAutoML(
             spark=spark,
             task=task,
-            # general_params={"use_algos": ["lgb", "linear_l2"]}
+            general_params={"use_algos": ["lgb", "linear_l2"]}
             # general_params={"use_algos": ["linear_l2"]}
-            general_params={"use_algos": ["lgb"]}
+            # general_params={"use_algos": ["lgb"]}
         )
 
         with print_exec_time():
