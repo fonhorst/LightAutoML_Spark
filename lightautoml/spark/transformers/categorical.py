@@ -486,13 +486,6 @@ class OHEEncoder(SparkTransformer):
         return output
 
 
-# def te_mapping_pandas_udf(broadcasted_dict):
-#     def f(folds: Series, current_column: Series) -> Series:
-#         values_dict = broadcasted_dict.value
-#         return values_dict[f"{folds}_{current_column}"]
-#     return F.pandas_udf(f, "double")
-
-
 def te_mapping_udf(broadcasted_dict):
     def f(folds, current_column):
         values_dict = broadcasted_dict.value
@@ -501,14 +494,6 @@ def te_mapping_udf(broadcasted_dict):
         except KeyError:
             return np.nan
     return F.udf(f, "double")
-
-
-def pandas_dict_udf(broadcasted_dict):
-
-    def f(s: Series) -> Series:
-        values_dict = broadcasted_dict.value
-        return s.map(values_dict)
-    return F.pandas_udf(f, "double")
 
 
 class TargetEncoder(SparkTransformer):
@@ -555,7 +540,6 @@ class TargetEncoder(SparkTransformer):
 
         cached_df = df.cache()
         sc = cached_df.sql_ctx.sparkSession.sparkContext
-        # cached_df, cached_rdd = get_cached_df_through_rdd(df, name=f"{self._fname_prefix}_ft_entry")
 
         _fc = F.col(dataset.folds_column)
         _tc = F.col(dataset.target_column)
@@ -654,10 +638,6 @@ class TargetEncoder(SparkTransformer):
 
             logger.info(f"[{type(self)} (TE)] Statistics in pandas have been calculated. Map size: {len(mapping)}")
 
-            # best_candidate = F.create_map(*[F.lit(x) for x in chain(*mapping.items())])
-
-            # col_select = best_candidate[F.concat(_fc, F.lit("_"), _cur_col)]
-
             values = sc.broadcast(mapping)
 
             cols_to_select.append(te_mapping_udf(values)(_fc, _cur_col).alias(f"{self._fname_prefix}__{col_name}"))
@@ -714,8 +694,6 @@ class TargetEncoder(SparkTransformer):
 
             values = sc.broadcast(self.encodings[i])
 
-            # labels = F.create_map(*[F.lit(x) for x in chain(*self.encodings[i].items())])
-            # labels[_cur_col]
             cols_to_select.append(pandas_dict_udf(values)(_cur_col).alias(f"{self._fname_prefix}__{col_name}"))
 
         output = dataset.empty()
