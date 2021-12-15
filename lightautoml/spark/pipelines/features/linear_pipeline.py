@@ -144,12 +144,13 @@ class LinearFeatures(TabularDataFeatures, LAMALinearFeatures):
         # get label encoded categories
         sparse_list.append(self.get_categorical_raw(train, le))
 
+        # TODO: fix the performance and uncomment
         # get target encoded categories
         # te_part = self.get_categorical_raw(train, te)
         # if te_part is not None:
         #     te_part = SequentialTransformer([te_part, target_encoder()])
         #     te_list.append(te_part)
-
+        
         # get intersection of top categories
         # intersections = self.get_categorical_intersections(train)
         # if intersections is not None:

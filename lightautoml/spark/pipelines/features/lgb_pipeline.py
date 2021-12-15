@@ -195,6 +195,7 @@ class LGBAdvancedPipeline(FeaturesPipeline, TabularDataFeatures):
 
             ordinal = sorted(list(set(ordinal)))
 
+        # TODO: fix the performance and uncomment
         # get label encoded categories
         # le_part = self.get_categorical_raw(train, le)
         # if le_part is not None:
