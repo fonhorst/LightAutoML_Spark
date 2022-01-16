@@ -12,6 +12,7 @@ from lightautoml.dataset.base import RolesDict, LAMLDataset
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.pipelines.selection.base import SelectionPipeline
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
+from lightautoml.spark.pipelines.selection.permutation_importance_based import NpPermutationImportanceEstimator
 from lightautoml.reader.tabular_batch_generator import ReadableToDf, read_data
 from lightautoml.spark.automl.blend import WeightedBlender
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
@@ -180,8 +181,8 @@ class TabularAutoML(AutoMLPreset):
 
             if selection_params["importance_type"] == "permutation":
                 # TODO: SPARK-LAMA add support for this selector
-                raise NotImplementedError("Not supported yet")
-                # importance = NpPermutationImportanceEstimator()
+                # raise NotImplementedError("Not supported yet")
+                importance = NpPermutationImportanceEstimator()
             else:
                 importance = ModelBasedImportanceEstimator()
 
