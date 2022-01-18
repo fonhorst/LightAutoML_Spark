@@ -72,19 +72,27 @@ class NpPermutationImportanceEstimator(SparkImportanceEstimator):
 
             # Get current column and shuffle it
             # shuffled_col = valid_data[permutation, col]
-            shuffled_col = "shuffled_" + col
-            shuffled_col_sdf = valid_data.data.select(SparkDataset.ID_COLUMN, (shuffle(F.col(col))).alias(shuffled_col))
 
             # Set shuffled column
             # logger.info3("Shuffled column set")
             # valid_data[col] = shuffled_col
-            valid_data.set_data(shuffled_col_sdf, [shuffled_col])
 
-            valid_data.add_to_service_columns(col)
+
+            df = valid_data.data
+            ds: SparkDataset = valid_data.empty()
+            ds.set_data(
+                df.select(
+                    *[c for c in valid_data.data.columns if c != col],
+                    (shuffle(F.col(col))).alias(col)
+                ),
+                valid_data.features,
+                valid_data.roles,
+                valid_data.dependencies
+            )
 
             # Calculate predict and metric
             logger.info3("Shuffled column set")
-            new_preds = ml_algo.predict(valid_data)
+            new_preds = ml_algo.predict(ds)
             shuffled_score = ml_algo.score(new_preds)
             logger.debug(
                 "Shuffled score for col {} = {}, difference with normal = {}".format(
@@ -96,7 +104,5 @@ class NpPermutationImportanceEstimator(SparkImportanceEstimator):
             # Set normal column back to the dataset
             # logger.debug("Normal column set")
             # valid_data[col] = save_col
-            valid_data.remove_from_service_columns(col)
-            valid_data.drop_features([shuffled_col])
 
         self.raw_importances = Series(permutation_importance).sort_values(ascending=False)
