@@ -69,7 +69,7 @@ class NpPermutationImportanceEstimator(SparkImportanceEstimator):
 
             def shuffle_col_in_partition(iterator):
                 for pdf in iterator:
-                    pdf[col] = np.random.RandomState(seed=self.random_state).permutation(pdf)
+                    pdf[col] = np.random.RandomState(seed=self.random_state).permutation(pdf[col])
                     # permutation = np.random.RandomState(seed=self.random_state).permutation(pdf.shape[0])
                     # shuffled_col = pdf[permutation, col]
                     # pdf[col] = shuffled_col
