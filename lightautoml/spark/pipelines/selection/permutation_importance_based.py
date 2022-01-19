@@ -60,38 +60,33 @@ class NpPermutationImportanceEstimator(SparkImportanceEstimator):
 
         valid_data: SparkDataset
         valid_data = train_valid.get_validation_data()
-        # valid_data = valid_data.to_numpy()
 
-        # permutation = np.random.RandomState(seed=self.random_state).permutation(valid_data.shape[0])
         permutation_importance = {}
 
         for it, col in enumerate(valid_data.features):
             logger.debug("Start processing ({},{})".format(it, col))
-            # Save initial column
-            # save_col = deepcopy(valid_data[:, col])
-
-            # Get current column and shuffle it
-            # shuffled_col = valid_data[permutation, col]
-
-            # Set shuffled column
-            # logger.info3("Shuffled column set")
-            # valid_data[col] = shuffled_col
-
-
             df = valid_data.data
+
+            def shuffle_col_in_partition(iterator):
+                for pdf in iterator:
+                    pdf[col] = np.random.RandomState(seed=self.random_state).permutation(pdf)
+                    # permutation = np.random.RandomState(seed=self.random_state).permutation(pdf.shape[0])
+                    # shuffled_col = pdf[permutation, col]
+                    # pdf[col] = shuffled_col
+                    # pdf[col] = np.random.permutation(pdf[col])
+                    yield pdf
+            df_with_shuffled_col = df.mapInPandas(shuffle_col_in_partition, df.schema)
+
             ds: SparkDataset = valid_data.empty()
             ds.set_data(
-                df.select(
-                    *[c for c in valid_data.data.columns if c != col],
-                    (shuffle(F.col(col))).alias(col)
-                ),
+                df_with_shuffled_col,
                 valid_data.features,
                 valid_data.roles,
                 valid_data.dependencies
             )
+            logger.info3("Dataframe with shuffled column prepared")
 
             # Calculate predict and metric
-            logger.info3("Shuffled column set")
             new_preds = ml_algo.predict(ds)
             shuffled_score = ml_algo.score(new_preds)
             logger.debug(
@@ -100,9 +95,5 @@ class NpPermutationImportanceEstimator(SparkImportanceEstimator):
                 )
             )
             permutation_importance[col] = normal_score - shuffled_score
-
-            # Set normal column back to the dataset
-            # logger.debug("Normal column set")
-            # valid_data[col] = save_col
 
         self.raw_importances = Series(permutation_importance).sort_values(ascending=False)
