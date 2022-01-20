@@ -68,27 +68,19 @@ class NpPermutationImportanceEstimator(SparkImportanceEstimator):
         valid_data.cache()
 
         for it, feat in enumerate(valid_data.features):
-            logger.debug(f"Start processing ({it},{feat})")
+            logger.info(f"Start processing ({it},{feat})")
             df = valid_data.data
 
             field: StructField = df.schema[feat]
 
             @pandas_udf(returnType=field.dataType)
             def permutate(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
-                permutator = np.random.RandomState(seed=42)
+                permutator = np.random.RandomState(seed=self.random_state)
+                # one may get list of arrs and concatenate them to perform permutation
+                # in the whole partition
                 for x in arrs:
                     px = permutator.permutation(x)
                     yield pd.Series(px)
-
-            # def shuffle_col_in_partition(iterator):
-            #     for pdf in iterator:
-            #         pdf[col] = np.random.RandomState(seed=self.random_state).permutation(pdf[col])
-            #         # permutation = np.random.RandomState(seed=self.random_state).permutation(pdf.shape[0])
-            #         # shuffled_col = pdf[permutation, col]
-            #         # pdf[col] = shuffled_col
-            #         # pdf[col] = np.random.permutation(pdf[col])
-            #         yield pdf
-            # df_with_shuffled_col = df.mapInPandas(shuffle_col_in_partition, df.schema)
 
             permutated_df = df.withColumn(feat, permutate(feat))
 
@@ -114,3 +106,5 @@ class NpPermutationImportanceEstimator(SparkImportanceEstimator):
         valid_data.uncache()
 
         self.raw_importances = Series(permutation_importance).sort_values(ascending=False)
+
+        logger.info(f"Finished importance estimating with {type(self)}")

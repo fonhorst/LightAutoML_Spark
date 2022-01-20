@@ -73,9 +73,9 @@ def spark_session() -> SparkSession:
         SparkSession
         .builder
         .appName("SPARK-LAMA-app")
-        # .master("local[4]")
-        .master("spark://node4.bdcl:7077")
-        .config("spark.driver.host", "node4.bdcl")
+        .master("local[4]")
+        # .master("spark://node4.bdcl:7077")
+        # .config("spark.driver.host", "node4.bdcl")
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.driver.cores", "4")
@@ -97,7 +97,7 @@ def spark_session() -> SparkSession:
     try:
         yield spark
     finally:
-        time.sleep(600)
+        # time.sleep(600)
         spark.stop()
 
 
@@ -130,11 +130,11 @@ if __name__ == "__main__":
 
         task = SparkTask("reg")
 
-        # data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"), header=True, escape="\"")
+        data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///spark_data/tiny_used_cars_data.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///spark_data/derivative_datasets/0125x_cleaned.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///spark_data/derivative_datasets/4x_cleaned.csv"), header=True, escape="\"")
-        data = spark.read.csv(os.path.join("file:///spark_data/derivative_datasets/2x_cleaned.csv"), header=True, escape="\"")
+        # data = spark.read.csv(os.path.join("file:///spark_data/derivative_datasets/2x_cleaned.csv"), header=True, escape="\"")
         # data = spark.read.csv(os.path.join("file:///opt/0125l_dataset.csv"), header=True, escape="\"")
         data = data.cache()
         train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
@@ -146,7 +146,8 @@ if __name__ == "__main__":
         automl = TabularAutoML(
             spark=spark,
             task=task,
-            general_params={"use_algos": ["lgb", "linear_l2"]}
+            general_params={"use_algos": ["lgb", "linear_l2"]},
+            selection_params={"importance_type": "permutation"}
             # general_params={"use_algos": ["linear_l2"]}
             # general_params={"use_algos": ["lgb"]}
         )
@@ -165,9 +166,9 @@ if __name__ == "__main__":
                 }
             )
 
-        te_pred = automl.predict(test_data_dropped)
-
-        test_data_pd = test_data.toPandas()
-        te_pred_pd = te_pred.data.limit(50).toPandas()
+        # te_pred = automl.predict(test_data_dropped)
+        #
+        # test_data_pd = test_data.toPandas()
+        # te_pred_pd = te_pred.data.limit(50).toPandas()
 
         _a = 1  # Just to check results in the debuggerr
