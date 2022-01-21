@@ -6,6 +6,9 @@ Simple example for binary classification on tabular data.
 import logging.config
 import os
 
+#import sys
+#print(sys.path)
+
 from pyspark.sql import functions as F
 
 from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
@@ -22,7 +25,7 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     with spark_session(master="local[1]") as spark:
         task = SparkTask("reg")
-        data = spark.read.csv(os.path.join("file://", os.getcwd(), "../data/tiny_used_cars_data.csv"),
+        data = spark.read.csv(os.path.join("file://", os.getcwd(), "./examples/data/tiny_used_cars_data.csv"),
                               header=True, escape="\"")
         # data = spark.read.csv("file:///spark_data/tiny_used_cars_data.csv", header=True, escape="\"")
         # data = spark.read.csv("file:///spark_data/derivative_datasets/0125x_cleaned.csv", header=True, escape="\"")

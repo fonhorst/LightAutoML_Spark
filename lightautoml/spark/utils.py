@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def spark_session(master: str = "local[1]", wait_secs_after_the_end: Optional[int] = None, **session_args) -> SparkSession:
+def spark_session(session_args: dict, master: str = "local[1]", wait_secs_after_the_end: Optional[int] = None) -> SparkSession:
     """
     Args:
         master: address of the master
@@ -33,16 +33,11 @@ def spark_session(master: str = "local[1]", wait_secs_after_the_end: Optional[in
     spark_sess_builder = (
         SparkSession
         .builder
-        .appName("SPARK-LAMA-app")
+        .appName(session_args.get("appName","SPARK-LAMA-app"))
         .master(master)
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-        .config("spark.driver.cores", "4")
-        .config("spark.driver.memory", "16g")
         .config("spark.cores.max", "16")
-        .config("spark.executor.instances", "4")
-        .config("spark.executor.memory", "16g")
-        .config("spark.executor.cores", "4")
         .config("spark.memory.fraction", "0.6")
         .config("spark.memory.storageFraction", "0.5")
         .config("spark.sql.autoBroadcastJoinThreshold", "100MB")
@@ -68,12 +63,41 @@ def spark_session(master: str = "local[1]", wait_secs_after_the_end: Optional[in
 
 @contextmanager
 def log_exec_time(name: Optional[str] = None):
+
+    # Add file handler for INFO 
+    file_handler_info = logging.FileHandler(f'/tmp/{name}_log.log.log', mode='a')
+    file_handler_info.setFormatter(logging.Formatter('%(message)s'))
+    file_handler_info.setLevel(logging.INFO)
+    logger.addHandler(file_handler_info)
+
     start = datetime.now()
-    yield
+
+    yield 
+
     end = datetime.now()
     duration = (end - start).total_seconds()
+
     msg = f"Exec time of {name}: {duration}" if name else f"Exec time: {duration}"
     logger.info(msg)
+
+# log_exec_time() class to return elapsed time value
+class log_exec_timer:
+    def __init__(self, name: Optional[str] = None):
+         self.name=name
+         file_handler_info = logging.FileHandler(f'/tmp/{name}_log.log', mode='w')
+         file_handler_info.setFormatter(logging.Formatter('%(message)s'))
+         file_handler_info.setLevel(logging.INFO)
+         logger.addHandler(file_handler_info)
+
+    def __enter__(self):
+        self.t = datetime.now()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.t = (datetime.now() - self.t).total_seconds()
+        msg = f"Exec time of {self.name}: {self.t}" if self.name else f"Exec time: {self.t}"
+        logger.info(msg)
+
 
 
 def get_cached_df_through_rdd(df: SparkDataFrame, name: Optional[str] = None) -> Tuple[SparkDataFrame, RDD]:
