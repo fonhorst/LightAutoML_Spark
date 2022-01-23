@@ -11,6 +11,7 @@ from lightautoml.dataset.utils import roles_parser
 from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.tasks import Task
+from lightautoml.utils.tmp_utils import log_data
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +330,10 @@ class SparkToSparkReader(Reader):
         #         task=self.task,
         #         **kwargs
         #     )
+
+        ds = dataset.to_pandas()
+        ds.task = None
+        log_data("s2sreader", ds)
 
         return dataset
 

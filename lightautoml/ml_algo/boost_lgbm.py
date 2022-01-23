@@ -16,6 +16,7 @@ from pandas import Series
 
 from ..pipelines.selection.base import ImportanceEstimator
 from ..utils.logging import LoggerStream
+from ..utils.tmp_utils import log_data
 from ..validation.base import TrainValidIterator
 from .base import TabularDataset
 from .base import TabularMLAlgo
@@ -250,6 +251,8 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             fobj,
             feval,
         ) = self._infer_params()
+
+        # log_data("lama_lgb_train_val", (train, valid))
 
         train_target, train_weight = self.task.losses["lgb"].fw_func(train.target, train.weights)
         valid_target, valid_weight = self.task.losses["lgb"].fw_func(valid.target, valid.weights)
