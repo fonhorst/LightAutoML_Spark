@@ -4,6 +4,9 @@
 Simple example for binary classification on tabular data.
 """
 import logging
+import logging.config
+import sys
+from contextlib import contextmanager
 from typing import Dict, Any
 
 from pyspark.ml.evaluation import RegressionEvaluator
@@ -13,7 +16,7 @@ from pyspark.sql.types import DoubleType
 from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.tasks.base import Task as SparkTask
-from lightautoml.spark.utils import log_exec_time, spark_session
+from lightautoml.spark.utils import log_exec_time, spark_session, logging_config, VERBOSE_LOGGING_FORMAT
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +87,62 @@ def calculate_automl(spark: SparkSession, path:str, seed: int = 42, use_algos = 
     return {"metric_value": metric_value, "test_metric_value": test_metric_value}
 
 
+@contextmanager
+def configure_spark_session(do_configuring: bool):
+    if do_configuring:
+        spark = (
+            SparkSession
+            .builder
+            .master("k8s://https://node2.bdcl:6443")
+            .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
+            .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+            .config('spark.kubernetes.container.image', 'node2.bdcl:5000/spark-lama-k8s:3.9-3.2.0')
+            .config('spark.kubernetes.container.image.pullPolicy', 'Always')
+            .config('spark.kubernetes.namespace', 'lama-exps')
+            .config('spark.kubernetes.authenticate.driver.serviceAccountName', 'default')
+            .config('spark.kubernetes.memoryOverheadFactor', '0.1')
+            .config('spark.kubernetes.driver.label.appname', 'driver-test-submit-run')
+            .config('spark.kubernetes.executor.label.appname', 'executor-test-submit-run')
+            .config('spark.kubernetes.executor.deleteOnTermination', 'true')
+            .config('spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.claimName', 'spark-lama-data')
+            .config('spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass', 'local-hdd')
+            .config('spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.path', '/spark_data')
+            .config('spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly', 'true')
+            .config('spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.options.claimName', 'spark-lama-data')
+            .config('spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass', 'local-hdd')
+            .config('spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.path', '/spark_data')
+            .config('spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly', 'true')
+            .config('spark.driver.cores', '4')
+            .config('spark.driver.memory', '16g')
+            .config('spark.executor.instances', '4')
+            .config('spark.executor.cores', '4')
+            .config('spark.executor.memory', '16g')
+            .config('spark.cores.max', '16')
+            .config('spark.memory.fraction', '0.6')
+            .config('spark.memory.storageFraction', '0.5')
+            .config('spark.sql.autoBroadcastJoinThreshold', '100MB')
+            .config('spark.sql.execution.arrow.pyspark.enabled', 'true')
+            .getOrCreate()
+        )
+    else:
+        spark = SparkSession.builder.getOrCreate()
+
+    try:
+        yield spark
+    finally:
+        spark.stop()
+
+
 if __name__ == "__main__":
+    logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
+    logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
+    logger = logging.getLogger(__name__)
 
-    spark = SparkSession.builder.getOrCreate()
+    do_configuring = True if len(sys.argv) > 1 and sys.argv[1] == '1' else False
 
-    calculate_automl(spark, path="file:///spark_data/tiny_used_cars_data.csv", use_algos=["linear_l2"])
-
-    spark.stop()
+    with configure_spark_session(do_configuring) as spark:
+        calculate_automl(
+            spark,
+            path="file:///spark_data/tiny_used_cars_data.csv",
+            use_algos=["linear_l2"]
+        )

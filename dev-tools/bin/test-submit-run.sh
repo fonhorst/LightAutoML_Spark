@@ -38,5 +38,5 @@ spark-submit \
   --conf 'spark.memory.fraction= 0.6' \
   --conf 'spark.memory.storageFraction=0.5' \
   --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
-  --conf 'spark.sql.execution.arrow.pyspark.enabled=true'
+  --conf 'spark.sql.execution.arrow.pyspark.enabled=true' \
   dev-tools/performance_tests/spark_used_cars.py
