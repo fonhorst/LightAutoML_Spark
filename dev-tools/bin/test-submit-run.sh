@@ -4,6 +4,11 @@ set -e
 
 APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 
+
+# TODO: volumes
+# TODO: memory
+# TODO: num_executors
+
 spark-submit \
   --master k8s://${APISERVER} \
   --deploy-mode cluster \
