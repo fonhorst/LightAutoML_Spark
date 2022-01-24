@@ -3,7 +3,7 @@ import logging.config
 from pprint import pprint
 from typing import Any, Callable
 from lama_used_cars import calculate_automl as lama_automl
-from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
+from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from spark_used_cars import calculate_automl as spark_automl
 
 
@@ -20,7 +20,11 @@ def calculate_quality(calc_automl: Callable[[str, int, Any], dict]):
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
     #              200000, 300000, 1_000_000, 2_000_000, 5_000_000]
     seeds = [42]
-    results = [calc_automl(dataset_path, seed, use_algos) for seed in seeds]
+    results = []
+    for seed in seeds:
+        with spark_session(master="local[4]") as spark:
+            res = calc_automl(dataset_path, seed, use_algos)
+            results.append(res)
 
     mvals = [f"{r['metric_value']:_.2f}" for r in results]
     print("OOf on train metric")

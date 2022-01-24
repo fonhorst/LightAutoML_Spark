@@ -7,7 +7,7 @@ import logging
 from typing import Dict, Any
 
 from pyspark.ml.evaluation import RegressionEvaluator
-from pyspark.sql import functions as F
+from pyspark.sql import functions as F, SparkSession
 from pyspark.sql.types import DoubleType
 
 from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
@@ -18,8 +18,8 @@ from lightautoml.spark.utils import log_exec_time, spark_session
 logger = logging.getLogger(__name__)
 
 
-def calculate_automl(path:str, seed: int = 42, use_algos = ("lgb", "linear_l2")) -> Dict[str, Any]:
-    with spark_session(master="local[4]") as spark:
+def calculate_automl(spark: SparkSession, path:str, seed: int = 42, use_algos = ("lgb", "linear_l2")) -> Dict[str, Any]:
+    with log_exec_time():
         target_col = 'price'
         task = SparkTask("reg")
         data = spark.read.csv(path, header=True, escape="\"")
@@ -39,47 +39,55 @@ def calculate_automl(path:str, seed: int = 42, use_algos = ("lgb", "linear_l2"))
 
         automl = TabularAutoML(spark=spark, task=task, general_params={"use_algos": use_algos})
 
-        with log_exec_time():
-            oof_predictions = automl.fit_predict(
-                train_data,
-                roles={
-                    "target": target_col,
-                    "drop": ["dealer_zip", "description", "listed_date",
-                             "year", 'Unnamed: 0', '_c0',
-                             'sp_id', 'sp_name', 'trimId',
-                             'trim_name', 'major_options', 'main_picture_url',
-                             'interior_color', 'exterior_color'],
-                    "numeric": ['latitude', 'longitude', 'mileage']
-                }
-            )
-
-        logger.info("Predicting on out of fold")
-
-        oof_preds_for_eval = (
-            oof_predictions.data
-            .join(train_data, on=SparkDataset.ID_COLUMN)
-            .select(SparkDataset.ID_COLUMN, target_col, oof_predictions.features[0])
+        oof_predictions = automl.fit_predict(
+            train_data,
+            roles={
+                "target": target_col,
+                "drop": ["dealer_zip", "description", "listed_date",
+                         "year", 'Unnamed: 0', '_c0',
+                         'sp_id', 'sp_name', 'trimId',
+                         'trim_name', 'major_options', 'main_picture_url',
+                         'interior_color', 'exterior_color'],
+                "numeric": ['latitude', 'longitude', 'mileage']
+            }
         )
 
-        evaluator = RegressionEvaluator(predictionCol=oof_predictions.features[0], labelCol=target_col,
-                                        metricName="mse")
+    logger.info("Predicting on out of fold")
 
-        metric_value = evaluator.evaluate(oof_preds_for_eval)
-        logger.info(f"{evaluator.getMetricName()} score for out-of-fold predictions: {metric_value}")
+    oof_preds_for_eval = (
+        oof_predictions.data
+        .join(train_data, on=SparkDataset.ID_COLUMN)
+        .select(SparkDataset.ID_COLUMN, target_col, oof_predictions.features[0])
+    )
 
-        # TODO: SPARK-LAMA fix bug in SparkToSparkReader.read method
-        with log_exec_time():
-            te_pred = automl.predict(test_data_dropped)
+    evaluator = RegressionEvaluator(predictionCol=oof_predictions.features[0], labelCol=target_col,
+                                    metricName="mse")
 
-            te_pred = (
-                te_pred.data
-                .join(test_data, on=SparkDataset.ID_COLUMN)
-                .select(SparkDataset.ID_COLUMN, target_col, te_pred.features[0])
-            )
+    metric_value = evaluator.evaluate(oof_preds_for_eval)
+    logger.info(f"{evaluator.getMetricName()} score for out-of-fold predictions: {metric_value}")
 
-            test_metric_value = evaluator.evaluate(te_pred)
-            logger.info(f"{evaluator.getMetricName()} score for test predictions: {test_metric_value}")
+    # TODO: SPARK-LAMA fix bug in SparkToSparkReader.read method
+    with log_exec_time():
+        te_pred = automl.predict(test_data_dropped)
 
-        logger.info("Predicting is finished")
+        te_pred = (
+            te_pred.data
+            .join(test_data, on=SparkDataset.ID_COLUMN)
+            .select(SparkDataset.ID_COLUMN, target_col, te_pred.features[0])
+        )
 
-        return {"metric_value": metric_value, "test_metric_value": test_metric_value}
+        test_metric_value = evaluator.evaluate(te_pred)
+        logger.info(f"{evaluator.getMetricName()} score for test predictions: {test_metric_value}")
+
+    logger.info("Predicting is finished")
+
+    return {"metric_value": metric_value, "test_metric_value": test_metric_value}
+
+
+if __name__ == "__main__":
+
+    spark = SparkSession.builder.getOrCreate()
+
+    calculate_automl(spark, path="file:///spark_data/tiny_used_cars_data.csv", use_algos=["linear_l2"])
+
+    spark.stop()
