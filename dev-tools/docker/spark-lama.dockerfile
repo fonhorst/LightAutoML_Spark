@@ -19,3 +19,7 @@ RUN poetry install
 COPY . /src
 RUN poetry build
 RUN pip install dist/LightAutoML-0.3.0-py3-none-any.whl
+
+ARG spark_jars_cache=jars_cache
+
+COPY ${spark_jars_cache} /root/.ivy2/cache

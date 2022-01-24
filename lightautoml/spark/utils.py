@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def spark_session(session_args: dict, master: str = "local[1]", wait_secs_after_the_end: Optional[int] = None) -> SparkSession:
+def spark_session(session_args: Optional[dict] = None, master: str = "local[1]", wait_secs_after_the_end: Optional[int] = None) -> SparkSession:
     """
     Args:
         master: address of the master
@@ -29,6 +29,9 @@ def spark_session(session_args: dict, master: str = "local[1]", wait_secs_after_
     Returns:
         SparkSession to be used and that is stopped upon exiting this context manager
     """
+
+    if not session_args:
+        session_args = dict()
 
     spark_sess_builder = (
         SparkSession
