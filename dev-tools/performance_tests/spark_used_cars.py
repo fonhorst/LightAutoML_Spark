@@ -5,6 +5,7 @@ Simple example for binary classification on tabular data.
 """
 import logging
 import logging.config
+import socket
 import sys
 from contextlib import contextmanager
 from typing import Dict, Any
@@ -90,16 +91,21 @@ def calculate_automl(spark: SparkSession, path:str, seed: int = 42, use_algos = 
 @contextmanager
 def configure_spark_session(do_configuring: bool):
     if do_configuring:
+        local_ip = socket.gethostbyname(socket.gethostname())
         spark = (
             SparkSession
             .builder
-            .master("k8s://https://node2.bdcl:6443")
-            .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
-            .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+            .appName('test-exps')
+            .master('k8s://https://node2.bdcl:6443')
+            .config('spark.driver.host', local_ip)
+            .config('spark.driver.bindAddress', '0.0.0.0')
+            .config('spark.jars.packages', 'com.microsoft.azure:synapseml_2.12:0.9.4')
+            .config('spark.jars.repositories', 'https://mmlspark.azureedge.net/maven')
+            .config('spark.kubernetes.executor.deleteOnTermination', 'false')
             .config('spark.kubernetes.container.image', 'node2.bdcl:5000/spark-lama-k8s:3.9-3.2.0')
             .config('spark.kubernetes.container.image.pullPolicy', 'Always')
-            .config('spark.kubernetes.namespace', 'lama-exps')
-            .config('spark.kubernetes.authenticate.driver.serviceAccountName', 'default')
+            .config('spark.kubernetes.namespace', 'spark-lama-exps')
+            .config('spark.kubernetes.authenticate.driver.serviceAccountName', 'spark')
             .config('spark.kubernetes.memoryOverheadFactor', '0.1')
             .config('spark.kubernetes.driver.label.appname', 'driver-test-submit-run')
             .config('spark.kubernetes.executor.label.appname', 'executor-test-submit-run')
@@ -144,5 +150,5 @@ if __name__ == "__main__":
         calculate_automl(
             spark,
             path="file:///spark_data/tiny_used_cars_data.csv",
-            use_algos=["linear_l2"]
+            use_algos=["lgb", "linear_l2"]
         )

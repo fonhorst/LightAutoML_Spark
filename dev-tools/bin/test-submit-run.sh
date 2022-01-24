@@ -16,7 +16,7 @@ spark-submit \
   --conf 'spark.kubernetes.container.image=node2.bdcl:5000/spark-lama-k8s:3.9-3.2.0' \
   --conf 'spark.kubernetes.container.image.pullPolicy=Always' \
   --conf "spark.kubernetes.namespace=${KUBE_NAMESPACE}" \
-  --conf 'spark.kubernetes.authenticate.driver.serviceAccountName=default' \
+  --conf 'spark.kubernetes.authenticate.driver.serviceAccountName=spark' \
   --conf 'spark.kubernetes.memoryOverheadFactor=0.1' \
   --conf 'spark.kubernetes.driver.label.appname=driver-test-submit-run' \
   --conf 'spark.kubernetes.executor.label.appname=executor-test-submit-run' \

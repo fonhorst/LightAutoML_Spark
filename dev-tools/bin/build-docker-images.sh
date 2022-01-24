@@ -12,7 +12,8 @@ docker build \
   -t spark-lama:3.9-3.2.0 \
   -f dev-tools/docker/spark-lama.dockerfile \
   .
-rm -rf jars_cache
-rm -rf dist
 
 docker build -t spark-lama-k8s:3.9-3.2.0 -f dev-tools/docker/spark-lama-k8s.dockerfile .
+
+rm -rf jars_cache
+rm -rf dist
