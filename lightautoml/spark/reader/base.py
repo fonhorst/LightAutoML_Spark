@@ -331,9 +331,9 @@ class SparkToSparkReader(Reader):
         #         **kwargs
         #     )
 
-        ds = dataset.to_pandas()
-        ds.task = None
-        log_data("s2sreader", ds)
+        # ds = dataset.to_pandas()
+        # ds.task = None
+        log_data("s2sreader", (dataset.features, dataset.roles))
 
         return dataset
 
