@@ -3,6 +3,7 @@ from typing import cast
 import pytest
 from pyspark.sql import SparkSession
 
+from lightautoml.dataset.roles import CategoryRole
 from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.reader.base import SparkToSparkReader
@@ -72,10 +73,18 @@ def test_spark_reader(spark: SparkSession, cv: int):
     sdiff = set(sdataset.features).symmetric_difference(pdataset.features)
     assert len(sdiff) == 0, f"Features sets are different: {sdiff}"
 
-    feat_and_roles = (
+    feat_and_roles = [
         (feat, srole, pdataset.roles[feat])
         for feat, srole in sdataset.roles.items()
-    )
+    ]
 
     not_equal_roles = [(feat, srole, prole) for feat, srole, prole in feat_and_roles if srole != prole]
     assert len(not_equal_roles) == 0, f"Roles are different: {not_equal_roles}"
+
+    # two checks on CategoryRole to make PyCharm field resolution happy
+    not_equal_encoding_types = [
+        feat for feat, srole, prole in feat_and_roles
+        if isinstance(srole, CategoryRole) and isinstance(prole, CategoryRole)
+        and srole.encoding_type != prole.encoding_type
+    ]
+    assert len(not_equal_encoding_types) ==0 , f"Encoding types are different: {not_equal_encoding_types}"
