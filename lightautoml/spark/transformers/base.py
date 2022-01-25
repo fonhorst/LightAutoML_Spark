@@ -3,7 +3,7 @@ from typing import cast, Sequence, List, Set
 
 from lightautoml.dataset.utils import concatenate
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.utils import print_exec_time
+from lightautoml.spark.utils import log_exec_time
 from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LAMAColumnsSelector, \
     ChangeRoles as LAMAChangeRoles
 
@@ -19,6 +19,7 @@ class SparkTransformer(LAMLTransformer):
 
     def fit(self, dataset: SparkDataset) -> "SparkTransformer":
 
+        logger.info(f"SparkTransformer of type: {type(self)}")
         self._features = dataset.features
         for check_func in self._fit_checks:
             check_func(dataset)
