@@ -213,6 +213,7 @@ class SparkToSparkReader(Reader):
 
         # get subsample if it needed
         subsample = train_data
+        # TODO: LAMA-SPARK replace seed here with a variable
         if self.samples:
             subsample = subsample.sample(fraction=0.1, seed=42).limit(self.samples).cache()
 
@@ -502,10 +503,11 @@ class SparkToSparkReader(Reader):
                 guessed_cols[feature] = NumericRole(num_dtype)
                 continue
 
+            fcol = F.col(feature)
+
             can_cast_to_numeric = (
-                F.col(feature)
-                .cast(dtype2Stype[num_dtype.__name__])
-                .isNotNull()
+                F.when(F.isnull(fcol), True)
+                .otherwise(fcol.cast(dtype2Stype[num_dtype.__name__]).isNotNull())
                 .astype(IntegerType())
             )
 
@@ -514,8 +516,8 @@ class SparkToSparkReader(Reader):
 
             cols_to_check.append((feature, num_dtype, date_format))
             check_columns.extend([
-                F.sum(can_cast_to_datetime).alias(f"{feature}_num"),
-                F.sum(can_cast_to_numeric).alias(f"{feature}_dt"),
+                F.sum(can_cast_to_numeric).alias(f"{feature}_num"),
+                F.sum(can_cast_to_datetime).alias(f"{feature}_dt"),
             ])
 
         result = data.select(

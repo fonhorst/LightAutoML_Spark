@@ -12,8 +12,8 @@ from . import spark
 import pandas as pd
 
 
-# @pytest.mark.parametrize("cv", [1, 5, 10])
-@pytest.mark.parametrize("cv", [5])
+@pytest.mark.parametrize("cv", [1, 5, 10])
+# @pytest.mark.parametrize("cv", [5])
 def test_spark_reader(spark: SparkSession, cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
@@ -60,7 +60,12 @@ def test_spark_reader(spark: SparkSession, cv: int):
     checks(sdataset, check_target_and_folds=False)
 
     # comparing with Pandas
-    pdf = pd.read_csv(path)
+    pdf = pd.read_csv(path, dtype={
+        'fleet': 'str', 'frame_damaged': 'str',
+        'has_accidents': 'str', 'isCab': 'str',
+        'is_cpo': 'str', 'is_new': 'str',
+        'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str'
+    })
     preader = PandasToPandasReader(task=Task(task_type), cv=cv)
     pdataset = preader.fit_read(pdf, roles=roles)
 
