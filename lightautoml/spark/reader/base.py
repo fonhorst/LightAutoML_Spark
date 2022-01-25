@@ -486,6 +486,7 @@ class SparkToSparkReader(Reader):
         for feature, ok in features:
             if not ok:
                 guessed_cols[feature] = DropRole()
+                continue
             inferred_dtype = feat2dtype[feature]
             # numpy doesn't understand 'string' but 'str' is ok
             inferred_dtype = np.dtype(stype2dtype[inferred_dtype])
@@ -544,22 +545,44 @@ class SparkToSparkReader(Reader):
         """
 
         row = train_data.select(
+            F.count('*').alias('count'),
             *[F.mean((F.isnull(feature) | F.isnan(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
               for feature in features if isinstance(train_data.schema[feature].dataType, NumericType)],
             *[F.mean((F.isnull(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
               for feature in features if not isinstance(train_data.schema[feature].dataType, NumericType)],
-            *[(F.approx_count_distinct(feature) / F.count(feature)).alias(f"{feature}_constant_rate")
-              for feature in features]
+            # *[(1 - (F.approx_count_distinct(feature) / F.count(feature))).alias(f"{feature}_constant_rate")
+            #   for feature in features]
         ).first()
 
-        return [
-            (
-                feature,
-                (row[f"{feature}_nan_rate"] < self.max_nan_rate)
-                and (row[f"{feature}_constant_rate"] < self.max_constant_rate)
+        estimated_features = []
+        for feat in features:
+            if row[f"{feat}_nan_rate"] >= self.max_nan_rate:
+                estimated_features.append((feat, False))
+                continue
+
+            crow = (
+                train_data
+                .groupby(feat)
+                .agg(F.count('*').alias('count'))
+                .select((F.max('count')).alias('count'))
+                .first()
             )
-            for feature in features
-        ]
+            if crow['count'] / row['count'] >= self.max_constant_rate:
+                estimated_features.append((feat, False))
+                continue
+
+            estimated_features.append((feat, True))
+
+        return estimated_features
+
+        # return [
+        #     (
+        #         feature,
+        #         (row[f"{feature}_nan_rate"] < self.max_nan_rate)
+        #         and (row[f"{feature}_constant_rate"] < self.max_constant_rate)
+        #     )
+        #     for feature in features
+        # ]
 
     def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
         """Read dataset with fitted metadata.
