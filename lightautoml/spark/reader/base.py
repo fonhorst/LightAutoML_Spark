@@ -560,6 +560,7 @@ class SparkToSparkReader(Reader):
                 estimated_features.append((feat, False))
                 continue
 
+            # TODO: this part may be optimized using sampling
             crow = (
                 train_data
                 .groupby(feat)
