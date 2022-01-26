@@ -39,7 +39,7 @@ def calculate_automl(path:str, seed: int = 42, use_algos = ("lgb", "linear_l2"))
 
         automl = TabularAutoML(spark=spark, task=task, general_params={"use_algos": use_algos})
 
-        with log_exec_time():
+        with log_exec_time("spark-lama training"):
             oof_predictions = automl.fit_predict(
                 train_data,
                 roles={
@@ -67,8 +67,7 @@ def calculate_automl(path:str, seed: int = 42, use_algos = ("lgb", "linear_l2"))
         metric_value = evaluator.evaluate(oof_preds_for_eval)
         logger.info(f"{evaluator.getMetricName()} score for out-of-fold predictions: {metric_value}")
 
-        # TODO: SPARK-LAMA fix bug in SparkToSparkReader.read method
-        with log_exec_time():
+        with log_exec_time("spark-lama predicting on test"):
             te_pred = automl.predict(test_data_dropped)
 
             te_pred = (

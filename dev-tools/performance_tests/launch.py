@@ -13,14 +13,18 @@ logger = logging.getLogger(__name__)
 
 
 def calculate_quality(calc_automl: Callable[[str, int, Any], dict]):
-    dataset_path = "examples/data/tiny_used_cars_data.csv"
+    # dataset_path = "examples/data/tiny_used_cars_data.csv"
     # dataset_path = "examples/data/small_used_cars_data.csv"
-    # dataset_path = "/opt/0125x_cleaned.csv"
+    dataset_path = "/opt/0125x_cleaned.csv"
     use_algos = ("lgb", "linear_l2")
-    # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
-    #              200000, 300000, 1_000_000, 2_000_000, 5_000_000]
-    seeds = [42, 100, 200]
-    results = [calc_automl(dataset_path, seed, use_algos) for seed in seeds]
+    seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
+                 200000, 300000, 1_000_000, 2_000_000, 5_000_000]
+    # seeds = [100, 200]
+    results = []
+    for seed in seeds:
+        res = calc_automl(dataset_path, seed, use_algos)
+        results.append(res)
+        logger.info(f"Result for seed {seed}: {res}")
 
     mvals = [f"{r['metric_value']:_.2f}" for r in results]
     print("OOf on train metric")
@@ -32,5 +36,5 @@ def calculate_quality(calc_automl: Callable[[str, int, Any], dict]):
 
 
 if __name__ == "__main__":
-    calculate_quality(lama_automl)
-    # calculate_quality(spark_automl)
+    # calculate_quality(lama_automl)
+    calculate_quality(spark_automl)
