@@ -27,7 +27,9 @@ class FoldsIterator(TrainValidIterator):
         assert hasattr(train, "folds"), "Folds in dataset should be defined to make folds iterator."
 
         super().__init__(train)
-        self.n_folds = train.folds.max() + 1
+        folds = cast(SparkDataFrame, train.folds)
+        num_folds = folds.select(F.max(train.folds_column).alias("max")).first()["max"]
+        self.n_folds = num_folds + 1
         if n_folds is not None:
             self.n_folds = min(self.n_folds, n_folds)
 
@@ -101,8 +103,8 @@ class FoldsIterator(TrainValidIterator):
         return HoldoutIterator(train_ds, valid_ds)
 
     def __split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset]:
-        train_df = self._df.where(F.col(SparkDataset.folds_column) != fold)
-        valid_df = self._df.where(F.col(SparkDataset.folds_column) == fold)
+        train_df = self._df.where(F.col(self.train.folds_column) != fold).drop(self.train.folds_column)
+        valid_df = self._df.where(F.col(self.train.folds_column) == fold).drop(self.train.folds_column)
 
         train_ds = cast(SparkDataset, self.train.empty())
         train_ds.set_data(train_df, self.train.features, self.train.roles)

@@ -65,7 +65,9 @@ def tune_and_fit_predict(
     try:
         preds = ml_algo.fit_predict(train_valid)
     except Exception as e:
-        logger.info("Model {0} failed during ml_algo.fit_predict call.\n\n{1}".format(ml_algo.name, e))
+        # TODO: SPARK-LAMA add traceback into the logged message
+        import traceback
+        logger.error(f"Model {ml_algo.name} failed during ml_algo.fit_predict call.\n\n{e}\n\n{traceback.format_exc(e)}")
         return None, None
 
     return ml_algo, preds
