@@ -12,7 +12,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: local-hdd
   hostPath:
-    path: /mnt/ess_storage/DN_1/storage/sber_LAMA/kaggle_used_cars_dataset
+    path: /mnt/ess_storage/DN_1/storage/sber_LAMA/kaggle_used_cars_dataset 
     type: Directory
 ---
 apiVersion: v1
