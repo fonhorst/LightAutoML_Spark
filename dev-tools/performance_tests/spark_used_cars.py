@@ -25,7 +25,7 @@ def calculate_automl(path:str, seed: int = 42, use_algos = ("lgb", "linear_l2"))
         data = spark.read.csv(path, header=True, escape="\"")
         # data = spark.read.csv("file:///spark_data/tiny_used_cars_data.csv", header=True, escape="\"")
         # data = spark.read.csv("file:///spark_data/derivative_datasets/0125x_cleaned.csv", header=True, escape="\"")
-        # data = spark.read.csv("file:///spark_data/derivative_datasets/4x_cleaned.csv", header=True, escape="\"")
+        # data = spark.read.csv("fтile:///spark_data/derivative_datasets/4x_cleaned.csv", header=True, escape="\"")
         # data = spark.read.csv("file:///spark_data/derivative_datasets/2x_cleaned.csv", header=True, escape="\"")
         # data = spark.read.csv("file:///opt/0125l_dataset.csv", header=True, escape="\"")
         data = data.withColumnRenamed(target_col, f"{target_col}_old") \

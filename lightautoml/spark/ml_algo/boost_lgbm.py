@@ -2,20 +2,17 @@ import logging
 from copy import copy
 from typing import Callable, Dict, Optional, Tuple, Union
 
+import pandas as pd
 from pandas import Series
-from pyspark.ml.classification import GBTClassifier
 from pyspark.ml.feature import VectorAssembler
-from pyspark.ml.regression import GBTRegressor
 from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
 
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel
-from lightautoml.spark.validation.base import TrainValidIterator
-import pandas as pd
-
 from lightautoml.utils.tmp_utils import log_data
+from lightautoml.validation.base import TrainValidIterator
 
 logger = logging.getLogger(__name__)
 
