@@ -28,3 +28,33 @@ spec:
   resources:
     requests:
       storage: '1000Gi'
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-scripts-shared-vol
+spec:
+  capacity:
+    storage: '10Gi'
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-hdd
+  hostPath:
+    path: /mnt/ess_storage/DN_1/tmp/scripts-shared-vol
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scripts-shared-vol
+  namespace: spark-lama-exps
+spec:
+  volumeName: pv-scripts-shared-vol
+  storageClassName: local-hdd
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: '10Gi'

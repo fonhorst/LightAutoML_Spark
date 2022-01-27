@@ -1,5 +1,7 @@
 FROM spark-py:pyspark-executor-3.2.0
 
+ARG spark_jars_cache=jars_cache
+
 USER root
 
 RUN mkdir -p /src

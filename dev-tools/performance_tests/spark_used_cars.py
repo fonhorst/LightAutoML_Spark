@@ -5,6 +5,7 @@ Simple example for binary classification on tabular data.
 """
 import logging
 import logging.config
+import os
 import socket
 import sys
 from contextlib import contextmanager
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
     logger = logging.getLogger(__name__)
 
-    do_configuring = True if len(sys.argv) > 1 and sys.argv[1] == "1" else False
+    do_configuring = True if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else False
 
     with configure_spark_session(do_configuring) as spark:
         print(calculate_automl(spark, path="/spark_data/tiny_used_cars_data.csv", use_algos=["lgb", "linear_l2"]))
