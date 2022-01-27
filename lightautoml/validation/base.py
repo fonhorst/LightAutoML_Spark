@@ -123,7 +123,7 @@ class DummyIterator(TrainValidIterator):
             train: Train dataset.
 
         """
-        self.train = train
+        super().__init__(train)
 
     def __len__(self) -> Optional[int]:
         """Get 1 len.
@@ -141,7 +141,7 @@ class DummyIterator(TrainValidIterator):
             Iterable object for dataset, where for validation also uses train.
 
         """
-        return iter([(None, self.train, self.train)])
+        return [(None, self.train, self.train)]
 
     def get_validation_data(self) -> Dataset:
         """Just get validation sample.
@@ -173,7 +173,7 @@ class HoldoutIterator(TrainValidIterator):
             valid: Dataset of valid data.
 
         """
-        self.train = train
+        super().__init__(train)
         self.valid = valid
 
     def __len__(self) -> Optional[int]:

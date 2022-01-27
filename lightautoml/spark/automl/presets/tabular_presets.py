@@ -21,6 +21,7 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures,
 from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.spark.pipelines.ml.nested_ml_pipe import NestedTabularMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
+from lightautoml.spark.validation.base import DummyIterator
 from lightautoml.tasks import Task
 
 logger = logging.getLogger(__name__)
@@ -661,6 +662,11 @@ class TabularAutoML(AutoMLPreset):
 
     def _create_validation_iterator(self, train: LAMLDataset, valid: Optional[LAMLDataset], n_folds: Optional[int],
                                     cv_iter: Optional[Callable]):
+
+        if valid is not None:
+            iterator = HoldoutIterator(train, valid)
+        else:
+            iterator = DummyIterator(train)
         return super()._create_validation_iterator(train, valid, n_folds, cv_iter)
 
 
