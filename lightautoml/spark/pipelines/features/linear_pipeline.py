@@ -146,10 +146,10 @@ class LinearFeatures(TabularDataFeatures, LAMALinearFeatures):
 
         # TODO: fix the performance and uncomment
         # get target encoded categories
-        # te_part = self.get_categorical_raw(train, te)
-        # if te_part is not None:
-        #     te_part = SequentialTransformer([te_part, target_encoder()])
-        #     te_list.append(te_part)
+        te_part = self.get_categorical_raw(train, te)
+        if te_part is not None:
+            te_part = SequentialTransformer([te_part, target_encoder()])
+            te_list.append(te_part)
         
         # get intersection of top categories
         # intersections = self.get_categorical_intersections(train)

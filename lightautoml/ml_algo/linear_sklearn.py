@@ -124,6 +124,7 @@ class LinearLBFGS(TabularMLAlgo):
             Target predictions for valid dataset.
 
         """
+        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(train.features)} ")
         if type(train) is PandasDataset:
             train = train.to_numpy()
             valid = valid.to_numpy()

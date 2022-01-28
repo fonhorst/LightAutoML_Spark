@@ -79,7 +79,7 @@ class LinearLBFGS(TabularMLAlgo):
             Target predictions for valid dataset.
 
         """
-        logger.info(f"predict single fold in LinearLBGFS")
+        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(train.features)} ")
         if self.task is None:
             self.task = train.task
 

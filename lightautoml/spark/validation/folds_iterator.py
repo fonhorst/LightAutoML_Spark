@@ -75,7 +75,7 @@ class FoldsIterator(TrainValidIterator):
             self._df.unpersist()
             raise StopIteration
 
-        train_ds, valid_ds = self.__split_by_fold(self._curr_idx)
+        train_ds, valid_ds = self.__split_by_fold(self._df, self._curr_idx)
         self._curr_idx += 1
 
         return None, train_ds, valid_ds
@@ -98,13 +98,17 @@ class FoldsIterator(TrainValidIterator):
             new hold-out-iterator.
 
         """
-        train_ds, valid_ds = self.__split_by_fold(0)
+        # TODO: SPARK-LAMA need to uncache later
+        dataset = cast(SparkDataset, self.train)
+        df = dataset.data.join(dataset.folds, SparkDataset.ID_COLUMN).cache()
+
+        train_ds, valid_ds = self.__split_by_fold(df, 0)
 
         return HoldoutIterator(train_ds, valid_ds)
 
-    def __split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset]:
-        train_df = self._df.where(F.col(self.train.folds_column) != fold).drop(self.train.folds_column)
-        valid_df = self._df.where(F.col(self.train.folds_column) == fold).drop(self.train.folds_column)
+    def __split_by_fold(self, df: SparkDataFrame, fold: int) -> Tuple[SparkDataset, SparkDataset]:
+        train_df = df.where(F.col(self.train.folds_column) != fold).drop(self.train.folds_column)
+        valid_df = df.where(F.col(self.train.folds_column) == fold).drop(self.train.folds_column)
 
         train_ds = cast(SparkDataset, self.train.empty())
         train_ds.set_data(train_df, self.train.features, self.train.roles)
