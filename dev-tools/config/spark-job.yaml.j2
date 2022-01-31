@@ -16,6 +16,10 @@ spec:
           persistentVolumeClaim:
             claimName: spark-lama-data
             readOnly: True
+        - name: exp-results-vol
+          persistentVolumeClaim:
+            claimName: exp-results-vol
+            readOnly: False
         - name: scripts-volume
           configMap:
             name: {{jobname}}-scripts
@@ -31,6 +35,8 @@ spec:
             readOnly: true
           - name: scripts-volume
             mountPath: /scripts
+          - name: exp-results-vol
+            mountPath: /exp_results
         resources:
           requests:
             memory: "16Gi"
@@ -39,4 +45,14 @@ spec:
             memory: "16Gi"
             cpu: "4000m"
       restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values: [node10.bdcl]
   backoffLimit: 0
+
+
