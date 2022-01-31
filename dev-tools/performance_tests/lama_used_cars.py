@@ -8,13 +8,11 @@ from typing import Dict, Any, Optional
 
 import pandas as pd
 import sklearn
-from sklearn.linear_model.tests.test_ridge import _mean_squared_error_callable
 from sklearn.model_selection import train_test_split
 
 from lightautoml.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.utils import log_exec_time
 from lightautoml.tasks import Task
-
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +44,8 @@ def calculate_automl(path: str,
 
     if metric_name == "mse":
         evaluator = sklearn.metrics.mean_squared_error
+    elif metric_name == "areaUnderROC":
+        evaluator = sklearn.metrics.roc_auc_score
     else:
         raise ValueError(f"Metric {metric_name} is not supported")
 

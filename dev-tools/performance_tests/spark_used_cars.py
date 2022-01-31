@@ -60,7 +60,7 @@ def calculate_automl(path: str,
             evaluator = RegressionEvaluator(predictionCol=oof_predictions.features[0], labelCol=target_col,
                                             metricName=metric_name)
         elif task_type == "binary":
-            evaluator = BinaryClassificationEvaluator(predictionCol=oof_predictions.features[0], labelCol=target_col,
+            evaluator = BinaryClassificationEvaluator(rawPredictionCol=oof_predictions.features[0], labelCol=target_col,
                                                       metricName=metric_name)
         elif task_type == "multiclass":
             evaluator = MulticlassClassificationEvaluator(predictionCol=oof_predictions.features[0], labelCol=target_col,
