@@ -44,17 +44,15 @@ def generate_experiments(config_data: Dict) -> List[Dict[str, Any]]:
 # Run subprocesses with Spark jobs
 # for i in range(repeat_rate):
 def run_experiments(experiments_configs: List[Dict[str, Any]]):
-    processes = []
     for experiment in experiments_configs:
         name = experiment["name"]
         with open(f"/tmp/{name}-config.yaml", "w+") as outfile:
             yaml.dump(experiment, outfile, default_flow_style=False)
 
-        p = subprocess.Popen(["./dev-tools/bin/test-job-run.sh", str(name)])
+        p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)])
+        # p = subprocess.Popen(["./dev-tools/bin/test-job-job.sh", str(name)])
+        print(f"Starting exp with name {name}")
         yield p
-
-    for p in processes:
-        p.wait()
 
 
 def limit_procs(it: Iterable[subprocess.Popen], max_parallel_ops: int = 1):
@@ -64,7 +62,7 @@ def limit_procs(it: Iterable[subprocess.Popen], max_parallel_ops: int = 1):
 
     def try_to_remove_finished():
         for p in procs:
-            if p.poll():
+            if p.poll() is not None:
                 procs.remove(p)
                 break
 
@@ -74,7 +72,7 @@ def limit_procs(it: Iterable[subprocess.Popen], max_parallel_ops: int = 1):
 
         while len(procs) >= max_parallel_ops:
             try_to_remove_finished()
-            time.sleep(5)
+            time.sleep(1)
 
 
 def wait_for_all(procs: Iterable[subprocess.Popen]):
@@ -83,7 +81,7 @@ def wait_for_all(procs: Iterable[subprocess.Popen]):
 
 
 def main():
-    cfg_path = "./dev-tools/experiments/experiment-config.yaml"
+    cfg_path = "./dev-tools/config/experiments/test-experiment-config.yaml"
     cfg = read_config(cfg_path)
     exp_cfgs = generate_experiments(cfg)
     exp_procs = list(tqdm(
