@@ -1,7 +1,7 @@
 """Basic classes for features generation."""
 
 from copy import copy, deepcopy
-from typing import Any, Callable
+from typing import Any, Callable, Union
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -9,11 +9,13 @@ from typing import Tuple
 import numpy as np
 from pandas import DataFrame
 from pandas import Series
+from pyspark.ml import Transformer, Estimator
+from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.sql import functions as F
 
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.utils import get_columns_by_role
-from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.transformers.categorical import FreqEncoder, OrdinalEncoder, LabelEncoder, \
     TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
 from lightautoml.spark.transformers.datetime import BaseDiff, DateSeasons
@@ -552,3 +554,35 @@ class TabularDataFeatures:
         top = list(df.index[:top_n])
 
         return top
+
+
+class SparkMLTransformerWrapper(Transformer, HasInputCols, HasOutputCols):
+    def __init__(self, slama_transformer: SparkTransformer):
+        super().__init__()
+        self._slama_transformer = slama_transformer
+
+    def _transform(self, dataset: Union[SparkDataFrame, SparkDataset]):
+        if isinstance(dataset, SparkDataFrame):
+            # TODO: construct SparkDataFrame if it is possible
+            raise NotImplementedError("Not yet supported")
+
+        self._slama_transformer.transform(dataset)
+
+
+class SparkMLEstimatorWrapper(Estimator, HasInputCols, HasOutputCols):
+    def __init__(self, slama_transformer: SparkTransformer, input_cols: Optional[List[str]] = None):
+        super().__init__()
+        self._slama_transformer = slama_transformer
+        self.inputCols = input_cols
+
+    def _fit(self, dataset: Union[SparkDataFrame, SparkDataset]) -> SparkMLTransformerWrapper:
+        if isinstance(dataset, SparkDataFrame):
+            # TODO: construct SparkDataFrame if it is possible
+            raise NotImplementedError("Not yet supported")
+
+        self._slama_transformer.fit(dataset)
+
+        transformer = SparkMLTransformerWrapper(self._slama_transformer)
+
+        return transformer
+
