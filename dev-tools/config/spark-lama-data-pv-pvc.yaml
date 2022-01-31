@@ -58,3 +58,33 @@ spec:
   resources:
     requests:
       storage: '10Gi'
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-spark-lama-exp-results-vol
+spec:
+  capacity:
+    storage: '10Gi'
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-hdd
+  hostPath:
+    path: /mnt/ess_storage/DN_1/storage/sber_LAMA/exp-results/
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: exp-results-vol
+  namespace: spark-lama-exps
+spec:
+  volumeName: pv-spark-lama-exp-results-vol
+  storageClassName: local-hdd
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: '10Gi'

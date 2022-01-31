@@ -140,10 +140,10 @@ def configure_spark_session(do_configuring: bool):
             .config("spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly", "true")
             .config("spark.driver.cores", "4")
             .config("spark.driver.memory", "16g")
-            .config("spark.executor.instances", "4")
+            .config("spark.executor.instances", "1")
             .config("spark.executor.cores", "4")
             .config("spark.executor.memory", "16g")
-            .config("spark.cores.max", "16")
+            .config("spark.cores.max", "4")
             .config("spark.memory.fraction", "0.6")
             .config("spark.memory.storageFraction", "0.5")
             .config("spark.sql.autoBroadcastJoinThreshold", "100MB")
@@ -167,4 +167,4 @@ if __name__ == "__main__":
     do_configuring = True if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else False
 
     with configure_spark_session(do_configuring) as spark:
-        print(calculate_automl(spark, path="/spark_data/tiny_used_cars_data.csv", use_algos=["lgb", "linear_l2"]))
+        print(calculate_automl(spark, path="/spark_data/tiny_used_cars_data_cleaned.csv", use_algos=["lgb", "linear_l2"]))
