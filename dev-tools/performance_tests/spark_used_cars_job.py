@@ -10,6 +10,7 @@ import json
 import os
 import socket
 import sys
+from datetime import datetime
 from contextlib import contextmanager
 from typing import Dict, Any
 
@@ -147,44 +148,17 @@ if __name__ == "__main__":
     del config_data["dataset_path"]
     del config_data["use_state_file"]
 
-    # Process state file if neccessary
-    if use_state_file == "use":
-        with open("/exp_results/Experiments_results.json", "r+") as file:
-            try:
-                dic = json.load(file)
-            except:
-                print("Error opening json file:", sys.exc_info()[0])
-                dic = {}
-
-            if app_name in dic:
-                sys.exit("Experiment already in state file")
-
-    elif use_state_file == "delete":
-        open("/exp_results/Experiments_results.json", "w").close()
-
     # Launch jobs with experiments and write results into file
     with configure_spark_session(do_configuring, app_name, config_data) as spark:
         res = calculate_automl(spark, path=f"/spark_data/{dataset_path}", use_algos=["lgb", "linear_l2"])
         res_dict = {}
         res_dict[app_name] = res
 
-        print(res)
-
         # Write in experiment log history file
-        with open(f"/exp_results/Experiments_history.txt", "a+") as outfile:
+        with open(f"/exp_results/{app_name}.log", "a+") as file:
             for key, val in res_dict.items():
-                outfile.write(f"{key}:{val}\n")
-            outfile.write("-----------\n")
+                file.write(f"{key}:{val}\n")
+            file.write(f"Experiment_datetime:{datetime.now()}")
+            file.write("-----------\n")
 
-        # Rewrite state file
-        with open("/exp_results/Experiments_results.json", "r+") as file:
-            try:
-                dic = json.load(file)
-            except:
-                print("Error opening json file:", sys.exc_info()[0])
-                dic = {}
-            finally:
-                dic.update(res_dict)
-                file.seek(0)
-                json.dump(dic, file)
-                file.truncate()
+        print(res)

@@ -5,7 +5,7 @@ spark_quality_repeat_rate: 2
 use_state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip experiments in state file, ignore - don`t skip experiments, delete - delete experiments in state file
 # Unique set of parameters for each experiment
 experiment_params: {
-  dataset_path: ['tiny_used_cars_data.csv', 'tiny_used_cars_data_2.csv', 'tiny_used_cars_data_3.csv', 'tiny_used_cars_data_4.csv', 'tiny_used_cars_data_5.csv'], #'derivative_datasets/025x_cleaned.csv', 'derivative_datasets/4x_cleaned.csv', 'derivative_datasets/4x_cleaned.csv'
+  dataset_path: ['tiny_used_cars_data.csv'], #'derivative_datasets/025x_cleaned.csv', 'derivative_datasets/4x_cleaned.csv', 'derivative_datasets/4x_cleaned.csv'
   spark.driver.cores: ['4'],
   spark.driver.memory: ['16g'],
   spark.executor.instances: ['4'],
