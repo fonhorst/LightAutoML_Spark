@@ -1,6 +1,7 @@
 import logging
 import pickle
 from collections import defaultdict
+from copy import deepcopy
 from itertools import chain, combinations
 from typing import Optional, Sequence, List, Tuple, Dict, Union, cast, Iterator
 
@@ -101,7 +102,7 @@ class LabelEncoder(SparkTransformer):
 
         self.dicts = dict()
 
-        for i in dataset.features:
+        for i in self._input_features:
 
             logger.debug(f"[{type(self)} (LE)] fit column {i}")
 
@@ -141,7 +142,7 @@ class LabelEncoder(SparkTransformer):
 
         cols_to_select = []
 
-        for i in dataset.features:
+        for i in self._input_features:
             logger.debug(f"[{type(self)} (LE)] transform col {i}")
 
             _ic = F.col(i)
@@ -199,13 +200,16 @@ class LabelEncoder(SparkTransformer):
 
             cols_to_select.append(col.alias(f"{self._fname_prefix}__{i}"))
 
+        new_roles = deepcopy(dataset.roles)
+        new_roles.update({feat:self._output_role for feat in self.features})
         output: SparkDataset = dataset.empty()
+        # *dataset.service_columns,
         output.set_data(
             df.select(
-                *dataset.service_columns,
+                '*',
                 *cols_to_select
             ).fillna(self._fillna_val),
-            self.features,
+            dataset.features + self.features,
             self._output_role
         )
 
@@ -280,7 +284,7 @@ class OrdinalEncoder(LabelEncoder):
         cached_dataset = dataset.data
 
         self.dicts = {}
-        for i in dataset.features:
+        for i in self._input_features:
 
             logger.debug(f"[{type(self)} (ORD)] fit column {i}")
 
@@ -505,8 +509,9 @@ class TargetEncoder(SparkTransformer):
     def __init__(self, alphas: Sequence[float] = (0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 250.0, 1000.0)):
         self.alphas = alphas
 
-    def fit(self, dataset: SparkDataset):
-        super().fit_transform(dataset)
+    def _fit(self, dataset: SparkDataset) -> "SparkTransformer":
+        self.fit_transform(dataset)
+        return self
 
     def fit_transform(self, dataset: SparkDataset) -> SparkDataset:
         dataset.cache()
@@ -566,7 +571,7 @@ class TargetEncoder(SparkTransformer):
 
         cols_to_select = []
 
-        for col_name in dataset.features:
+        for col_name in self._input_features:
 
             logger.debug(f"[{type(self)} (TE)] column {col_name}")
 
@@ -658,12 +663,13 @@ class TargetEncoder(SparkTransformer):
 
         output = dataset.empty()
         self.output_role = NumericRole(np.float32, prob=output.task.name == "binary")
+        # *dataset.service_columns,
         output.set_data(
             cached_df.select(
-                *dataset.service_columns,
+                '*',
                 *cols_to_select
             ),
-            self.features,
+            dataset.features + self.features,
             self.output_role
         )
 
@@ -688,7 +694,7 @@ class TargetEncoder(SparkTransformer):
         # В оригинальной ламе об этом не парились, т.к. сразу переходили в numpy. Если прислали датасет не с тем
         # порядком строк - ну штоош, это проблемы того, кто датасет этот сюда вкинул. Стоит ли нам тоже придерживаться
         # этой логики?
-        for i, col_name in enumerate(dataset.features):
+        for i, col_name in enumerate(self._input_features):
             _cur_col = F.col(col_name)
             logger.debug(f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self.encodings[i])}")
 
@@ -697,12 +703,13 @@ class TargetEncoder(SparkTransformer):
             cols_to_select.append(pandas_dict_udf(values)(_cur_col).alias(f"{self._fname_prefix}__{col_name}"))
 
         output = dataset.empty()
+        # *dataset.service_columns,
         output.set_data(
             dataset.data.select(
-                *dataset.service_columns,
+                '*',
                 *cols_to_select
             ),
-            self.features,
+            dataset.features + self.features,
             self.output_role
         )
 

@@ -561,28 +561,28 @@ class SparkMLTransformerWrapper(Transformer, HasInputCols, HasOutputCols):
         super().__init__()
         self._slama_transformer = slama_transformer
 
-    def _transform(self, dataset: Union[SparkDataFrame, SparkDataset]):
+    def _transform(self, dataset: Union[SparkDataFrame, SparkDataset]) -> SparkDataset:
         if isinstance(dataset, SparkDataFrame):
             # TODO: construct SparkDataFrame if it is possible
             raise NotImplementedError("Not yet supported")
 
-        self._slama_transformer.transform(dataset)
+        return self._slama_transformer.transform(dataset)
 
 
 class SparkMLEstimatorWrapper(Estimator, HasInputCols, HasOutputCols):
     def __init__(self, slama_transformer: SparkTransformer, input_cols: Optional[List[str]] = None):
         super().__init__()
         self._slama_transformer = slama_transformer
-        self.inputCols = input_cols
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, self._slama_transformer.get_output_names(input_cols))
 
     def _fit(self, dataset: Union[SparkDataFrame, SparkDataset]) -> SparkMLTransformerWrapper:
         if isinstance(dataset, SparkDataFrame):
             # TODO: construct SparkDataFrame if it is possible
             raise NotImplementedError("Not yet supported")
 
-        self._slama_transformer.fit(dataset)
+        self._slama_transformer.fit(dataset, use_features=self.getInputCols())
 
         transformer = SparkMLTransformerWrapper(self._slama_transformer)
 
         return transformer
-

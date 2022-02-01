@@ -1,5 +1,6 @@
 import logging
-from typing import cast, Sequence, List, Set
+from copy import copy
+from typing import cast, Sequence, List, Set, Optional
 
 from lightautoml.dataset.utils import concatenate
 from lightautoml.spark.dataset.base import SparkDataset
@@ -11,18 +12,45 @@ from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LA
 logger = logging.getLogger(__name__)
 
 
+# TODO: SPARK-LAMA make it ABC?
 class SparkTransformer(LAMLTransformer):
 
     _features = []
 
     _can_unwind_parents: bool = True
 
-    def fit(self, dataset: SparkDataset) -> "SparkTransformer":
+    _input_features = []
+
+    def get_output_names(self, input_cols: List[str]) -> List[str]:
+        return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
+
+    def fit(self, dataset: SparkDataset, use_features: Optional[List[str]] = None) -> "SparkTransformer":
 
         logger.info(f"SparkTransformer of type: {type(self)}")
-        self._features = dataset.features
+
+        if use_features:
+            existing_feats = set(dataset.features)
+            not_found_feats = [feat for feat in use_features if feat not in existing_feats]
+            assert len(not_found_feats) == 0, \
+                f"Not found features {not_found_feats} among existing {existing_feats}"
+            self._features = use_features
+
+            # # TODO: SPARK-LAMA reimplement it later
+            # # here we intentionally is going to reduce features to the desired
+            # # to pass the check with rewriting checks themselves
+            # use_roles = {feat: dataset.roles[feat] for feat in use_features}
+            # ds = dataset.empty()
+            # ds.set_data(dataset.data, use_features, use_roles, dataset.dependencies)
+
+            # for check_func in self._fit_checks:
+            #     check_func(ds)
+        else:
+            self._features = dataset.features
+
+        self._input_features = use_features if use_features else dataset.features
+
         for check_func in self._fit_checks:
-            check_func(dataset)
+            check_func(dataset, use_features)
 
         return self._fit(dataset)
 
@@ -217,3 +245,5 @@ class ChangeRoles(LAMAChangeRoles, SparkTransformer):
     _fname_prefix = "changeroles"
     _can_unwind_parents = False
 
+    def get_output_names(self, input_cols: List[str]) -> List[str]:
+        return copy(input_cols)
