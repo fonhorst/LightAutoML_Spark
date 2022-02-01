@@ -65,17 +65,21 @@ def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordin
     ordinal_cat_processing = Pipeline(stages=[ord_estimator])
     num_processing = Pipeline(stages=[num_estimator])
 
-    model = cat_processing.fit(sdataset)
-
-    result = cast(SparkDataset, model.transform(sdataset))
-
-    pdf = result.to_pandas().data
-
-    # ut = Pipeline(stages=[cat_processing, ordinal_cat_processing, num_processing])
+    # model = cat_processing.fit(sdataset)
     #
-    # ut_transformer: PipelineModel = ut.fit(sdataset)
+    # result = cast(SparkDataset, model.transform(sdataset))
     #
-    # result = ut_transformer.transform(sdataset)
+    # pdf = result.data.toPandas()  # .to_pandas().data
+
+    ut = Pipeline(stages=[cat_processing, ordinal_cat_processing, num_processing])
+    #
+    ut_transformer: PipelineModel = ut.fit(sdataset)
+    #
+    result = cast(SparkDataset, ut_transformer.transform(sdataset))
+
+    pdf = result.data.toPandas()  # .to_pandas().data
+
+    k = 0
 
 
 if __name__ == "__main__":

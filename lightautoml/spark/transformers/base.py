@@ -1,7 +1,9 @@
 import logging
-from copy import copy
+from copy import copy, deepcopy
 from typing import cast, Sequence, List, Set, Optional
 
+from lightautoml.dataset.base import RolesDict
+from lightautoml.dataset.roles import ColumnRole
 from lightautoml.dataset.utils import concatenate
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.utils import log_exec_time
@@ -88,6 +90,12 @@ class SparkTransformer(LAMLTransformer):
         result.dependencies = deps
 
         return result
+
+    @staticmethod
+    def _get_updated_roles(dataset: SparkDataset, new_features: List[str], new_role: ColumnRole) -> RolesDict:
+        new_roles = deepcopy(dataset.roles)
+        new_roles.update({feat: new_role for feat in new_features})
+        return  new_roles
 
 
 class SequentialTransformer(SparkTransformer):

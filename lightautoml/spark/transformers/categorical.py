@@ -14,6 +14,7 @@ from pyspark.sql.functions import udf, array, monotonically_increasing_id
 from pyspark.sql.types import FloatType, DoubleType, IntegerType
 from sklearn.utils.murmurhash import murmurhash3_32
 
+from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
@@ -200,17 +201,16 @@ class LabelEncoder(SparkTransformer):
 
             cols_to_select.append(col.alias(f"{self._fname_prefix}__{i}"))
 
-        new_roles = deepcopy(dataset.roles)
-        new_roles.update({feat:self._output_role for feat in self.features})
         output: SparkDataset = dataset.empty()
         # *dataset.service_columns,
         output.set_data(
             df.select(
-                '*',
+                *dataset.service_columns,
+                *dataset.features,
                 *cols_to_select
             ).fillna(self._fillna_val),
             dataset.features + self.features,
-            self._output_role
+            self._get_updated_roles(dataset, self.features, self._output_role)
         )
 
         logger.info(f"[{type(self)} (LE)] Transform is finished")
@@ -533,7 +533,7 @@ class TargetEncoder(SparkTransformer):
         return (target - candidate) ** 2
 
     def _fit_transform(self, dataset: SparkDataset) -> SparkDataset:
-        LAMLTransformer.fit(self, dataset)
+        # LAMLTransformer.fit(self, dataset)
 
         logger.info(f"[{type(self)} (TE)] fit_transform is started")
 
@@ -666,11 +666,12 @@ class TargetEncoder(SparkTransformer):
         # *dataset.service_columns,
         output.set_data(
             cached_df.select(
-                '*',
+                *dataset.service_columns,
+                *dataset.features,
                 *cols_to_select
             ),
             dataset.features + self.features,
-            self.output_role
+            self._get_updated_roles(dataset, self.features, self.output_role)
         )
 
         cached_df.unpersist()
@@ -710,7 +711,7 @@ class TargetEncoder(SparkTransformer):
                 *cols_to_select
             ),
             dataset.features + self.features,
-            self.output_role
+            self._get_updated_roles(dataset, self.features, self.output_role)
         )
 
         logger.info(f"[{type(self)} (TE)] transform is finished")
