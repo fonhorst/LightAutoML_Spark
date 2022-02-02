@@ -52,6 +52,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         self.task = None
 
         self._features_importance = None
+        self._assembler = None
 
     def _infer_params(self) -> Tuple[dict, int, int, int, Optional[Callable], Optional[Callable]]:
         """Infer all parameters in lightgbm format.
@@ -174,13 +175,13 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         log_data("spark_lgb_predict", {"predict": dataset.to_pandas()})
 
-        assembler = VectorAssembler(
-            inputCols=dataset.features,
-            outputCol=f"{self._name}_vassembler_features",
-            handleInvalid="keep"
-        )
+        # assembler = VectorAssembler(
+        #     inputCols=dataset.features,
+        #     outputCol=f"{self._name}_vassembler_features",
+        #     handleInvalid="keep"
+        # )
 
-        temp_sdf = assembler.transform(dataset.data)
+        temp_sdf = self._assembler.transform(dataset.data)
 
         pred = model.transform(temp_sdf)
 
@@ -217,36 +218,24 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         logger.info(f"Input cols for the vector assembler: {train.features}")
         # TODO: reconsider using of 'keep' as a handleInvalid value
-        assembler = VectorAssembler(
-            inputCols=train.features,
-            outputCol=f"{self._name}_vassembler_features",
-            handleInvalid="keep"
-        )
+        if self._assembler is None:
+            self._assembler = VectorAssembler(
+                inputCols=train.features,
+                outputCol=f"{self._name}_vassembler_features",
+                handleInvalid="keep"
+            )
 
         LGBMBooster = LightGBMRegressor if is_reg else LightGBMClassifier
+        metric = 'mse' if is_reg else 'auc'
 
         lgbm = LGBMBooster(
-            # fobj=fobj,  # TODO SPARK-LAMA: Commented only for smoke test
-            # feval=feval,
-            featuresCol=assembler.getOutputCol(),
+            featuresCol=self._assembler.getOutputCol(),
             labelCol=train.target_column,
             predictionCol=self._prediction_col,
-            # learningRate=params["learning_rate"],
-            # numLeaves=params["num_leaves"],
-            # featureFraction=params["feature_fraction"],
-            # baggingFraction=params["bagging_fraction"],
-            # baggingFreq=params["bagging_freq"],
-            # maxDepth=params["max_depth"],
-            # verbosity=params["verbosity"],
-            # minGainToSplit=params["min_split_gain"],
-            # numThreads=params["num_threads"],
-            # maxBin=params["max_bin"],
-            # minDataInLeaf=params["min_data_in_bin"],
-            # earlyStoppingRound=early_stopping_rounds
             learningRate=0.05,
             numLeaves=128,
-            featureFraction=0.9,
-            baggingFraction=0.9,
+            featureFraction=0.7,
+            baggingFraction=0.7,
             baggingFreq=1,
             maxDepth=-1,
             verbosity=-1,
@@ -255,8 +244,8 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             maxBin=255,
             minDataInLeaf=3,
             earlyStoppingRound=100,
-            metric="mse",
-            numIterations=2000
+            metric=metric,
+            numIterations=3000
             # numIterations=1
         )
 
@@ -266,28 +255,11 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             # lgbm.setAlpha(params["reg_alpha"]).setLambdaL1(params["reg_lambda"]).setLambdaL2(params["reg_lambda"])
             lgbm.setAlpha(1.0).setLambdaL1(0.0).setLambdaL2(0.0)
 
-        # LGBMBooster = GBTRegressor if is_reg else GBTClassifier
-        # lgbm = LGBMBooster(
-        #     featuresCol=assembler.getOutputCol(),
-        #     labelCol=train.target_column,
-        #     predictionCol=self._prediction_col,
-        #     maxDepth=5,
-        #     maxBins=32,
-        #     minInstancesPerNode=1,
-        #     minInfoGain=0.0,
-        #     cacheNodeIds=False,
-        #     subsamplingRate=1.0,
-        #     checkpointInterval=10,
-        #     maxIter=5,
-        #     impurity='variance',
-        #     featureSubsetStrategy='all'
-        # )
-
-        temp_sdf = assembler.transform(train_sdf)
+        temp_sdf = self._assembler.transform(train_sdf)
 
         ml_model = lgbm.fit(temp_sdf)
 
-        val_pred = ml_model.transform(assembler.transform(valid_sdf))
+        val_pred = ml_model.transform(self._assembler.transform(valid_sdf))
 
         # TODO: dummy feature importance, need to be replaced
         self._features_importance = pd.Series(

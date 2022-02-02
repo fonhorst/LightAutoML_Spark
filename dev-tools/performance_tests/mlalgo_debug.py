@@ -1,3 +1,5 @@
+import logging
+import logging.config
 import pickle
 
 import sklearn
@@ -6,7 +8,7 @@ from lightautoml.ml_algo.boost_lgbm import BoostLGBM
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.utils import spark_session
+from lightautoml.spark.utils import spark_session, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.validation.base import DummyIterator
 from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM as SparkBoostLGBM
 
@@ -17,6 +19,10 @@ import numpy as np
 # TODO: correct parameters of BoostLGBM?
 # TODO: correct parametes of Tuner for BoostLGBM?
 from tests.spark.unit import from_pandas_to_spark
+
+logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
+logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
+logger = logging.getLogger(__name__)
 
 mode = "spark"
 
@@ -66,13 +72,13 @@ print(f"Test metric value: {test_metric_value}")
 # =================================================
 
 with spark_session('local[4]') as spark:
-    sds = from_pandas_to_spark(train, spark, train.target)
+    train_sds = from_pandas_to_spark(train, spark, train.target)
     test_sds = from_pandas_to_spark(test_df, spark, tgts)
-    iterator = DummyIterator(train=sds)
+    iterator = DummyIterator(train=train_sds)
 
-    ml_algo = SparkBoostLGBM()
-    ml_algo, _ = tune_and_fit_predict(ml_algo, DefaultTuner(), iterator)
-    preds = ml_algo.predict(test_sds)
+    spark_ml_algo = SparkBoostLGBM()
+    spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+    preds = spark_ml_algo.predict(test_sds)
 
     pred_target_df = (
         preds.data
