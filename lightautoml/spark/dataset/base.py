@@ -312,7 +312,7 @@ class SparkDataset(LAMLDataset):
         # assert kwargs["target"] in data.columns, \
         #     f"No target column (the column name: {kwargs['target']}) in the spark dataframe"
 
-    def _materialize_to_pandas(self) -> Tuple[pd.DataFrame, Dict[str, ColumnRole]]:
+    def _materialize_to_pandas(self) -> Tuple[pd.DataFrame, pd.Series, Dict[str, ColumnRole]]:
         sdf = self.data
 
         def expand_if_vec_or_arr(col, role) -> Tuple[List[Column], ColumnRole]:
@@ -333,15 +333,23 @@ class SparkDataset(LAMLDataset):
             return arr, NumericRole(dtype=vrole.dtype)
 
         arr_cols = (expand_if_vec_or_arr(c, self.roles[c]) for c in self.features)
-        all_cols_and_roles = [(c, role) for c_arr, role in arr_cols for c in c_arr]
-        all_cols = [scol for scol, _ in all_cols_and_roles]
+        all_cols_and_roles = {c: role for c_arr, role in arr_cols for c in c_arr}
+        all_cols = [scol for scol, _ in all_cols_and_roles.items()]
 
-        sdf = sdf.select(all_cols)
+        if 'target' in self.__dict__ and self.target is not None:
+            sdf = sdf.join(self.target, on=SparkDataset.ID_COLUMN, how='inner')
+
+        sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(self.target_column, *all_cols)
         data = sdf.toPandas()
 
         # we do it this way, because scol doesn't have a method to retrive name as a str
-        all_roles = {c: r for c, (_, r) in zip(sdf.columns, all_cols_and_roles)}
-        return pd.DataFrame(data=data.to_dict()), all_roles
+        all_roles = {c: all_cols_and_roles[c] for c in sdf.columns if c != self.target_column}
+
+        df = pd.DataFrame(data=data.to_dict())
+        target_series = df[self.target_column]
+        df = df.drop(self.target_column, 1)
+
+        return df, target_series, all_roles
 
     def set_data(self,
                  data: SparkDataFrame,
@@ -363,12 +371,15 @@ class SparkDataset(LAMLDataset):
             self._dependencies = dependencies
 
     def to_pandas(self) -> PandasDataset:
-        data, roles = self._materialize_to_pandas()
-        # TODO: SPARK-LAMA convert spark task to lama task
-        return PandasDataset(data=data, roles=roles, task=self.task)
+        data, target_data, roles = self._materialize_to_pandas()
+
+        task = Task(self.task.name)
+        pds = PandasDataset(data=data, roles=roles, task=task, target=target_data)
+
+        return pds
 
     def to_numpy(self) -> NumpyDataset:
-        data, roles = self._materialize_to_pandas()
+        data, target_data, roles = self._materialize_to_pandas()
 
         try:
             target = self.target

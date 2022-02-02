@@ -199,11 +199,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             feval,
         ) = self._infer_params()
 
-        tds = train.to_pandas()
-        tds.task = None
-        vds = valid.to_pandas()
-        vds.task = None
-        log_data("spark_lgb_train_val", (tds, vds))
+        log_data("spark_lgb_train_val", {"train": train.to_pandas(), "valid": valid.to_pandas()})
 
         train_sdf = self._make_sdf_with_target(train)
         valid_sdf = valid.data
@@ -286,6 +282,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         # )
 
         temp_sdf = assembler.transform(train_sdf)
+
         ml_model = lgbm.fit(temp_sdf)
 
         val_pred = ml_model.transform(assembler.transform(valid_sdf))
