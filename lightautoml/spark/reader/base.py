@@ -614,6 +614,14 @@ class SparkToSparkReader(Reader):
 
                 kwargs[array_attr] = target_col
 
+        if SparkDataset.ID_COLUMN not in data.columns:
+            data = data.withColumn(SparkDataset.ID_COLUMN, F.monotonically_increasing_id())
+        data = data.cache()
+
+        data = self._create_target(data, target_col=self.target_col)
+        target = data.select(SparkDataset.ID_COLUMN, self.target_col)
+        kwargs["target"] = target
+
         def convert_column(feat: str):
             role: ColumnRole = self.roles[feat]
             if isinstance(role, DatetimeRole):

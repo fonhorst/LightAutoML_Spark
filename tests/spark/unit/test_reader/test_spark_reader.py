@@ -13,8 +13,8 @@ from . import spark
 import pandas as pd
 
 
-@pytest.mark.parametrize("cv", [1, 5, 10])
-# @pytest.mark.parametrize("cv", [5])
+# @pytest.mark.parametrize("cv", [1, 5, 10])
+@pytest.mark.parametrize("cv", [5])
 def test_spark_reader(spark: SparkSession, cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
@@ -87,4 +87,4 @@ def test_spark_reader(spark: SparkSession, cv: int):
         if isinstance(srole, CategoryRole) and isinstance(prole, CategoryRole)
         and srole.encoding_type != prole.encoding_type
     ]
-    assert len(not_equal_encoding_types) ==0 , f"Encoding types are different: {not_equal_encoding_types}"
+    assert len(not_equal_encoding_types) == 0, f"Encoding types are different: {not_equal_encoding_types}"

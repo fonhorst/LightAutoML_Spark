@@ -39,8 +39,9 @@ def calculate_automl(path: str,
                 .cache()
             train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
 
-            test_data_dropped = test_data \
-                .drop(F.col(target_col)).cache()
+            # test_data_dropped = test_data \
+            #     .drop(F.col(target_col)).cache()
+            test_data_dropped = test_data.cache()
 
             automl = TabularAutoML(spark=spark, task=task, general_params={"use_algos": use_algos})
 
