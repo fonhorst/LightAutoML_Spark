@@ -2,6 +2,7 @@ import itertools
 import subprocess
 import time
 import ast
+from datetime import datetime
 from copy import deepcopy
 from typing import Iterable, List, Set, Dict, Any
 
@@ -62,8 +63,10 @@ def run_experiments(experiments_configs: List[Dict[str, Any]]):
         with open(f"/tmp/{name}-config.yaml", "w+") as outfile:
             yaml.dump(experiment, outfile, default_flow_style=False)
 
-        # p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)], stdout=subprocess.PIPE)
-        p = subprocess.Popen(["./dev-tools/bin/test-job-run.sh", str(name)], stdout=subprocess.PIPE)
+        with open(f"./dev-tools/experiments/results/local/Results_{name}.log", "w+") as logfile:
+            logfile.write(f"Launch datetime: {datetime.now()}\n")
+            # p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)], stdout=logfile)
+            p = subprocess.Popen(["./dev-tools/bin/test-job-run.sh", str(name)], stdout=logfile)
         print(f"Starting exp with name {name}")
         yield p
 
@@ -83,42 +86,37 @@ def limit_procs(it: Iterable[subprocess.Popen], max_parallel_ops: int = 1):
         procs.add(el)
         yield el
 
-        # while len(procs) >= max_parallel_ops:  # TODO: fix processes limits
-        #     try_to_remove_finished()
-        #     time.sleep(1)
+        while len(procs) >= max_parallel_ops:
+            try_to_remove_finished()
+            time.sleep(1)
 
 
-def wait_for_all(procs: Iterable[subprocess.Popen]) -> Dict[str, Any]:
-    results = {}
+def wait_for_all(procs: Iterable[subprocess.Popen]):
     for p in procs:
-        stdout = p.communicate()
+        p.wait()
 
-        # Mark task completion in state file
+        # Mark job as completed in state file
         with open("./dev-tools/experiments/results/state_file.txt", "a+") as file:
             file.write(f"{p.args[1]},")
 
-        # Print stdout and save results
-        stdout = stdout[0].decode("utf-8")
-        print(f"\n------- STDOUT of experiment {p.args[1]} -------\n{stdout}")
 
-        results[p.args[1]] = stdout.splitlines()[-1]
+def gather_results(procs: Iterable[subprocess.Popen]):
+    with open("./dev-tools/experiments/results/Experiments_results.txt", "a+") as resultfile:
+        for p in procs:
+            with open(f"./dev-tools/experiments/results/local/Results_{p.args[1]}.log", "r") as logfile:
+                for line in logfile:
+                    pass
+                metrics = line
+                # Check if acquired results are correct and write them
+                try:
+                    ast.literal_eval(metrics)
+                except Exception as ex:
+                    print(f"Obtained results for experiment {p.args[1]} are incorrect")
+                    print(f"Input results: {metrics}\nError message: {ex}")
+                    continue
 
-    return results
-
-
-def write_results(results: Dict[str, Any]):
-    with open("./dev-tools/experiments/results/Experiments_results.txt", "a+") as file:
-        for key, value in results.items():
-            # Check if acquired results are correct and write them
-            try:
-                ast.literal_eval(value)
-            except Exception as ex:
-                print(f"Obtained results for experiment {key} are incorrect")
-                print(f"Input results: {value}\nError message: {ex}")
-                continue
-
-            file.write(f"{key}:{value}\n")
-            print(f"Results for experiment {key} saved in file")
+                resultfile.write(f"{p.args[1]}:{metrics}")
+                print(f"Results for experiment {p.args[1]} saved in file\n")
 
 
 def main():
@@ -128,8 +126,8 @@ def main():
     exp_procs = list(
         tqdm(limit_procs(run_experiments(exp_cfgs), max_parallel_ops=2), desc="Experiment", total=len(exp_cfgs))
     )
-    results = wait_for_all(exp_procs)
-    write_results(results)
+    wait_for_all(exp_procs)
+    gather_results(exp_procs)
 
     print("Finished processes")
 

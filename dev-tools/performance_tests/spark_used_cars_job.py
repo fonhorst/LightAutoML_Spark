@@ -98,6 +98,7 @@ def calculate_automl(spark: SparkSession, path: str, seed: int = 42, use_algos=(
         "predict_time": predict_time.t,
         "metric_value": metric_value,
         "test_metric_value": test_metric_value,
+        "completion_datetime": f"{datetime.now()}",
     }
 
 
@@ -158,7 +159,6 @@ if __name__ == "__main__":
         with open(f"/exp_results/{app_name}.log", "a+") as file:
             for key, val in res_dict.items():
                 file.write(f"{key}:{val}\n")
-            file.write(f"Experiment_datetime:{datetime.now()}")
             file.write("-----------\n")
 
         print(res)
