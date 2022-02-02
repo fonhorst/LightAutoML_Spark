@@ -1,3 +1,4 @@
+from copy import deepcopy
 import logging
 import logging.config
 import os
@@ -5,13 +6,13 @@ from typing import List, cast
 
 from pyspark.ml import Pipeline, PipelineModel
 
-from lightautoml.dataset.roles import NumericRole
+from lightautoml.dataset.roles import FoldsRole, NumericRole, TargetRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import SparkMLEstimatorWrapper
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.transformers.base import ChangeRoles, UnionTransformer, SequentialTransformer
-from lightautoml.spark.transformers.categorical import LabelEncoderEstimator, OrdinalEncoder
+from lightautoml.spark.transformers.categorical import LabelEncoderEstimator, OrdinalEncoder, TargetEncoderEstimator
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.transformers.base import ColumnsSelector
@@ -57,11 +58,15 @@ def execute_lama_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordinal_
 
 def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordinal_feats: List[str], numeric_feats: List[str]):
     le_estimator = LabelEncoderEstimator(input_cols=cat_feats, input_roles=sdataset.roles)
-    # te_estimator = TargetEncoder(input_cols=le_estimator.getOutputCols(), input_roles=le_estimator.getOutputRoles())
+    te_estimator = TargetEncoderEstimator(input_cols=le_estimator.getOutputCols(), 
+                                          input_roles=le_estimator.getOutputRoles(),
+                                          task_name=sdataset.task.name,
+                                          folds_column=sdataset.folds_column,
+                                          target_column=sdataset.target_column)
     # ord_estimator = OrdinalEncoder(random_state=42, input_cols=ordinal_feats)
     # num_estimator = ChangeRoles(NumericRole(np.float32), input_cols=numeric_feats)
 
-    # cat_processing = Pipeline(stages=[le_estimator, te_estimator])
+    cat_processing = Pipeline(stages=[le_estimator, te_estimator])
     # ordinal_cat_processing = Pipeline(stages=[ord_estimator])
     # num_processing = Pipeline(stages=[num_estimator])
 
@@ -71,7 +76,8 @@ def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordin
     #
     # pdf = result.data.toPandas()  # .to_pandas().data
 
-    ut = Pipeline(stages=[le_estimator])
+    #ut = Pipeline(stages=[cat_processing, ordinal_cat_processing, num_processing])
+    ut = Pipeline(stages=[cat_processing])
     #
     ut_transformer: PipelineModel = ut.fit(sdataset.data)
     #
@@ -99,7 +105,22 @@ if __name__ == "__main__":
         # data reading and converting to SparkDataset
         df = spark.read.csv("examples/data/tiny_used_cars_data.csv", header=True, escape="\"")
         sreader = SparkToSparkReader(task=SparkTask("reg"), cv=5)
-        sdataset = sreader.fit_read(df, roles=roles)
+        sdataset_tmp = sreader.fit_read(df, roles=roles)
+
+        
+        sdataset = sdataset_tmp.empty()
+        new_roles = deepcopy(sdataset_tmp.roles)
+        new_roles.update({sdataset_tmp.target_column: TargetRole(np.float32), sdataset_tmp.folds_column: FoldsRole()})
+        # roles = sdataset_tmp.roles.update({sdataset_tmp.target_column: TargetRole(np.float32)})
+        # roles = sdataset_tmp.roles.update({sdataset_tmp.folds_column: FoldsRole()})
+        sdataset.set_data(
+            sdataset_tmp.data \
+                .join(sdataset_tmp.target, SparkDataset.ID_COLUMN) \
+                .join(sdataset_tmp.folds, SparkDataset.ID_COLUMN),
+            sdataset_tmp.features,
+            new_roles
+        )
+        sdataset.to_pandas().data.to_csv("/tmp/sdataset_data.csv")
 
         # ChangeRoles(output_category_role),
         # feats_to_select_cats = get_columns_by_role(sdataset, "Category", encoding_type="oof")
