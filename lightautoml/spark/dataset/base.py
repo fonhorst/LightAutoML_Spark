@@ -312,7 +312,7 @@ class SparkDataset(LAMLDataset):
         # assert kwargs["target"] in data.columns, \
         #     f"No target column (the column name: {kwargs['target']}) in the spark dataframe"
 
-    def _materialize_to_pandas(self) -> Tuple[pd.DataFrame, pd.Series, Dict[str, ColumnRole]]:
+    def _materialize_to_pandas(self) -> Tuple[pd.DataFrame, Optional[pd.Series], Dict[str, ColumnRole]]:
         sdf = self.data
 
         def expand_if_vec_or_arr(col, role) -> Tuple[List[Column], ColumnRole]:
@@ -338,16 +338,22 @@ class SparkDataset(LAMLDataset):
 
         if 'target' in self.__dict__ and self.target is not None:
             sdf = sdf.join(self.target, on=SparkDataset.ID_COLUMN, how='inner')
+            sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(self.target_column, *all_cols)
+            # we do it this way, because scol doesn't have a method to retrive name as a str
+            all_roles = {c: all_cols_and_roles[c] for c in sdf.columns if c != self.target_column}
+        else:
+            sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(*all_cols)
+            all_roles = {c: all_cols_and_roles[c] for c in sdf.columns}
 
-        sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(self.target_column, *all_cols)
         data = sdf.toPandas()
 
-        # we do it this way, because scol doesn't have a method to retrive name as a str
-        all_roles = {c: all_cols_and_roles[c] for c in sdf.columns if c != self.target_column}
-
         df = pd.DataFrame(data=data.to_dict())
-        target_series = df[self.target_column]
-        df = df.drop(self.target_column, 1)
+
+        if 'target' in self.__dict__ and self.target is not None:
+            target_series = df[self.target_column]
+            df = df.drop(self.target_column, 1)
+        else:
+            target_series = None
 
         return df, target_series, all_roles
 

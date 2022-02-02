@@ -296,6 +296,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             Predicted target values.
 
         """
+        log_data("lama_lgb_predict", {"predict": dataset})
         pred = self.task.losses["lgb"].bw_func(model.predict(dataset.data))
 
         return pred

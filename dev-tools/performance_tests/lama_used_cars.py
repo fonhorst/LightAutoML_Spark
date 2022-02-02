@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from lightautoml.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.utils import log_exec_time
 from lightautoml.tasks import Task
+from lightautoml.utils.tmp_utils import log_data
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,8 @@ def calculate_automl(path: str,
             train_data,
             roles=roles
         )
+
+    log_data("lama_test_part", {"test": test_data})
 
     if metric_name == "mse":
         evaluator = sklearn.metrics.mean_squared_error

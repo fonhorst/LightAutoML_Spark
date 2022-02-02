@@ -71,5 +71,5 @@ def calculate_quality(calc_automl: Callable):
 
 
 if __name__ == "__main__":
-    # calculate_quality(lama_automl)
-    calculate_quality(spark_automl)
+    calculate_quality(lama_automl)
+    # calculate_quality(spark_automl)

@@ -14,6 +14,7 @@ from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import log_exec_time, spark_session
+from lightautoml.utils.tmp_utils import log_data
 
 logger = logging.getLogger(__name__)
 
@@ -29,24 +30,27 @@ def calculate_automl(path: str,
     roles = roles if roles else {}
 
     with spark_session(master="local[4]") as spark:
-        task = SparkTask(task_type)
-        data = spark.read.csv(path, header=True, escape="\"")
-        data = data.withColumnRenamed(target_col, f"{target_col}_old") \
-            .select('*', F.col(f"{target_col}_old").astype(DoubleType()).alias(target_col)).drop(f"{target_col}_old") \
-            .withColumn(SparkDataset.ID_COLUMN, F.monotonically_increasing_id()) \
-            .cache()
-        train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
-
-        test_data_dropped = test_data \
-            .drop(F.col(target_col)).cache()
-
-        automl = TabularAutoML(spark=spark, task=task, general_params={"use_algos": use_algos})
-
         with log_exec_time("spark-lama training"):
+            task = SparkTask(task_type)
+            data = spark.read.csv(path, header=True, escape="\"")
+            data = data.withColumnRenamed(target_col, f"{target_col}_old") \
+                .select('*', F.col(f"{target_col}_old").astype(DoubleType()).alias(target_col)).drop(f"{target_col}_old") \
+                .withColumn(SparkDataset.ID_COLUMN, F.monotonically_increasing_id()) \
+                .cache()
+            train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
+
+            test_data_dropped = test_data \
+                .drop(F.col(target_col)).cache()
+
+            automl = TabularAutoML(spark=spark, task=task, general_params={"use_algos": use_algos})
+
+
             oof_predictions = automl.fit_predict(
                 train_data,
                 roles=roles
             )
+
+        log_data("spark_test_part", {"test": test_data.select(SparkDataset.ID_COLUMN, target_col).toPandas()})
 
         logger.info("Predicting on out of fold")
 
