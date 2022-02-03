@@ -100,7 +100,8 @@ class TabularMLAlgo(MLAlgo):
         pred_col_prefix = self._predict_feature_name()
 
         # TODO: SPARK-LAMA - we need to cache the "parent" dataset of the train_valid_iterator
-        # train_valid_iterator.cache()
+        tr = cast(SparkDataset, train_valid_iterator.train)
+        tr.cache()
 
         # TODO: Make parallel version later
         for n, (idx, train, valid) in enumerate(train_valid_iterator):
