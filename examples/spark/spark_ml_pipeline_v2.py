@@ -11,8 +11,8 @@ from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import SparkMLEstimatorWrapper
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.transformers.base import ChangeRoles, UnionTransformer, SequentialTransformer
-from lightautoml.spark.transformers.categorical import LabelEncoderEstimator, OrdinalEncoder, TargetEncoderEstimator
+from lightautoml.spark.transformers.base import ChangeRoles, ChangeRolesTransformer, UnionTransformer, SequentialTransformer
+from lightautoml.spark.transformers.categorical import LabelEncoderEstimator, OrdinalEncoder, OrdinalEncoderEstimator, TargetEncoderEstimator
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.transformers.base import ColumnsSelector
@@ -63,12 +63,14 @@ def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordin
                                           task_name=sdataset.task.name,
                                           folds_column=sdataset.folds_column,
                                           target_column=sdataset.target_column)
-    # ord_estimator = OrdinalEncoder(random_state=42, input_cols=ordinal_feats)
-    # num_estimator = ChangeRoles(NumericRole(np.float32), input_cols=numeric_feats)
+    ord_estimator = OrdinalEncoderEstimator(input_cols=ordinal_feats, input_roles=te_estimator.getOutputRoles())
+    num_estimator = ChangeRolesTransformer(roles=NumericRole(np.float32), 
+                                            input_cols=numeric_feats, 
+                                            input_roles=ord_estimator.getOutputRoles())
 
     cat_processing = Pipeline(stages=[le_estimator, te_estimator])
-    # ordinal_cat_processing = Pipeline(stages=[ord_estimator])
-    # num_processing = Pipeline(stages=[num_estimator])
+    ordinal_cat_processing = Pipeline(stages=[ord_estimator])
+    num_processing = Pipeline(stages=[num_estimator])
 
     # model = cat_processing.fit(sdataset)
     #
@@ -76,8 +78,7 @@ def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordin
     #
     # pdf = result.data.toPandas()  # .to_pandas().data
 
-    #ut = Pipeline(stages=[cat_processing, ordinal_cat_processing, num_processing])
-    ut = Pipeline(stages=[cat_processing])
+    ut = Pipeline(stages=[cat_processing, ordinal_cat_processing, num_processing])
     #
     ut_transformer: PipelineModel = ut.fit(sdataset.data)
     #

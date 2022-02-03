@@ -19,7 +19,7 @@ from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.transformers.base import SparkTransformer
-from lightautoml.spark.utils import get_cached_df_through_rdd
+from lightautoml.spark.utils import get_cached_df_through_rdd, cache
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
     multiclass_task_check
 from lightautoml.transformers.base import LAMLTransformer
@@ -273,8 +273,11 @@ class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols):
         # self._output_role = CategoryRole(np.int32, label_encoded=True)
         # self.set(self.inputCols, kwargs["input_cols"])
         # self.set(self.outputCols, self.get_output_names(kwargs["input_cols"]))
-        self.fitted_label_encoder = kwargs["fitted_label_encoder"]
-        self.dicts = self.fitted_label_encoder.dicts
+        self.fitted_encoder = kwargs["fitted_encoder"]
+        self.dicts = self.fitted_encoder.dicts
+        # TODO: change this to inheritance style
+        self._fillna_val = self.fitted_encoder._fillna_val
+        self._fname_prefix = self.fitted_encoder._fname_prefix
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
 
@@ -285,7 +288,7 @@ class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols):
 
         cols_to_select = []
 
-        for i in self.fitted_label_encoder.getInputCols():
+        for i in self.fitted_encoder.getInputCols():
             logger.debug(f"[{type(self)} (LE)] transform col {i}")
 
             _ic = F.col(i)
@@ -421,7 +424,7 @@ class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
 
     def get_output_roles(self):
         new_roles = deepcopy(self.getOrDefault(self.inputRoles))
-        new_roles.update({feat: self._output_role for feat in self.getInputCols()})
+        new_roles.update({feat: self._output_role for feat in self.getOutputCols()})
         return new_roles
 
     def getOutputRoles(self):
@@ -449,8 +452,7 @@ class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
 
         # TODO: think over it
         # dataset.cache()
-        if not dataset.is_cached:
-            dataset = dataset.cache()
+        dataset = cache(dataset)
 
         # df = dataset.data
         df = dataset
@@ -489,7 +491,7 @@ class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
 
         logger.info(f"[{type(self)} (LE)] fit is finished")
 
-        return LabelEncoderTransformer(fitted_label_encoder=self)
+        return LabelEncoderTransformer(fitted_encoder=self)
 
 
 
@@ -593,6 +595,105 @@ class OrdinalEncoder(LabelEncoder):
         logger.info(f"[{type(self)} (ORD)] fit is finished")
 
         return self
+
+
+class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
+
+    _spark_numeric_types = (
+        SparkTypes.ShortType,
+        SparkTypes.IntegerType,
+        SparkTypes.LongType,
+        SparkTypes.FloatType,
+        SparkTypes.DoubleType,
+        SparkTypes.DecimalType
+    )
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "ord"
+
+    _fillna_val = np.nan
+
+    inputRoles = Param(Params._dummy(), "inputRoles",
+                            "input roles (lama format)")
+
+    outputRoles = Param(Params._dummy(), "outputRoles",
+                            "output roles (lama format)")
+
+    def __init__(self, input_cols: Optional[List[str]] = None, input_roles: Optional[Dict[str, ColumnRole]] = None):
+        super().__init__()
+        self._output_role = NumericRole(np.float32)
+        self.dicts = None
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, self.get_output_names(input_cols))
+        self.set(self.inputRoles, input_roles)
+        self.set(self.outputRoles, self.get_output_roles())
+
+    def get_output_names(self, input_cols: List[str]) -> List[str]:
+        return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
+
+    def get_output_roles(self):
+        new_roles = deepcopy(self.getOrDefault(self.inputRoles))
+        new_roles.update({feat: self._output_role for feat in self.getOutputCols()})
+        return new_roles
+
+    def getOutputRoles(self):
+        """
+        Gets output roles or its default value.
+        """
+        return self.getOrDefault(self.outputRoles)
+
+    def _fit(self, dataset: SparkDataFrame) -> "LabelEncoderTransformer":
+
+        logger.info(f"[{type(self)} (ORD)] fit is started")
+
+
+
+        # roles = dataset.roles
+        roles = self.getOrDefault(self.inputRoles)
+
+        # dataset.cache()
+        dataset = cache(dataset)
+        # cached_dataset = dataset.data
+        cached_dataset = dataset
+
+        self.dicts = {}
+        for i in self.getInputCols():
+
+            logger.debug(f"[{type(self)} (ORD)] fit column {i}")
+
+            role = roles[i]
+
+            if not type(cached_dataset.schema[i].dataType) in self._spark_numeric_types:
+
+                co = role.unknown
+
+                cnts = cached_dataset \
+                    .groupBy(i).count() \
+                    .where((F.col("count") > co) & F.col(i).isNotNull()) \
+
+                # TODO SPARK-LAMA: isnan raises an exception if column is boolean.
+                if type(cached_dataset.schema[i].dataType) != SparkTypes.BooleanType:
+                    cnts = cnts \
+                        .where(~F.isnan(F.col(i)))
+
+                cnts = cnts \
+                    .select(i) \
+                    .toPandas()
+
+                logger.debug(f"[{type(self)} (ORD)] toPandas is completed")
+
+                cnts = Series(cnts[i].astype(str).rank().values, index=cnts[i])
+                self.dicts[i] = cnts.append(Series([cnts.shape[0] + 1], index=[np.nan])).drop_duplicates()
+                logger.debug(f"[{type(self)} (ORD)] pandas processing is completed")
+
+        # dataset.uncache()
+        dataset.unpersist()
+
+        logger.info(f"[{type(self)} (ORD)] fit is finished")
+
+        # TODO: think over _fillna_val and _fname_prefix in LabelEncoderTransformer
+        return LabelEncoderTransformer(fitted_encoder=self)
 
 
 class CatIntersectstions(LabelEncoder):
@@ -1029,7 +1130,7 @@ class TargetEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
 
     def get_output_roles(self):
         new_roles = deepcopy(self.getOrDefault(self.inputRoles))
-        new_roles.update({feat: self._output_role for feat in self.getInputCols()})
+        new_roles.update({feat: self._output_role for feat in self.getOutputCols()})
         return new_roles
 
     def getOutputRoles(self):
@@ -1206,7 +1307,7 @@ class TargetEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
 
         logger.info(f"[{type(self)} (TE)] fit_transform is finished")
 
-        return TargetEncoderTransformer(fitted_target_encoder=self)
+        return TargetEncoderTransformer(fitted_encoder=self)
 
 
 class TargetEncoderTransformer(Transformer):
@@ -1215,8 +1316,8 @@ class TargetEncoderTransformer(Transformer):
     _transform_checks = ()
     _fname_prefix = "oof"
 
-    def __init__(self, fitted_target_encoder: TargetEncoderEstimator):
-        self._fitted_target_encoder = fitted_target_encoder
+    def __init__(self, fitted_encoder: TargetEncoderEstimator):
+        self._fitted_encoder = fitted_encoder
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
 
@@ -1230,11 +1331,11 @@ class TargetEncoderTransformer(Transformer):
         # В оригинальной ламе об этом не парились, т.к. сразу переходили в numpy. Если прислали датасет не с тем
         # порядком строк - ну штоош, это проблемы того, кто датасет этот сюда вкинул. Стоит ли нам тоже придерживаться
         # этой логики?
-        for i, col_name in enumerate(self._fitted_target_encoder.getInputCols()):
+        for i, col_name in enumerate(self._fitted_encoder.getInputCols()):
             _cur_col = F.col(col_name)
-            logger.debug(f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._fitted_target_encoder.encodings[i])}")
+            logger.debug(f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._fitted_encoder.encodings[i])}")
 
-            values = sc.broadcast(self._fitted_target_encoder.encodings[i])
+            values = sc.broadcast(self._fitted_encoder.encodings[i])
 
             cols_to_select.append(pandas_dict_udf(values)(_cur_col).alias(f"{self._fname_prefix}__{col_name}"))
 

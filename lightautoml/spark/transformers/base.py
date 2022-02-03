@@ -1,14 +1,19 @@
 import logging
 from copy import copy, deepcopy
-from typing import cast, Sequence, List, Set, Optional
+from typing import Dict, cast, Sequence, List, Set, Optional
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
 from lightautoml.dataset.utils import concatenate
-from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.utils import log_exec_time
 from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LAMAColumnsSelector, \
     ChangeRoles as LAMAChangeRoles
+from lightautoml.transformers.base import Roles
+
+from pyspark.ml import Transformer
+from pyspark.ml.param.shared import HasInputCols, HasOutputCols
+from pyspark.ml.param.shared import Param, Params
 
 
 logger = logging.getLogger(__name__)
@@ -255,3 +260,38 @@ class ChangeRoles(LAMAChangeRoles, SparkTransformer):
 
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return copy(input_cols)
+
+class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols):
+    # _fname_prefix = "changeroles"
+    # _can_unwind_parents = False
+
+    inputRoles = Param(Params._dummy(), "inputRoles",
+                            "input roles (lama format)")
+
+    outputRoles = Param(Params._dummy(), "outputRoles",
+                            "output roles (lama format)")
+
+    def __init__(self, 
+                 input_cols: Optional[List[str]] = None, 
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 roles: Roles = None):
+        super().__init__()
+        self._output_role = roles # CHECK this
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, self.get_output_names(input_cols))
+        self.set(self.inputRoles, input_roles)
+        self.set(self.outputRoles, self.get_output_roles())
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        return dataset
+
+
+    def get_output_names(self, input_cols: List[str]) -> List[str]:
+        return copy(input_cols)
+
+
+    def get_output_roles(self):
+        new_roles = deepcopy(self.getOrDefault(self.inputRoles))
+        # TODO: change to use with different types of self._output_role
+        new_roles.update({feat: self._output_role for feat in self.getInputCols()})
+        return new_roles
