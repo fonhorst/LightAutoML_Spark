@@ -7,6 +7,7 @@ import sklearn
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml.feature import VectorAssembler, OneHotEncoder
+from pyspark.ml.regression import LinearRegression
 from pyspark.sql.types import BooleanType
 from synapse.ml.lightgbm import LightGBMClassifier
 
@@ -36,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 mode = "spark"
 
-# task_name, target_col = "used_cars", "price"
-task_name, target_col = "binary", "TARGET"
+task_name, target_col = "used_cars", "price"
+# task_name, target_col = "binary", "TARGET"
 
 alg = "linear_l2"
 # alg = "lgb"
@@ -72,12 +73,6 @@ if mode == "spark":
 else:
     tgts = test_target_df[target_col].values
 
-# with spark_session('local[4]') as spark:
-#     train_sds = from_pandas_to_spark(train, spark, train.target)
-#     test_sds = from_pandas_to_spark(test_df, spark, tgts)
-#     train = train_sds.to_pandas()
-#     test_df = test_sds.to_pandas()
-
 
 train_lama = train if alg == "lgb" else train.to_numpy()
 test_df_lama = test_df if alg == "lgb" else test_df.to_numpy()
@@ -109,54 +104,59 @@ if mode == "spark":
         iterator = DummyIterator(train=train_sds)
 
         #
-        predict_col = "prediction"
-        cat_feats = [feat for feat in train_sds.features if train_sds.roles[feat].name == "Category"]
-        non_cat_feats = [feat for feat in train_sds.features if train_sds.roles[feat].name != "Category"]
-
-        ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_lgbfs_ohe" for f in cat_feats])
-        assembler = VectorAssembler(
-            inputCols=non_cat_feats + ohe.getOutputCols(),
-            outputCol=f"lgbfs_vassembler_features"
-        )
-
-
-        # TODO: SPARK-LAMA add params processing later
-        model = LogisticRegression(featuresCol=assembler.getOutputCol(),
-                                   labelCol=train_sds.target_column,
-                                   predictionCol=predict_col)
-
-        pipeline = Pipeline(stages=[ohe, assembler, model])
-
-        train_df = train_sds.data\
-            .join(train_sds.target, on=SparkDataset.ID_COLUMN)\
-            .withColumn("tr_or_val", F.floor(F.rand(42) / 0.8).cast(BooleanType()))\
-            .cache()
-        # test = test_sds.data.join(test_sds.target, on=SparkDataset.ID_COLUMN).cache()
-        # train_df, valid_df = train_df.randomSplit([0.8, 0.2], seed=42)
-        # train_df, valid_df = train_df.cache(), valid_df.cache()
-        # train_df.count()
-        # valid_df.count()
-
-        model = pipeline.fit(train_df)
-        preds_df = model.transform(train_df)
-
-        pred_target_df = (
-            preds_df
-            .select(SparkDataset.ID_COLUMN, test_sds.target_column, predict_col)
-        )
-
-        ### Normal way
-        # spark_ml_algo = SparkBoostLGBM() if alg == "lgb" else SparkLinearLBFGS()
-        # spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
-        # preds = spark_ml_algo.predict(test_sds)
-        # predict_col = preds.features[0]
-        # preds = preds.data
+        # predict_col = "prediction"
+        # cat_feats = [feat for feat in train_sds.features if train_sds.roles[feat].name == "Category"]
+        # non_cat_feats = [feat for feat in train_sds.features if train_sds.roles[feat].name != "Category"]
+        #
+        # ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_lgbfs_ohe" for f in cat_feats])
+        # assembler = VectorAssembler(
+        #     inputCols=non_cat_feats + ohe.getOutputCols(),
+        #     outputCol=f"lgbfs_vassembler_features"
+        # )
+        #
+        # # TODO: SPARK-LAMA add params processing later
+        # # model = LogisticRegression(featuresCol=assembler.getOutputCol(),
+        # #                            labelCol=train_sds.target_column,
+        # #                            predictionCol=predict_col)
+        # model = LinearRegression(featuresCol=assembler.getOutputCol(),
+        #                          labelCol=train_sds.target_column,
+        #                          predictionCol=predict_col)
+        # # **params)
+        # model.setSolver("l-bfgs")
+        #
+        # pipeline = Pipeline(stages=[ohe, assembler, model])
+        #
+        # train_df = train_sds.data\
+        #     .join(train_sds.target, on=SparkDataset.ID_COLUMN)\
+        #     .withColumn("tr_or_val", F.floor(F.rand(42) / 0.8).cast(BooleanType()))\
+        #     .cache()
+        # # test = test_sds.data.join(test_sds.target, on=SparkDataset.ID_COLUMN).cache()
+        # # train_df, valid_df = train_df.randomSplit([0.8, 0.2], seed=42)
+        # # train_df, valid_df = train_df.cache(), valid_df.cache()
+        # # train_df.count()
+        # # valid_df.count()
+        #
+        # model = pipeline.fit(train_df)
+        # preds_df = model.transform(train_sds.data)
         #
         # pred_target_df = (
-        #     preds
-        #         .join(test_sds.target, on=SparkDataset.ID_COLUMN, how='inner')
-        #         .select(SparkDataset.ID_COLUMN, test_sds.target_column, predict_col)
+        #     preds_df
+        #     .join(test_sds.target, on=SparkDataset.ID_COLUMN, how='inner')
+        #     .select(SparkDataset.ID_COLUMN, test_sds.target_column, predict_col)
         # )
+
+        # ### Normal way
+        spark_ml_algo = SparkBoostLGBM() if alg == "lgb" else SparkLinearLBFGS()
+        spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+        preds = spark_ml_algo.predict(test_sds)
+        predict_col = preds.features[0]
+        preds = preds.data
+
+        pred_target_df = (
+            preds
+                .join(test_sds.target, on=SparkDataset.ID_COLUMN, how='inner')
+                .select(SparkDataset.ID_COLUMN, test_sds.target_column, predict_col)
+        )
 
         pt_df = pred_target_df.toPandas()
         test_metric_value2 = evaluator(

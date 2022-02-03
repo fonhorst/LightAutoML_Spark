@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def calculate_quality(calc_automl: Callable):
+    # # used_cars dataset
     # config = {
     #     "path": "examples/data/small_used_cars_data.csv",
     #     "task_type": "reg",
@@ -40,13 +41,64 @@ def calculate_quality(calc_automl: Callable):
     #     }
     # }
 
+    # #  LAMA's test set
+    # config = {
+    #     "path": "./examples/data/sampled_app_train.csv",
+    #     "task_type": "binary",
+    #     "metric_name": "areaUnderROC",
+    #     "target_col": "TARGET",
+    #     "use_algos": ["linear_l2"],
+    #     "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
+    # }
+
+    # https://www.openml.org/d/734
+    # config = {
+    #     "path": "/opt/ailerons.csv",
+    #     "task_type": "binary",
+    #     "metric_name": "areaUnderROC",
+    #     "target_col": "binaryClass",
+    #     "use_algos": ["linear_l2"],
+    #     "roles": {"target": "binaryClass"},
+    # }
+
+    # https://www.openml.org/d/4534
+    # config = {
+    #     "path": "/opt/PhishingWebsites.csv",
+    #     "task_type": "binary",
+    #     "metric_name": "areaUnderROC",
+    #     "target_col": "Result",
+    #     "use_algos": ["lgb"],
+    #     "roles": {"target": "Result"},
+    # }
+
+    # # https://www.openml.org/d/981
+    # config = {
+    #     "path": "/opt/kdd_internet_usage.csv",
+    #     "task_type": "binary",
+    #     "metric_name": "areaUnderROC",
+    #     "target_col": "Who_Pays_for_Access_Work",
+    #     "use_algos": ["lgb"],
+    #     "roles": {"target": "Who_Pays_for_Access_Work"},
+    # }
+
+    # # https://www.openml.org/d/42821
+    # config = {
+    #     "path": "/opt/nasa_phm2008.csv",
+    #     "task_type": "reg",
+    #     "metric_name": "mse",
+    #     "target_col": "class",
+    #     "use_algos": ["lgb"],
+    #     "roles": {"target": "class"},
+    # }
+
+    # https://www.openml.org/d/4549
     config = {
-        "path": "./examples/data/sampled_app_train.csv",
-        "task_type": "binary",
-        "metric_name": "areaUnderROC",
-        "target_col": "TARGET",
-        "use_algos": ["linear_l2"],
-        "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
+        "path": "/opt/Buzzinsocialmedia_Twitter_25k.csv",
+        "task_type": "reg",
+        "metric_name": "mse",
+        "target_col": "Annotation",
+        "use_algos": ["lgb"],
+        "roles": {"target": "Annotation"},
     }
 
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
@@ -71,5 +123,5 @@ def calculate_quality(calc_automl: Callable):
 
 
 if __name__ == "__main__":
-    # calculate_quality(lama_automl)
-    calculate_quality(spark_automl)
+    calculate_quality(lama_automl)
+    # calculate_quality(spark_automl)
