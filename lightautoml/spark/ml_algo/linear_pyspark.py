@@ -13,6 +13,7 @@ from pyspark.ml.regression import LinearRegression, LinearRegressionModel
 from .base import TabularMLAlgo, SparkMLModel
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ...utils.timer import TaskTimer
+from ...utils.tmp_utils import log_data
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,8 @@ class LinearLBFGS(TabularMLAlgo):
 
         """
         logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(train.features)} ")
+        log_data("spark_linear_l2_train_val", {"train": train.to_pandas(), "valid": valid.to_pandas()})
+
         if self.task is None:
             self.task = train.task
 
@@ -105,5 +108,6 @@ class LinearLBFGS(TabularMLAlgo):
             Predictions for input dataset.
 
         """
+        log_data("spark_linear_l2_predict", {"predict": dataset.to_pandas()})
         pred = model.transform(dataset.data)
         return pred

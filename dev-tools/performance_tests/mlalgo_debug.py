@@ -8,12 +8,14 @@ from pyspark.sql.types import BooleanType
 from synapse.ml.lightgbm import LightGBMClassifier
 
 from lightautoml.ml_algo.boost_lgbm import BoostLGBM
+from lightautoml.ml_algo.linear_sklearn import LinearLBFGS
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.utils import spark_session, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.validation.base import DummyIterator
 from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM as SparkBoostLGBM
+from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS as SparkLinearLBFGS
 
 from pyspark.sql import functions as F
 
@@ -30,13 +32,16 @@ logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 mode = "spark"
-task_name = "used_cars"
-# target_col = 'TARGET'
-target_col = 'price'
 
-path = f'../dumps/datalog_{task_name}_{mode}_lgb_train_val.pickle'
-path_for_test = f'../dumps/datalog_{task_name}_{mode}_test_part.pickle'
-path_predict = f'../dumps/datalog_{task_name}_{mode}_lgb_predict.pickle'
+# task_name, target_col = "used_cars", "price"
+task_name, target_col = "binary", "TARGET"
+
+alg = "linear_l2"
+# alg = "lgb"
+
+path = f'../dumps/datalog_{task_name}_{mode}_{alg}_train_val.pickle'
+path_for_test = f'../dumps/datalog_{task_name}_{mode}_{alg}_test_part.pickle'
+path_predict = f'../dumps/datalog_{task_name}_{mode}_{alg}_predict.pickle'
 
 
 with open(path, "rb") as f:
@@ -64,12 +69,15 @@ if mode == "spark":
 else:
     tgts = test_target_df[target_col].values
 
-train_valid = DummyIterator(train)
-ml_algo = BoostLGBM()
+train_lama = train if alg == "lgb" else train.to_numpy()
+test_df_lama = test_df if alg == "lgb" else test_df.to_numpy()
+
+train_valid = DummyIterator(train_lama) if alg == "lgb" else DummyIterator(train_lama)
+ml_algo = BoostLGBM() if alg == "lgb" else LinearLBFGS()
 
 ml_algo, _ = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
 
-preds = ml_algo.predict(test_df)
+preds = ml_algo.predict(test_df_lama)
 
 if train.task.name == "binary":
     evaluator = sklearn.metrics.roc_auc_score
@@ -143,7 +151,7 @@ if mode == "spark":
         # predict_col = 'prediction_LightGBM'
 
         ### Normal way
-        spark_ml_algo = SparkBoostLGBM()
+        spark_ml_algo = SparkBoostLGBM() if alg == "lgb" else SparkLinearLBFGS()
         spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
         preds = spark_ml_algo.predict(test_sds)
         predict_col = preds.features[0]
