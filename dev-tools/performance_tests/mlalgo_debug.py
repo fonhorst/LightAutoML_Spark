@@ -3,6 +3,9 @@ import logging.config
 import pickle
 
 import sklearn
+from pyspark.ml.feature import VectorAssembler
+from pyspark.sql.types import BooleanType
+from synapse.ml.lightgbm import LightGBMClassifier
 
 from lightautoml.ml_algo.boost_lgbm import BoostLGBM
 from lightautoml.ml_algo.tuning.base import DefaultTuner
@@ -11,6 +14,8 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.utils import spark_session, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.validation.base import DummyIterator
 from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM as SparkBoostLGBM
+
+from pyspark.sql import functions as F
 
 import numpy as np
 
@@ -76,20 +81,68 @@ with spark_session('local[4]') as spark:
     test_sds = from_pandas_to_spark(test_df, spark, tgts)
     iterator = DummyIterator(train=train_sds)
 
-    spark_ml_algo = SparkBoostLGBM()
-    spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
-    preds = spark_ml_algo.predict(test_sds)
+    predict_col = "prediction"
+    assembler = VectorAssembler(
+        inputCols=train_sds.features,
+        outputCol=f"_vassembler_features",
+        handleInvalid="keep"
+    )
+
+    classifier = LightGBMClassifier(
+        featuresCol=assembler.getOutputCol(),
+        labelCol=train_sds.target_column,
+        predictionCol=predict_col,
+        metric="auc",
+        validationIndicatorCol="tr_or_val",
+        # isProvideTrainingMetric=True,
+        # learningRate=0.05,
+        # numLeaves=128,
+        # featureFraction=0.9,
+        # baggingFraction=0.9,
+        # baggingFreq=1,
+        # maxDepth=-1,
+        # verbosity=-1,
+        # minGainToSplit=0.0,
+        # numThreads=0,
+        # maxBin=255,
+        # minDataInLeaf=3,
+        # earlyStoppingRound=100,
+        # numIterations=3000
+    )
+
+    train = train_sds.data\
+        .join(train_sds.target, on=SparkDataset.ID_COLUMN)\
+        .withColumn("tr_or_val", F.floor(F.rand(42) / 0.8).cast(BooleanType()))\
+        .cache()
+    test = test_sds.data.join(test_sds.target, on=SparkDataset.ID_COLUMN).cache()
+    # train, test = train.randomSplit([0.8, 0.2], seed=42)
+    train.count()
+    test.count()
+
+    ml_model = classifier.fit(assembler.transform(train))
+    preds = ml_model.transform(assembler.transform(test))
+
+    # spark_ml_algo = SparkBoostLGBM()
+    # ml_model, _, _ = spark_ml_algo.fit_predict_single_fold(train_sds, train_sds)
+
+    # preds = spark_ml_algo.predict_single_fold(test_sds, ml_model)
+    # predict_col = 'prediction_LightGBM'
+
+    # spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+    # preds = spark_ml_algo.predict(test_sds)
+    # preds = preds.data
+    # predict_col = preds.features[0]
 
     pred_target_df = (
-        preds.data
-        .join(test_sds.target, on=SparkDataset.ID_COLUMN, how='inner')
-        .select(SparkDataset.ID_COLUMN, test_sds.target_column, preds.features[0])
+        preds
+        # .join(train_sds.target, on=SparkDataset.ID_COLUMN, how='inner')
+        .select(SparkDataset.ID_COLUMN, test_sds.target_column, predict_col)
     )
 
     pt_df = pred_target_df.toPandas()
     test_metric_value2 = evaluator(
-        pt_df[test_sds.target_column].values,
-        pt_df[preds.features[0]].values
+        pt_df[train_sds.target_column].values,
+        pt_df[predict_col].values
     )
 
     print(f"Test metric value2: {test_metric_value2}")
