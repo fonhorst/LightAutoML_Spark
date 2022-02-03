@@ -161,4 +161,4 @@ if __name__ == "__main__":
                 file.write(f"{key}:{val}\n")
             file.write("-----------\n")
 
-        print(res)
+        print(f"Test results:[{res}]")

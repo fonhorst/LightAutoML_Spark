@@ -1,13 +1,19 @@
 import itertools
 import subprocess
 import time
-import ast
+import json
+import re
 from datetime import datetime
 from copy import deepcopy
 from typing import Iterable, List, Set, Dict, Any
 
 import yaml
 from tqdm import tqdm
+
+patterns = [r"Test results:\[.*\]"]
+statefile_path = "./dev-tools/experiments/results"
+results_path = "./dev-tools/experiments/results"
+cfg_path = "./dev-tools/config/experiments/test-experiment-config.yaml"
 
 
 def read_config(cfg_path: str) -> Dict:
@@ -28,11 +34,18 @@ def generate_experiments(config_data: Dict) -> List[Dict[str, Any]]:
     exps_to_skip = []
 
     if use_state_file == "use":
-        with open("./dev-tools/experiments/results/state_file.txt", "r") as file:
-            exps_to_skip = file.read().split(",")
+        with open(f"{statefile_path}/state_file.json", "r") as file:
+            try:
+                json_file = json.load(file)
+            except json.decoder.JSONDecodeError:
+                json_file = []
+                pass
+
+            for experiment in json_file:
+                exps_to_skip.append(experiment["experiment"])
 
     elif use_state_file == "delete":
-        open("./dev-tools/experiments/results/state_file.txt", "w").close()
+        open(f"{statefile_path}/state_file.json", "w+").close()
 
     # Retrieve static Spark paramaters and concatenate them with experiment paramaters
     experiments_configs = []
@@ -63,10 +76,11 @@ def run_experiments(experiments_configs: List[Dict[str, Any]]):
         with open(f"/tmp/{name}-config.yaml", "w+") as outfile:
             yaml.dump(experiment, outfile, default_flow_style=False)
 
-        with open(f"./dev-tools/experiments/results/local/Results_{name}.log", "w+") as logfile:
+        with open(f"{results_path}/Results_{name}.log", "w+") as logfile:
             logfile.write(f"Launch datetime: {datetime.now()}\n")
             # p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)], stdout=logfile)
             p = subprocess.Popen(["./dev-tools/bin/test-job-run.sh", str(name)], stdout=logfile)
+
         print(f"Starting exp with name {name}")
         yield p
 
@@ -96,31 +110,39 @@ def wait_for_all(procs: Iterable[subprocess.Popen]):
         p.wait()
 
         # Mark job as completed in state file
-        with open("./dev-tools/experiments/results/state_file.txt", "a+") as file:
-            file.write(f"{p.args[1]},")
+        json_struct = []
+        json_record = {"experiment": f"{p.args[1]}"}
+
+        with open(f"{statefile_path}/state_file.json", "r") as statefile_r:
+            try:
+                json_struct = json.load(statefile_r)
+            except json.decoder.JSONDecodeError:
+                pass
+
+        with open(f"{statefile_path}/state_file.json", "w+") as statefile_w:
+            json_struct.append(json_record)
+            json.dump(json_struct, statefile_w)
 
 
 def gather_results(procs: Iterable[subprocess.Popen]):
-    with open("./dev-tools/experiments/results/Experiments_results.txt", "a+") as resultfile:
+    with open(f"{results_path}/Experiments_results.txt", "a+") as resultfile:
         for p in procs:
-            with open(f"./dev-tools/experiments/results/local/Results_{p.args[1]}.log", "r") as logfile:
-                for line in logfile:
-                    pass
-                metrics = line
-                # Check if acquired results are correct and write them
-                try:
-                    ast.literal_eval(metrics)
-                except Exception as ex:
-                    print(f"Obtained results for experiment {p.args[1]} are incorrect")
-                    print(f"Input results: {metrics}\nError message: {ex}")
-                    continue
+            with open(f"{results_path}/Results_{p.args[1]}.log", "r") as logfile:
+                stdout = logfile.read()
 
-                resultfile.write(f"{p.args[1]}:{metrics}")
+                for pattern in patterns:
+                    metrics = re.search(pattern, stdout)
+                    if metrics:
+                        metrics = metrics.group()
+                        metrics = metrics.split("[", 1)[1].split("]")[0]
+                        break
+
+                print(f"Obtained results for experiment {p.args[1]}: {metrics}")
+                resultfile.write(f"{p.args[1]}:{metrics}\n")
                 print(f"Results for experiment {p.args[1]} saved in file\n")
 
 
 def main():
-    cfg_path = "./dev-tools/config/experiments/test-experiment-config.yaml"
     cfg = read_config(cfg_path)
     exp_cfgs = generate_experiments(cfg)
     exp_procs = list(

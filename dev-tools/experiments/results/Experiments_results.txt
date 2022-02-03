@@ -1,5 +1,10 @@
-
-exper-tiny-used-cars-data-csv-4-16g-n1:{'fit_predict_time': 117.387826, 'predict_time': 20.667433, 'metric_value': 964873.0549908493, 'test_metric_value': 70891470.15254058, 'completion_datetime': '2022-02-02 10:04:24.464282'}
-exper-tiny-used-cars-data-csv-4-16g-n2:{'fit_predict_time': 115.282387, 'predict_time': 19.032597, 'metric_value': 964870.2112778939, 'test_metric_value': 70892340.87890735, 'completion_datetime': '2022-02-02 10:04:21.191755'}
-exper-tiny-used-cars-data-csv-4-16g-n1:{'fit_predict_time': 112.97223, 'predict_time': 20.355331, 'metric_value': 964872.6963074475, 'test_metric_value': 70891579.06063384, 'completion_datetime': '2022-02-02 10:08:24.779061'}
-exper-tiny-used-cars-data-csv-4-16g-n2:{'fit_predict_time': 114.614667, 'predict_time': 19.704393, 'metric_value': 964870.6243861954, 'test_metric_value': 70892213.33359797, 'completion_datetime': '2022-02-02 10:11:08.988309'}
+exper-tiny-used-cars-data-csv-4-16g-n1:{'fit_predict_time': 115.589062, 'predict_time': 19.987819, 'metric_value': 961597.8767943359, 'test_metric_value': 68959274.66959807}
+exper-tiny-used-cars-data-csv-4-16g-n2:{'fit_predict_time': 115.589062, 'predict_time': 19.987819, 'metric_value': 961597.8767943359, 'test_metric_value': 68959274.66959807}
+exper-tiny-used-cars-data-csv-4-16g-n1:{'fit_predict_time': 115.589062, 'predict_time': 19.987819, 'metric_value': 961597.8767943359, 'test_metric_value': 68959274.66959807}
+exper-tiny-used-cars-data-csv-4-16g-n2:{'fit_predict_time': 115.589062, 'predict_time': 19.987819, 'metric_value': 961597.8767943359, 'test_metric_value': 68959274.66959807}
+exper-tiny-used-cars-data-csv-4-16g-n1:{'fit_predict_time': 112.922799, 'predict_time': 20.182848, 'metric_value': 967540.4153348566, 'test_metric_value': 70295457.05411485, 'completion_datetime': '2022-02-03 09:49:54.767976'}
+exper-tiny-used-cars-data-csv-4-16g-n2:{'fit_predict_time': 120.073313, 'predict_time': 20.258843, 'metric_value': 967476.2954589167, 'test_metric_value': 70307143.35163096, 'completion_datetime': '2022-02-03 09:50:01.159167'}
+exper-tiny-used-cars-data-csv-4-16g-n1:{'fit_predict_time': 115.589062, 'predict_time': 19.987819, 'metric_value': 961597.8767943359, 'test_metric_value': 68959274.66959807}
+exper-tiny-used-cars-data-csv-4-16g-n2:{'fit_predict_time': 115.589062, 'predict_time': 19.987819, 'metric_value': 961597.8767943359, 'test_metric_value': 68959274.66959807}
+exper-tiny-used-cars-data-csv-4-16g-n1:{'fit_predict_time': 116.921311, 'predict_time': 19.613825, 'metric_value': 967341.115582576, 'test_metric_value': 70330857.91890179, 'completion_datetime': '2022-02-03 09:57:37.163124'}
+exper-tiny-used-cars-data-csv-4-16g-n2:{'fit_predict_time': 112.525105, 'predict_time': 20.210517, 'metric_value': 967324.3904331649, 'test_metric_value': 70333690.00194496, 'completion_datetime': '2022-02-03 09:57:34.468333'}
