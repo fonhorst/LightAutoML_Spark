@@ -6,6 +6,7 @@ from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
 from lightautoml.dataset.utils import concatenate
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
+from lightautoml.spark.mlwriters import TmpСommonMLWriter
 from lightautoml.spark.utils import log_exec_time
 from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LAMAColumnsSelector, \
     ChangeRoles as LAMAChangeRoles
@@ -14,6 +15,7 @@ from lightautoml.transformers.base import Roles
 from pyspark.ml import Transformer
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.param.shared import Param, Params
+from pyspark.ml.util import MLReadable, MLWritable, MLWriter
 
 
 logger = logging.getLogger(__name__)
@@ -261,7 +263,7 @@ class ChangeRoles(LAMAChangeRoles, SparkTransformer):
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return copy(input_cols)
 
-class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols):
+class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols, MLWritable):
     # _fname_prefix = "changeroles"
     # _can_unwind_parents = False
 
@@ -282,9 +284,12 @@ class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols):
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self.get_output_roles())
 
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Transformer instance."
+        return TmpСommonMLWriter(self.uid)
+
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset
-
 
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return copy(input_cols)

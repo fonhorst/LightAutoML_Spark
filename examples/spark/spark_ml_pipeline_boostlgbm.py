@@ -63,9 +63,13 @@ if __name__ == "__main__":
 
         boostlgbm_pipline = Pipeline(stages=[boostlgbm_estimator])
 
+        boostlgbm_pipline.write().overwrite().save("/tmp/boostlgbm_pipline")
+
         boostlgbm_model = boostlgbm_pipline.fit(sdataset.data)
 
         result = boostlgbm_model.transform(sdataset.data).toPandas().to_csv("/tmp/boostlgbm_model_result.csv", index=False)
+
+        boostlgbm_model.write().overwrite().save("/tmp/boostlgbm_model")
 
         logger.info("Finished")
 

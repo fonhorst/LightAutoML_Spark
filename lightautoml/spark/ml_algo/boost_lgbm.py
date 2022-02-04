@@ -10,6 +10,7 @@ from pyspark.ml.classification import GBTClassifier
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import GBTRegressor
 from pyspark.ml import Transformer, Estimator, PipelineModel
+from pyspark.ml.util import MLReadable, MLWritable, MLWriter
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.param.shared import Param, Params
 from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
@@ -20,6 +21,7 @@ from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel
+from lightautoml.spark.mlwriters import TmpСommonMLWriter
 from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
 import pandas as pd
 
@@ -316,7 +318,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         return self._features_importance
 
 
-class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols):
+class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
     """Spark MLlib Estimator implementation of BoostLGBM
 
     Uses `LightGBMClassifier` and `LightGBMRegressor` from synapse.ml.lightgbm package
@@ -353,7 +355,6 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols):
     outputRoles = Param(Params._dummy(), "outputRoles",
                             "output roles (lama format)")
 
-
     def __init__(self,
                  input_cols: Optional[List[str]] = None,
                  input_roles: Optional[Dict[str, ColumnRole]] = None,
@@ -373,6 +374,10 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols):
         self.set(self.outputCols, [self._predict_feature_name()])
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self.get_output_roles())
+
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Estimator instance."
+        return TmpСommonMLWriter(self.uid)
 
     def get_output_roles(self):
         prob = self._task_name in ["binary", "multiclass"]
@@ -669,12 +674,16 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols):
         return BoostLGBMTransformer(fitted_estimator=self)
 
 
-class BoostLGBMTransformer(Transformer):
+class BoostLGBMTransformer(Transformer, MLWritable):
 
     def __init__(self, fitted_estimator):
+        super().__init__()
         self._fitted_estimator = fitted_estimator
         self.models = self._fitted_estimator.models
 
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Transformer instance."
+        return TmpСommonMLWriter(self.uid)
 
     def _get_predict_column(self, model: SparkMLModel) -> str:
         # TODO SPARK-LAMA: Rewrite using class recognition.

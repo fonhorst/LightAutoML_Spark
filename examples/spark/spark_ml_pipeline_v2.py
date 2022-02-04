@@ -79,9 +79,13 @@ def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordin
     # pdf = result.data.toPandas()  # .to_pandas().data
 
     ut = Pipeline(stages=[cat_processing, ordinal_cat_processing, num_processing])
-    #
+    
+    ut.write().overwrite().save("/tmp/ut_pipline")
+
     ut_transformer: PipelineModel = ut.fit(sdataset.data)
-    #
+
+    ut_transformer.write().overwrite().save("/tmp/ut_pipline")
+
     # result = cast(SparkDataset, ut_transformer.transform(sdataset.data))
 
     # pdf = result.data.toPandas()  # .to_pandas().data

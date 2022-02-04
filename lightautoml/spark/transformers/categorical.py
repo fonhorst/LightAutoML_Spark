@@ -18,6 +18,7 @@ from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
+from lightautoml.spark.mlwriters import TmpСommonMLWriter
 from lightautoml.spark.transformers.base import SparkTransformer
 from lightautoml.spark.utils import get_cached_df_through_rdd, cache
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
@@ -27,6 +28,7 @@ from lightautoml.transformers.base import LAMLTransformer
 from pyspark.ml import Transformer, Estimator
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.param.shared import TypeConverters, Param, Params
+from pyspark.ml.util import MLReadable, MLWritable, MLWriter
 
 
 logger = logging.getLogger(__name__)
@@ -222,7 +224,7 @@ class LabelEncoder(SparkTransformer):
         return output
 
 
-class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols):
+class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols, MLWritable):
     _ad_hoc_types_mapper = defaultdict(
         lambda: "string",
         {
@@ -273,11 +275,16 @@ class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols):
         # self._output_role = CategoryRole(np.int32, label_encoded=True)
         # self.set(self.inputCols, kwargs["input_cols"])
         # self.set(self.outputCols, self.get_output_names(kwargs["input_cols"]))
+        super().__init__()
         self.fitted_encoder = kwargs["fitted_encoder"]
         self.dicts = self.fitted_encoder.dicts
         # TODO: change this to inheritance style
         self._fillna_val = self.fitted_encoder._fillna_val
         self._fname_prefix = self.fitted_encoder._fname_prefix
+
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Transformer instance."
+        return TmpСommonMLWriter(self.uid)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
 
@@ -368,7 +375,7 @@ class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols):
         return output
 
 
-class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
+class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
 
     _ad_hoc_types_mapper = defaultdict(
         lambda: "string",
@@ -442,6 +449,10 @@ class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
         self.set(self.outputCols, self.get_output_names(input_cols))
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self.get_output_roles())
+
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Estimator instance."
+        return TmpСommonMLWriter(self.uid)
 
     def _fit(self, dataset: SparkDataFrame) -> "LabelEncoderTransformer":
 
@@ -597,7 +608,7 @@ class OrdinalEncoder(LabelEncoder):
         return self
 
 
-class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
+class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
 
     _spark_numeric_types = (
         SparkTypes.ShortType,
@@ -628,6 +639,10 @@ class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
         self.set(self.outputCols, self.get_output_names(input_cols))
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self.get_output_roles())
+
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Estimator instance."
+        return TmpСommonMLWriter(self.uid)
 
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
@@ -1095,7 +1110,7 @@ class TargetEncoder(SparkTransformer):
         return output
 
 
-class TargetEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
+class TargetEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
 
     _fit_checks = (categorical_check, oof_task_check, encoding_check)
     _transform_checks = ()
@@ -1124,6 +1139,9 @@ class TargetEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self.get_output_roles())
 
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Estimator instance."
+        return TmpСommonMLWriter(self.uid)
 
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
@@ -1310,14 +1328,19 @@ class TargetEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
         return TargetEncoderTransformer(fitted_encoder=self)
 
 
-class TargetEncoderTransformer(Transformer):
+class TargetEncoderTransformer(Transformer, MLWritable):
 
     _fit_checks = (categorical_check, oof_task_check, encoding_check)
     _transform_checks = ()
     _fname_prefix = "oof"
 
     def __init__(self, fitted_encoder: TargetEncoderEstimator):
+        super().__init__()
         self._fitted_encoder = fitted_encoder
+
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Transformer instance."
+        return TmpСommonMLWriter(self.uid)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
 
