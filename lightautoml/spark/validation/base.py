@@ -3,7 +3,9 @@
 from copy import copy
 from typing import Any, Generator, Iterable, List, Optional, Sequence, Tuple, TypeVar, cast
 
-from lightautoml.spark.dataset.base import SparkDataset
+from pyspark.sql.functions import col
+
+from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.pipelines.features.base import FeaturesPipeline
 
 
@@ -201,3 +203,31 @@ class CustomIterator(TrainValidIterator):
         """
         for (tr_idx, val_idx) in self.iterator:
             return HoldoutIterator(self.train[tr_idx], self.train[val_idx])
+
+
+class TmpIterator(TrainValidIterator):
+    """To test only"""
+
+    def __init__(self, dataset: SparkDataFrame, folds_column: str, folds_number: int = 1):
+
+        self._dataset = dataset
+        self._folds_number = folds_number
+        self._folds_column = folds_column
+
+    def __len__(self) -> Optional[int]:
+
+        return self._folds_number
+
+    def __iter__(self) -> Iterable[Tuple[None, SparkDataFrame, SparkDataFrame]]:
+
+        return iter([(
+                None,
+                self._dataset.filter(col(self._folds_column) != validation_fold_id),
+                self._dataset.filter(col(self._folds_column) == validation_fold_id)
+            )
+            for validation_fold_id in range(self._folds_number)])
+
+    def get_validation_data(self) -> SparkDataset:
+
+        return self._dataset
+
