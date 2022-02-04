@@ -126,3 +126,8 @@ def logging_config(level: int = logging.INFO, log_filename: str = '/var/log/lama
             }
         }
     }
+
+def cache(df: SparkDataFrame) -> SparkDataFrame:
+    if not df.is_cached:
+        df = df.cache()
+    return df
