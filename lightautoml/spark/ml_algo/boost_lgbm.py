@@ -14,6 +14,8 @@ from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel
 from lightautoml.utils.tmp_utils import log_data
 from lightautoml.validation.base import TrainValidIterator
 
+from pyspark.sql import functions as F
+
 logger = logging.getLogger(__name__)
 
 
@@ -204,8 +206,12 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         log_data("spark_lgb_train_val", {"train": train.to_pandas(), "valid": valid.to_pandas()})
 
-        train_sdf = self._make_sdf_with_target(train)
-        valid_sdf = valid.data
+        is_val_col = 'is_val'
+
+        train_sdf = self._make_sdf_with_target(train).withColumn(is_val_col, F.lit(0))
+        valid_sdf = self._make_sdf_with_target(valid).withColumn(is_val_col, F.lit(1))
+
+        train_valid_sdf = train_sdf.union(valid_sdf)
 
         # from pyspark.sql import functions as F
         # dump_sdf = train_sdf.select([F.col(c).alias(c.replace('(', '___').replace(')', '___')) for c in train.data.columns])
@@ -229,11 +235,15 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         metric = 'mse' if is_reg else 'auc'
 
         lgbm = LGBMBooster(
+            isUnbalance=True,
+            baggingSeed=42,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=train.target_column,
             predictionCol=self._prediction_col,
-            learningRate=0.05,
-            numLeaves=128,
+            validationIndicatorCol=is_val_col,
+            objective='binary',
+            learningRate=0.01,
+            numLeaves=32,
             featureFraction=0.7,
             baggingFraction=0.7,
             baggingFreq=1,
@@ -243,7 +253,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             numThreads=1,
             maxBin=255,
             minDataInLeaf=3,
-            earlyStoppingRound=100,
+            earlyStoppingRound=200,
             metric=metric,
             numIterations=3000
             # numIterations=1
@@ -253,9 +263,9 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         if is_reg:
             # lgbm.setAlpha(params["reg_alpha"]).setLambdaL1(params["reg_lambda"]).setLambdaL2(params["reg_lambda"])
-            lgbm.setAlpha(1.0).setLambdaL1(0.0).setLambdaL2(0.0)
+            lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
 
-        temp_sdf = self._assembler.transform(train_sdf)
+        temp_sdf = self._assembler.transform(train_valid_sdf)
 
         ml_model = lgbm.fit(temp_sdf)
 

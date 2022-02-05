@@ -17,13 +17,15 @@ from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.utils import spark_session, logging_config, VERBOSE_LOGGING_FORMAT
-from lightautoml.validation.base import DummyIterator
+from lightautoml.validation.base import DummyIterator, HoldoutIterator
 from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM as SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS as SparkLinearLBFGS
 
 from pyspark.sql import functions as F
 
 import numpy as np
+
+import pandas as pd
 
 # TODO: need to log data in predict
 # TODO: correct order in PandasDataset from Spark ?
@@ -37,11 +39,11 @@ logger = logging.getLogger(__name__)
 
 mode = "spark"
 
-task_name, target_col = "used_cars", "price"
-# task_name, target_col = "binary", "TARGET"
+# task_name, target_col = "used_cars", "price"
+task_name, target_col = "binary", "TARGET"
 
-alg = "linear_l2"
-# alg = "lgb"
+# alg = "linear_l2"
+alg = "lgb"
 
 path = f'../dumps/datalog_{task_name}_{mode}_{alg}_train_val.pickle'
 path_for_test = f'../dumps/datalog_{task_name}_{mode}_{alg}_test_part.pickle'
@@ -75,9 +77,11 @@ else:
 
 
 train_lama = train if alg == "lgb" else train.to_numpy()
+valid_lama = valid if alg == "lgb" else valid.to_numpy()
 test_df_lama = test_df if alg == "lgb" else test_df.to_numpy()
 
-train_valid = DummyIterator(train_lama) if alg == "lgb" else DummyIterator(train_lama)
+# train_valid = DummyIterator(train_lama) if alg == "lgb" else DummyIterator(train_lama)
+train_valid = HoldoutIterator(train_lama, valid_lama)
 ml_algo = BoostLGBM() if alg == "lgb" else LinearLBFGS()
 
 ml_algo, _ = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
@@ -97,11 +101,13 @@ print(f"Test metric value: {test_metric_value}")
 
 # sys.exit(1)
 # =================================================
-if mode == "spark":
+# if mode == "spark":
+if True:
     with spark_session('local[4]') as spark:
-        train_sds = from_pandas_to_spark(train, spark, train.target)
-        test_sds = from_pandas_to_spark(test_df, spark, tgts)
-        iterator = DummyIterator(train=train_sds)
+        train_sds = from_pandas_to_spark(train.to_pandas(), spark, pd.Series(train.target))
+        valid_sds = from_pandas_to_spark(valid.to_pandas(), spark, pd.Series(valid.target))
+        test_sds = from_pandas_to_spark(test_df.to_pandas(), spark, pd.Series(tgts))
+        iterator = HoldoutIterator(train_sds, valid_sds)
 
         #
         # predict_col = "prediction"

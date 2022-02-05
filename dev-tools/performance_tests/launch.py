@@ -3,6 +3,9 @@ import logging.config
 from copy import deepcopy
 from pprint import pprint
 from typing import Any, Callable
+
+from pyspark.ml import Pipeline
+
 from lama_used_cars import calculate_automl as lama_automl
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from spark_used_cars import calculate_automl as spark_automl
@@ -25,40 +28,40 @@ logger = logging.getLogger(__name__)
 
 
 def calculate_quality(calc_automl: Callable):
-    # used_cars dataset
-    config = {
-        "path": "examples/data/small_used_cars_data.csv",
-        "task_type": "reg",
-        "metric_name": "mse",
-        "target_col": USED_CARS_DATASET_ROLES["target"],
-        # "use_algos": [["lgb", "linear_l2"], ["lgb", "linear_l2"]],
-        "use_algos": ["linear_l2"],
-        "roles": USED_CARS_DATASET_ROLES,
-        "dtype": {
-            'fleet': 'str', 'frame_damaged': 'str',
-            'has_accidents': 'str', 'isCab': 'str',
-            'is_cpo': 'str', 'is_new': 'str',
-            'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str'
-        }
-    }
-
-    # #  LAMA's test set
+    # # used_cars dataset
     # config = {
-    #     "path": "./examples/data/sampled_app_train.csv",
-    #     "task_type": "binary",
-    #     "metric_name": "areaUnderROC",
-    #     "target_col": "TARGET",
+    #     "path": "examples/data/small_used_cars_data.csv",
+    #     "task_type": "reg",
+    #     "metric_name": "mse",
+    #     "target_col": USED_CARS_DATASET_ROLES["target"],
+    #     # "use_algos": [["lgb", "linear_l2"], ["lgb", "linear_l2"]],
     #     "use_algos": ["linear_l2"],
-    #     "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
+    #     "roles": USED_CARS_DATASET_ROLES,
+    #     "dtype": {
+    #         'fleet': 'str', 'frame_damaged': 'str',
+    #         'has_accidents': 'str', 'isCab': 'str',
+    #         'is_cpo': 'str', 'is_new': 'str',
+    #         'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str'
+    #     }
     # }
 
-    # https://www.openml.org/d/734
+    #  LAMA's test set
+    config = {
+        "path": "./examples/data/sampled_app_train.csv",
+        "task_type": "binary",
+        "metric_name": "areaUnderROC",
+        "target_col": "TARGET",
+        "use_algos": ["lgb"],
+        "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
+    }
+
+    # # https://www.openml.org/d/734
     # config = {
     #     "path": "/opt/ailerons.csv",
     #     "task_type": "binary",
     #     "metric_name": "areaUnderROC",
     #     "target_col": "binaryClass",
-    #     "use_algos": ["linear_l2"],
+    #     "use_algos": ["lgb"],
     #     "roles": {"target": "binaryClass"},
     # }
 
