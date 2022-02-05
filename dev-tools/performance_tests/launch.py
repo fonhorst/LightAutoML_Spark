@@ -61,7 +61,7 @@ def calculate_quality(calc_automl: Callable):
     #     "task_type": "binary",
     #     "metric_name": "areaUnderROC",
     #     "target_col": "binaryClass",
-    #     "use_algos": ["lgb"],
+    #     "use_algos": ["linear_l2"],
     #     "roles": {"target": "binaryClass"},
     # }
 

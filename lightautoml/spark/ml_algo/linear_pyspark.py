@@ -10,6 +10,8 @@ from pyspark.ml.classification import LogisticRegression, LogisticRegressionMode
 from pyspark.ml.feature import VectorAssembler, OneHotEncoder
 from pyspark.ml.regression import LinearRegression, LinearRegressionModel
 
+from pyspark.sql import functions as F
+
 from .base import TabularMLAlgo, SparkMLModel
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ...utils.timer import TaskTimer
@@ -137,7 +139,7 @@ class LinearLBFGS(TabularMLAlgo):
 
         # TODO: SPARK-LAMA target column?
         train_sdf = self._make_sdf_with_target(train)
-        val_sdf = valid.data
+        val_sdf = self._make_sdf_with_target(valid)
 
         estimators, early_stopping = self._infer_params(train)
 
@@ -152,7 +154,11 @@ class LinearLBFGS(TabularMLAlgo):
             logger.debug(f"Fitting estimators with regParam {rp}")
             ml_model = pipeline.fit(train_sdf)
             val_pred = ml_model.transform(val_sdf)
-            current_score = self.score(val_pred)
+            preds_to_score = val_pred.select(
+                F.col(self._prediction_col).alias("prediction"),
+                F.col(valid.target_column).alias("target")
+            )
+            current_score = self.score(preds_to_score)
             if current_score > best_score:
                 best_score = current_score
                 best_model = ml_model
