@@ -236,14 +236,14 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         lgbm = LGBMBooster(
             isUnbalance=True,
-            baggingSeed=42,
+            # baggingSeed=42,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=train.target_column,
             predictionCol=self._prediction_col,
             validationIndicatorCol=is_val_col,
             objective='binary',
-            learningRate=0.01,
-            numLeaves=32,
+            learningRate=0.02,
+            numLeaves=10,
             featureFraction=0.7,
             baggingFraction=0.7,
             baggingFreq=1,
@@ -253,7 +253,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             numThreads=1,
             maxBin=255,
             minDataInLeaf=3,
-            earlyStoppingRound=200,
+            earlyStoppingRound=100,
             metric=metric,
             numIterations=3000
             # numIterations=1
