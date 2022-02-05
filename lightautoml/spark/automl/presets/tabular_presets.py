@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 # Either path/full url, or pyspark.sql.DataFrame, or dict with data
 ReadableIntoSparkDf = Union[str, SparkDataFrame, dict, pd.DataFrame]
 
+base_dir = os.path.dirname(__file__)
+
 
 class TabularAutoML(AutoMLPreset):
     _default_config_path = "tabular_config.yml"
@@ -64,6 +66,8 @@ class TabularAutoML(AutoMLPreset):
             gbm_pipeline_params: Optional[dict] = None,
             linear_pipeline_params: Optional[dict] = None,
     ):
+        if config_path is None:
+            config_path = os.path.join(base_dir, self._default_config_path)
         super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path)
 
         logger.info("I'm here")
@@ -161,7 +165,7 @@ class TabularAutoML(AutoMLPreset):
         lgb_params = deepcopy(self.lgb_params)
         lgb_params["default_params"] = {
             **lgb_params["default_params"],
-            **{"feature_fraction": 1},
+            **{"featureFraction": 1},
         }
 
         mode = selection_params["mode"]

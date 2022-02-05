@@ -35,7 +35,7 @@ def calculate_quality(calc_automl: Callable):
     #     "metric_name": "mse",
     #     "target_col": USED_CARS_DATASET_ROLES["target"],
     #     # "use_algos": [["lgb", "linear_l2"], ["lgb", "linear_l2"]],
-    #     "use_algos": ["linear_l2"],
+    #     "use_algos": ["lgb"],
     #     "roles": USED_CARS_DATASET_ROLES,
     #     "dtype": {
     #         'fleet': 'str', 'frame_damaged': 'str',
@@ -45,15 +45,15 @@ def calculate_quality(calc_automl: Callable):
     #     }
     # }
 
-    #  LAMA's test set
-    config = {
-        "path": "./examples/data/sampled_app_train.csv",
-        "task_type": "binary",
-        "metric_name": "areaUnderROC",
-        "target_col": "TARGET",
-        "use_algos": ["lgb"],
-        "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
-    }
+    # #  LAMA's test set
+    # config = {
+    #     "path": "./examples/data/sampled_app_train.csv",
+    #     "task_type": "binary",
+    #     "metric_name": "areaUnderROC",
+    #     "target_col": "TARGET",
+    #     "use_algos": ["lgb"],
+    #     "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
+    # }
 
     # # https://www.openml.org/d/734
     # config = {
@@ -95,15 +95,15 @@ def calculate_quality(calc_automl: Callable):
     #     "roles": {"target": "class"},
     # }
 
-    # # https://www.openml.org/d/4549
-    # config = {
-    #     "path": "/opt/Buzzinsocialmedia_Twitter_25k.csv",
-    #     "task_type": "reg",
-    #     "metric_name": "mse",
-    #     "target_col": "Annotation",
-    #     "use_algos": ["lgb"],
-    #     "roles": {"target": "Annotation"},
-    # }
+    # https://www.openml.org/d/4549
+    config = {
+        "path": "/opt/Buzzinsocialmedia_Twitter_25k.csv",
+        "task_type": "reg",
+        "metric_name": "mse",
+        "target_col": "Annotation",
+        "use_algos": ["lgb"],
+        "roles": {"target": "Annotation"},
+    }
 
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
     #              200000, 300000, 1_000_000, 2_000_000, 5_000_000, 74909, 54179, 68572, 25425]

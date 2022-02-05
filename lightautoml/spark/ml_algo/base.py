@@ -319,5 +319,5 @@ class TabularMLAlgo(MLAlgo):
         sdf = train.data
         t_sdf = train.target.select(SparkDataset.ID_COLUMN, train.target_column)
         if train.target_column not in train.data.columns:
-            sdf = sdf.join(t_sdf, SparkDataset.ID_COLUMN).drop(t_sdf[SparkDataset.ID_COLUMN])
+            sdf = sdf.join(t_sdf, SparkDataset.ID_COLUMN)#.drop(t_sdf[SparkDataset.ID_COLUMN])
         return sdf
