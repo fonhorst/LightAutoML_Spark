@@ -105,7 +105,16 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         # add loss and tasks params if defined
         # params = {**params, **loss.fobj_params, **loss.metric_params}
 
+        if task != "reg":
+            if "alpha" in params:
+                del params["alpha"]
+            if "lambdaL1" in params:
+                del params["lambdaL1"]
+            if "lambdaL2" in params:
+                del params["lambdaL2"]
+
         params = {**params}
+
 
         return params, verbose_eval, fobj, feval
 
@@ -177,6 +186,10 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         suggested_params["numIterations"] = ntrees
         suggested_params["earlyStoppingRound"] = es
 
+        if task != "reg":
+            if "alpha" in suggested_params:
+                del suggested_params["alpha"]
+
         return suggested_params
 
     def _get_default_search_spaces(self, suggested_params: Dict, estimated_n_trials: int) -> Dict:
@@ -222,18 +235,21 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
                 high=1.0,
             )
 
-            optimization_search_space["min_sum_hessian_in_leaf"] = SearchSpace(
-                Distribution.LOGUNIFORM,
-                low=1e-3,
-                high=10.0,
-            )
+            # # TODO: SPARK-LAMA is there an alternative in synapse ml ?
+            # optimization_search_space["min_sum_hessian_in_leaf"] = SearchSpace(
+            #     Distribution.LOGUNIFORM,
+            #     low=1e-3,
+            #     high=10.0,
+            # )
 
         if estimated_n_trials > 100:
-            optimization_search_space["alpha"] = SearchSpace(
-                Distribution.LOGUNIFORM,
-                low=1e-8,
-                high=10.0,
-            )
+            if self.task.name == "reg":
+                optimization_search_space["alpha"] = SearchSpace(
+                    Distribution.LOGUNIFORM,
+                    low=1e-8,
+                    high=10.0,
+                )
+
             optimization_search_space["lambdaL1"] = SearchSpace(
                 Distribution.LOGUNIFORM,
                 low=1e-8,
@@ -247,12 +263,6 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
                             model: Union[LightGBMRegressor, LightGBMClassifier]) -> SparkDataFrame:
 
         log_data("spark_lgb_predict", {"predict": dataset.to_pandas()})
-
-        # assembler = VectorAssembler(
-        #     inputCols=dataset.features,
-        #     outputCol=f"{self._name}_vassembler_features",
-        #     handleInvalid="keep"
-        # )
 
         temp_sdf = self._assembler.transform(dataset.data)
 

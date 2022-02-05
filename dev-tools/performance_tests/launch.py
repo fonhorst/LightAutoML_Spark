@@ -28,22 +28,22 @@ logger = logging.getLogger(__name__)
 
 
 def calculate_quality(calc_automl: Callable):
-    # # used_cars dataset
-    # config = {
-    #     "path": "examples/data/small_used_cars_data.csv",
-    #     "task_type": "reg",
-    #     "metric_name": "mse",
-    #     "target_col": USED_CARS_DATASET_ROLES["target"],
-    #     # "use_algos": [["lgb", "linear_l2"], ["lgb", "linear_l2"]],
-    #     "use_algos": ["lgb"],
-    #     "roles": USED_CARS_DATASET_ROLES,
-    #     "dtype": {
-    #         'fleet': 'str', 'frame_damaged': 'str',
-    #         'has_accidents': 'str', 'isCab': 'str',
-    #         'is_cpo': 'str', 'is_new': 'str',
-    #         'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str'
-    #     }
-    # }
+    # used_cars dataset
+    config = {
+        "path": "examples/data/small_used_cars_data.csv",
+        "task_type": "reg",
+        "metric_name": "mse",
+        "target_col": USED_CARS_DATASET_ROLES["target"],
+        # "use_algos": [["lgb", "linear_l2"], ["lgb", "linear_l2"]],
+        "use_algos": ["lgb"],
+        "roles": USED_CARS_DATASET_ROLES,
+        "dtype": {
+            'fleet': 'str', 'frame_damaged': 'str',
+            'has_accidents': 'str', 'isCab': 'str',
+            'is_cpo': 'str', 'is_new': 'str',
+            'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str'
+        }
+    }
 
     # #  LAMA's test set
     # config = {
@@ -65,7 +65,7 @@ def calculate_quality(calc_automl: Callable):
     #     "roles": {"target": "binaryClass"},
     # }
 
-    # https://www.openml.org/d/4534
+    # # https://www.openml.org/d/4534
     # config = {
     #     "path": "/opt/PhishingWebsites.csv",
     #     "task_type": "binary",
@@ -95,15 +95,15 @@ def calculate_quality(calc_automl: Callable):
     #     "roles": {"target": "class"},
     # }
 
-    # https://www.openml.org/d/4549
-    config = {
-        "path": "/opt/Buzzinsocialmedia_Twitter_25k.csv",
-        "task_type": "reg",
-        "metric_name": "mse",
-        "target_col": "Annotation",
-        "use_algos": ["lgb"],
-        "roles": {"target": "Annotation"},
-    }
+    # # https://www.openml.org/d/4549
+    # config = {
+    #     "path": "/opt/Buzzinsocialmedia_Twitter_25k.csv",
+    #     "task_type": "reg",
+    #     "metric_name": "mse",
+    #     "target_col": "Annotation",
+    #     "use_algos": ["lgb"],
+    #     "roles": {"target": "Annotation"},
+    # }
 
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
     #              200000, 300000, 1_000_000, 2_000_000, 5_000_000, 74909, 54179, 68572, 25425]
