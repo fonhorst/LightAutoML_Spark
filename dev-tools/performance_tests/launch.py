@@ -29,21 +29,21 @@ logger = logging.getLogger(__name__)
 
 def calculate_quality(calc_automl: Callable):
     # used_cars dataset
-    config = {
-        "path": "examples/data/small_used_cars_data.csv",
-        "task_type": "reg",
-        "metric_name": "mse",
-        "target_col": USED_CARS_DATASET_ROLES["target"],
-        # "use_algos": [["lgb", "linear_l2"], ["lgb", "linear_l2"]],
-        "use_algos": ["linear_l2"],
-        "roles": USED_CARS_DATASET_ROLES,
-        "dtype": {
-            'fleet': 'str', 'frame_damaged': 'str',
-            'has_accidents': 'str', 'isCab': 'str',
-            'is_cpo': 'str', 'is_new': 'str',
-            'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str'
-        }
-    }
+    # config = {
+    #     "path": "examples/data/small_used_cars_data.csv",
+    #     "task_type": "reg",
+    #     "metric_name": "mse",
+    #     "target_col": USED_CARS_DATASET_ROLES["target"],
+    #     # "use_algos": [["lgb", "linear_l2"], ["lgb", "linear_l2"]],
+    #     "use_algos": ["linear_l2"],
+    #     "roles": USED_CARS_DATASET_ROLES,
+    #     "dtype": {
+    #         'fleet': 'str', 'frame_damaged': 'str',
+    #         'has_accidents': 'str', 'isCab': 'str',
+    #         'is_cpo': 'str', 'is_new': 'str',
+    #         'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str'
+    #     }
+    # }
 
     # #  LAMA's test set
     # config = {
@@ -55,15 +55,15 @@ def calculate_quality(calc_automl: Callable):
     #     "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
     # }
 
-    # # https://www.openml.org/d/734
-    # config = {
-    #     "path": "/opt/ailerons.csv",
-    #     "task_type": "binary",
-    #     "metric_name": "areaUnderROC",
-    #     "target_col": "binaryClass",
-    #     "use_algos": ["linear_l2"],
-    #     "roles": {"target": "binaryClass"},
-    # }
+    # https://www.openml.org/d/734
+    config = {
+        "path": "/opt/ailerons.csv",
+        "task_type": "binary",
+        "metric_name": "areaUnderROC",
+        "target_col": "binaryClass",
+        "use_algos": ["linear_l2"],
+        "roles": {"target": "binaryClass"},
+    }
 
     # # https://www.openml.org/d/4534
     # config = {

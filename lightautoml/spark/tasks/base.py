@@ -64,12 +64,15 @@ class SparkMetric(LAMLMetric):
         else:
             raise ValueError(f"Unsupported type {type(dataset)}")
 
-        return self._evaluator.evaluate(sdf, params=self._metric_params)
+        score = self._evaluator.evaluate(sdf, params=self._metric_params)
+        sign = 2 * float(self.greater_is_better) - 1
+        return score * sign
 
 
 class Task(LAMATask):
 
     _default_metrics = {"binary": "areaUnderROC", "reg": "mse", "multiclass": "logLoss"}
+    _greater_is_better_mapping = {"areaUnderROC": True, "mse": False, "logLoss": False}
     _target_col = "target"
     _prediction_col = "prediction"
 
@@ -89,6 +92,12 @@ class Task(LAMATask):
 
         self._name = name
 
+        if metric is None:
+            metric = self._default_metrics[self.name]
+
+        if greater_is_better is None:
+            greater_is_better = self._greater_is_better_mapping[metric]
+
         # add losses
         # if None - infer from task
         self.losses = {}
@@ -106,8 +115,6 @@ class Task(LAMATask):
 
         # set callback metric for loss
         # if no metric - infer from task
-        if metric is None:
-            metric = self._default_metrics[self.name]
 
         self.metric_params = metric_params if metric_params else dict()
 

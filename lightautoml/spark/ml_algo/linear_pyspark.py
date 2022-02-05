@@ -60,11 +60,14 @@ class LinearLBFGS(TabularMLAlgo):
         "early_stopping": 2,
     }
 
-    def __init__(self, timer: Optional[TaskTimer] = None, **params):
+    def __init__(self,
+                 default_params: Optional[dict] = None,
+                 freeze_defaults: bool = True,
+                 timer: Optional[TaskTimer] = None,
+                 optimization_search_space: Optional[dict] = {}):
         super().__init__()
 
         self._prediction_col = f"prediction_{self._name}"
-        self.params = params
         self.task = None
         self._timer = timer
 
@@ -95,17 +98,19 @@ class LinearLBFGS(TabularMLAlgo):
             es = 100
 
         def build_pipeline(reg_param: int):
+            instance_params = copy(params)
+            instance_params["regParam"] = reg_param
             # TODO: SPARK-LAMA add params processing later
             if self.task.name in ["binary", "multiclass"]:
                 model = LogisticRegression(featuresCol=assembler.getOutputCol(),
                                            labelCol=train.target_column,
-                                           predictionCol=self._prediction_col)
-                                           # **params)
+                                           predictionCol=self._prediction_col,
+                                           **instance_params)
             elif self.task.name == "reg":
                 model = LinearRegression(featuresCol=assembler.getOutputCol(),
                                          labelCol=train.target_column,
-                                         predictionCol=self._prediction_col)
-                                         # **params)
+                                         predictionCol=self._prediction_col,
+                                         **instance_params)
                 model.setSolver("l-bfgs")
             else:
                 raise ValueError("Task not supported")
