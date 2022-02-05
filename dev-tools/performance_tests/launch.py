@@ -35,7 +35,7 @@ def calculate_quality(calc_automl: Callable):
         "metric_name": "mse",
         "target_col": USED_CARS_DATASET_ROLES["target"],
         # "use_algos": [["lgb", "linear_l2"], ["lgb", "linear_l2"]],
-        "use_algos": ["lgb"],
+        "use_algos": ["linear_l2"],
         "roles": USED_CARS_DATASET_ROLES,
         "dtype": {
             'fleet': 'str', 'frame_damaged': 'str',
