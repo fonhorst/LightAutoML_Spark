@@ -45,7 +45,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         "lambdaL1": 0.0,
         "lambdaL2": 0.0,
         # seeds
-        "baggingSeed": 42
+        # "baggingSeed": 42
     }
 
     def __init__(self,
