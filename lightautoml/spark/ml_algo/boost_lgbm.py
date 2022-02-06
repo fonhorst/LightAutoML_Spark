@@ -55,10 +55,6 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             optimization_search_space: Optional[dict] = {}):
         TabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
         self._prediction_col = f"prediction_{self._name}"
-        # self.params = {} if params is None else params
-        # self.task = None
-
-        self._features_importance = None
         self._assembler = None
 
     def _infer_params(self) -> Tuple[dict, int, Optional[Callable], Optional[Callable]]:
@@ -290,8 +286,6 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         is_val_col = 'is_val'
         train_sdf = self._make_sdf_with_target(train).withColumn(is_val_col, F.lit(0))
         valid_sdf = self._make_sdf_with_target(valid).withColumn(is_val_col, F.lit(1))
-        if len(train_sdf.columns) != len(valid_sdf.columns):
-            k = 0
 
         train_valid_sdf = train_sdf.union(valid_sdf)
 
@@ -332,16 +326,17 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         val_pred = ml_model.transform(self._assembler.transform(valid_sdf))
         val_pred = val_pred.select(*valid_sdf.columns, self._prediction_col)
 
-        # TODO: SPARK-LAMA dummy feature importance, need to be replaced
-        self._features_importance = pd.Series(
-            [1.0 / len(train.features) for _ in train.features],
-            index=list(train.features)
-        )
-
         return ml_model, val_pred, self._prediction_col
 
     def fit(self, train_valid: TrainValidIterator):
         self.fit_predict(train_valid)
 
     def get_features_score(self) -> Series:
-        return self._features_importance
+        imp = 0
+        for model in self.models:
+            imp = imp + pd.Series(model.getFeatureImportances(importance_type='gain'))
+
+        imp = imp / len(self.models)
+
+        result = Series(list(imp), index=self.features).sort_values(ascending=False)
+        return result
