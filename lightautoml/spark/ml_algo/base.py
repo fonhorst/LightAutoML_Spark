@@ -80,14 +80,14 @@ class TabularMLAlgo(MLAlgo):
         # get metric and loss if None
         self.task = train_valid_iterator.train.task
 
-        preds_ds = cast(SparkDataset, train_valid_iterator.get_validation_data())
+        valid_ds = cast(SparkDataset, train_valid_iterator.get_validation_data())
 
         # spark
         outp_dim = 1
         if self.task.name == "multiclass":
             # TODO: SPARK-LAMA working with target should be reflected in SparkDataset
-            tdf: SparkDataFrame = preds_ds.target
-            outp_dim = tdf.select(F.max(preds_ds.target_column).alias("max")).first()
+            tdf: SparkDataFrame = valid_ds.target
+            outp_dim = tdf.select(F.max(valid_ds.target_column).alias("max")).first()
             outp_dim = outp_dim["max"] + 1
 
         self.n_classes = outp_dim
@@ -128,19 +128,19 @@ class TabularMLAlgo(MLAlgo):
                     break
 
         # combine predictions of all models and make them into the single one
-        full_preds_df = self._average_predictions(preds_ds, preds_dfs, pred_col_prefix)
+        full_preds_df = self._average_predictions(valid_ds, preds_dfs, pred_col_prefix)
 
         # TODO: send the "parent" dataset of the train_valid_iterator for unwinding later
         #       e.g. from the train_valid_iterator
-        preds_ds = self._set_prediction(preds_ds, full_preds_df)
+        pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
 
         if iterator_len > 1:
             logger.info(
-                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(preds_ds)}\x1b[0m")
+                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(pred_ds)}\x1b[0m")
 
         if iterator_len > 1 or "Tuned" not in self._name:
             logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
-        return preds_ds
+        return pred_ds
 
     def fit_predict_single_fold(self, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.

@@ -409,9 +409,12 @@ class TabularDataFeatures:
                 tds = cast(SparkDataFrame, train.target)
                 result = tds.select(F.max(train.target_column).alias("max")).first()
                 n_classes = result['max'] + 1
-                raise NotImplementedError()
-                if n_classes <= self.multiclass_te_co:
-                    target_encoder = MultiClassTargetEncoder
+
+                # TODO: SPARK-LAMA add warning here
+                target_encoder = None
+                # raise NotImplementedError()
+                # if n_classes <= self.multiclass_te_co:
+                #     target_encoder = MultiClassTargetEncoder
 
         return target_encoder
 

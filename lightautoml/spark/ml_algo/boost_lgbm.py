@@ -121,6 +121,8 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         return params, verbose_eval, fobj, feval
 
     def init_params_on_input(self, train_valid_iterator: TrainValidIterator) -> dict:
+        # TODO: SPARK-LAMA doing it to make _get_default_search_spaces working
+        self.task = train_valid_iterator.train.task
 
         sds = cast(SparkDataset, train_valid_iterator.train)
         # TODO: SPARK-LAMA may be expensive
@@ -288,6 +290,9 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         is_val_col = 'is_val'
         train_sdf = self._make_sdf_with_target(train).withColumn(is_val_col, F.lit(0))
         valid_sdf = self._make_sdf_with_target(valid).withColumn(is_val_col, F.lit(1))
+        if len(train_sdf.columns) != len(valid_sdf.columns):
+            k = 0
+
         train_valid_sdf = train_sdf.union(valid_sdf)
 
         logger.info(f"Input cols for the vector assembler: {train.features}")

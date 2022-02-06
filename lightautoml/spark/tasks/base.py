@@ -68,6 +68,10 @@ class SparkMetric(LAMLMetric):
         sign = 2 * float(self.greater_is_better) - 1
         return score * sign
 
+    @property
+    def name(self) -> str:
+        return self._name
+
 
 class Task(LAMATask):
 
