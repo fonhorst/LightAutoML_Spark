@@ -25,6 +25,7 @@ def calculate_automl(path: str,
                      metric_name: str,
                      target_col: str = 'target',
                      seed: int = 42,
+                     cv: int = 5,
                      use_algos = ("lgb", "linear_l2"),
                      roles: Optional[Dict] = None,
                      dtype: Optional[None] = None) -> Dict[str, Any]:
@@ -48,7 +49,12 @@ def calculate_automl(path: str,
             #     .drop(F.col(target_col)).cache()
             test_data_dropped = test_data.cache()
 
-            automl = TabularAutoML(spark=spark, task=task, general_params={"use_algos": use_algos})
+            automl = TabularAutoML(
+                spark=spark,
+                task=task,
+                general_params={"use_algos": use_algos},
+                reader_params={"cv": cv}
+            )
 
             oof_predictions = automl.fit_predict(
                 train_data,

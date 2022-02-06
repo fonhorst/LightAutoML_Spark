@@ -338,7 +338,7 @@ class SparkToSparkReader(Reader):
 
         return dataset
 
-    def _create_folds(self, sdf: SparkDataFrame, kwargs: dict) -> SparkDataFrame:
+    def _create_folds(self, sdf: SparkDataFrame, kwargs: dict) -> Optional[SparkDataFrame]:
         if "folds" in kwargs:
             folds_col = kwargs["folds"]
 
@@ -367,6 +367,9 @@ class SparkToSparkReader(Reader):
             #     train = df.filter(~condition).drop(folds_col)
             #     datasets.append((train, validation))
             # return datasets
+
+        if self.cv == 1:
+            return None
 
         h = 1.0 / self.cv
         folds_sdf = sdf.select(

@@ -93,7 +93,7 @@ class SparkDataset(LAMLDataset):
             self._target_column: str = next(c for c in target_sdf.columns if c != SparkDataset.ID_COLUMN)
 
         self._folds_column = None
-        if "folds" in kwargs:
+        if "folds" in kwargs and kwargs["folds"] is not None:
             # folds = kwargs["folds"]
             # assert isinstance(folds, list)
             # correct_folds = (

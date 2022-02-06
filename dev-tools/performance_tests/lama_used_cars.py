@@ -23,6 +23,7 @@ def calculate_automl(path: str,
                      metric_name: str,
                      target_col: str = 'target',
                      seed: int = 42,
+                     cv: int = 5,
                      use_algos = ("lgb", "linear_l2"),
                      roles: Optional[Dict] = None,
                      dtype: Optional[Dict] = None) -> Dict[str, Any]:
@@ -36,7 +37,12 @@ def calculate_automl(path: str,
 
         task = Task(task_type)
 
-        automl = TabularAutoML(task=task, timeout=3600 * 3, general_params={"use_algos": use_algos})
+        automl = TabularAutoML(
+            task=task,
+            timeout=3600 * 3,
+            general_params={"use_algos": use_algos},
+            reader_params={"cv": cv}
+        )
 
         oof_predictions = automl.fit_predict(
             train_data,

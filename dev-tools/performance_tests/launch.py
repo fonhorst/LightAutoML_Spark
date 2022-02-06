@@ -126,19 +126,21 @@ logger = logging.getLogger(__name__)
 
 def calculate_quality(calc_automl: Callable):
 
-    # config = copy(datasets()["used_cars_dataset"])
+    config = copy(datasets()["used_cars_dataset"])
     # config = copy(datasets()["internet_usage"])
-    config = copy(datasets()["buzz_dataset"])
-    config["use_algos"] = [["lgb_tuned"]]
+    # config = copy(datasets()["buzz_dataset"])
+    config["use_algos"] = [["lgb"]]
 
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
     #              200000, 300000, 1_000_000, 2_000_000, 5_000_000, 74909, 54179, 68572, 25425]
 
+    cv = 5
     seeds = [42]
     results = []
     for seed in seeds:
         cfg = deepcopy(config)
         cfg['seed'] = seed
+        cfg['cv'] = cv
         res = calc_automl(**cfg)
         results.append(res)
         logger.info(f"Result for seed {seed}: {res}")
