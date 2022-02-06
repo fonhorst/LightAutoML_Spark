@@ -303,11 +303,14 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         LGBMBooster = LightGBMRegressor if train.task.name == "reg" else LightGBMClassifier
 
+        if train.task.name == "multiclass":
+            params["probabilityCol"] = self._prediction_col
+
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=train.target_column,
-            predictionCol=self._prediction_col,
+            predictionCol=self._prediction_col if train.task.name != "multiclass" else "prediction",
             validationIndicatorCol=is_val_col,
             verbosity=verbose_eval
         )
@@ -322,6 +325,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         ml_model = lgbm.fit(temp_sdf)
 
         val_pred = ml_model.transform(self._assembler.transform(valid_sdf))
+        val_pred = val_pred.select(*valid_sdf.columns, self._prediction_col)
 
         # TODO: SPARK-LAMA dummy feature importance, need to be replaced
         self._features_importance = pd.Series(

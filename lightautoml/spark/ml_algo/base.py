@@ -210,17 +210,16 @@ class TabularMLAlgo(MLAlgo):
         counter_col_name = "counter"
 
         if self.task.name == "multiclass":
-            empty_pred = F.array(*[F.lit(0) for _ in range(self.n_classes)])
+            empty_pred = F.array(*[F.lit(0.0) for _ in range(self.n_classes)])
 
             def convert_col(prediction_column: str) -> Column:
                 return vector_to_array(F.col(prediction_column))
 
             # full_preds_df
-            def sum_predictions_col() -> Column:
-                # curr_df[pred_col_prefix]
+            def sum_predictions_col(alg_num: int) -> Column:
                 return F.transform(
-                    F.arrays_zip(pred_col_prefix, f"{pred_col_prefix}_{i}"),
-                    lambda x, y: x + y
+                    F.arrays_zip(pred_col_prefix, f"{pred_col_prefix}_{alg_num}"),
+                    lambda x: x[pred_col_prefix] + x[f"{pred_col_prefix}_{alg_num}"]
                 ).alias(pred_col_prefix)
 
             def avg_preds_sum_col() -> Column:
@@ -234,9 +233,9 @@ class TabularMLAlgo(MLAlgo):
             def convert_col(prediction_column: str) -> Column:
                 return F.col(prediction_column)
 
-            def sum_predictions_col() -> Column:
+            def sum_predictions_col(alg_num: int) -> Column:
                 # curr_df[pred_col_prefix]
-                return (F.col(pred_col_prefix) + F.col(f"{pred_col_prefix}_{i}")).alias(pred_col_prefix)
+                return (F.col(pred_col_prefix) + F.col(f"{pred_col_prefix}_{alg_num}")).alias(pred_col_prefix)
 
             def avg_preds_sum_col() -> Column:
                 return (F.col(pred_col_prefix) / F.col("counter")).alias(pred_col_prefix)
@@ -262,7 +261,7 @@ class TabularMLAlgo(MLAlgo):
                 .select(
                     full_preds_df[SparkDataset.ID_COLUMN],
                     counter_col_name,
-                    sum_predictions_col()
+                    sum_predictions_col(alg_num=i)
                 )
             )
 

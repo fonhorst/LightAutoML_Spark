@@ -126,7 +126,9 @@ logger = logging.getLogger(__name__)
 
 def calculate_quality(calc_automl: Callable):
 
-    config = copy(datasets()["internet_usage"])
+    config = copy(datasets()["used_cars_dataset"])
+    # config = copy(datasets()["internet_usage"])
+    # config = copy(datasets()["buzz_dataset"])
     config["use_algos"] = ["lgb"]
 
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
