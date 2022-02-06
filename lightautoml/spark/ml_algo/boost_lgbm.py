@@ -355,6 +355,9 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
     outputRoles = Param(Params._dummy(), "outputRoles",
                             "output roles (lama format)")
 
+    taskName = Param(Params._dummy(), "taskName",
+                            "Task type name: 'req', 'binary' or 'multiclass'")
+
     def __init__(self,
                  input_cols: Optional[List[str]] = None,
                  input_roles: Optional[Dict[str, ColumnRole]] = None,
@@ -367,6 +370,7 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
         self.models = []
         self._prediction_col = f"prediction_{self._name}"
         self._task_name = task_name
+        self.set(self.taskName, task_name)
         self._folds_column = folds_column
         self._target_column = target_column
         self._folds_number = folds_number
@@ -374,6 +378,7 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
         self.set(self.outputCols, [self._predict_feature_name()])
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self.get_output_roles())
+        self._is_reg = self._task_name == "reg"
 
     def write(self) -> MLWriter:
         "Returns MLWriter instance that can save the Estimator instance."
@@ -440,12 +445,6 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
 
     def init_params_on_input(self, task_name: str) -> dict:
 
-        # TODO SPARK-LAMA: Only for smoke test
-        try:
-            is_reg = task_name == "reg"
-        except AttributeError:
-            is_reg = False
-
         # suggested_params = copy(self.default_params)
         suggested_params = copy(self._default_params)
 
@@ -453,7 +452,7 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
         #     # if user change defaults manually - keep it
         #     return suggested_params
 
-        if is_reg:
+        if self._is_reg:
             suggested_params = {
                 "learning_rate": 0.05,
                 "num_leaves": 32,
@@ -461,7 +460,7 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
                 "bagging_fraction": 0.9,
             }
 
-        suggested_params["num_leaves"] = 128 if is_reg else 244
+        suggested_params["num_leaves"] = 128 if self._is_reg else 244
 
         suggested_params["learning_rate"] = 0.05
         suggested_params["num_trees"] = 2000
@@ -472,8 +471,6 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
     def fit_single_fold(self, train: SparkDataFrame) -> SparkMLModel:
         # if self.task is None:
         #     self.task = train.task
-
-        is_reg = self._task_name == "reg"
 
         (
             params,
@@ -496,7 +493,7 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
             handleInvalid="keep"
         )
 
-        LGBMBooster = LightGBMRegressor if is_reg else LightGBMClassifier
+        LGBMBooster = LightGBMRegressor if self._is_reg else LightGBMClassifier
 
         lgbm = LGBMBooster(
             # fobj=fobj,  # TODO SPARK-LAMA: Commented only for smoke test
@@ -535,7 +532,7 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
 
         logger.info(f"In GBM with params: {lgbm.params}")
 
-        if is_reg:
+        if self._is_reg:
             # lgbm.setAlpha(params["reg_alpha"]).setLambdaL1(params["reg_lambda"]).setLambdaL2(params["reg_lambda"])
             lgbm.setAlpha(1.0).setLambdaL1(0.0).setLambdaL2(0.0)
 
@@ -711,7 +708,6 @@ class BoostLGBMTransformer(Transformer, MLWritable):
 
         return pred
 
-
     def _average_predictions(self, 
                             preds_ds: SparkDataFrame,
                             preds_dfs: List[SparkDataFrame], 
@@ -792,7 +788,6 @@ class BoostLGBMTransformer(Transformer, MLWritable):
         )
 
         return full_preds_df
-
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         """Mean prediction for all fitted models.

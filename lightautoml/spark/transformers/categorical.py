@@ -272,9 +272,6 @@ class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols, MLWritab
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
 
     def __init__(self, *args, **kwargs):
-        # self._output_role = CategoryRole(np.int32, label_encoded=True)
-        # self.set(self.inputCols, kwargs["input_cols"])
-        # self.set(self.outputCols, self.get_output_names(kwargs["input_cols"]))
         super().__init__()
         self.fitted_encoder = kwargs["fitted_encoder"]
         self.dicts = self.fitted_encoder.dicts

@@ -72,11 +72,6 @@ def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordin
     ordinal_cat_processing = Pipeline(stages=[ord_estimator])
     num_processing = Pipeline(stages=[num_estimator])
 
-    # model = cat_processing.fit(sdataset)
-    #
-    # result = cast(SparkDataset, model.transform(sdataset))
-    #
-    # pdf = result.data.toPandas()  # .to_pandas().data
 
     ut = Pipeline(stages=[cat_processing, ordinal_cat_processing, num_processing])
     
@@ -85,10 +80,6 @@ def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordin
     ut_transformer: PipelineModel = ut.fit(sdataset.data)
 
     ut_transformer.write().overwrite().save("/tmp/ut_pipline")
-
-    # result = cast(SparkDataset, ut_transformer.transform(sdataset.data))
-
-    # pdf = result.data.toPandas()  # .to_pandas().data
 
     result = ut_transformer.transform(sdataset.data).toPandas()
 
@@ -116,8 +107,6 @@ if __name__ == "__main__":
         sdataset = sdataset_tmp.empty()
         new_roles = deepcopy(sdataset_tmp.roles)
         new_roles.update({sdataset_tmp.target_column: TargetRole(np.float32), sdataset_tmp.folds_column: FoldsRole()})
-        # roles = sdataset_tmp.roles.update({sdataset_tmp.target_column: TargetRole(np.float32)})
-        # roles = sdataset_tmp.roles.update({sdataset_tmp.folds_column: FoldsRole()})
         sdataset.set_data(
             sdataset_tmp.data \
                 .join(sdataset_tmp.target, SparkDataset.ID_COLUMN) \
