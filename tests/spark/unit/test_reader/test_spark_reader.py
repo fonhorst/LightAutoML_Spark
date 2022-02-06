@@ -13,7 +13,7 @@ from . import spark
 import pandas as pd
 
 
-def datasets() -> List[Dict[str, Any]]:
+def datasets(setting: str = "all") -> List[Dict[str, Any]]:
     used_cars_dataset = {
         "path": "examples/data/small_used_cars_data.csv",
         "task_type": "reg",
@@ -41,7 +41,6 @@ def datasets() -> List[Dict[str, Any]]:
         "task_type": "binary",
         "metric_name": "areaUnderROC",
         "target_col": "TARGET",
-        "use_algos": ["lgb"],
         "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
     }
 
@@ -51,7 +50,6 @@ def datasets() -> List[Dict[str, Any]]:
         "task_type": "binary",
         "metric_name": "areaUnderROC",
         "target_col": "binaryClass",
-        "use_algos": ["lgb_tuned"],
         "roles": {"target": "binaryClass"},
     }
 
@@ -61,7 +59,6 @@ def datasets() -> List[Dict[str, Any]]:
         "task_type": "binary",
         "metric_name": "areaUnderROC",
         "target_col": "Result",
-        "use_algos": ["lgb"],
         "roles": {"target": "Result"},
     }
 
@@ -71,7 +68,6 @@ def datasets() -> List[Dict[str, Any]]:
         "task_type": "binary",
         "metric_name": "areaUnderROC",
         "target_col": "Who_Pays_for_Access_Work",
-        "use_algos": ["lgb"],
         "roles": {"target": "Who_Pays_for_Access_Work"},
     }
 
@@ -81,7 +77,6 @@ def datasets() -> List[Dict[str, Any]]:
         "task_type": "reg",
         "metric_name": "mse",
         "target_col": "class",
-        "use_algos": ["lgb"],
         "roles": {"target": "class"},
     }
 
@@ -91,18 +86,51 @@ def datasets() -> List[Dict[str, Any]]:
         "task_type": "reg",
         "metric_name": "mse",
         "target_col": "Annotation",
-        "use_algos": ["lgb"],
         "roles": {"target": "Annotation"},
     }
 
-    return [
-        used_cars_dataset, lama_test_dataset, ailerons_dataset,
-        phishing_websites_dataset, kdd_internet_usage, nasa_dataset,
-        buzz_dataset
-    ]
+    # https://www.openml.org/d/372
+    internet_usage = {
+        "path": "/opt/internet_usage.csv",
+        "task_type": "multiclass",
+        "metric_name": "ova",
+        "target_col": "Actual_Time",
+        "roles": {"target": "Actual_Time"},
+    }
+
+    # https://www.openml.org/d/4538
+    gesture_segmentation = {
+        "path": "/opt/gesture_segmentation.csv",
+        "task_type": "multiclass",
+        "metric_name": "ova",
+        "target_col": "Phase",
+        "roles": {"target": "Phase"},
+    }
+
+    # https://www.openml.org/d/382
+    ipums_97 = {
+        "path": "/opt/ipums_97.csv",
+        "task_type": "multiclass",
+        "metric_name": "ova",
+        "target_col": "movedin",
+        "roles": {"target": "movedin"},
+    }
+
+    if setting == "fast":
+        return [used_cars_dataset]
+    elif setting == "multiclass":
+        return [internet_usage, gesture_segmentation, ipums_97]
+    elif setting == "all":
+        return [
+            used_cars_dataset, lama_test_dataset, ailerons_dataset,
+            phishing_websites_dataset, kdd_internet_usage, nasa_dataset,
+            buzz_dataset, internet_usage, gesture_segmentation, ipums_97
+        ]
+    else:
+        raise ValueError(f"Unsupported setting {setting}")
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in datasets()])
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in datasets(setting="fast")])
 def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
