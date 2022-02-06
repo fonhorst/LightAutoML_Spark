@@ -1,4 +1,4 @@
-from typing import cast
+from typing import cast, Dict, Any, List
 
 import pytest
 from pyspark.sql import SparkSession
@@ -13,9 +13,97 @@ from . import spark
 import pandas as pd
 
 
-# @pytest.mark.parametrize("cv", [1, 5, 10])
-@pytest.mark.parametrize("cv", [5])
-def test_spark_reader(spark: SparkSession, cv: int):
+def datasets() -> List[Dict[str, Any]]:
+    used_cars_dataset = {
+        "path": "examples/data/small_used_cars_data.csv",
+        "task_type": "reg",
+        "metric_name": "mse",
+        "target_col": "price",
+        "roles": {
+            "target": "price",
+            "drop": ["dealer_zip", "description", "listed_date",
+                     "year", 'Unnamed: 0', '_c0',
+                     'sp_id', 'sp_name', 'trimId',
+                     'trim_name', 'major_options', 'main_picture_url',
+                     'interior_color', 'exterior_color'],
+            "numeric": ['latitude', 'longitude', 'mileage']
+        },
+        "dtype": {
+            'fleet': 'str', 'frame_damaged': 'str',
+            'has_accidents': 'str', 'isCab': 'str',
+            'is_cpo': 'str', 'is_new': 'str',
+            'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+        }
+    }
+
+    lama_test_dataset = {
+        "path": "./examples/data/sampled_app_train.csv",
+        "task_type": "binary",
+        "metric_name": "areaUnderROC",
+        "target_col": "TARGET",
+        "use_algos": ["lgb"],
+        "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
+    }
+
+    # https://www.openml.org/d/734
+    ailerons_dataset = {
+        "path": "/opt/ailerons.csv",
+        "task_type": "binary",
+        "metric_name": "areaUnderROC",
+        "target_col": "binaryClass",
+        "use_algos": ["lgb_tuned"],
+        "roles": {"target": "binaryClass"},
+    }
+
+    # https://www.openml.org/d/4534
+    phishing_websites_dataset = {
+        "path": "/opt/PhishingWebsites.csv",
+        "task_type": "binary",
+        "metric_name": "areaUnderROC",
+        "target_col": "Result",
+        "use_algos": ["lgb"],
+        "roles": {"target": "Result"},
+    }
+
+    # https://www.openml.org/d/981
+    kdd_internet_usage = {
+        "path": "/opt/kdd_internet_usage.csv",
+        "task_type": "binary",
+        "metric_name": "areaUnderROC",
+        "target_col": "Who_Pays_for_Access_Work",
+        "use_algos": ["lgb"],
+        "roles": {"target": "Who_Pays_for_Access_Work"},
+    }
+
+    # https://www.openml.org/d/42821
+    nasa_dataset = {
+        "path": "/opt/nasa_phm2008.csv",
+        "task_type": "reg",
+        "metric_name": "mse",
+        "target_col": "class",
+        "use_algos": ["lgb"],
+        "roles": {"target": "class"},
+    }
+
+    # https://www.openml.org/d/4549
+    buzz_dataset = {
+        "path": "/opt/Buzzinsocialmedia_Twitter_25k.csv",
+        "task_type": "reg",
+        "metric_name": "mse",
+        "target_col": "Annotation",
+        "use_algos": ["lgb"],
+        "roles": {"target": "Annotation"},
+    }
+
+    return [
+        used_cars_dataset, lama_test_dataset, ailerons_dataset,
+        phishing_websites_dataset, kdd_internet_usage, nasa_dataset,
+        buzz_dataset
+    ]
+
+
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in datasets()])
+def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
         # 2. it should have target
@@ -39,17 +127,10 @@ def test_spark_reader(spark: SparkSession, cv: int):
     # path = "../../examples/data/sampled_app_train.csv"
     # task_type = "binary"
 
-    path = "../../examples/data/tiny_used_cars_data.csv"
-    task_type = "reg"
-    roles = {
-        "target": 'price',
-        "drop": ["dealer_zip", "description", "listed_date",
-                 "year", 'Unnamed: 0', '_c0',
-                 'sp_id', 'sp_name', 'trimId',
-                 'trim_name', 'major_options', 'main_picture_url',
-                 'interior_color', 'exterior_color'],
-        "numeric": ['latitude', 'longitude', 'mileage']
-    }
+    path = config['path']
+    task_type = config['task_type']
+    roles = config['roles']
+    dtype = config['dtype'] if 'dtype' in config else None
 
     df = spark.read.csv(path, header=True, escape="\"")
     sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv)
@@ -61,12 +142,7 @@ def test_spark_reader(spark: SparkSession, cv: int):
     checks(sdataset, check_target_and_folds=False)
 
     # comparing with Pandas
-    pdf = pd.read_csv(path, dtype={
-        'fleet': 'str', 'frame_damaged': 'str',
-        'has_accidents': 'str', 'isCab': 'str',
-        'is_cpo': 'str', 'is_new': 'str',
-        'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str'
-    })
+    pdf = pd.read_csv(path, dtype=dtype)
     preader = PandasToPandasReader(task=Task(task_type), cv=cv)
     pdataset = preader.fit_read(pdf, roles=roles)
 
