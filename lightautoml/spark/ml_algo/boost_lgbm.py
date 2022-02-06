@@ -88,6 +88,9 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         elif task == "binary":
             params["objective"] = "binary"
             params["metric"] = "auc"
+        elif task == "multiclass":
+            params["objective"] = "multiclass"
+            params["metric"] = "multi_logloss"
         else:
             raise ValueError(f"Unsupported task type: {task}")
 
@@ -114,7 +117,6 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
                 del params["lambdaL2"]
 
         params = {**params}
-
 
         return params, verbose_eval, fobj, feval
 
