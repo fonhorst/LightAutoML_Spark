@@ -196,16 +196,15 @@ class LGBAdvancedPipeline(FeaturesPipeline, TabularDataFeatures):
             te_part = SequentialTransformer([te_part, target_encoder()])
             transformer_list.append(te_part)
 
-        # TODO: SPARK-LAMA fix bug with performance of catintersections
         # get intersection of top categories
-        # intersections = self.get_categorical_intersections(train)
-        # if intersections is not None:
-        #     # if target_encoder is not None:
-        #     #     ints_part = SequentialTransformer([intersections, target_encoder()])
-        #     # else:
-        #     ints_part = SequentialTransformer([intersections, ChangeRoles(output_category_role)])
-        #
-        #     transformer_list.append(ints_part)
+        intersections = self.get_categorical_intersections(train)
+        if intersections is not None:
+            # if target_encoder is not None:
+            #     ints_part = SequentialTransformer([intersections, target_encoder()])
+            # else:
+            ints_part = SequentialTransformer([intersections, ChangeRoles(output_category_role)])
+
+            transformer_list.append(ints_part)
 
         # add numeric pipeline
         transformer_list.append(self.get_numeric_data(train))

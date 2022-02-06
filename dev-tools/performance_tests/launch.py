@@ -134,7 +134,7 @@ def calculate_quality(calc_automl: Callable):
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
     #              200000, 300000, 1_000_000, 2_000_000, 5_000_000, 74909, 54179, 68572, 25425]
 
-    cv = 5
+    cv = 2
     seeds = [42]
     results = []
     for seed in seeds:
