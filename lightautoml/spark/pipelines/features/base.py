@@ -1,7 +1,7 @@
 """Basic classes for features generation."""
 
 from copy import copy, deepcopy
-from typing import Any, Callable, Union
+from typing import Any, Callable, Union, cast
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -576,9 +576,15 @@ class TabularDataFeatures:
             if train.task.name in ["binary", "reg"]:
                 target_encoder = TargetEncoder
             else:
-                n_classes = train.target.max() + 1
-                if n_classes <= self.multiclass_te_co:
-                    target_encoder = MultiClassTargetEncoder
+                tds = cast(SparkDataFrame, train.target)
+                result = tds.select(F.max(train.target_column).alias("max")).first()
+                n_classes = result['max'] + 1
+
+                # TODO: SPARK-LAMA add warning here
+                target_encoder = None
+                # raise NotImplementedError()
+                # if n_classes <= self.multiclass_te_co:
+                #     target_encoder = MultiClassTargetEncoder
 
         return target_encoder
 

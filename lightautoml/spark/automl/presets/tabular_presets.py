@@ -3,15 +3,16 @@ import os
 from copy import deepcopy, copy
 from typing import Optional, Sequence, Iterable, cast, Union, Tuple, Callable
 
-import numpy as np
 import pandas as pd
 from pyspark.sql import SparkSession
 
 from lightautoml.automl.presets.base import AutoMLPreset, upd_params
 from lightautoml.dataset.base import RolesDict, LAMLDataset
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
-from lightautoml.pipelines.selection.base import SelectionPipeline
+from lightautoml.pipelines.selection.base import SelectionPipeline, ComposedSelector
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
+from lightautoml.pipelines.selection.permutation_importance_based import NpIterativeFeatureSelector
+from lightautoml.spark.pipelines.selection.permutation_importance_based import NpPermutationImportanceEstimator
 from lightautoml.reader.tabular_batch_generator import ReadableToDf, read_data
 from lightautoml.spark.automl.blend import WeightedBlender
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
@@ -21,12 +22,16 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures,
 from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.spark.pipelines.ml.nested_ml_pipe import NestedTabularMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
+from lightautoml.spark.validation.folds_iterator import FoldsIterator
 from lightautoml.tasks import Task
+from lightautoml.validation.base import HoldoutIterator, DummyIterator
 
 logger = logging.getLogger(__name__)
 
 # Either path/full url, or pyspark.sql.DataFrame, or dict with data
 ReadableIntoSparkDf = Union[str, SparkDataFrame, dict, pd.DataFrame]
+
+base_dir = os.path.dirname(__file__)
 
 
 class TabularAutoML(AutoMLPreset):
@@ -63,6 +68,8 @@ class TabularAutoML(AutoMLPreset):
             gbm_pipeline_params: Optional[dict] = None,
             linear_pipeline_params: Optional[dict] = None,
     ):
+        if config_path is None:
+            config_path = os.path.join(base_dir, self._default_config_path)
         super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path)
 
         logger.info("I'm here")
@@ -160,7 +167,7 @@ class TabularAutoML(AutoMLPreset):
         lgb_params = deepcopy(self.lgb_params)
         lgb_params["default_params"] = {
             **lgb_params["default_params"],
-            **{"feature_fraction": 1},
+            **{"featureFraction": 1},
         }
 
         mode = selection_params["mode"]
@@ -179,9 +186,7 @@ class TabularAutoML(AutoMLPreset):
             selection_gbm.set_prefix("Selector")
 
             if selection_params["importance_type"] == "permutation":
-                # TODO: SPARK-LAMA add support for this selector
-                raise NotImplementedError("Not supported yet")
-                # importance = NpPermutationImportanceEstimator()
+                importance = NpPermutationImportanceEstimator()
             else:
                 importance = ModelBasedImportanceEstimator()
 
@@ -200,20 +205,18 @@ class TabularAutoML(AutoMLPreset):
                 selection_gbm = BoostLGBM(timer=sel_timer_1, **lgb_params)
                 selection_gbm.set_prefix("Selector")
 
-                # TODO: SPARK-LAMA add support for this selector
-                raise NotImplementedError("Not supported yet")
                 # # TODO: Check about reusing permutation importance
-                # importance = NpPermutationImportanceEstimator()
-                #
-                # extra_selector = NpIterativeFeatureSelector(
-                #     selection_feats,
-                #     selection_gbm,
-                #     importance,
-                #     feature_group_size=selection_params["feature_group_size"],
-                #     max_features_cnt_in_result=selection_params["max_features_cnt_in_result"],
-                # )
-                #
-                # pre_selector = ComposedSelector([pre_selector, extra_selector])
+                importance = NpPermutationImportanceEstimator()
+
+                extra_selector = NpIterativeFeatureSelector(
+                    selection_feats,
+                    selection_gbm,
+                    importance,
+                    feature_group_size=selection_params["feature_group_size"],
+                    max_features_cnt_in_result=selection_params["max_features_cnt_in_result"],
+                )
+                
+                pre_selector = ComposedSelector([pre_selector, extra_selector])
 
         return pre_selector
 
@@ -661,7 +664,18 @@ class TabularAutoML(AutoMLPreset):
 
     def _create_validation_iterator(self, train: LAMLDataset, valid: Optional[LAMLDataset], n_folds: Optional[int],
                                     cv_iter: Optional[Callable]):
-        return super()._create_validation_iterator(train, valid, n_folds, cv_iter)
 
+        sds = cast(SparkDataset, train)
 
+        if valid:
+            iterator = HoldoutIterator(train, valid)
+        elif cv_iter:
+            raise NotImplementedError("Not supported now")
+        elif train.folds:
+            iterator = FoldsIterator(sds, n_folds)
+        else:
+            iterator = DummyIterator(train)
 
+        logger.info(f"Using train valid iterator of type: {type(iterator)}")
+
+        return iterator
