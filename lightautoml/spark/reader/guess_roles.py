@@ -1,8 +1,11 @@
-from typing import Optional, Union
+from typing import Optional, Union, List
 
-from lightautoml.reader.guess_roles import calc_ginis
+from pyspark.sql.types import IntegerType
+
+from lightautoml.dataset.roles import CategoryRole
+from lightautoml.reader.guess_roles import calc_ginis, RolesDict
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.transformers.base import SparkTransformer, SequentialTransformer
+from lightautoml.spark.transformers.base import SparkTransformer, SequentialTransformer, ChangeRoles
 
 from pyspark.sql import functions as F
 
@@ -11,12 +14,26 @@ import numpy as np
 
 from lightautoml.spark.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, \
     MultiClassTargetEncoder, TargetEncoder
+from lightautoml.spark.transformers.numeric import QuantileBinning
+
+
+def get_gini_func(target_col: str):
+    def gini_func(iterator):
+        for pdf in iterator:
+            target = pdf[target_col].to_numpy()
+            data = pdf.drop(target_col)
+            cols = data.columns
+            data = data.to_numpy()
+            scores = calc_ginis(data, target, None)
+            yield pd.DataFrame(data=scores,
+                               columns=cols)
+
+    return gini_func
 
 
 def get_score_from_pipe(
     train: SparkDataset,
-    pipe: Optional[SparkTransformer] = None,
-    empty_slice: Optional[np.ndarray] = None,
+    pipe: Optional[SparkTransformer] = None
 ) -> np.ndarray:
     """Get normalized gini index from pipeline.
 
@@ -34,25 +51,126 @@ def get_score_from_pipe(
     if pipe is not None:
         train = pipe.fit_transform(train)
 
-    def gini_func(iterator):
-        for pdf in iterator:
-            target = pdf[train.target_column].to_numpy()
-            data = pdf.drop(train.target_column)
-            cols = data.columns
-            data = data.to_numpy()
-            scores = calc_ginis(data, target, empty_slice)
-            yield pd.DataFrame(data=scores,
-                               columns=cols)
-    schema = train.data.schema
-    cols = train.data.columns
-    mean_scores = (
+    gini_func = get_gini_func(train.target_column)
+
+    sdf = (
         train.data
         .join(train.target, on=SparkDataset.ID_COLUMN)
-        .mapInPandas(gini_func, schema)
-        .select([F.mean(c).alias(c) for c in cols])
+    )
+
+    mean_scores = (
+        sdf
+        .mapInPandas(gini_func, sdf.schema)
+        .select([F.mean(c).alias(c) for c in train.features])
     ).toPandas().to_numpy()
 
     return mean_scores
+
+
+def get_numeric_roles_stat(
+    train: SparkDataset,
+    subsample: Optional[Union[float, int]] = 100000,
+    random_state: int = 42,
+    manual_roles: Optional[RolesDict] = None) -> pd.DataFrame:
+    """Calculate statistics about different encodings performances.
+
+    We need it to calculate rules about advanced roles guessing.
+    Only for numeric data.
+
+    Args:
+        train: Dataset.
+        subsample: size of subsample.
+        random_state: int.
+        manual_roles: Dict.
+        n_jobs: int.
+
+    Returns:
+        DataFrame.
+
+    """
+    if manual_roles is None:
+        manual_roles = {}
+
+    roles_to_identify = []
+    roles = []
+    flg_manual_set = []
+    # check for train dtypes
+    for f in train.features:
+        role = train.roles[f]
+        if role.name == "Numeric":
+            roles_to_identify.append(f)
+            roles.append(role)
+            flg_manual_set.append(f in manual_roles)
+
+    res = pd.DataFrame(
+        columns=[
+            "flg_manual",
+            "unique",
+            "unique_rate",
+            "top_freq_values",
+            "raw_scores",
+            "binned_scores",
+            "encoded_scores",
+            "freq_scores",
+            "nan_rate",
+        ],
+        index=roles_to_identify,
+    )
+    res["flg_manual"] = flg_manual_set
+
+    if len(roles_to_identify) == 0:
+        return res
+
+    train = train.empty()
+    sdf = train.data.select(SparkDataset.ID_COLUMN, *roles_to_identify)
+
+    if subsample is not None:
+        sdf = sdf.sample(fraction=subsample, seed=random_state)
+
+    train.set_data(sdf, roles_to_identify, roles)
+
+    assert train.folds is not None
+
+    # if train.folds is None:
+    #     train.folds = set_sklearn_folds(train.task, train.target, cv=5, random_state=42, group=train.group)
+
+    data, target = train.data, train.target
+
+    # check task specific
+    if train.task.name == "multiclass":
+        encoder = MultiClassTargetEncoder
+    else:
+        encoder = TargetEncoder
+
+    # s3d = data.shape + (-1,)
+    # empty_slice = np.isnan(data)
+
+    # check scores as is
+    res["raw_scores"] = get_score_from_pipe(train)
+
+    # check unique values
+    # unique_values = [np.unique(data[:, x][~np.isnan(data[:, x])], return_counts=True) for x in range(data.shape[1])]
+    # top_freq_values = np.array([max(x[1]) for x in unique_values])
+    # unique_values = np.array([len(x[0]) for x in unique_values])
+    # res["unique"] = unique_values
+    # res["top_freq_values"] = top_freq_values
+    # res["unique_rate"] = res["unique"] / train.shape[0]
+
+    # check binned categorical score
+    trf = SequentialTransformer([QuantileBinning(), encoder()])
+    res["binned_scores"] = get_score_from_pipe(train, pipe=trf)
+
+    # check label encoded scores
+    trf = SequentialTransformer([ChangeRoles(CategoryRole(np.float32)), LabelEncoder(), encoder()])
+    res["encoded_scores"] = get_score_from_pipe(train, pipe=trf)
+
+    # check frequency encoding
+    trf = SequentialTransformer([ChangeRoles(CategoryRole(np.float32)), FreqEncoder()])
+    res["freq_scores"] = get_score_from_pipe(train, pipe=trf)
+
+    # res["nan_rate"] = empty_slice.mean(axis=0)
+
+    return res
 
 
 def get_category_roles_stat(
@@ -139,5 +257,68 @@ def get_category_roles_stat(
     # check ordinal encoding
     trf = OrdinalEncoder()
     res["ord_scores"] = get_score_from_pipe(train, pipe=trf)
+
+    return res
+
+
+def get_null_scores(
+    train: SparkDataset,
+    feats: Optional[List[str]] = None,
+    subsample: Optional[Union[float, int]] = 100000,
+    random_state: int = 42,
+) -> pd.Series:
+    """Get null scores.
+
+    Args:
+        train: Dataset
+        feats: list of features.
+        subsample: size of subsample.
+        random_state: seed of random numbers generator.
+
+    Returns:
+        Series.
+
+    """
+    roles = train.roles
+    train = train.empty()
+    sdf = train.data.select(SparkDataset.ID_COLUMN, *feats)
+
+    if subsample is not None:
+        sdf = sdf.sample(fraction=subsample, seed=random_state)
+
+    train.set_data(sdf, feats, [roles[f] for f in feats])
+
+    train.cache()
+    size = train.data.count()
+    notnan = train.data.select([
+        F.sum(F.isnull(feat).astype(IntegerType())).alias(feat)
+        for feat in train.features
+    ]).first().asDict()
+
+    notnan_cols = [
+        feat for feat, cnt in notnan.items()
+        if cnt != size and cnt != 0
+    ]
+
+    gini_func = get_gini_func(train.target_column)
+    sdf = (
+        train.data
+        .select(SparkDataset.ID_COLUMN, *notnan_cols)
+        .join(train.target, on=SparkDataset.ID_COLUMN)
+    )
+    mean_scores = (
+        sdf
+        .mapInPandas(gini_func, sdf.schema)
+        .select([F.mean(c).alias(c) for c in notnan_cols])
+    ).first().asDict()
+
+    scores = [
+        mean_scores[feat] if feat in mean_scores else 0.0
+        for feat in train.features
+    ]
+
+    train.uncache()
+
+    res = pd.Series(scores, index=train.features, name="max_score")
 
     return res

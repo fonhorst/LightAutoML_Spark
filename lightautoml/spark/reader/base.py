@@ -3,6 +3,8 @@ from copy import deepcopy
 from typing import Optional, Any, List, Dict, Tuple
 
 import numpy as np
+import pandas as pd
+
 from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType, NumericType, DoubleType, FloatType
 
@@ -10,7 +12,10 @@ from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
 from lightautoml.dataset.utils import roles_parser
 from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType, RolesDict
+from lightautoml.reader.guess_roles import calc_encoding_rules, rule_based_roles_guess, calc_category_rules, \
+    rule_based_cat_handler_guess
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
+from lightautoml.spark.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from lightautoml.tasks import Task
 from lightautoml.utils.tmp_utils import log_data
 
@@ -664,75 +669,73 @@ class SparkToSparkReader(Reader):
         return dataset
 
     # TODO: SPARK-LAMA will be implemented later
-    # def advanced_roles_guess(self, dataset: SparkDataset, manual_roles: Optional[RolesDict] = None) -> RolesDict:
-    #     """Advanced roles guess over user's definition and reader's simple guessing.
-    #
-    #     Strategy - compute feature's NormalizedGini
-    #     for different encoding ways and calc stats over results.
-    #     Role is inferred by comparing performance stats with manual rules.
-    #     Rule params are params of roles guess in init.
-    #     Defaults are ok in general case.
-    #
-    #     Args:
-    #         dataset: Input PandasDataset.
-    #         manual_roles: Dict of user defined roles.
-    #
-    #     Returns:
-    #         Dict.
-    #
-    #     """
-    #     if manual_roles is None:
-    #         manual_roles = {}
-    #     top_scores = []
-    #     new_roles_dict = dataset.roles
-    #     advanced_roles_params = deepcopy(self.advanced_roles_params)
-    #     drop_co = advanced_roles_params.pop("drop_score_co")
-    #     # guess roles nor numerics
-    #
-    #     stat = get_numeric_roles_stat(
-    #         dataset,
-    #         manual_roles=manual_roles,
-    #         random_state=self.random_state,
-    #         subsample=self.samples,
-    #         n_jobs=self.n_jobs,
-    #     )
-    #
-    #     if len(stat) > 0:
-    #         # upd stat with rules
-    #
-    #         stat = calc_encoding_rules(stat, **advanced_roles_params)
-    #         new_roles_dict = {**new_roles_dict, **rule_based_roles_guess(stat)}
-    #         top_scores.append(stat["max_score"])
-    #     #
-    #     # # # guess categories handling type
-    #     stat = get_category_roles_stat(
-    #         dataset,
-    #         random_state=self.random_state,
-    #         subsample=self.samples,
-    #         n_jobs=self.n_jobs,
-    #     )
-    #     if len(stat) > 0:
-    #         # upd stat with rules
-    #         # TODO: add sample params
-    #
-    #         stat = calc_category_rules(stat)
-    #         new_roles_dict = {**new_roles_dict, **rule_based_cat_handler_guess(stat)}
-    #         top_scores.append(stat["max_score"])
-    #     #
-    #     # # get top scores of feature
-    #     if len(top_scores) > 0:
-    #         top_scores = pd.concat(top_scores, axis=0)
-    #         # TODO: Add sample params
-    #
-    #         null_scores = get_null_scores(
-    #             dataset,
-    #             list(top_scores.index),
-    #             random_state=self.random_state,
-    #             subsample=self.samples,
-    #         )
-    #         top_scores = pd.concat([null_scores, top_scores], axis=1).max(axis=1)
-    #         rejected = list(top_scores[top_scores < drop_co].index)
-    #         logger.info3("Feats was rejected during automatic roles guess: {0}".format(rejected))
-    #         new_roles_dict = {**new_roles_dict, **{x: DropRole() for x in rejected}}
-    #
-    #     return new_roles_dict
+    def advanced_roles_guess(self, dataset: SparkDataset, manual_roles: Optional[RolesDict] = None) -> RolesDict:
+        """Advanced roles guess over user's definition and reader's simple guessing.
+
+        Strategy - compute feature's NormalizedGini
+        for different encoding ways and calc stats over results.
+        Role is inferred by comparing performance stats with manual rules.
+        Rule params are params of roles guess in init.
+        Defaults are ok in general case.
+
+        Args:
+            dataset: Input PandasDataset.
+            manual_roles: Dict of user defined roles.
+
+        Returns:
+            Dict.
+
+        """
+        if manual_roles is None:
+            manual_roles = {}
+        top_scores = []
+        new_roles_dict = dataset.roles
+        advanced_roles_params = deepcopy(self.advanced_roles_params)
+        drop_co = advanced_roles_params.pop("drop_score_co")
+        # guess roles nor numerics
+
+        stat = get_numeric_roles_stat(
+            dataset,
+            manual_roles=manual_roles,
+            random_state=self.random_state,
+            subsample=self.samples,
+        )
+
+        if len(stat) > 0:
+            # upd stat with rules
+
+            stat = calc_encoding_rules(stat, **advanced_roles_params)
+            new_roles_dict = {**new_roles_dict, **rule_based_roles_guess(stat)}
+            top_scores.append(stat["max_score"])
+        #
+        # # # guess categories handling type
+        stat = get_category_roles_stat(
+            dataset,
+            random_state=self.random_state,
+            subsample=self.samples
+        )
+        if len(stat) > 0:
+            # upd stat with rules
+            # TODO: add sample params
+
+            stat = calc_category_rules(stat)
+            new_roles_dict = {**new_roles_dict, **rule_based_cat_handler_guess(stat)}
+            top_scores.append(stat["max_score"])
+        #
+        # # get top scores of feature
+        if len(top_scores) > 0:
+            top_scores = pd.concat(top_scores, axis=0)
+            # TODO: Add sample params
+
+            null_scores = get_null_scores(
+                dataset,
+                list(top_scores.index),
+                random_state=self.random_state,
+                subsample=self.samples
+            )
+            top_scores = pd.concat([null_scores, top_scores], axis=1).max(axis=1)
+            rejected = list(top_scores[top_scores < drop_co].index)
+            logger.info3("Feats was rejected during automatic roles guess: {0}".format(rejected))
+            new_roles_dict = {**new_roles_dict, **{x: DropRole() for x in rejected}}
+
+        return new_roles_dict
