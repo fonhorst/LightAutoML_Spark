@@ -256,6 +256,17 @@ class ColumnsSelector(LAMAColumnsSelector, SparkTransformer):
     _can_unwind_parents = False
 
 
+class ColumnsSelectorTransformer(Transformer, HasInputCols):
+
+    def __init__(self,
+                 input_cols: Optional[List[str]] = None):
+        super().__init__()
+        self.set(self.inputCols, input_cols)
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        return dataset.select(self.getInputCols())
+
+
 class ChangeRoles(LAMAChangeRoles, SparkTransformer):
     _fname_prefix = "changeroles"
     _can_unwind_parents = False

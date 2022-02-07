@@ -8,10 +8,14 @@ from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import FeaturesPipeline
 from lightautoml.spark.pipelines.features.base import TabularDataFeatures
-from lightautoml.spark.transformers.base import SparkTransformer, SequentialTransformer, UnionTransformer, \
+from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkTransformer, SequentialTransformer, UnionTransformer, \
     ColumnsSelector, ChangeRoles
 from lightautoml.spark.transformers.categorical import OrdinalEncoder
 from lightautoml.spark.transformers.datetime import TimeToNum
+
+from pyspark.ml import Transformer, Pipeline
+from lightautoml.spark.transformers.categorical import OrdinalEncoderEstimator
+from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
 
 
 class LGBSimpleFeatures(FeaturesPipeline):
@@ -89,6 +93,44 @@ class LGBSimpleFeatures(FeaturesPipeline):
 
         seq = SequentialTransformer(pipes) if len(pipes) > 1 else pipes[0]
         return seq
+
+
+class LGBSimpleFeaturesTmp(FeaturesPipeline):
+
+    def create_pipeline(self, train: SparkDataset) -> Pipeline:
+        """Create tree pipeline.
+
+        Args:
+            train: Dataset with train features.
+
+        Returns:
+            Composite datetime, categorical, numeric transformer.
+
+        """
+
+        final_columns = []
+        stages = []
+
+        categories = get_columns_by_role(train, "Category")
+        if len(categories) > 0:
+            ord_estimator = OrdinalEncoderEstimator(input_cols=categories, input_roles=train.roles)
+            stages.append(ord_estimator)
+            final_columns = categories + ord_estimator.getOutputCols()
+
+        datetimes = get_columns_by_role(train, "Datetime")
+        if len(datetimes) > 0:
+            final_columns = final_columns + datetimes
+
+        numerics = get_columns_by_role(train, "Numeric")
+        if len(numerics) > 0:
+            final_columns = final_columns + numerics
+
+        columns_selector = ColumnsSelectorTransformer(input_cols=final_columns)
+        stages.append(columns_selector)
+
+        pipeline = Pipeline(stages=stages)
+
+        return pipeline
 
 
 # we don't inherit from LAMALGBAdvancedPipeline
@@ -250,3 +292,100 @@ class LGBAdvancedPipeline(FeaturesPipeline, TabularDataFeatures):
 
         seq = SequentialTransformer(pipes) if len(pipes) > 1 else pipes[0]
         return seq
+
+class LGBAdvancedPipelineTmp(FeaturesPipeline, TabularDataFeatures):
+
+    def create_pipeline(self, train: SparkDataset) -> Pipeline:
+        """Create tree pipeline.
+
+        Args:
+            train: Dataset with train features.
+
+        Returns:
+            Transformer.
+
+        """
+
+        # transformer_list = []
+        stages = []
+        target_encoder = self.get_target_encoder_new(train)
+
+        output_category_role = (
+            CategoryRole(np.float32, label_encoded=True) if self.output_categories else NumericRole(np.float32)
+        )
+
+        # handle categorical feats
+        # split categories by handling type. This pipe use 3 encodings - freq/label/target/ordinal
+        # 1 - separate freqs. It does not need label encoding
+        stages.append(self.get_freq_encoding_new(train))
+
+        # 2 - check different target encoding parts and split (ohe is the same as auto - no ohe in gbm)
+        auto = get_columns_by_role(train, "Category", encoding_type="auto") + get_columns_by_role(
+            train, "Category", encoding_type="ohe"
+        )
+
+        if self.output_categories:
+            le = (
+                    auto
+                    + get_columns_by_role(train, "Category", encoding_type="oof")
+                    + get_columns_by_role(train, "Category", encoding_type="int")
+            )
+            te = []
+            ordinal = None
+
+        else:
+            le = get_columns_by_role(train, "Category", encoding_type="int")
+            ordinal = get_columns_by_role(train, "Category", ordinal=True)
+
+            if target_encoder is not None:
+                te = get_columns_by_role(train, "Category", encoding_type="oof")
+                # split auto categories by unique values cnt
+                un_values = self.get_uniques_cnt(train, auto)
+                te = te + [x for x in un_values.index if un_values[x] > self.auto_unique_co]
+                ordinal = ordinal + list(set(auto) - set(te))
+
+            else:
+                te = []
+                ordinal = ordinal + auto + get_columns_by_role(train, "Category", encoding_type="oof")
+
+            ordinal = sorted(list(set(ordinal)))
+
+        # TODO: fix the performance and uncomment
+        # get label encoded categories
+        # le_part = self.get_categorical_raw(train, le)
+        # if le_part is not None:
+        #     le_part = SequentialTransformer([le_part, ChangeRoles(output_category_role)])
+        #     transformer_list.append(le_part)
+
+        # get target encoded part
+        # te_part = self.get_categorical_raw(train, te)
+        # if te_part is not None:
+        #     te_part = SequentialTransformer([te_part, target_encoder()])
+        #     transformer_list.append(te_part)
+
+        # get intersection of top categories
+        intersections = self.get_categorical_intersections_new(train)
+        if intersections is not None:
+            # if target_encoder is not None:
+            #     ints_part = SequentialTransformer([intersections, target_encoder()])
+            # else:
+            # ints_part = SequentialTransformer([intersections, ChangeRoles(output_category_role)])
+            change_roles_transformer = ChangeRolesTransformer(input_cols=intersections.getOutputCols(), role=output_category_role)
+            ints_part = [intersections, change_roles_transformer]
+
+            stages.append(ints_part)
+
+        # add numeric pipeline
+        stages.append(self.get_numeric_data_new(train))
+        stages.append(self.get_ordinal_encoding_new(train, ordinal))
+        # add difference with base date
+        stages.append(self.get_datetime_diffs_new(train))
+        # add datetime seasonality
+        stages.append(self.get_datetime_seasons_new(train, NumericRole(np.float32)))
+
+        # final pipeline
+        # union_all = UnionTransformer([x for x in stages if x is not None])
+        # pipeline = Pipeline(stages=[x for x in stages if x is not None] + ColumnsSelectorTransformer(input_cols=))
+        pipeline = None
+
+        return pipeline
