@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 from typing import Optional, Any, List, Dict, Tuple
 
 import numpy as np
@@ -8,7 +9,7 @@ from pyspark.sql.types import IntegerType, NumericType, DoubleType, FloatType
 from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
 from lightautoml.dataset.utils import roles_parser
-from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType
+from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType, RolesDict
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.tasks import Task
 from lightautoml.utils.tmp_utils import log_data
