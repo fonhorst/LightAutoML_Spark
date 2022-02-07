@@ -268,16 +268,17 @@ class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols, MLWritab
 
     _fillna_val = 0
 
+    fittedDicts = Param(Params._dummy(), "fittedDicts",
+                            "dicts from fitted Estimator")
+
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, input_cols: List[str], dicts: Dict):
         super().__init__()
-        self.fitted_encoder = kwargs["fitted_encoder"]
-        self.dicts = self.fitted_encoder.dicts
-        # TODO: change this to inheritance style
-        self._fillna_val = self.fitted_encoder._fillna_val
-        self._fname_prefix = self.fitted_encoder._fname_prefix
+        self.set(self.inputCols, input_cols)
+        self.set(self.fittedDicts, dicts)
+        self.dicts = dicts
 
     def write(self) -> MLWriter:
         "Returns MLWriter instance that can save the Transformer instance."
@@ -292,7 +293,7 @@ class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols, MLWritab
 
         cols_to_select = []
 
-        for i in self.fitted_encoder.getInputCols():
+        for i in self.getInputCols():
             logger.debug(f"[{type(self)} (LE)] transform col {i}")
 
             _ic = F.col(i)
@@ -423,6 +424,15 @@ class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
     outputRoles = Param(Params._dummy(), "outputRoles",
                             "output roles (lama format)")
 
+    def __init__(self, input_cols: Optional[List[str]] = None, input_roles: Optional[Dict[str, ColumnRole]] = None):
+        super().__init__()
+        self._output_role = CategoryRole(np.int32, label_encoded=True)
+        self.dicts = None
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, self.get_output_names(input_cols))
+        self.set(self.inputRoles, input_roles)
+        self.set(self.outputRoles, self.get_output_roles())
+
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
 
@@ -436,16 +446,6 @@ class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
         Gets output roles or its default value.
         """
         return self.getOrDefault(self.outputRoles)
-
-
-    def __init__(self, input_cols: Optional[List[str]] = None, input_roles: Optional[Dict[str, ColumnRole]] = None):
-        super().__init__()
-        self._output_role = CategoryRole(np.int32, label_encoded=True)
-        self.dicts = None
-        self.set(self.inputCols, input_cols)
-        self.set(self.outputCols, self.get_output_names(input_cols))
-        self.set(self.inputRoles, input_roles)
-        self.set(self.outputRoles, self.get_output_roles())
 
     def write(self) -> MLWriter:
         "Returns MLWriter instance that can save the Estimator instance."
@@ -499,8 +499,7 @@ class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
 
         logger.info(f"[{type(self)} (LE)] fit is finished")
 
-        return LabelEncoderTransformer(fitted_encoder=self)
-
+        return LabelEncoderTransformer(input_cols=self.getInputCols(), dicts=self.dicts)
 
 
 class FreqEncoder(LabelEncoder):
@@ -545,6 +544,58 @@ class FreqEncoder(LabelEncoder):
         logger.info(f"[{type(self)} (FE)] fit is finished")
 
         return self
+
+
+class FreqEncoderEstimator(Estimator, HasInputCols):
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "freq"
+
+    _fillna_val = 1
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._output_role = NumericRole(np.float32)
+
+    def _fit(self, dataset: SparkDataFrame) -> "FreqEncoderTransformer":
+
+        logger.info(f"[{type(self)} (FE)] fit is started")
+
+        dataset = cache(dataset)
+
+        df = dataset
+
+        self.dicts = {}
+        for i in dataset.features:
+
+            logger.info(f"[{type(self)} (FE)] fit column {i}")
+
+            vals = df \
+                .groupBy(i).count() \
+                .where(F.col("count") > 1) \
+                .select(i, F.col("count")) \
+                .toPandas()
+
+            logger.debug(f"[{type(self)} (FE)] toPandas is completed")
+
+            self.dicts[i] = vals.set_index(i)["count"]
+
+            logger.debug(f"[{type(self)} (LE)] pandas processing is completed")
+
+        dataset.uncache()
+
+        logger.info(f"[{type(self)} (FE)] fit is finished")
+
+        return FreqEncoderTransformer(input_cols=self.getInputCols(), dicts=self.dicts)
+
+
+class FreqEncoderTransformer(LabelEncoderTransformer):
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "freq"
+    _fillna_val = 1
 
 
 class OrdinalEncoder(LabelEncoder):
@@ -655,11 +706,9 @@ class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable
         """
         return self.getOrDefault(self.outputRoles)
 
-    def _fit(self, dataset: SparkDataFrame) -> "LabelEncoderTransformer":
+    def _fit(self, dataset: SparkDataFrame) -> "Transformer":
 
         logger.info(f"[{type(self)} (ORD)] fit is started")
-
-
 
         # roles = dataset.roles
         roles = self.getOrDefault(self.inputRoles)
@@ -704,8 +753,24 @@ class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable
 
         logger.info(f"[{type(self)} (ORD)] fit is finished")
 
-        # TODO: think over _fillna_val and _fname_prefix in LabelEncoderTransformer
-        return LabelEncoderTransformer(fitted_encoder=self)
+        return OrdinalEncoderTransformer(input_cols=self.getInputCols(), dicts=self.dicts)
+
+
+class OrdinalEncoderTransformer(LabelEncoderTransformer):
+
+    _spark_numeric_types = (
+        SparkTypes.ShortType,
+        SparkTypes.IntegerType,
+        SparkTypes.LongType,
+        SparkTypes.FloatType,
+        SparkTypes.DoubleType,
+        SparkTypes.DecimalType
+    )
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "ord"
+    _fillna_val = np.nan
 
 
 class CatIntersectstions(LabelEncoder):

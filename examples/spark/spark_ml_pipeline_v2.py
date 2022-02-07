@@ -64,13 +64,13 @@ def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordin
                                           folds_column=sdataset.folds_column,
                                           target_column=sdataset.target_column)
     ord_estimator = OrdinalEncoderEstimator(input_cols=ordinal_feats, input_roles=te_estimator.getOutputRoles())
-    num_estimator = ChangeRolesTransformer(roles=NumericRole(np.float32), 
+    num_transformer = ChangeRolesTransformer(roles=NumericRole(np.float32), 
                                             input_cols=numeric_feats, 
                                             input_roles=ord_estimator.getOutputRoles())
 
     cat_processing = Pipeline(stages=[le_estimator, te_estimator])
     ordinal_cat_processing = Pipeline(stages=[ord_estimator])
-    num_processing = Pipeline(stages=[num_estimator])
+    num_processing = Pipeline(stages=[num_transformer])
 
 
     ut = Pipeline(stages=[cat_processing, ordinal_cat_processing, num_processing])
@@ -114,7 +114,7 @@ if __name__ == "__main__":
             sdataset_tmp.features,
             new_roles
         )
-        sdataset.to_pandas().data.to_csv("/tmp/sdataset_data.csv")
+        # sdataset.to_pandas().data.to_csv("/tmp/sdataset_data.csv")
 
         # ChangeRoles(output_category_role),
         # feats_to_select_cats = get_columns_by_role(sdataset, "Category", encoding_type="oof")

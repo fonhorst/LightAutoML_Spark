@@ -49,7 +49,7 @@ if __name__ == "__main__":
             sdataset_tmp.features,
             new_roles
         )
-        sdataset.to_pandas().data.to_csv("/tmp/sdataset_data.csv")
+        # sdataset.to_pandas().data.to_csv("/tmp/sdataset_data.csv")
 
         # Spark ML pipeline
         simple_pipline_builder = LGBSimpleFeaturesTmp()
