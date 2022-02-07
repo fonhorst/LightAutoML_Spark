@@ -16,6 +16,7 @@ from pandas import Series
 
 from ..pipelines.selection.base import ImportanceEstimator
 from ..utils.logging import LoggerStream
+from ..utils.tmp_utils import log_data
 from ..validation.base import TrainValidIterator
 from .base import TabularDataset
 from .base import TabularMLAlgo
