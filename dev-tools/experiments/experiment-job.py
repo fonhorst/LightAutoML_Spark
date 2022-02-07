@@ -27,12 +27,22 @@ def generate_experiments(config_data: Dict) -> List[Dict[str, Any]]:
     repeat_rate = config_data["spark_quality_repeat_rate"]
     # Make all possible experiments
     keys_exps, values_exps = zip(*config_data["experiment_params"].items())
-    experiments = [dict(zip(keys_exps, v)) for v in itertools.product(*values_exps)]
-    for exp in experiments:
-        spark_config = exp.get("spark_config", {})
-        exp["spark_config"] = copy(config_data["default_spark_config"])
-        exp["spark_config"].update(spark_config)
-        exp["calculation_script"] = config_data["calculation_script"]
+    param_sets = [dict(zip(keys_exps, v)) for v in itertools.product(*values_exps)]
+
+    for params in param_sets:
+
+        spark_config = copy(config_data["default_spark_config"])
+        spark_config_params = params.get("spark_config", {})
+        spark_config.update(spark_config_params)
+
+        params["spark_config"] = spark_config
+
+        exp = {
+            "name": None,
+            "params": params,
+            "calculation_script": config_data["calculation_script"]
+        }
+        yield exp
 
     # Process state file if neccessary
     use_state_file = config_data["use_state_file"]
