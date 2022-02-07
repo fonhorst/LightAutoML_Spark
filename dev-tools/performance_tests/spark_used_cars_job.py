@@ -136,10 +136,7 @@ if __name__ == "__main__":
 
     # Read values from config file
     with open("/scripts/config.yaml", "r") as stream:
-        try:
-            config_data = yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            print(exc)
+        config_data = yaml.safe_load(stream)
 
     # Delete non-spark parameters
     app_name = config_data["name"]
@@ -152,7 +149,7 @@ if __name__ == "__main__":
     # Launch jobs with experiments and write results into file
     with configure_spark_session(do_configuring, app_name, config_data) as spark:
         res = calculate_automl(spark, path=f"/spark_data/{dataset_path}", use_algos=["lgb", "linear_l2"])
-        res_dict = {}
+        res_dict = dict()
         res_dict[app_name] = res
 
         # Write in experiment log history file

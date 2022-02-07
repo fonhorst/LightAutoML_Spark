@@ -4,7 +4,7 @@ import time
 import json
 import re
 from datetime import datetime
-from copy import deepcopy
+from copy import deepcopy, copy
 from typing import Iterable, List, Set, Dict, Any
 
 import yaml
@@ -28,6 +28,11 @@ def generate_experiments(config_data: Dict) -> List[Dict[str, Any]]:
     # Make all possible experiments
     keys_exps, values_exps = zip(*config_data["experiment_params"].items())
     experiments = [dict(zip(keys_exps, v)) for v in itertools.product(*values_exps)]
+    for exp in experiments:
+        spark_config = exp.get("spark_config", {})
+        exp["spark_config"] = copy(config_data["default_spark_config"])
+        exp["spark_config"].update(spark_config)
+        exp["calculation_script"] = config_data["calculation_script"]
 
     # Process state file if neccessary
     use_state_file = config_data["use_state_file"]
@@ -73,13 +78,17 @@ def generate_experiments(config_data: Dict) -> List[Dict[str, Any]]:
 def run_experiments(experiments_configs: List[Dict[str, Any]]):
     for experiment in experiments_configs:
         name = experiment["name"]
+        launch_script_name = experiment["calculation_script"]
         with open(f"/tmp/{name}-config.yaml", "w+") as outfile:
-            yaml.dump(experiment, outfile, default_flow_style=False)
+            yaml.dump(experiment["experiment_params"], outfile, default_flow_style=False)
 
         with open(f"{results_path}/Results_{name}.log", "w+") as logfile:
             logfile.write(f"Launch datetime: {datetime.now()}\n")
             # p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)], stdout=logfile)
-            p = subprocess.Popen(["./dev-tools/bin/test-job-run.sh", str(name)], stdout=logfile)
+            p = subprocess.Popen(
+                ["./dev-tools/bin/test-job-run.sh", str(name), str(launch_script_name)],
+                stdout=logfile
+            )
 
         print(f"Starting exp with name {name}")
         yield p

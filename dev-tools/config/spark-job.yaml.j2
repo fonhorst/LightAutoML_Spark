@@ -27,7 +27,7 @@ spec:
       - name: spark
         image: node2.bdcl:5000/spark-lama:3.9-3.2.0
         command: [ "python" ]
-        args: ["/scripts/exec.py", "/scripts/config.yaml"]
+        args: ["/scripts/{{launchscript}}", "/scripts/config.yaml"]
         imagePullPolicy: Always
         volumeMounts:
           - mountPath: /spark_data

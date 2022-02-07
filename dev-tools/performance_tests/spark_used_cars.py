@@ -4,9 +4,11 @@
 Simple example for binary classification on tabular data.
 """
 import logging
+import logging.config
 from typing import Dict, Any, Optional
 
 import sklearn
+import yaml
 from pyspark.ml.evaluation import RegressionEvaluator, BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
@@ -14,7 +16,7 @@ from pyspark.sql.types import DoubleType
 from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.tasks.base import Task as SparkTask
-from lightautoml.spark.utils import log_exec_time, spark_session
+from lightautoml.spark.utils import log_exec_time, spark_session, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.utils.tmp_utils import log_data
 
 logger = logging.getLogger(__name__)
@@ -117,3 +119,17 @@ def calculate_automl(path: str,
         logger.info("Predicting is finished")
 
         return {"metric_value": metric_value, "test_metric_value": test_metric_value}
+
+
+if __name__ == "__main__":
+    logging.config.dictConfig(logging_config(level=logging.INFO, log_filename="/tmp/lama.log"))
+    logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
+    logger = logging.getLogger(__name__)
+
+    # Read values from config file
+    with open("/scripts/config.yaml", "r") as stream:
+        config_data = yaml.safe_load(stream)
+
+    calculate_automl(**config_data)
+
+
