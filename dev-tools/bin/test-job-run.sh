@@ -24,3 +24,13 @@ until \
 
 echo "Getting logs..."
 kubectl -n ${kube_ns} logs job/${job_name} &> "${out_file_path}"
+
+res=$(kubectl -n ${kube_ns} get job/${job_name} -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' | grep True)
+
+if [[ "$res" == "True" ]]; then
+    echo "Job failed"
+    exit 1
+else
+    echo "Job succeseded"
+    exit 0
+fi

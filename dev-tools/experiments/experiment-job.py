@@ -16,8 +16,8 @@ from tqdm import tqdm
 
 from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 
-# JOB_SUBMITTER_EXE = "./dev-tools/bin/test-job-run.sh"
-JOB_SUBMITTER_EXE = "./dev-tools/bin/test-sleep-job.sh"
+JOB_SUBMITTER_EXE = "./dev-tools/bin/test-job-run.sh"
+# JOB_SUBMITTER_EXE = "./dev-tools/bin/test-sleep-job.sh"
 MARKER = "EXP-RESULT:"
 
 
@@ -273,8 +273,13 @@ def register_results(exp_procs: Iterator[ExpInstanceProc], total: int):
 
 def print_all_results_file():
     print("All results file content:\n\n")
+    if not os.path.exists(all_results_path):
+        logger.error("No file with results. Nothing to print.")
+        return
+
     with open(all_results_path, "r") as f:
         content = f.read()
+
     print(content)
 
 
