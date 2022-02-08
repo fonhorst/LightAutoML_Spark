@@ -15,10 +15,10 @@ from tqdm import tqdm
 
 from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 
-patterns = [r"Test results:\[.*\]"]
 statefile_path = "./dev-tools/experiments/results"
 results_path = "./dev-tools/experiments/results"
 cfg_path = "./dev-tools/config/experiments/test-experiment-config.yaml"
+all_results_path = "/tmp/results.txt"
 
 
 ExpInstanceConfig = Dict[str, Any]
@@ -186,6 +186,35 @@ def limit_procs(it: Iterator[ExpInstanceProc],
             time.sleep(check_period_secs)
 
 
+def process_outfile(exp_instance: ExpInstanceConfig, outfile: str, result_file: str) -> None:
+    marker = "EXP-RESULT:"
+    with open(outfile, "r") as f:
+        res_lines = [line for line in f.readlines() if marker in line]
+
+    if len(res_lines) == 0:
+        logger.error(f"No result line found for exp with instance id {exp_instance['instance_id']} in {outfile}")
+        return
+
+    if len(res_lines) > 1:
+        logger.warning(f"More than one results ({len(res_lines)}) are found "
+                       f"for exp with instance id {exp_instance['instance_id']} in {outfile}")
+
+    result_line = res_lines[-1]
+    result_str = result_line[result_line.index(marker) + len(marker):].strip('\n \t')
+    if len(result_str) == 0:
+        logger.error(f"Found result line for exp with instance id {exp_instance['instance_id']} in {outfile} is empty")
+
+    record = {
+        "exp_instance": exp_instance,
+        "outfile": outfile,
+        "result": result_str
+    }
+
+    with open(result_file, "a") as f:
+        record = json.dumps(record)
+        f.write(f"{record}{os.linesep}")
+
+
 def register_results(exp_procs: Iterator[ExpInstanceProc], total: int):
     state_file_path = f"{statefile_path}/state_file.json"
 
@@ -194,11 +223,21 @@ def register_results(exp_procs: Iterator[ExpInstanceProc], total: int):
         # Mark exp_instance as completed in the state file
         instance_id = exp_proc.exp_instance['instance_id']
         logger.info(f"Registering finished process with instance id: {instance_id}")
+
+        process_outfile(exp_proc.exp_instance, exp_proc.outfile, all_results_path)
+
         with open(state_file_path, "a") as f:
             record = copy(exp_proc.exp_instance)
             record["outfile"] = exp_proc.outfile
             record = json.dumps(record)
             f.write(f"{record}{os.linesep}")
+
+
+def print_all_results_file():
+    print("All results file content:\n\n")
+    with open(all_results_path, "r") as f:
+        content = f.read()
+    print(content)
 
 
 def main():
@@ -208,6 +247,7 @@ def main():
     exp_cfgs = generate_experiments(cfg)
     exp_procs = limit_procs(run_experiments(exp_cfgs), max_parallel_ops=2)
     register_results(exp_procs, total=len(exp_cfgs))
+    print_all_results_file()
 
     logger.info("Finished processes")
 
