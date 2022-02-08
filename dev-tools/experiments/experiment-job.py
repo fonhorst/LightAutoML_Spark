@@ -114,7 +114,7 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
                 "exp_name": name,
                 "instance_id": instance_id,
                 "params": params,
-                "calculation_script": config_data["calculation_script"]
+                "calculation_script": config_data["calculation_scripts"][library]
             }
 
             exp_instances.append(exp_instance)

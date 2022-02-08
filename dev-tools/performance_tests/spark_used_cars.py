@@ -30,10 +30,14 @@ def calculate_automl(path: str,
                      cv: int = 5,
                      use_algos = ("lgb", "linear_l2"),
                      roles: Optional[Dict] = None,
-                     dtype: Optional[None] = None) -> Dict[str, Any]:
+                     dtype: Optional[None] = None,
+                     spark_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-    with spark_session(master="local[4]") as spark:
+    if not spark_config:
+        spark_config = {"master": "local[4]"}
+
+    with spark_session(**spark_config) as spark:
         with log_exec_time("spark-lama training"):
             task = SparkTask(task_type)
             data = spark.read.csv(path, header=True, escape="\"").repartition(4)

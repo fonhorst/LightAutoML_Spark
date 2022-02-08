@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def spark_session(session_args: Optional[dict] = None, master: str = "local[1]", wait_secs_after_the_end: Optional[int] = None) -> SparkSession:
+def spark_session(session_args: Optional[dict] = None, master: str = "local[]", wait_secs_after_the_end: Optional[int] = None) -> SparkSession:
     """
     Args:
         master: address of the master
@@ -32,24 +32,27 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[1]",
     """
 
     if not session_args:
-        session_args = dict()
-
-    spark_sess_builder = (
-        SparkSession
-        .builder
-        .appName(session_args.get("appName","SPARK-LAMA-app"))
-        .master(master)
-        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
-        .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-        .config("spark.cores.max", "16")
-        .config("spark.memory.fraction", "0.6")
-        .config("spark.memory.storageFraction", "0.5")
-        .config("spark.sql.autoBroadcastJoinThreshold", "100MB")
-        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-    )
-
-    for arg, value in session_args.items():
-        spark_sess_builder = spark_sess_builder.config(arg, value)
+        spark_sess_builder = (
+            SparkSession
+            .builder
+            .appName(session_args.get("appName","SPARK-LAMA-app"))
+            .master(master)
+            .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
+            .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+            .config("spark.cores.max", "16")
+            .config("spark.memory.fraction", "0.6")
+            .config("spark.memory.storageFraction", "0.5")
+            .config("spark.sql.autoBroadcastJoinThreshold", "100MB")
+            .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+        )
+    else:
+        spark_sess_builder = (
+            SparkSession
+            .builder
+            .appName(session_args.get("appName", "SPARK-LAMA-app"))
+        )
+        for arg, value in session_args.items():
+            spark_sess_builder = spark_sess_builder.config(arg, value)
 
     spark_sess = spark_sess_builder.getOrCreate()
 

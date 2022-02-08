@@ -1,2 +1,0 @@
-exper-tiny-used-cars-data-csv-4-16g-n1:{'fit_predict_time': 115.589062, 'predict_time': 19.987819, 'metric_value': 961597.8767943359, 'test_metric_value': 68959274.66959807}
-exper-tiny-used-cars-data-csv-4-16g-n2:{'fit_predict_time': 115.589062, 'predict_time': 19.987819, 'metric_value': 961597.8767943359, 'test_metric_value': 68959274.66959807}

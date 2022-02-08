@@ -4,14 +4,16 @@
 Simple example for binary classification on tabular data.
 """
 import logging
+import logging.config
 from typing import Dict, Any, Optional
 
 import pandas as pd
 import sklearn
+import yaml
 from sklearn.model_selection import train_test_split
 
 from lightautoml.automl.presets.tabular_presets import TabularAutoML
-from lightautoml.spark.utils import log_exec_time
+from lightautoml.spark.utils import log_exec_time, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.tasks import Task
 from lightautoml.utils.tmp_utils import log_data
 
@@ -70,3 +72,15 @@ def calculate_automl(path: str,
     logger.info("Predicting is finished")
 
     return {"metric_value": metric_value, "test_metric_value": test_metric_value}
+
+
+if __name__ == "__main__":
+    logging.config.dictConfig(logging_config(level=logging.INFO, log_filename="/tmp/lama.log"))
+    logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
+    logger = logging.getLogger(__name__)
+
+    # Read values from config file
+    with open("/scripts/config.yaml", "r") as stream:
+        config_data = yaml.safe_load(stream)
+
+    calculate_automl(**config_data)

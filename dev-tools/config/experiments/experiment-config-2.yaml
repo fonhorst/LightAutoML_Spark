@@ -1,6 +1,8 @@
 ---
 experiment_type: spark_quality
-calculation_script: spark_used_cars.py
+calculation_scripts:
+  spark: spark_used_cars.py
+  lama: lama_used_cars.py
 spark_quality_repeat_rate: 2
 state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip experiments in state file, ignore - don`t skip experiments, delete - delete experiments in state file
 
@@ -22,7 +24,7 @@ experiments:
 
 # Static parameters for Spark
 default_spark_config: {
-  master: k8s://https://node2.bdcl:6443,
+  spark.master: k8s://https://node2.bdcl:6443,
   #deploy-mode: cluster,
   spark.kubernetes.container.image: node2.bdcl:5000/spark-lama-k8s:3.9-3.2.0,
   spark.kubernetes.namespace: spark-lama-exps,
