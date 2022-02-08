@@ -4,6 +4,7 @@ set -ex
 
 job_name=$1
 launch_script_name=$2
+out_file_path=$3
 cfg_file="/tmp/${job_name}-config.yaml"
 kube_ns="spark-lama-exps"
 
@@ -22,4 +23,4 @@ until \
   do sleep 1 ; done
 
 echo "Getting logs..."
-kubectl -n ${kube_ns} logs job/${job_name}
+kubectl -n ${kube_ns} logs job/${job_name} &> "${out_file_path}"

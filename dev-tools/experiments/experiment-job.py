@@ -1,15 +1,19 @@
 import itertools
+import logging
 import os
 import subprocess
 import time
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from copy import deepcopy, copy
 from typing import Iterable, List, Set, Dict, Any, Iterator, Tuple, Optional
 
 import yaml
 from tqdm import tqdm
+
+from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 
 patterns = [r"Test results:\[.*\]"]
 statefile_path = "./dev-tools/experiments/results"
@@ -18,6 +22,17 @@ cfg_path = "./dev-tools/config/experiments/test-experiment-config.yaml"
 
 
 ExpInstanceConfig = Dict[str, Any]
+
+
+logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ExpInstanceProc:
+    exp_instance: ExpInstanceConfig
+    p: subprocess.Popen
+    outfile: str
 
 
 def read_config(cfg_path: str) -> Dict:
@@ -42,10 +57,15 @@ def process_state_file(config_data: Dict[str, Any]) -> Set[str]:
     else:
         raise ValueError(f"Unsupported mode for state file: {state_file_mode}")
 
+    logger.info(f"Found {len(exp_instances_ids)} existing experiments "
+                f"in state file {state_file_path}."
+                f"Exp instance ids: \n{exp_instances_ids}")
+
     return exp_instances_ids
 
 
 def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
+    logger.info(f"Starting to generate experiments configs. Config file: \n\n{config_data}")
     experiments = config_data["experiments"]
 
     existing_exp_instances_ids = process_state_file(config_data)
@@ -104,38 +124,40 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
 
 # Run subprocesses with Spark jobs
 def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
-        -> Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]]:
+        -> Iterator[ExpInstanceProc]:
+    logger.info(f"Starting to run experiments. Experiments count: {len(experiments_configs)}")
     for exp_instance in experiments_configs:
         instance_id = exp_instance["instance_id"]
         launch_script_name = exp_instance["calculation_script"]
         with open(f"/tmp/{instance_id}-config.yaml", "w+") as outfile:
             yaml.dump(exp_instance["experiment_params"], outfile, default_flow_style=False)
 
-        with open(f"{results_path}/Results_{instance_id}.log", "w+") as logfile:
-            logfile.write(f"Launch datetime: {datetime.now()}\n")
-            # p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)], stdout=logfile)
-            p = subprocess.Popen(
-                ["./dev-tools/bin/test-job-run.sh", instance_id, str(launch_script_name)],
-                stdout=logfile
-            )
+        outfile = os.path.abspath(f"{results_path}/Results_{instance_id}.log")
+
+        # p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)], stdout=logfile)
+        p = subprocess.Popen(
+            ["./dev-tools/bin/test-job-run.sh", instance_id, str(launch_script_name), outfile],
+        )
+
+        logger.info(f"Started process with instance id {instance_id} and args {p.args}")
 
         print(f"Starting exp with name {instance_id}")
-        yield exp_instance, p
+        yield ExpInstanceProc(exp_instance=exp_instance, p=p, outfile=outfile)
 
 
-def limit_procs(it: Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]],
+def limit_procs(it: Iterator[ExpInstanceProc],
                 max_parallel_ops: int = 1,
                 check_period_secs: float = 1.0) \
-        -> Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]]:
+        -> Iterator[ExpInstanceProc]:
     assert max_parallel_ops > 0
 
-    exp_procs: Set[Tuple[ExpInstanceConfig, subprocess.Popen]] = set()
+    exp_procs: Set[ExpInstanceProc] = set()
 
-    def try_to_remove_finished() -> Optional[Tuple[ExpInstanceConfig, subprocess.Popen]]:
+    def try_to_remove_finished() -> Optional[ExpInstanceProc]:
         proc_to_remove = None
-        for exp_instance, p in exp_procs:
-            if p.poll() is not None:
-                proc_to_remove = (exp_instance, p)
+        for exp_proc in exp_procs:
+            if exp_proc.p.poll() is not None:
+                proc_to_remove = exp_proc
                 break
 
         if proc_to_remove is not None:
@@ -164,42 +186,30 @@ def limit_procs(it: Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]],
             time.sleep(check_period_secs)
 
 
-def wait_for_all(exp_procs: Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]], total: int):
+def register_results(exp_procs: Iterator[ExpInstanceProc], total: int):
     state_file_path = f"{statefile_path}/state_file.json"
 
-    for exp_instance, p in tqdm(exp_procs, desc="Experiment", total=total):
+    exp_proc: ExpInstanceProc
+    for exp_proc in tqdm(exp_procs, desc="Experiment", total=total):
         # Mark exp_instance as completed in the state file
+        instance_id = exp_proc.exp_instance['instance_id']
+        logger.info(f"Registering finished process with instance id: {instance_id}")
         with open(state_file_path, "a") as f:
-            record = json.dumps(exp_instance)
+            record = copy(exp_proc.exp_instance)
+            record["outfile"] = exp_proc.outfile
+            record = json.dumps(record)
             f.write(f"{record}{os.linesep}")
 
 
-def gather_results(procs: Iterable[subprocess.Popen]):
-    with open(f"{results_path}/Experiments_results.txt", "a+") as resultfile:
-        for p in procs:
-            with open(f"{results_path}/Results_{p.args[1]}.log", "r") as logfile:
-                stdout = logfile.read()
-
-                for pattern in patterns:
-                    metrics = re.search(pattern, stdout)
-                    if metrics:
-                        metrics = metrics.group()
-                        metrics = metrics.split("[", 1)[1].split("]")[0]
-                        break
-
-                print(f"Obtained results for experiment {p.args[1]}: {metrics}")
-                resultfile.write(f"{p.args[1]}:{metrics}\n")
-                print(f"Results for experiment {p.args[1]} saved in file\n")
-
-
 def main():
+    logger.info("Starting experiments")
+
     cfg = read_config(cfg_path)
     exp_cfgs = generate_experiments(cfg)
     exp_procs = limit_procs(run_experiments(exp_cfgs), max_parallel_ops=2)
-    wait_for_all(exp_procs, total=len(exp_cfgs))
-    gather_results(exp_procs)
+    register_results(exp_procs, total=len(exp_cfgs))
 
-    print("Finished processes")
+    logger.info("Finished processes")
 
 
 if __name__ == "__main__":
