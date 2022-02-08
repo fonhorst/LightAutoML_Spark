@@ -683,8 +683,11 @@ class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable
     outputRoles = Param(Params._dummy(), "outputRoles",
                             "output roles (lama format)")
 
-    def __init__(self, input_cols: Optional[List[str]] = None,
-                 input_roles: Optional[Dict[str, ColumnRole]] = None):
+    def __init__(self,
+                 input_cols: Optional[List[str]] = None,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 subs: Optional[float] = None,
+                 random_state: Optional[int] = 42):
         super().__init__()
         self._output_role = NumericRole(np.float32)
         self.dicts = None
@@ -847,21 +850,51 @@ class CatIntersectstions(LabelEncoder):
         return super().transform(inter_dataset)
 
 
-class CatIntersectstionsEstimator(Estimator):
+class CatIntersectionsEstimator(Estimator, HasOutputCols):
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
     _fname_prefix = "inter"
 
+    outputRoles = Param(Params._dummy(), "outputRoles",
+                            "output roles (lama format)")
+
     def __init__(self,
+                 input_cols: Optional[List[str]] = None,
                  input_roles: Optional[Dict[str, ColumnRole]] = None,
                  intersections: Optional[Sequence[Sequence[str]]] = None,
                  max_depth: int = 2):
 
         super().__init__()
+        self._output_role = CategoryRole(np.int32, label_encoded=True)
+        self.input_cols = input_cols,
         self.input_roles = input_roles
         self.intersections = intersections
         self.max_depth = max_depth
+
+        if self.intersections is None:
+            self.intersections = []
+            for i in range(2, min(self.max_depth, len(self.input_cols)) + 1):
+                self.intersections.extend(list(combinations(self.input_cols, i)))
+
+        self.output_cols = self.get_output_names()
+        self.set(self.outputCols, self.get_output_names())
+        self.set(self.outputRoles, self.get_output_roles())
+        
+
+    def get_output_names(self) -> List[str]:
+        return [f"{self._fname_prefix}__({'__'.join(comb)})" for comb in self.intersections]
+
+    def get_output_roles(self):
+        new_roles = {} # TODO: need cumulative or partial?  deepcopy(self.getOrDefault(self.inputRoles))
+        new_roles.update({feat: self._output_role for feat in self.getOutputCols()})
+        return new_roles
+
+    def getOutputRoles(self):
+        """
+        Gets output roles or its default value.
+        """
+        return self.getOrDefault(self.outputRoles)
 
     @staticmethod
     def _make_category(cols: Sequence[str]) -> Column:
@@ -905,11 +938,6 @@ class CatIntersectstionsEstimator(Estimator):
     def _fit(self, df: SparkDataFrame) -> Transformer:
 
         logger.info(f"[{type(self)} (CI)] fit is started")
-
-        if self.intersections is None:
-            self.intersections = []
-            for i in range(2, min(self.max_depth, len(self.input_cols)) + 1):
-                self.intersections.extend(list(combinations(self.input_cols, i)))
 
         df, roles = self._build_df(df)
 
@@ -974,6 +1002,8 @@ class CatIntersectionsTransformer(Transformer):
     _fit_checks = (categorical_check,)
     _transform_checks = ()
     _fname_prefix = "inter"
+
+    _fillna_val = 0
 
     def __init__(self,
                  dicts: Dict,

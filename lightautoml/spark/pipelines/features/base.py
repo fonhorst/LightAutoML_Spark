@@ -16,7 +16,7 @@ from pyspark.sql import functions as F
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
-from lightautoml.spark.transformers.categorical import CatIntersectstionsEstimator, FreqEncoder, FreqEncoderEstimator, LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
+from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator, FreqEncoder, FreqEncoderEstimator, LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
     TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
 from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, ChangeRoles, \
@@ -756,7 +756,8 @@ class TabularDataFeatures:
         #     ),
         # ]
 
-        cat_processing = CatIntersectstionsEstimator(input_cols=feats_to_select,
+        cat_processing = CatIntersectionsEstimator(input_cols=feats_to_select,
+                                                     input_roles=train.roles,
                                                      max_depth=self.max_intersection_depth)
 
         return cat_processing

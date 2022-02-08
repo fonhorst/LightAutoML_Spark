@@ -413,6 +413,6 @@ class LGBAdvancedPipelineTmp(FeaturesPipeline, TabularDataFeatures):
         # final pipeline
         # union_all = UnionTransformer([x for x in stages if x is not None])
         # pipeline = Pipeline(stages=[x for x in stages if x is not None] + ColumnsSelectorTransformer(input_cols=))
-        pipeline = None
+        pipeline = Pipeline(stages=[x for x in stages if x is not None])
 
         return pipeline
