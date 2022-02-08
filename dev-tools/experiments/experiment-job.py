@@ -1,11 +1,12 @@
 import itertools
+import os
 import subprocess
 import time
 import json
 import re
 from datetime import datetime
 from copy import deepcopy, copy
-from typing import Iterable, List, Set, Dict, Any
+from typing import Iterable, List, Set, Dict, Any, Iterator, Tuple, Optional
 
 import yaml
 from tqdm import tqdm
@@ -16,6 +17,9 @@ results_path = "./dev-tools/experiments/results"
 cfg_path = "./dev-tools/config/experiments/test-experiment-config.yaml"
 
 
+ExpInstanceConfig = Dict[str, Any]
+
+
 def read_config(cfg_path: str) -> Dict:
     with open(cfg_path, "r") as stream:
         config_data = yaml.safe_load(stream)
@@ -23,124 +27,151 @@ def read_config(cfg_path: str) -> Dict:
     return config_data
 
 
-def generate_experiments(config_data: Dict) -> List[Dict[str, Any]]:
-    repeat_rate = config_data["spark_quality_repeat_rate"]
-    # Make all possible experiments
-    keys_exps, values_exps = zip(*config_data["experiment_params"].items())
-    param_sets = [dict(zip(keys_exps, v)) for v in itertools.product(*values_exps)]
+def process_state_file(config_data: Dict[str, Any]) -> Set[str]:
+    state_file_mode = config_data["state_file"]
+    state_file_path = f"{statefile_path}/state_file.json"
 
-    for params in param_sets:
+    if state_file_mode == "use":
+        with open(state_file_path, "r") as f:
+            exp_instances = [json.loads(line) for line in  f.readlines()]
+        exp_instances_ids = {exp_inst["instance_id"] for exp_inst in exp_instances}
+    elif state_file_mode == "delete":
+        if os.path.exists(state_file_path):
+            os.remove(state_file_path)
+        exp_instances_ids = set()
+    else:
+        raise ValueError(f"Unsupported mode for state file: {state_file_mode}")
 
-        spark_config = copy(config_data["default_spark_config"])
-        spark_config_params = params.get("spark_config", {})
-        spark_config.update(spark_config_params)
+    return exp_instances_ids
 
-        params["spark_config"] = spark_config
 
-        exp = {
-            "name": None,
-            "params": params,
-            "calculation_script": config_data["calculation_script"]
-        }
-        yield exp
+def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
+    experiments = config_data["experiments"]
 
-    # Process state file if neccessary
-    use_state_file = config_data["use_state_file"]
-    exps_to_skip = []
+    existing_exp_instances_ids = process_state_file(config_data)
 
-    if use_state_file == "use":
-        with open(f"{statefile_path}/state_file.json", "r") as file:
-            try:
-                json_file = json.load(file)
-            except json.decoder.JSONDecodeError:
-                json_file = []
-                pass
+    exp_instances = []
+    for experiment in experiments:
+        name = experiment["name"]
+        repeat_rate = experiment["repeat_rate"]
+        libraries = experiment["library"]
 
-            for experiment in json_file:
-                exps_to_skip.append(experiment["experiment"])
+        # Make all possible experiment AutoML params
+        keys_exps, values_exps = zip(*experiment["params"].items())
+        param_sets = [dict(zip(keys_exps, v)) for v in itertools.product(*values_exps)]
 
-    elif use_state_file == "delete":
-        open(f"{statefile_path}/state_file.json", "w+").close()
+        if "spark" in libraries:
+            assert "spark_config" in experiment, f"No spark_config set (even empty one) for experiment {name}"
+            keys_exps, values_exps = zip(*experiment['params']['spark_config'].items())
+            spark_param_sets = [dict(zip(keys_exps, v)) for v in itertools.product(*values_exps)]
 
-    # Retrieve static Spark paramaters and concatenate them with experiment paramaters
-    experiments_configs = []
-    for item in experiments:
-        experiment = dict(item)
-        experiment["use_state_file"] = config_data["use_state_file"]
-        experiment.update(config_data["spark_static_config"])
+            spark_configs = []
+            for spark_params in spark_param_sets:
+                spark_config = copy(config_data["default_spark_config"])
+                spark_config.update(spark_params)
+                spark_config['spark.cores.max'] = \
+                    int(spark_config['spark.executor.cores']) * int(spark_config['spark.executor.instances'])
+                spark_configs.append(spark_config)
 
-        for i in range(repeat_rate):
-            name = (
-                f"exper-{experiment['dataset_path'].translate(str.maketrans({'/': '-', '_': '-', '.': '-'}))}"
-                f"-{experiment['spark.executor.instances']}-{experiment['spark.executor.memory']}-n{i + 1}"
-            )
-            if name in exps_to_skip:
+        else:
+            spark_configs = []
+
+        for library, params, spark_config in itertools.product(libraries, param_sets, spark_configs):
+            params = copy(params)
+
+            use_algos = '__'.join(['_'.join(layer) for layer in params['use_algos']])
+
+            instance_id = f"{name}-{params['dataset']}-{use_algos}-{params['cv']}-{params['seed']}-" \
+                   f"{params['spark_config']['spark.executor.instances']}"
+
+            if instance_id in existing_exp_instances_ids:
                 continue
 
-            exp_instance = deepcopy(experiment)
-            exp_instance["name"] = name
-            experiments_configs.append(exp_instance)
+            if library == "spark":
+                params["spark_config"] = spark_config
 
-    return experiments_configs
+            exp_instance = {
+                "exp_name": name,
+                "instance_id": instance_id,
+                "params": params,
+                "calculation_script": config_data["calculation_script"]
+            }
+
+            exp_instances.append(exp_instance)
+
+    return exp_instances
 
 
 # Run subprocesses with Spark jobs
-def run_experiments(experiments_configs: List[Dict[str, Any]]):
-    for experiment in experiments_configs:
-        name = experiment["name"]
-        launch_script_name = experiment["calculation_script"]
-        with open(f"/tmp/{name}-config.yaml", "w+") as outfile:
-            yaml.dump(experiment["experiment_params"], outfile, default_flow_style=False)
+def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
+        -> Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]]:
+    for exp_instance in experiments_configs:
+        instance_id = exp_instance["instance_id"]
+        launch_script_name = exp_instance["calculation_script"]
+        with open(f"/tmp/{instance_id}-config.yaml", "w+") as outfile:
+            yaml.dump(exp_instance["experiment_params"], outfile, default_flow_style=False)
 
-        with open(f"{results_path}/Results_{name}.log", "w+") as logfile:
+        with open(f"{results_path}/Results_{instance_id}.log", "w+") as logfile:
             logfile.write(f"Launch datetime: {datetime.now()}\n")
             # p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)], stdout=logfile)
             p = subprocess.Popen(
-                ["./dev-tools/bin/test-job-run.sh", str(name), str(launch_script_name)],
+                ["./dev-tools/bin/test-job-run.sh", instance_id, str(launch_script_name)],
                 stdout=logfile
             )
 
-        print(f"Starting exp with name {name}")
-        yield p
+        print(f"Starting exp with name {instance_id}")
+        yield exp_instance, p
 
 
-def limit_procs(it: Iterable[subprocess.Popen], max_parallel_ops: int = 1):
+def limit_procs(it: Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]],
+                max_parallel_ops: int = 1,
+                check_period_secs: float = 1.0) \
+        -> Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]]:
     assert max_parallel_ops > 0
 
-    procs: Set[subprocess.Popen] = set()
+    exp_procs: Set[Tuple[ExpInstanceConfig, subprocess.Popen]] = set()
 
-    def try_to_remove_finished():
-        for p in procs:
+    def try_to_remove_finished() -> Optional[Tuple[ExpInstanceConfig, subprocess.Popen]]:
+        proc_to_remove = None
+        for exp_instance, p in exp_procs:
             if p.poll() is not None:
-                procs.remove(p)
+                proc_to_remove = (exp_instance, p)
                 break
 
+        if proc_to_remove is not None:
+            exp_procs.remove(proc_to_remove)
+            return proc_to_remove
+
+        return None
+
     for el in it:
-        procs.add(el)
-        yield el
+        exp_procs.add(el)
 
-        while len(procs) >= max_parallel_ops:
-            try_to_remove_finished()
-            time.sleep(1)
+        while len(exp_procs) >= max_parallel_ops:
+            exp_proc = try_to_remove_finished()
+
+            if exp_proc:
+                yield exp_proc
+            else:
+                time.sleep(check_period_secs)
+
+    while len(exp_procs) > 0:
+        exp_proc = try_to_remove_finished()
+
+        if exp_proc:
+            yield exp_proc
+        else:
+            time.sleep(check_period_secs)
 
 
-def wait_for_all(procs: Iterable[subprocess.Popen]):
-    for p in procs:
-        p.wait()
+def wait_for_all(exp_procs: Iterator[Tuple[ExpInstanceConfig, subprocess.Popen]], total: int):
+    state_file_path = f"{statefile_path}/state_file.json"
 
-        # Mark job as completed in state file
-        json_struct = []
-        json_record = {"experiment": f"{p.args[1]}"}
-
-        with open(f"{statefile_path}/state_file.json", "r") as statefile_r:
-            try:
-                json_struct = json.load(statefile_r)
-            except json.decoder.JSONDecodeError:
-                pass
-
-        with open(f"{statefile_path}/state_file.json", "w+") as statefile_w:
-            json_struct.append(json_record)
-            json.dump(json_struct, statefile_w)
+    for exp_instance, p in tqdm(exp_procs, desc="Experiment", total=total):
+        # Mark exp_instance as completed in the state file
+        with open(state_file_path, "a") as f:
+            record = json.dumps(exp_instance)
+            f.write(f"{record}{os.linesep}")
 
 
 def gather_results(procs: Iterable[subprocess.Popen]):
@@ -164,10 +195,8 @@ def gather_results(procs: Iterable[subprocess.Popen]):
 def main():
     cfg = read_config(cfg_path)
     exp_cfgs = generate_experiments(cfg)
-    exp_procs = list(
-        tqdm(limit_procs(run_experiments(exp_cfgs), max_parallel_ops=2), desc="Experiment", total=len(exp_cfgs))
-    )
-    wait_for_all(exp_procs)
+    exp_procs = limit_procs(run_experiments(exp_cfgs), max_parallel_ops=2)
+    wait_for_all(exp_procs, total=len(exp_cfgs))
     gather_results(exp_procs)
 
     print("Finished processes")

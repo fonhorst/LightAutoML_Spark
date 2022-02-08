@@ -2,16 +2,23 @@
 experiment_type: spark_quality
 calculation_script: spark_used_cars.py
 spark_quality_repeat_rate: 2
-use_state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip experiments in state file, ignore - don`t skip experiments, delete - delete experiments in state file
+state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip experiments in state file, ignore - don`t skip experiments, delete - delete experiments in state file
 
 # Unique set of parameters for each experiment
-experiment_params:
-  path: ["buzz", ]
-  seed: [42]
-  cv: [5]
-  use_algos:
-    - [["lgb"]]
-  spark_config: [{}]
+
+experiments:
+  - name: "cmp-spark-lama"
+    library: ["spark", "lama"]
+    repeat_rate: 4
+    params:
+      dataset: ["buzz", ]
+      seed: [42]
+      cv: [5]
+      use_algos:
+        - [["lgb"]]
+    spark_config:
+      spark.executor.instances: ['1', '4']
+      spark.executor.cores: ['4']
 
 # Static parameters for Spark
 default_spark_config: {
