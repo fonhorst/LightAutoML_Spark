@@ -88,3 +88,33 @@ spec:
   resources:
     requests:
       storage: '10Gi'
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-spark-lama-ivy2-cache
+spec:
+  capacity:
+    storage: '25Gi'
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-hdd
+  hostPath:
+    path: /mnt/ess_storage/DN_1/storage/sber_LAMA/ivy2cache/
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spark-lama-ivy2-cache
+  namespace: spark-lama-exps
+spec:
+  volumeName: pv-spark-lama-ivy2-cache
+  storageClassName: local-hdd
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: '25Gi'

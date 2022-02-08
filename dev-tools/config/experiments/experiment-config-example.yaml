@@ -47,14 +47,22 @@ default_spark_config: {
   spark.memory.storageFraction: '0.5',
   spark.sql.autoBroadcastJoinThreshold: 100MB,
   spark.sql.execution.arrow.pyspark.enabled: 'true',
+
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.claimName: spark-lama-data,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass: local-hdd,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.path: /spark_data,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly: 'true',
+
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.options.claimName: spark-lama-data,
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass: local-hdd,
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.path: /spark_data,
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly: 'true',
+
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.options.claimName: spark-lama-ivy2-cache,
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.options.storageClass: local-hdd,
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.mount.path: /root/.ivy2/cache,
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.mount.readOnly: 'true',
+
   spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.options.claimName:  exp-results-vol,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.options.storageClass: local-hdd,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.mount.path: /exp_results,
