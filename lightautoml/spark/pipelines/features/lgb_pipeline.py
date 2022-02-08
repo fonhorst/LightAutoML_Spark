@@ -1,4 +1,5 @@
 from typing import cast, Optional, Union
+from unicodedata import name
 
 import numpy as np
 
@@ -10,7 +11,7 @@ from lightautoml.spark.pipelines.features.base import FeaturesPipeline
 from lightautoml.spark.pipelines.features.base import TabularDataFeatures
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkTransformer, SequentialTransformer, UnionTransformer, \
     ColumnsSelector, ChangeRoles
-from lightautoml.spark.transformers.categorical import OrdinalEncoder
+from lightautoml.spark.transformers.categorical import OrdinalEncoder, TargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import TimeToNum
 
 from pyspark.ml import Transformer, Pipeline
@@ -306,6 +307,7 @@ class LGBAdvancedPipelineTmp(FeaturesPipeline, TabularDataFeatures):
 
         """
 
+        final_columns = []
         # transformer_list = []
         stages = []
         target_encoder = self.get_target_encoder_new(train)
@@ -350,30 +352,55 @@ class LGBAdvancedPipelineTmp(FeaturesPipeline, TabularDataFeatures):
 
             ordinal = sorted(list(set(ordinal)))
 
-        # TODO: fix the performance and uncomment
         # get label encoded categories
-        # le_part = self.get_categorical_raw(train, le)
-        # if le_part is not None:
-        #     le_part = SequentialTransformer([le_part, ChangeRoles(output_category_role)])
-        #     transformer_list.append(le_part)
+        le_part = self.get_categorical_raw_new(train, le)
+        if le_part is not None:
+            # le_part = SequentialTransformer([le_part, ChangeRoles(output_category_role)])
+            stages.append(le_part)
+            stages.append(ChangeRolesTransformer(input_cols=le_part.getOutputCols(),
+                                                 input_roles=le_part.getOutputRoles(),
+                                                 roles=output_category_role))
 
         # get target encoded part
-        # te_part = self.get_categorical_raw(train, te)
-        # if te_part is not None:
-        #     te_part = SequentialTransformer([te_part, target_encoder()])
-        #     transformer_list.append(te_part)
+        te_part = self.get_categorical_raw_new(train, te)
+        if te_part is not None:
+            # te_part = SequentialTransformer([te_part, target_encoder()])
+            stages.append(te_part)
+            stages.append(target_encoder(input_cols=te_part.getOutputCols(),
+                                         input_roles=te_part.getOutputRoles(),
+                                         task_name=train.task.name,
+                                         folds_column=train.folds_column,
+                                         target_column=train.target_column))
+            # stages.append(TargetEncoderEstimator(input_cols=te_part.getOutputCols(),
+            #                                     input_roles=te_part.getOutputRoles(),
+            #                                     task_name=train.task.name,
+            #                                     folds_column=train.folds_column,
+            #                                     target_column=train.target_column
+            #                                     ))
 
+
+        # TODO: SPARK-LAMA fix bug with performance of catintersections
         # get intersection of top categories
         intersections = self.get_categorical_intersections_new(train)
         if intersections is not None:
-            # if target_encoder is not None:
-            #     ints_part = SequentialTransformer([intersections, target_encoder()])
-            # else:
-            # ints_part = SequentialTransformer([intersections, ChangeRoles(output_category_role)])
-            change_roles_transformer = ChangeRolesTransformer(input_cols=intersections.getOutputCols(), role=output_category_role)
-            ints_part = [intersections, change_roles_transformer]
-
-            stages.append(ints_part)
+            if target_encoder is not None:
+                # ints_part = SequentialTransformer([intersections, target_encoder()])
+                stages.append(intersections)
+                stages.append(target_encoder(input_cols=intersections.getOutputCols(),
+                                             input_roles=intersections.getOutputRoles(),
+                                             task_name=train.task.name,
+                                             folds_column=train.folds_column,
+                                             target_column=train.target_column))
+                # stages.append(TargetEncoderEstimator(input_cols=intersections.getOutputCols(),
+                #                                     input_roles=intersections.getOutputRoles(),
+                #                                     task_name=train.task.name,
+                #                                     folds_column=train.folds_column,
+                #                                     target_column=train.target_column
+                #                                     ))
+            else:
+                # ints_part = SequentialTransformer([intersections, ChangeRoles(output_category_role)])
+                stages.append(intersections)
+                stages.append(ChangeRolesTransformer(input_cols=intersections.getOutputCols(), role=output_category_role))
 
         # add numeric pipeline
         stages.append(self.get_numeric_data_new(train))

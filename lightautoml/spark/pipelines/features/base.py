@@ -16,9 +16,9 @@ from pyspark.sql import functions as F
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
-from lightautoml.spark.transformers.categorical import FreqEncoder, FreqEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
+from lightautoml.spark.transformers.categorical import CatIntersectstionsEstimator, FreqEncoder, FreqEncoderEstimator, LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
     TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
-from lightautoml.spark.transformers.datetime import BaseDiff, DateSeasons
+from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, ChangeRoles, \
     UnionTransformer, SparkTransformer
 from lightautoml.pipelines.utils import map_pipeline_names
@@ -262,9 +262,8 @@ class TabularDataFeatures:
         #     ]
         # )
 
-        dt_processing = BaseDiffEstimator(input_cols=list(set(datetimes + base_dates)),
-                                          base_names=base_dates,
-                                          diff_names=datetimes)
+        dt_processing = BaseDiffTransformer(base_names=base_dates,
+                                            diff_names=datetimes)
 
         return dt_processing
 
@@ -330,7 +329,7 @@ class TabularDataFeatures:
         #         DateSeasons(outp_role),
         #     ]
         # )
-        date_as_cat = DateSeasonsEstimator(input_cols=datetimes, outp_role=outp_role)
+        date_as_cat = DateSeasonsTransformer(input_cols=datetimes, input_roles=train.roles, output_role=outp_role)
 
         return date_as_cat
 
@@ -561,6 +560,40 @@ class TabularDataFeatures:
         cat_processing = SequentialTransformer(cat_processing)
         return cat_processing
 
+    def get_categorical_raw_new(
+        self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
+    ) -> Optional[Estimator]:
+        """Get label encoded categories data.
+
+        Args:
+            train: Dataset with train data.
+            feats_to_select: Features to handle. If ``None`` - default filter.
+
+        Returns:
+            Transformer.
+
+        """
+
+        if feats_to_select is None:
+            feats_to_select = []
+            for i in ["auto", "oof", "int", "ohe"]:
+                feats_to_select.extend(get_columns_by_role(train, "Category", encoding_type=i))
+
+        if len(feats_to_select) == 0:
+            return
+
+        # cat_processing = [
+        #     ColumnsSelector(keys=feats_to_select),
+        #     LabelEncoder(subs=self.subsample, random_state=self.random_state),
+        # ]
+        # cat_processing = SequentialTransformer(cat_processing)
+
+        cat_processing = LabelEncoderEstimator(input_cols=feats_to_select,
+                                               subs=self.subsample,
+                                               random_state=self.random_state,
+                                               input_roles=train.roles)
+        return cat_processing
+
     def get_target_encoder(self, train: SparkDataset) -> Optional[type]:
         """Get target encoder func for dataset.
 
@@ -723,8 +756,8 @@ class TabularDataFeatures:
         #     ),
         # ]
 
-        cat_processing = CatIntersectstionsEstimator(input_cols=feats_to_select, max_depth=self.max_intersection_depth)
-        cat_processing = SequentialTransformer(cat_processing)
+        cat_processing = CatIntersectstionsEstimator(input_cols=feats_to_select,
+                                                     max_depth=self.max_intersection_depth)
 
         return cat_processing
 

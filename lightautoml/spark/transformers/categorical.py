@@ -424,7 +424,11 @@ class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
     outputRoles = Param(Params._dummy(), "outputRoles",
                             "output roles (lama format)")
 
-    def __init__(self, input_cols: Optional[List[str]] = None, input_roles: Optional[Dict[str, ColumnRole]] = None):
+    def __init__(self,
+                 input_cols: Optional[List[str]] = None,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 subs: Optional[float] = None,
+                 random_state: Optional[int] = 42):
         super().__init__()
         self._output_role = CategoryRole(np.int32, label_encoded=True)
         self.dicts = None
@@ -679,7 +683,8 @@ class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable
     outputRoles = Param(Params._dummy(), "outputRoles",
                             "output roles (lama format)")
 
-    def __init__(self, input_cols: Optional[List[str]] = None, input_roles: Optional[Dict[str, ColumnRole]] = None):
+    def __init__(self, input_cols: Optional[List[str]] = None,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None):
         super().__init__()
         self._output_role = NumericRole(np.float32)
         self.dicts = None
@@ -840,6 +845,266 @@ class CatIntersectstions(LabelEncoder):
 
         inter_dataset = self._build_df(dataset)
         return super().transform(inter_dataset)
+
+
+class CatIntersectstionsEstimator(Estimator):
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "inter"
+
+    def __init__(self,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 intersections: Optional[Sequence[Sequence[str]]] = None,
+                 max_depth: int = 2):
+
+        super().__init__()
+        self.input_roles = input_roles
+        self.intersections = intersections
+        self.max_depth = max_depth
+
+    @staticmethod
+    def _make_category(cols: Sequence[str]) -> Column:
+        lit = F.lit("_")
+        col_name = f"({'__'.join(cols)})"
+        columns_for_concat = []
+        for col in cols:
+            columns_for_concat.append(F.col(col))
+            columns_for_concat.append(lit)
+        columns_for_concat = columns_for_concat[:-1]
+
+        return murmurhash3_32_udf(F.concat(*columns_for_concat)).alias(col_name)
+
+    def _build_df(self, df: SparkDataFrame) -> SparkDataFrame:
+
+        logger.info(f"[{type(self)} (CI)] build df is started")
+
+        # df = dataset.data
+
+        roles = {}
+
+        columns_to_select = []
+
+        for comb in self.intersections:
+            columns_to_select.append(self._make_category(comb))
+            roles[f"({'__'.join(comb)})"] = CategoryRole(
+                object,
+                unknown=max((self.input_roles[x].unknown for x in comb)),
+                label_encoded=True,
+            )
+
+        df = df.select(*df.columns, *columns_to_select)
+
+        # output = dataset.empty()
+        # output.set_data(result, result.columns, roles)
+
+        logger.info(f"[{type(self)} (CI)] build df is finished")
+
+        return df, roles
+
+    def _fit(self, df: SparkDataFrame) -> Transformer:
+
+        logger.info(f"[{type(self)} (CI)] fit is started")
+
+        if self.intersections is None:
+            self.intersections = []
+            for i in range(2, min(self.max_depth, len(self.input_cols)) + 1):
+                self.intersections.extend(list(combinations(self.input_cols, i)))
+
+        df, roles = self._build_df(df)
+
+        # Code from LabelEncoderEstimator._fit()
+
+        logger.info(f"[{type(self)} (LE)] fit is started")
+
+        # roles = self.getOrDefault(self.inputRoles)
+
+        # TODO: think over it
+        # dataset.cache()
+        df = cache(df)
+
+        self.dicts = dict()
+
+        for comb in self.intersections:
+
+            i = f"({'__'.join(comb)})"
+
+            logger.debug(f"[{type(self)} (LE)] fit column {i}")
+
+            role = roles[i]
+
+            # TODO: think what to do with this warning
+            co = role.unknown
+
+            # FIXME SPARK-LAMA: Possible OOM point
+            # TODO SPARK-LAMA: Can be implemented without multiple groupby and thus shuffling using custom UDAF.
+            # May be an alternative it there would be performance problems.
+            # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749539901
+            vals = df \
+                .groupBy(i).count() \
+                .where(F.col("count") > co) \
+                .select(i, F.col("count")) \
+                .toPandas()
+
+            logger.debug(f"[{type(self)} (LE)] toPandas is completed")
+
+            vals = vals.sort_values(["count", i], ascending=[False, True])
+            self.dicts[i] = Series(np.arange(vals.shape[0], dtype=np.int32) + 1, index=vals[i])
+            logger.debug(f"[{type(self)} (LE)] pandas processing is completed")
+
+        # TODO: think over it
+        # dataset.uncache()
+        # if not self.is_frozen_in_cache:
+        # dataset.unpersist()
+
+        logger.info(f"[{type(self)} (LE)] fit is finished")
+
+        # return super()._fit(inter_dataset)
+        return CatIntersectionsTransformer(dicts=self.dicts,
+                                           intersections=self.intersections,
+                                           input_roles=self.input_roles)
+
+    # def transform(self, dataset: SparkDataset) -> SparkDataset:
+
+    #     inter_dataset = self._build_df(dataset)
+    #     return super().transform(inter_dataset)
+
+class CatIntersectionsTransformer(Transformer):
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "inter"
+
+    def __init__(self,
+                 dicts: Dict,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 intersections: Optional[Sequence[Sequence[str]]] = None):
+
+        super().__init__()
+        self.dicts = dicts
+        self.input_roles = input_roles
+        self.intersections = intersections
+
+
+    def _build_df(self, df: SparkDataFrame) -> SparkDataFrame:
+
+        logger.info(f"[{type(self)} (CI)] build df is started")
+
+        # df = dataset.data
+
+        roles = {}
+
+        columns_to_select = []
+
+        for comb in self.intersections:
+            columns_to_select.append(CatIntersectstionsEstimator._make_category(comb))
+            roles[f"({'__'.join(comb)})"] = CategoryRole(
+                object,
+                unknown=max((self.input_roles[x].unknown for x in comb)),
+                label_encoded=True,
+            )
+
+        df = df.select(*df.columns, *columns_to_select)
+
+        # output = dataset.empty()
+        # output.set_data(result, result.columns, roles)
+
+        logger.info(f"[{type(self)} (CI)] build df is finished")
+
+        return df, roles
+
+    def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
+        
+        df, roles = self._build_df(df)
+
+        logger.info(f"[{type(self)} (LE)] transform is started")
+
+        # df = dataset.data
+        sc = df.sql_ctx.sparkSession.sparkContext
+
+        cols_to_select = []
+
+        for comb in self.intersections:
+
+            i = f"({'__'.join(comb)})"
+
+            logger.debug(f"[{type(self)} (LE)] transform col {i}")
+
+            _ic = F.col(i)
+
+            if i not in self.dicts:
+                col = _ic
+            elif len(self.dicts[i]) == 0:
+                col = F.lit(self._fillna_val)
+            else:
+                vals: dict = self.dicts[i].to_dict()
+
+                null_value = self._fillna_val
+                if None in vals:
+                    null_value = vals[None]
+                    _ = vals.pop(None, None)
+
+                if len(vals) == 0:
+                    col = F.when(_ic.isNull(), null_value).otherwise(None)
+                else:
+
+                    nan_value = self._fillna_val
+
+                    # if np.isnan(list(vals.keys())).any():  # not working
+                    # Вот этот кусок кода тут по сути из-за OrdinalEncoder, который
+                    # в КАЖДЫЙ dicts пихает nan. И вот из-за этого приходится его отсюда чистить.
+                    # Нужно подумать, как это всё зарефакторить.
+                    new_dict = {}
+                    for key, value in vals.items():
+                        try:
+                            if np.isnan(key):
+                                nan_value = value
+                            else:
+                                new_dict[key] = value
+                        except TypeError:
+                            new_dict[key] = value
+
+                    vals = new_dict
+
+                    if len(vals) == 0:
+                        col = F.when(F.isnan(_ic), nan_value).otherwise(None)
+                    else:
+                        logger.debug(f"[{type(self)} (LE)] map size: {len(vals)}")
+
+                        labels = sc.broadcast(vals)
+
+                        if type(df.schema[i].dataType) in self._spark_numeric_types:
+                            col = F.when(_ic.isNull(), null_value) \
+                                .otherwise(
+                                    F.when(F.isnan(_ic), nan_value)
+                                     .otherwise(pandas_dict_udf(labels)(_ic))
+                                )
+                        else:
+                            col = F.when(_ic.isNull(), null_value) \
+                                   .otherwise(pandas_dict_udf(labels)(_ic))
+
+            cols_to_select.append(col.alias(f"{self._fname_prefix}__{i}"))
+
+        # output: SparkDataset = dataset.empty()
+        # # *dataset.service_columns,
+        # output.set_data(
+        #     df.select(
+        #         *dataset.service_columns,
+        #         *dataset.features,
+        #         *cols_to_select
+        #     ).fillna(self._fillna_val),
+        #     dataset.features + self.features,
+        #     self._get_updated_roles(dataset, self.features, self._output_role)
+        # )
+
+        output = df.select(
+                    *df.columns,
+                    *cols_to_select
+                ).fillna(self._fillna_val)
+
+        logger.info(f"[{type(self)} (LE)] Transform is finished")
+
+        return output
 
 
 class OHEEncoder(SparkTransformer):

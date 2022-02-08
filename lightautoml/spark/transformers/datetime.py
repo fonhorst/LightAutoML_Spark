@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, List
+from typing import Dict, Optional, Sequence, List
 from collections import defaultdict, OrderedDict
 from itertools import chain, combinations
 from datetime import datetime
@@ -13,6 +13,10 @@ from lightautoml.transformers.datetime import datetime_check, date_attrs
 
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.transformers.base import SparkTransformer
+
+from pyspark.ml import Transformer, Estimator
+from pyspark.ml.param.shared import HasInputCols, HasOutputCols
+from pyspark.ml.param.shared import TypeConverters, Param, Params
 
 
 def is_holiday(timestamp: int,
@@ -161,6 +165,68 @@ class BaseDiff(SparkDatetimeTransformer):
         return output
 
 
+class BaseDiffTransformer(Transformer, HasOutputCols):
+
+    _fname_prefix = "basediff"
+    _can_unwind_parents = False
+
+    @property
+    def features(self) -> List[str]:
+        return self._features
+
+    baseNames = Param(Params._dummy(), "baseNames",
+                            "base_names")
+
+    diffNames = Param(Params._dummy(), "diffNames",
+                            "diff_names")
+
+    basicInterval = Param(Params._dummy(), "basicInterval",
+                            "basic_interval")
+
+    outputRoles = Param(Params._dummy(), "outputRoles",
+                            "output roles (lama format)")
+
+    def __init__(self,
+                 base_names: Sequence[str],
+                 diff_names: Sequence[str],
+                 basic_interval: Optional[str] = "D"):
+        self.set(self.baseNames, base_names)
+        self.set(self.diffNames, diff_names)
+        self.set(self.basicInterval, basic_interval)
+        self.set(self.outputCols, self.get_output_names())
+        self.set(self.outputRoles, self.get_output_roles())
+        self.base_names = base_names
+        self.diff_names = diff_names
+        self.basic_interval = basic_interval
+
+    def get_output_names(self) -> List[str]:
+        return [f"{self._fname_prefix}_{base}__{dif}" for base in self.base_names for dif in self.diff_names]
+
+    def get_output_roles(self):
+        output_roles = {}
+        output_roles.update({feat: NumericRole(dtype=np.float32) for feat in self.getOutputCols()})
+        return output_roles
+
+    def getOutputRoles(self):
+        """
+        Gets output roles or its default value.
+        """
+        return self.getOrDefault(self.outputRoles)
+
+    def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
+
+        for dif in self.diff_names:
+            for base in self.base_names:
+                df = df.withColumn(
+                    f"{self._fname_prefix}_{base}__{dif}",
+                    (
+                        F.to_timestamp(F.col(dif)).cast("long") - F.to_timestamp(F.col(base)).cast("long")
+                    ) / self._interval_mapping[self.basic_interval]
+                )
+
+        return df
+
+
 class DateSeasons(SparkDatetimeTransformer):
 
     _fname_prefix = "season"
@@ -232,4 +298,100 @@ class DateSeasons(SparkDatetimeTransformer):
         output.set_data(df, self.features, self.output_role)
 
         return output
+
+
+class DateSeasonsTransformer(Transformer, HasInputCols, HasOutputCols):
+
+    _fname_prefix = "season"
+    _can_unwind_parents = False
+
+    @property
+    def features(self) -> List[str]:
+        return self._features
+
+    inputRoles = Param(Params._dummy(), "inputRoles",
+                            "input roles (lama format)")
+
+    outputRoles = Param(Params._dummy(), "outputRoles",
+                            "output roles (lama format)")
+
+    def __init__(self, input_cols: Optional[List[str]] = None,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 output_role: Optional[ColumnRole] = None):
+
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, self.get_output_names(input_cols))
+        self.set(self.inputRoles, input_roles)
+        self.set(self.outputRoles, self.get_output_roles())
+        self.output_role = output_role
+        if output_role is None:
+            self.output_role = CategoryRole(np.int32)
+
+    def get_output_names(self) -> List[str]:
+
+        feats = self.getInputCols()
+        roles = self.getOrDefault(self.inputRoles)
+        self._features = []
+        self.transformations = OrderedDict()
+
+        for col in feats:
+            seas = roles[col].seasonality
+            self.transformations[col] = seas
+            for s in seas:
+                self._features.append(f"{self._fname_prefix}_{s}__{col}")
+            if roles[col].country is not None:
+                self._features.append(f"{self._fname_prefix}_hol__{col}")
+
+        return self._features
+
+    def get_output_roles(self):
+        new_roles = {}
+        new_roles.update({feat: self.output_role for feat in self.getOutputCols()})
+        return new_roles
+
+    def getOutputRoles(self):
+        """
+        Gets output roles or its default value.
+        """
+        return self.getOrDefault(self.outputRoles)
+
+    def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
+
+        # roles = dataset.roles
+        roles = self.getOrDefault(self.inputRoles)
+
+        for col in self.getInputCols():
+
+            df = df.withColumn(col, F.to_timestamp(F.col(col)).cast("long"))
+
+            for seas in self.transformations[col]:
+                df = df \
+                    .withColumn(
+                        f"{self._fname_prefix}_{seas}__{col}",
+                        F.when(F.isnan(col) | F.isnull(col), None)
+                        .otherwise(
+                            get_timestamp_attr_udf(F.col(col), F.lit(date_attrs[seas]))
+                        )
+                    )
+
+            if roles[col].country is not None:
+                df = df.withColumn(
+                    f"{self._fname_prefix}_hol__{col}",
+                    is_holiday_udf(
+                        F.col(col),
+                        F.lit(roles[col].country),
+                        F.lit(roles[col].state),
+                        F.lit(roles[col].prov)
+                    )
+                )
+
+        # df = df.select(
+        #     *dataset.service_columns,
+        #     *[col for col in self.features]
+        # )
+
+        # output = dataset.empty()
+        # output.set_data(df, self.features, self.output_role)
+
+        return df
 
