@@ -130,7 +130,8 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
 
             use_algos = '__'.join(['_'.join(layer) for layer in params['use_algos']])
 
-            instance_id = f"{name}-{library}-n{repeat_seq_id}-{params['dataset']}-{use_algos}-" \
+            instance_id = f"{name}-{library}-n{repeat_seq_id}-{params['dataset'].replace('_', '-')}" \
+                          f"-{use_algos}-" \
                           f"cv{params['cv']}-seed{params['seed']}-" \
                           f"ei{spark_config['spark.executor.instances'] if spark_config else ''}"
 
@@ -160,7 +161,7 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
         instance_id = exp_instance["instance_id"]
         launch_script_name = exp_instance["calculation_script"]
         with open(f"/tmp/{instance_id}-config.yaml", "w+") as outfile:
-            yaml.dump(exp_instance, outfile, default_flow_style=False)
+            yaml.dump(exp_instance["params"], outfile, default_flow_style=False)
 
         outfile = os.path.abspath(f"{results_path}/Results_{instance_id}.log")
 
@@ -224,6 +225,10 @@ def limit_procs(it: Iterator[ExpInstanceProc],
 
 
 def process_outfile(exp_instance: ExpInstanceConfig, outfile: str, result_file: str) -> None:
+    if not os.path.exists(outfile):
+        logger.error(f"No result file found on path {outfile} for exp with instance id {exp_instance['instance_id']}")
+        return
+
     with open(outfile, "r") as f:
         res_lines = [line for line in f.readlines() if MARKER in line]
 

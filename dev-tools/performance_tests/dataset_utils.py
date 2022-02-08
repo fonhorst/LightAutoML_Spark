@@ -4,7 +4,7 @@ from typing import Any, Dict
 def datasets() -> Dict[str, Any]:
     all_datastes = {
         "used_cars_dataset": {
-            "path": "examples/data/small_used_cars_data.csv",
+            "path": "/opt/small_used_cars_data.csv",
             "task_type": "reg",
             "metric_name": "mse",
             "target_col": "price",
@@ -27,7 +27,7 @@ def datasets() -> Dict[str, Any]:
         },
 
         "lama_test_dataset": {
-            "path": "./examples/data/sampled_app_train.csv",
+            "path": "/opt/sampled_app_train.csv",
             "task_type": "binary",
             "metric_name": "areaUnderROC",
             "target_col": "TARGET",

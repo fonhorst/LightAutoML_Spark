@@ -13,7 +13,7 @@ experiments:
     library: ["spark", "lama"]
     repeat_rate: 1
     params:
-      dataset: ["buzz", ]
+      dataset: ["buzz_dataset"]
       seed: [42, 100]
       cv: [5]
       use_algos:
@@ -50,13 +50,18 @@ default_spark_config: {
 
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.claimName: spark-lama-data,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass: local-hdd,
-  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.path: /spark_data,
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.path: /opt,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly: 'true',
 
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.options.claimName: spark-lama-data,
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass: local-hdd,
-  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.path: /spark_data,
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.path: /opt,
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly: 'true',
+
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.options.claimName: spark-lama-ivy2-cache,
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.options.storageClass: local-hdd,
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.mount.path: /root/.ivy2/cache,
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.mount.readOnly: 'true',
 
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.options.claimName: spark-lama-ivy2-cache,
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.options.storageClass: local-hdd,

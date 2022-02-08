@@ -140,6 +140,5 @@ if __name__ == "__main__":
     del config_data['dataset']
     ds_cfg.update(config_data)
 
-    calculate_automl(**config_data)
-
-
+    result = calculate_automl(**ds_cfg)
+    print(f"EXP-RESULT: {result}")
