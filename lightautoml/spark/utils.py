@@ -35,7 +35,7 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[]", 
         spark_sess_builder = (
             SparkSession
             .builder
-            .appName(session_args.get("appName","SPARK-LAMA-app"))
+            .appName("SPARK-LAMA-app")
             .master(master)
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
@@ -49,7 +49,7 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[]", 
         spark_sess_builder = (
             SparkSession
             .builder
-            .appName(session_args.get("appName", "SPARK-LAMA-app"))
+            .appName("SPARK-LAMA-app")
         )
         for arg, value in session_args.items():
             spark_sess_builder = spark_sess_builder.config(arg, value)

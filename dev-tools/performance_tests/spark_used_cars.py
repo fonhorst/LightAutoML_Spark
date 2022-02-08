@@ -7,6 +7,8 @@ import logging
 import logging.config
 from typing import Dict, Any, Optional
 
+from dataset_utils import datasets
+
 import sklearn
 import yaml
 from pyspark.ml.evaluation import RegressionEvaluator, BinaryClassificationEvaluator, MulticlassClassificationEvaluator
@@ -133,6 +135,10 @@ if __name__ == "__main__":
     # Read values from config file
     with open("/scripts/config.yaml", "r") as stream:
         config_data = yaml.safe_load(stream)
+
+    ds_cfg = datasets()[config_data['dataset']]
+    del config_data['dataset']
+    ds_cfg.update(config_data)
 
     calculate_automl(**config_data)
 

@@ -11,6 +11,7 @@ import pandas as pd
 import sklearn
 import yaml
 from sklearn.model_selection import train_test_split
+from dataset_utils import datasets
 
 from lightautoml.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.utils import log_exec_time, logging_config, VERBOSE_LOGGING_FORMAT
@@ -82,5 +83,9 @@ if __name__ == "__main__":
     # Read values from config file
     with open("/scripts/config.yaml", "r") as stream:
         config_data = yaml.safe_load(stream)
+
+    ds_cfg = datasets()[config_data['dataset']]
+    del config_data['dataset']
+    ds_cfg.update(config_data)
 
     calculate_automl(**config_data)
