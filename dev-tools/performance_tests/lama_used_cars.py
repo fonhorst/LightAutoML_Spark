@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from dataset_utils import datasets
 
 from lightautoml.automl.presets.tabular_presets import TabularAutoML
-from lightautoml.spark.utils import log_exec_time, logging_config, VERBOSE_LOGGING_FORMAT
+from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_timer
 from lightautoml.tasks import Task
 from lightautoml.utils.tmp_utils import log_data
 
@@ -30,7 +30,7 @@ def calculate_automl(path: str,
                      use_algos = ("lgb", "linear_l2"),
                      roles: Optional[Dict] = None,
                      dtype: Optional[Dict] = None) -> Dict[str, Any]:
-    with log_exec_time("LAMA"):
+    with log_exec_timer("LAMA") as train_timer:
         # to assure that LAMA correctly interprets these columns as categorical
         roles = roles if roles else {}
         dtype = dtype if dtype else {}
@@ -64,7 +64,7 @@ def calculate_automl(path: str,
     metric_value = evaluator(train_data[target_col].values, oof_predictions.data[:, 0])
     logger.info(f"mse score for out-of-fold predictions: {metric_value}")
 
-    with log_exec_time():
+    with log_exec_timer() as predict_timer:
         te_pred = automl.predict(test_data)
 
     test_metric_value = evaluator(test_data[target_col].values, te_pred.data[:, 0])
@@ -72,7 +72,9 @@ def calculate_automl(path: str,
 
     logger.info("Predicting is finished")
 
-    return {"metric_value": metric_value, "test_metric_value": test_metric_value}
+    return {"metric_value": metric_value, "test_metric_value": test_metric_value,
+            "train_duration_secs": train_timer.duration,
+            "predict_duration_secs": predict_timer.duration}
 
 
 if __name__ == "__main__":

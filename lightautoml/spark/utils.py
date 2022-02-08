@@ -87,24 +87,30 @@ def log_exec_time(name: Optional[str] = None):
     msg = f"Exec time of {name}: {duration}" if name else f"Exec time: {duration}"
     logger.info(msg)
 
+
 # log_exec_time() class to return elapsed time value
 class log_exec_timer:
     def __init__(self, name: Optional[str] = None):
-         self.name=name
-         file_handler_info = logging.FileHandler(f'/tmp/{name}_log.log', mode='w')
-         file_handler_info.setFormatter(logging.Formatter('%(message)s'))
-         file_handler_info.setLevel(logging.INFO)
-         logger.addHandler(file_handler_info)
+        self.name = name
+        file_handler_info = logging.FileHandler(f'/tmp/{name}_log.log', mode='w')
+        file_handler_info.setFormatter(logging.Formatter('%(message)s'))
+        file_handler_info.setLevel(logging.INFO)
+        logger.addHandler(file_handler_info)
+        self._start = None
+        self._duration = None
 
     def __enter__(self):
-        self.t = datetime.now()
+        self._start = datetime.now()
         return self
 
     def __exit__(self, type, value, traceback):
-        self.t = (datetime.now() - self.t).total_seconds()
-        msg = f"Exec time of {self.name}: {self.t}" if self.name else f"Exec time: {self.t}"
+        self._duration = (datetime.now() - self._start).total_seconds()
+        msg = f"Exec time of {self.name}: {self._duration}" if self.name else f"Exec time: {self._duration}"
         logger.info(msg)
 
+    @property
+    def duration(self):
+        return self._duration
 
 
 def get_cached_df_through_rdd(df: SparkDataFrame, name: Optional[str] = None) -> Tuple[SparkDataFrame, RDD]:

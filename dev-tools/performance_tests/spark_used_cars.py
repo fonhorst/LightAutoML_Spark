@@ -18,7 +18,7 @@ from pyspark.sql.types import DoubleType
 from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.tasks.base import Task as SparkTask
-from lightautoml.spark.utils import log_exec_time, spark_session, logging_config, VERBOSE_LOGGING_FORMAT
+from lightautoml.spark.utils import spark_session, logging_config, VERBOSE_LOGGING_FORMAT, log_exec_timer
 from lightautoml.utils.tmp_utils import log_data
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def calculate_automl(path: str,
         spark_config = {"master": "local[4]"}
 
     with spark_session(**spark_config) as spark:
-        with log_exec_time("spark-lama training"):
+        with log_exec_timer("spark-lama training") as train_timer:
             task = SparkTask(task_type)
             data = spark.read.csv(path, header=True, escape="\"").repartition(4)
 
@@ -106,7 +106,7 @@ def calculate_automl(path: str,
         metric_value = evaluator(oof_preds_for_eval_pdf[target_col].values, oof_preds_for_eval_pdf[predict_col].values)
         logger.info(f"{metric_name} score for out-of-fold predictions: {metric_value}")
 
-        with log_exec_time("spark-lama predicting on test"):
+        with log_exec_timer("spark-lama predicting on test") as predict_timer:
             te_pred = automl.predict(test_data_dropped)
 
             te_pred = (
@@ -124,7 +124,9 @@ def calculate_automl(path: str,
 
         logger.info("Predicting is finished")
 
-        return {"metric_value": metric_value, "test_metric_value": test_metric_value}
+        return {"metric_value": metric_value, "test_metric_value": test_metric_value,
+                "train_duration_secs": train_timer.duration,
+                "predict_duration_secs": predict_timer.duration}
 
 
 if __name__ == "__main__":
