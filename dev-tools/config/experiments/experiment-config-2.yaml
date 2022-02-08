@@ -9,15 +9,17 @@ state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip exp
 # Unique set of parameters for each experiment
 
 experiments:
-  - name: "cmp-spark-lama"
+  - name: "cmp-all"
     library: ["spark", "lama"]
-    repeat_rate: 4
+    repeat_rate: 1
     params:
       dataset: ["buzz", ]
-      seed: [42]
+      seed: [42, 100]
       cv: [5]
       use_algos:
         - [["lgb"]]
+        - [["lgb_tuned"]]
+#        - [["lgb_tuned", "linear_l2"], ["lgb", "linear_l2"]]
     spark_config:
       spark.executor.instances: ['1', '4']
       spark.executor.cores: ['4']

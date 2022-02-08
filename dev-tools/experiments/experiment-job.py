@@ -17,7 +17,7 @@ from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 
 statefile_path = "./dev-tools/experiments/results"
 results_path = "./dev-tools/experiments/results"
-cfg_path = "./dev-tools/config/experiments/test-experiment-config.yaml"
+cfg_path = "./dev-tools/config/experiments/experiment-config-2.yaml"
 all_results_path = "/tmp/results.txt"
 
 
@@ -73,7 +73,7 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
     exp_instances = []
     for experiment in experiments:
         name = experiment["name"]
-        repeat_rate = experiment["repeat_rate"]
+        repeat_rate = experiment.get("repeat_rate", 1)
         libraries = experiment["library"]
 
         # Make all possible experiment AutoML params
@@ -82,7 +82,7 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
 
         if "spark" in libraries:
             assert "spark_config" in experiment, f"No spark_config set (even empty one) for experiment {name}"
-            keys_exps, values_exps = zip(*experiment['params']['spark_config'].items())
+            keys_exps, values_exps = zip(*experiment['spark_config'].items())
             spark_param_sets = [dict(zip(keys_exps, v)) for v in itertools.product(*values_exps)]
 
             spark_configs = []
@@ -92,17 +92,29 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
                 spark_config['spark.cores.max'] = \
                     int(spark_config['spark.executor.cores']) * int(spark_config['spark.executor.instances'])
                 spark_configs.append(spark_config)
-
+            spark_instances = itertools.product(["spark"], param_sets, spark_configs)
         else:
-            spark_configs = []
+            spark_instances = []
 
-        for library, params, spark_config in itertools.product(libraries, param_sets, spark_configs):
+        if "lama" in libraries:
+            lama_instances = itertools.product(["lama"], param_sets, [None])
+        else:
+            lama_instances = []
+
+        instances = (
+            (i, el) for el in itertools.chain(spark_instances, lama_instances)
+            for i in range(repeat_rate)
+        )
+
+        for repeat_seq_id, (library, params, spark_config) in instances:
             params = copy(params)
+            spark_config = copy(spark_config)
 
             use_algos = '__'.join(['_'.join(layer) for layer in params['use_algos']])
 
-            instance_id = f"{name}-{params['dataset']}-{use_algos}-{params['cv']}-{params['seed']}-" \
-                   f"{params['spark_config']['spark.executor.instances']}"
+            instance_id = f"{name}-{library}-n{repeat_seq_id}-{params['dataset']}-{use_algos}-" \
+                          f"cv{params['cv']}-seed{params['seed']}-" \
+                          f"ei{spark_config['spark.executor.instances'] if spark_config else ''}"
 
             if instance_id in existing_exp_instances_ids:
                 continue
