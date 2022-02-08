@@ -874,7 +874,7 @@ class CatIntersectionsEstimator(Estimator, HasOutputCols):
 
         if self.intersections is None:
             self.intersections = []
-            TODO: make self.input_cols = list and replace self.input_cols[0] to self.input_cols
+            # TODO: make self.input_cols = list and replace self.input_cols[0] to self.input_cols
             for i in range(2, min(self.max_depth, len(self.input_cols[0])) + 1):
                 self.intersections.extend(list(combinations(self.input_cols[0], i)))
 
