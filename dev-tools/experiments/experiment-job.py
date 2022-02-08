@@ -5,7 +5,8 @@ import subprocess
 import time
 import json
 import re
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from copy import deepcopy, copy
 from typing import Iterable, List, Set, Dict, Any, Iterator, Tuple, Optional
@@ -15,10 +16,15 @@ from tqdm import tqdm
 
 from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 
-statefile_path = "./dev-tools/experiments/results"
-results_path = "./dev-tools/experiments/results"
+# JOB_SUBMITTER_EXE = "./dev-tools/bin/test-job-run.sh"
+JOB_SUBMITTER_EXE = "./dev-tools/bin/test-sleep-job.sh"
+MARKER = "EXP-RESULT:"
+
+
+statefile_path = "/tmp/exp-job"
+results_path = "/tmp/exp-job"
 cfg_path = "./dev-tools/config/experiments/experiment-config-2.yaml"
-all_results_path = "/tmp/results.txt"
+all_results_path = "/tmp/exp-job/results.txt"
 
 
 ExpInstanceConfig = Dict[str, Any]
@@ -33,6 +39,16 @@ class ExpInstanceProc:
     exp_instance: ExpInstanceConfig
     p: subprocess.Popen
     outfile: str
+    id: str = field(init=False)
+
+    def __post_init__(self):
+        self.id = f'{uuid.uuid4()}'
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, other):
+        return other.id == self.id
 
 
 def read_config(cfg_path: str) -> Dict:
@@ -46,10 +62,12 @@ def process_state_file(config_data: Dict[str, Any]) -> Set[str]:
     state_file_mode = config_data["state_file"]
     state_file_path = f"{statefile_path}/state_file.json"
 
-    if state_file_mode == "use":
+    if state_file_mode == "use" and os.path.exists(state_file_path):
         with open(state_file_path, "r") as f:
             exp_instances = [json.loads(line) for line in  f.readlines()]
         exp_instances_ids = {exp_inst["instance_id"] for exp_inst in exp_instances}
+    elif state_file_mode == "use" and not os.path.exists(state_file_path):
+        exp_instances_ids = set()
     elif state_file_mode == "delete":
         if os.path.exists(state_file_path):
             os.remove(state_file_path)
@@ -58,7 +76,7 @@ def process_state_file(config_data: Dict[str, Any]) -> Set[str]:
         raise ValueError(f"Unsupported mode for state file: {state_file_mode}")
 
     logger.info(f"Found {len(exp_instances_ids)} existing experiments "
-                f"in state file {state_file_path}."
+                f"in state file {state_file_path}. "
                 f"Exp instance ids: \n{exp_instances_ids}")
 
     return exp_instances_ids
@@ -142,18 +160,16 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
         instance_id = exp_instance["instance_id"]
         launch_script_name = exp_instance["calculation_script"]
         with open(f"/tmp/{instance_id}-config.yaml", "w+") as outfile:
-            yaml.dump(exp_instance["experiment_params"], outfile, default_flow_style=False)
+            yaml.dump(exp_instance, outfile, default_flow_style=False)
 
         outfile = os.path.abspath(f"{results_path}/Results_{instance_id}.log")
 
-        # p = subprocess.Popen(["./dev-tools/bin/test-sleep-job.sh", str(name)], stdout=logfile)
         p = subprocess.Popen(
-            ["./dev-tools/bin/test-job-run.sh", instance_id, str(launch_script_name), outfile],
+            [JOB_SUBMITTER_EXE, instance_id, str(launch_script_name), outfile],
         )
 
         logger.info(f"Started process with instance id {instance_id} and args {p.args}")
 
-        print(f"Starting exp with name {instance_id}")
         yield ExpInstanceProc(exp_instance=exp_instance, p=p, outfile=outfile)
 
 
@@ -167,19 +183,28 @@ def limit_procs(it: Iterator[ExpInstanceProc],
 
     def try_to_remove_finished() -> Optional[ExpInstanceProc]:
         proc_to_remove = None
-        for exp_proc in exp_procs:
-            if exp_proc.p.poll() is not None:
-                proc_to_remove = exp_proc
+        for exp_p in exp_procs:
+            if exp_p.p.poll() is not None:
+                proc_to_remove = exp_p
                 break
 
         if proc_to_remove is not None:
-            exp_procs.remove(proc_to_remove)
-            return proc_to_remove
+            msg = f"Removing proc {proc_to_remove.p.pid} " \
+                  f"because it is ended (exit code {proc_to_remove.p.returncode}) " \
+                  f"for instance id {proc_to_remove.exp_instance['instance_id']}"
+            if proc_to_remove.p.returncode != 0:
+                logger.warning(msg)
+            else:
+                logger.debug(msg)
 
-        return None
+            exp_procs.remove(proc_to_remove)
+
+        return proc_to_remove
 
     for el in it:
         exp_procs.add(el)
+
+        # logger.info(f"Uid: {el.id}, instance id {el.exp_instance['instance_id']}")
 
         while len(exp_procs) >= max_parallel_ops:
             exp_proc = try_to_remove_finished()
@@ -199,9 +224,8 @@ def limit_procs(it: Iterator[ExpInstanceProc],
 
 
 def process_outfile(exp_instance: ExpInstanceConfig, outfile: str, result_file: str) -> None:
-    marker = "EXP-RESULT:"
     with open(outfile, "r") as f:
-        res_lines = [line for line in f.readlines() if marker in line]
+        res_lines = [line for line in f.readlines() if MARKER in line]
 
     if len(res_lines) == 0:
         logger.error(f"No result line found for exp with instance id {exp_instance['instance_id']} in {outfile}")
@@ -212,7 +236,7 @@ def process_outfile(exp_instance: ExpInstanceConfig, outfile: str, result_file: 
                        f"for exp with instance id {exp_instance['instance_id']} in {outfile}")
 
     result_line = res_lines[-1]
-    result_str = result_line[result_line.index(marker) + len(marker):].strip('\n \t')
+    result_str = result_line[result_line.index(MARKER) + len(MARKER):].strip('\n \t')
     if len(result_str) == 0:
         logger.error(f"Found result line for exp with instance id {exp_instance['instance_id']} in {outfile} is empty")
 
@@ -243,6 +267,8 @@ def register_results(exp_procs: Iterator[ExpInstanceProc], total: int):
             record["outfile"] = exp_proc.outfile
             record = json.dumps(record)
             f.write(f"{record}{os.linesep}")
+
+    logger.info("Finished exp_procs proccessing")
 
 
 def print_all_results_file():
