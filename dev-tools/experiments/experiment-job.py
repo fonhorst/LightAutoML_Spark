@@ -23,7 +23,7 @@ MARKER = "EXP-RESULT:"
 
 statefile_path = "/tmp/exp-job"
 results_path = "/tmp/exp-job"
-cfg_path = "./dev-tools/config/experiments/experiment-config-lama-only.yaml"
+cfg_path = "./dev-tools/config/experiments/experiment-config-spark-only.yaml"
 all_results_path = "/tmp/exp-job/results.txt"
 
 
