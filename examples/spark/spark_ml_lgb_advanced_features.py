@@ -78,11 +78,6 @@ def build_graph(begin: SparkTransformer):
 
     starts, _ = find_start_end(begin)
 
-    for st in starts:
-        if st not in graph:
-            graph[st] = set()
-        graph[st].add("init")
-
     return graph
 
 
