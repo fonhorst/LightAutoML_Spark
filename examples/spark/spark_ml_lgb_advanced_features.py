@@ -3,7 +3,7 @@ from copy import deepcopy
 import logging
 import logging.config
 import os
-from typing import List, cast, Tuple, Dict
+from typing import List, cast, Tuple, Dict, Optional
 
 from pyspark.ml import Pipeline, PipelineModel, Transformer, Estimator
 
@@ -31,9 +31,11 @@ class NoOpTransformer(Transformer):
 class Cacher(Estimator):
     _cacher_dict: Dict[str, SparkDataFrame] = dict()
 
-    def __init__(self, key: str):
+    def __init__(self, key: str, remember_dataset: bool = False):
         super().__init__()
         self._key = key
+        self._remember_dataset = remember_dataset
+        self._dataset: Optional[SparkDataFrame] = None
 
     def _fit(self, dataset):
         ds = dataset.cache()
@@ -45,7 +47,14 @@ class Cacher(Estimator):
 
         self._cacher_dict[self._key] = ds
 
+        if self._remember_dataset:
+            self._dataset = dataset
+
         return NoOpTransformer()
+
+    @property
+    def dataset(self) -> SparkDataFrame:
+        return self._dataset
 
 
 def build_graph(begin: SparkTransformer):
@@ -128,9 +137,15 @@ if __name__ == "__main__":
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
         stages = [tr for layer in tr_layers
-                  for tr in itertools.chain(layer, [Cacher('some_key')])]
+                  for tr in itertools.chain(layer, [Cacher('some_key', remember_dataset=True)])]
+
+        last_cacher = stages[-1]
+        assert isinstance(last_cacher, Cacher)
 
         spark_ml_pipeline = Pipeline(stages=stages)
+        fp_model = spark_ml_pipeline.fit(sdataset.data)
+        # sdf = fp_model.transform(sdataset.data)
+        sdf = last_cacher.dataset
 
 
         # # Spark ML pipeline
