@@ -5,6 +5,7 @@ from itertools import chain, combinations
 from typing import Optional, Sequence, List, Tuple, Dict, Union, cast, Iterator
 
 import numpy as np
+import pandas as pd
 from pandas import Series
 from pyspark.ml import Transformer
 from pyspark.ml.feature import OneHotEncoder
@@ -711,123 +712,194 @@ class TargetEncoder(SparkTransformer):
         return output
 
 
+def mcte_mapping_udf(broadcasted_dict):
+    def f(folds, target, current_column):
+        values_dict = broadcasted_dict.value
+        try:
+            return values_dict[(folds, target, current_column)]
+        except KeyError as e:
+            # print(f"FAIL: {values_dict}")
+            # print(f"F={folds}, T={target}, C={current_column}")
+            # raise e
+            return np.nan
+    return F.udf(f, "double")
+
+
+def mcte_transform_udf(broadcasted_dict):
+    def f(target, current_column):
+        values_dict = broadcasted_dict.value
+        try:
+            return values_dict[(target, current_column)]
+        except KeyError:
+            return np.nan
+    return F.udf(f, "double")
+
+
 class MultiClassTargetEncoder(SparkTransformer):
 
     _fit_checks = (categorical_check, multiclass_task_check, encoding_check)
     _transform_checks = ()
     _fname_prefix = "multioof"
 
-    @property
-    def features(self) -> List[str]:
-        return self._features
-
     def __init__(self, alphas: Sequence[float] = (0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 250.0, 1000.0)):
         self.alphas = alphas
 
-    #TODO
-    @staticmethod
-    def score_func(candidates: np.ndarray, target: np.ndarray) -> int:
+    def fit(self, dataset: SparkDataset):
+        super().fit_transform(dataset)
 
-        target = target[:, np.newaxis, np.newaxis]
-        scores = -np.log(np.take_along_axis(candidates, target, axis=1)).mean(axis=0)[0]
-        idx = scores.argmin()
+    def fit_transform(self, dataset: SparkDataset) -> SparkDataset:
+        dataset.cache()
+        result = self._fit_transform(dataset)
 
-        return idx
+        if self._can_unwind_parents:
+            result.unwind_dependencies()
 
-    def fit_transform(self,
-                      dataset: SparkDataset,
-                      target_column: str,
-                      folds_column: str) -> SparkDataset:
+        return result
 
-        # set transformer names and add checks
-        super().fit(dataset)
+    def _fit_transform(self, dataset: SparkDataset) -> SparkDataset:
 
-        data = dataset.data
+        LAMLTransformer.fit(self, dataset)
+
+        logger.info(f"[{type(self)} (MCTE)] fit_transform is started")
 
         self.encodings = []
-        prior = data.groupBy(target_column).agg(F.count(F.col(target_column).cast("double"))/data.count()).collect()
-        prior = list(map(lambda x: x[1], prior))
 
-        f_sum = data.groupBy(target_column, folds_column).agg(F.count(F.col(target_column).cast("double")).alias("sumd"))
-        f_count = data.groupBy(folds_column).agg(F.count(F.col(target_column).cast("double")).alias("countd"))
-        f_sum = f_sum.join(f_count, folds_column)
-        tot_sum = data.groupBy(target_column).agg(F.count(F.col(target_column).cast("double")).alias("sumT"))
-        f_sum = f_sum.join(tot_sum, target_column)
-        tot_count = data.agg(F.count(F.col(target_column).cast("double")).alias("countT")).collect()[0][0]
+        tcn = dataset.target_column
+        fcn = dataset.folds_column
 
-        folds_prior = f_sum.withColumn("folds_prior", udf(lambda x, y, z: (z - x) / (tot_count - y), FloatType())(F.col("sumd"), F.col("countd"), F.col("sumT")))
-        self.feats = data
-        self.encs = {}
-        self.n_classes = data.agg(F.max(target_column)).collect()[0][0] + 1
-        self.old_columns = data.columns
-        self.old_columns.remove('_id')
-        self._features = []
-        for i in dataset.features:
-            for j in range(self.n_classes):
-                self._features.append("{0}_{1}__{2}".format("multioof", j, i))
+        df = dataset.data \
+            .join(dataset.target, SparkDataset.ID_COLUMN) \
+            .join(dataset.folds, SparkDataset.ID_COLUMN)
 
-        for col_name in self.old_columns:
+        cached_df = df.cache()
+        sc = cached_df.sql_ctx.sparkSession.sparkContext
 
-            f_sum = data.groupBy(col_name, target_column, folds_column).agg(F.count(F.col(target_column).cast("double")).alias("sumd"))
-            f_count = data.groupBy(col_name, folds_column).agg(F.count(F.col(target_column).cast("double")).alias("countd"))
-            t_sum = data.groupBy(col_name, target_column).agg(F.count(F.col(target_column).cast("double")).alias("sumt"))
-            t_count = data.groupBy(col_name).agg(F.count(F.col(target_column).cast("double")).alias("countt"))
-            f_sum = f_sum.join(f_count, [col_name, folds_column]).join(t_sum, [col_name, target_column]).join(t_count, col_name)
+        _fc = F.col(fcn)
+        _tc = F.col(tcn)
 
-            oof_sum = f_sum.withColumn("oof_sum", F.col("sumt") - F.col(("sumd"))).withColumn("oof_count", F.col("countt") - F.col(("countd")))
-            oof_sum_joined = oof_sum.join(data[col_name, target_column, folds_column], [col_name, target_column, folds_column]).join(folds_prior[folds_column, target_column, "folds_prior"], [folds_column, target_column])
-            diff = {}
-            udf_diff = udf(lambda x: float(-(np.log(x))), DoubleType())
+        agg = cached_df.groupBy([_fc, _tc]).count().toPandas().sort_values(by=[fcn, tcn])
 
-            for a in self.alphas:
-                udf_a = udf(lambda os, fp, oc: (os + a * fp) / (oc + a), DoubleType())
-                alp_colname = f"walpha{a}".replace(".", "d").replace(",", "d")
-                dif_colname = f"{alp_colname}Diff"
-                oof_sum_joined = oof_sum_joined.withColumn(alp_colname, udf_a(F.col("oof_sum").cast("double"), F.col("folds_prior").cast("double"), F.col("oof_count").cast("double")))
-                oof_sum_joined = oof_sum_joined.withColumn(dif_colname, udf_diff(F.col(alp_colname).cast("double")))
-                diff[a] = oof_sum_joined.agg(F.avg(F.col(alp_colname + "Diff").cast("double"))).collect()[0][0]
-            a_opt = min(diff, key=diff.get)
-            out_col = f"walpha{a_opt}".replace(".", "d").replace(",", "d")
+        rows_count = agg["count"].sum()
+        prior = agg.groupby(tcn).agg({
+            "count": sum
+        })
 
-            w = Window.orderBy(monotonically_increasing_id())
+        prior["prior"] = prior["count"] / float(rows_count)
+        prior = prior.to_dict()["prior"]
 
-            self.feats = self.feats.withColumn("columnindex", F.row_number().over(w))
-            oof_sum_joined = oof_sum_joined.withColumn("columnindex", F.row_number().over(w))
+        agg["tt_sum"] = agg[tcn].map(agg[[tcn, "count"]].groupby(tcn).sum()["count"].to_dict()) - agg["count"]
+        agg["tf_sum"] = rows_count - agg[fcn].map(agg[[fcn, "count"]].groupby(fcn).sum()["count"].to_dict())
 
-            self.feats = self.feats.alias('a').join(oof_sum_joined.withColumnRenamed(out_col, self._fname_prefix + "__" +col_name).alias('b'),
-                                                     self.feats.columnindex == oof_sum_joined.columnindex, 'inner').select(
-                [F.col('a.' + xx) for xx in self.feats.columns] + [F.col('b.{}'.format(self._fname_prefix + "__" +col_name))]).drop(self.feats.columnindex)
+        agg["folds_prior"] = agg["tt_sum"] / agg["tf_sum"]
+        folds_prior_dict = agg[[fcn, tcn, "folds_prior"]].groupby([fcn, tcn]).max().to_dict()["folds_prior"]
 
-            # calc best encoding
-            enc_list = []
-            for i in range(self.n_classes):
-                enc = f_sum.withColumn(f"enc_{col_name}", udf(lambda tot_sum, tot_count: float((tot_sum + a_opt * prior[i]) / (tot_count + a_opt)), FloatType())(F.col("sumt"), F.col("countt"))).select(f"enc_{col_name}")
-                enc = list(map(lambda x: x[0], enc.collect()))
-                enc_list.append(enc)
-            sums = [sum(x) for x in zip(*enc_list)]
-            for i in range(self.n_classes):
-                self.encs[self._fname_prefix + "_" + str(i) + "__" + col_name ] = [enc_list[i][j]/sums[j] for j in range(len(enc_list[i]))]
+        # Folds column unique values
+        fcvs = sorted(list(set([fold for fold, target in folds_prior_dict.keys()])))
+        # Target column unique values
+        tcvs = sorted(list(set([target for fold, target in folds_prior_dict.keys()])))
 
-        self.output_role = NumericRole(np.float32, prob=True)
-        return self.transform(dataset)
+        cols_to_select = []
 
-    def transform(self, dataset: SparkDataset) -> SparkDataset:
+        for ccn in dataset.features:
 
-        # checks here
-        super().transform(dataset)
+            logger.debug(f"[{type(self)} (MCTE)] column {ccn}")
 
-        data = dataset.data
-        dc = self.old_columns
-        # transform
-        for c in dc:
-            data = data.withColumn(c, data[c].cast("int"))
-            for i in range(self.n_classes):
-                col = self.encs[self._fname_prefix + "_" + str(i) + "__" + c]
-                data = data.withColumn(self._fname_prefix + "_" + str(i) + "__" + c, udf(lambda x: col[x], DoubleType())(c))
-            data = data.drop(c)
+            _cc = F.col(ccn)
 
-        # create resulted
+            col_agg = cached_df.groupby(_fc, _tc, _cc).count().toPandas()
+            col_agg_dict = col_agg.groupby([ccn, fcn, tcn]).sum().to_dict()["count"]
+            t_sum_dict = col_agg[[ccn, tcn, "count"]].groupby([ccn, tcn]).sum().to_dict()["count"]
+            f_count_dict = col_agg[[ccn, fcn, "count"]].groupby([ccn, fcn]).sum().to_dict()["count"]
+            t_count_dict = col_agg[[ccn, "count"]].groupby([ccn]).sum().to_dict()["count"]
+
+            alphas_values = dict()
+            # Current column unique values
+            ccvs = sorted(col_agg[ccn].unique())
+
+            for column_value in ccvs:
+                for fold in fcvs:
+                    oof_count = t_count_dict.get(column_value, 0) - f_count_dict.get((column_value, fold), 0)
+                    for target in tcvs:
+                        oof_sum = t_sum_dict.get((column_value, target), 0) - col_agg_dict.get((column_value, fold, target), 0)
+                        alphas_values[(column_value, fold, target)] = [(oof_sum + a * folds_prior_dict[(fold, target)]) / (oof_count + a) for a in self.alphas]
+
+            def make_candidates(x):
+                fold, target, column_value, count = x
+                values = alphas_values[(column_value, fold, target)]
+                for i, a in enumerate(self.alphas):
+                    x[f"alpha_{i}"] = values[i]
+                return x
+
+            candidates_df = col_agg.apply(make_candidates, axis=1)
+
+            best_alpha_index = np.array([(-np.log(candidates_df[f"alpha_{i}"]) * candidates_df["count"]).sum() for i, a in enumerate(self.alphas)]).argmin()
+
+            bacn = f"alpha_{best_alpha_index}"
+            processing_df = pd.DataFrame(
+                [[fv, tv, cv, alp[best_alpha_index]] for (cv, fv, tv), alp in alphas_values.items()],
+                columns=[fcn, tcn, ccn, bacn]
+            )
+
+            mapping = processing_df.groupby([fcn, tcn, ccn]).max().to_dict()[bacn]
+            values = sc.broadcast(mapping)
+
+            for tcv in tcvs:
+                cols_to_select.append(mcte_mapping_udf(values)(_fc, F.lit(tcv), _cc).alias(f"{self._fname_prefix}_{tcv}__{ccn}"))
+
+            column_encodings_dict = pd.DataFrame(
+                [
+                    [
+                        ccv, tcv,
+                        (t_sum_dict.get((ccv, tcv), 0) + self.alphas[best_alpha_index] * prior[tcv])
+                        / (t_count_dict[ccv] + self.alphas[best_alpha_index])
+                    ]
+                    for (ccv, fcv, tcv), _ in alphas_values.items()
+                ],
+                columns=[ccn, tcn, "encoding"]
+            ).groupby([tcn, ccn]).max().to_dict()["encoding"]
+
+            self.encodings.append(column_encodings_dict)
+
         output = dataset.empty()
-        output.set_data(data, self.features, self.output_role)
+        output.set_data(
+            cached_df.select(
+                *dataset.service_columns,
+                *cols_to_select
+            ),
+            self.features,
+            NumericRole(np.float32, prob=True)
+        )
+
+        logger.info(f"[{type(self)} (MCTE)] fit_transform is finished")
+
+        return output
+
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
+
+        cols_to_select = []
+        logger.info(f"[{type(self)} (MCTE)] transform is started")
+
+        sc = dataset.data.sql_ctx.sparkSession.sparkContext
+
+        for i, ccn in enumerate(dataset.features):
+            _cc = F.col(ccn)
+            logger.debug(f"[{type(self)} (MCTE)] transform map size for column {ccn}: {len(self.encodings[i])}")
+
+            enc = self.encodings[i]
+            values = sc.broadcast(enc)
+            for tcv in {tcv for tcv, _ in enc.keys()}:
+                cols_to_select.append(mcte_transform_udf(values)(F.lit(tcv), _cc).alias(f"{self._fname_prefix}_{tcv}__{ccn}"))
+
+        output = dataset.empty()
+        output.set_data(
+            dataset.data.select(
+                *dataset.service_columns,
+                *cols_to_select
+            ),
+            self.features,
+            NumericRole(np.float32, prob=True)
+        )
+
+        logger.info(f"[{type(self)} (TE)] transform is finished")
 
         return output

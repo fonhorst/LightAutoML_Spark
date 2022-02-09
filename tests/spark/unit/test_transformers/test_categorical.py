@@ -16,12 +16,13 @@ from lightautoml.spark.transformers.base import ColumnsSelector as SparkColumnsS
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
-    TargetEncoder as SparkTargetEncoder
+    TargetEncoder as SparkTargetEncoder, MultiClassTargetEncoder as SparkMCTE
 from lightautoml.spark.utils import log_exec_time
 from lightautoml.tasks import Task
 from lightautoml.transformers.base import ColumnsSelector
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
-    OHEEncoder, TargetEncoder
+    OHEEncoder, TargetEncoder, MultiClassTargetEncoder as MCTE
+from spark.dataset.base import SparkDataset
 from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_datasets, compare_by_metadata, \
     compare_by_content
 
@@ -160,6 +161,60 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     transformed_spark = spark_encoder.transform(sds)
 
     compare_obtained_datasets(transformed_lama, transformed_spark)
+
+
+def test_mcte(spark: SparkSession):
+    df = pd.read_csv("unit/resources/datasets/house_prices.csv")#.head(300)
+    pds = PandasDataset(
+        df[["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF", "LotShape"]],
+        roles={
+            "Id": CategoryRole(np.int32),
+            "MSSubClass": CategoryRole(np.int32),
+            "MSZoning": CategoryRole(str),
+            "LotFrontage": CategoryRole(np.float32),
+            "WoodDeckSF": CategoryRole(bool),
+            "LotShape": CategoryRole(str)
+        }
+    )
+
+    le = LabelEncoder()
+    le.fit(pds)
+    lds = le.transform(pds).to_pandas()
+
+    cols = ["le__Id", "le__MSSubClass", "le__LotFrontage", "le__LotShape"]
+
+    folds: pd.Series = lds.data["le__WoodDeckSF"]
+    folds[folds == 2] = 0
+
+    target: pd.Series = lds.data["le__MSZoning"]
+
+    nds = NumpyDataset(
+        data=lds.data[cols].to_numpy(),
+        features=cols,
+        roles=[lds.roles[col] for col in cols],
+        task=Task("multiclass"),
+        target=target.to_numpy(),
+        folds=folds.to_numpy()
+    )
+
+    pnds = nds.to_pandas()
+
+    lama_encoder = MCTE()
+    lama_output = lama_encoder.fit_transform(pnds)
+    _p = lama_encoder.transform(pnds).to_pandas()
+
+    sds: SparkDataset = from_pandas_to_spark(pnds, spark, target=target, folds=folds)
+
+    spark_encoder = SparkMCTE()
+    spark_output = spark_encoder.fit_transform(sds)
+
+
+    compare_obtained_datasets(lama_output, spark_output)
+
+    lama_transformed = lama_encoder.transform(pnds)
+    spark_transformed = spark_encoder.transform(sds)
+
+    compare_obtained_datasets(lama_transformed, spark_transformed)
 
 
 def test_target_encoder_2(spark: SparkSession):
