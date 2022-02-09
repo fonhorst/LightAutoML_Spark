@@ -1,15 +1,17 @@
 """Basic classes for features generation."""
 
 from copy import copy, deepcopy
-from typing import Any, Callable, Union, cast
+from typing import Any, Callable, Dict, Union, cast
 from typing import List
 from typing import Optional
 from typing import Tuple
 
+import itertools
 import numpy as np
+import toposort
 from pandas import DataFrame
 from pandas import Series
-from pyspark.ml import Transformer, Estimator
+from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.sql import functions as F
 
@@ -26,6 +28,34 @@ from lightautoml.spark.transformers.numeric import QuantileBinning
 
 from lightautoml.spark.transformers.categorical import TargetEncoderEstimator
 
+
+class NoOpTransformer(Transformer):
+    def _transform(self, dataset):
+        return dataset
+
+class Cacher(Estimator):
+    _cacher_dict: Dict[str, SparkDataFrame] = dict()
+
+    @property
+    def dataset(self) -> SparkDataFrame:
+        """Returns chached dataframe"""
+        return self._cacher_dict[self._key]
+
+    def __init__(self, key: str):
+        super().__init__()
+        self._key = key
+
+    def _fit(self, dataset):
+        ds = dataset.cache()
+        ds.write.mode('overwrite').format('noop').save()
+
+        previous_ds = self._cacher_dict.get(self._key, None)
+        if previous_ds:
+            previous_ds.unpersist()
+
+        self._cacher_dict[self._key] = ds
+
+        return NoOpTransformer()
 
 class FeaturesPipeline:
     """Abstract class.
@@ -47,6 +77,7 @@ class FeaturesPipeline:
         super().__init__(**kwargs)
         self.pipes: List[Callable[[SparkDataset], SparkTransformer]] = [self.create_pipeline]
         self.sequential = False
+        self._transformer = None
 
     # TODO: visualize pipeline ?
     @property
@@ -75,6 +106,15 @@ class FeaturesPipeline:
         mapped = map_pipeline_names(self.input_features, self.output_features)
         return list(set(mapped))
 
+    @property
+    def transformer(self) -> PipelineModel:
+        """Returns Spark MLlib PipelineModel.
+        Represents a compiled pipeline with transformers and fitted models."""
+
+        assert self._transformer is not None, "Pipline is not fitted!"
+
+        return self._transformer
+
     def create_pipeline(self, train: SparkDataset) -> SparkTransformer:
         """Analyse dataset and create composite transformer.
 
@@ -87,6 +127,51 @@ class FeaturesPipeline:
         """
         raise NotImplementedError
 
+    @staticmethod
+    def _build_graph(begin: SparkTransformer):
+        graph = dict()
+        def find_start_end(tr: SparkTransformer) -> Tuple[List[SparkTransformer], List[SparkTransformer]]:
+            if isinstance(tr, SequentialTransformer):
+                se = [st_or_end for el in tr.transformer_list for st_or_end in find_start_end(el)]
+
+                starts = se[0]
+                ends = se[-1]
+                middle = se[1:-1]
+
+                i = 0
+                while i < len(middle):
+                    for new_st, new_end in itertools.product(middle[i], middle[i + 1]):
+                        if new_end not in graph:
+                            graph[new_end] = set()
+                        graph[new_end].add(new_st)
+                    i += 2
+
+                return starts, ends
+
+            elif isinstance(tr, UnionTransformer):
+                se = [find_start_end(el) for el in tr.transformer_list]
+                starts = [s_el for s, _ in se for s_el in s]
+                ends = [e_el for _, e in se for e_el in e]
+                return starts, ends
+            else:
+                return [tr], [tr]
+
+        starts, _ = find_start_end(begin)
+
+        return graph
+
+    @staticmethod
+    def _optimize_pipeline(pipeline: SparkTransformer) -> Tuple[Pipeline, Cacher]:
+        graph = FeaturesPipeline._build_graph(pipeline)
+        tr_layers = list(toposort.toposort(graph))
+        stages = [tr for layer in tr_layers
+                  for tr in itertools.chain(layer, [Cacher('some_key')])]
+
+        cacher_stage = stages[-1]
+        assert isinstance(cacher_stage, Cacher), "Last stage of feature pipeline must be a Cacher"
+
+        return Pipeline(stages=stages), cacher_stage
+
     def fit_transform(self, train: SparkDataset) -> SparkDataset:
         """Create pipeline and then fit on train data and then transform.
 
@@ -97,14 +182,25 @@ class FeaturesPipeline:
             Dataset with new features.
 
         """
-        # TODO: Think about input/output features attributes
-        self._input_features = train.features
-        self._pipeline = self._merge_seq(train) if self.sequential else self._merge(train)
 
-        # TODO: LAMA-SPARK a place with potential duplicate computations
-        #        need to think carefully about it
+        pipeline, features, roles = self.create_pipeline(train)
+        pipeline, last_cacher = self._optimize_pipeline(pipeline)
+        pipeline_model = pipeline.fit(train.data)
+        self._transformer = pipeline_model
+        sdf = last_cacher.dataset
+        sdf = sdf.select(SparkDataset.ID_COLUMN, *features)
+        output = train.empty()
+        output.set_data(sdf, features=features, roles=roles)
+        return output
 
-        return self._pipeline.fit_transform(train)
+        # # TODO: Think about input/output features attributes
+        # self._input_features = train.features
+        # self._pipeline = self._merge_seq(train) if self.sequential else self._merge(train)
+
+        # # TODO: LAMA-SPARK a place with potential duplicate computations
+        # #        need to think carefully about it
+
+        # return self._pipeline.fit_transform(train)
 
     def transform(self, test: SparkDataset) -> SparkDataset:
         """Apply created pipeline to new data.
@@ -408,7 +504,6 @@ class TabularDataFeatures:
         # )
 
         num_processing = ChangeRolesTransformer(input_cols=feats_to_select,
-                                                input_roles=train.roles,
                                                 roles=NumericRole(np.float32))
 
         return num_processing
@@ -444,7 +539,7 @@ class TabularDataFeatures:
     @staticmethod
     def get_freq_encoding_new(
         train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkTransformer]:
+    ) -> Optional[FreqEncoderEstimator]:
         """Get frequency encoding part.
 
         Args:
@@ -562,7 +657,7 @@ class TabularDataFeatures:
 
     def get_categorical_raw_new(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[Estimator]:
+    ) -> Optional[LabelEncoderEstimator]:
         """Get label encoded categories data.
 
         Args:

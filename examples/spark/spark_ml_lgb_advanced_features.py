@@ -94,7 +94,9 @@ if __name__ == "__main__":
         }
 
         # data reading and converting to SparkDataset
-        df = spark.read.csv("../data/tiny_used_cars_data.csv", header=True, escape="\"")
+        # df = spark.read.csv("examples/data/tiny_used_cars_data.csv", header=True, escape="\"")
+        df = spark.read.csv("examples/data/avito1k_train.csv", header=True, escape="\"")
+        # df = spark.read.csv("examples/data/sampled_app_train.csv", header=True, escape="\"")
         sreader = SparkToSparkReader(task=SparkTask("reg"), cv=5)
         sdataset_tmp = sreader.fit_read(df, roles=roles)
 
@@ -120,24 +122,43 @@ if __name__ == "__main__":
             'top_intersections': 4
         }
 
-        # SparkTransformer pipeline
-        lgb_simple_feature_builder = LGBAdvancedPipeline(**ml_alg_kwargs)
-        pipeline = lgb_simple_feature_builder.create_pipeline(sdataset)
-        # pipeline.fit_transform(sdataset).to_pandas().data.to_csv("/tmp/pipeline_model.csv", index=False)
+        # # SparkTransformer pipeline
+        # lgb_simple_feature_builder = LGBAdvancedPipeline(**ml_alg_kwargs)
+        # pipeline = lgb_simple_feature_builder.create_pipeline(sdataset)
+        # # pipeline.fit_transform(sdataset).to_pandas().data.to_csv("/tmp/pipeline_model.csv", index=False)
 
-        graph = build_graph(pipeline)
-        tr_layers = list(toposort.toposort(graph))
-        stages = [tr for layer in tr_layers
-                  for tr in itertools.chain(layer, [Cacher('some_key')])]
+        # graph = build_graph(pipeline)
+        # tr_layers = list(toposort.toposort(graph))
+        # stages = [tr for layer in tr_layers
+        #           for tr in itertools.chain(layer, [Cacher('some_key')])]
 
-        spark_ml_pipeline = Pipeline(stages=stages)
+        # spark_ml_pipeline = Pipeline(stages=stages)
 
 
         # # Spark ML pipeline
-        # simple_pipline_builder = LGBAdvancedPipelineTmp(**ml_alg_kwargs)
-        # spark_pipeline = simple_pipline_builder.create_pipeline(sdataset)
-        # spark_pipeline_model = spark_pipeline.fit(sdataset.data)
-        # spark_pipeline_model.transform(sdataset.data).toPandas().to_csv("/tmp/spark_pipeline_model.csv", index=False)
+        simple_pipline_builder = LGBAdvancedPipelineTmp(**ml_alg_kwargs)
+        # spark_pipeline, features, roles = simple_pipline_builder.create_pipeline(sdataset)
+        simple_pipline_builder.fit_transform(sdataset)
+
+        # test saved pipline model
+        pipeline_model = simple_pipline_builder.transformer
+        result = pipeline_model.transform(sdataset.data)
+        result.toPandas().to_csv("/tmp/spark_pipeline_model.csv", index=False)
+
+        # graph = build_graph(spark_pipeline)
+        # tr_layers = list(toposort.toposort(graph))
+        # stages = [tr for layer in tr_layers
+        #           for tr in itertools.chain(layer, [Cacher('some_key')])]
+
+        # cacher_stage = stages[-1]
+        # assert isinstance(cacher_stage, Cacher), "Last stage of feature pipeline must be a Cacher"
+
+        # spark_ml_pipeline = Pipeline(stages=stages)
+
+        # pipeline_model = spark_ml_pipeline.fit(sdataset.data)
+        # pipeline_model.transform(sdataset.data).toPandas().to_csv("/tmp/spark_pipeline_model.csv", index=False)
+
+
 
         logger.info("Finished")
 
