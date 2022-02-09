@@ -22,7 +22,7 @@ from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel
 from lightautoml.spark.mlwriters import TmpСommonMLWriter
-from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
+# from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
 import pandas as pd
 
 from lightautoml.utils.timer import TaskTimer
@@ -605,7 +605,8 @@ class BoostLGBMEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
                                     dataset: SparkDataFrame, 
                                     folds_column: str,
                                     folds_number: int = 2) -> TrainValidIterator:
-        return TmpIterator(dataset, folds_column, folds_number)
+        raise NotImplementedError()
+        # return TmpIterator(dataset, folds_column, folds_number)
 
     def _fit(self, dataset: SparkDataFrame) -> "BoostLGBMTransformer":
         """Divides the input dataframe into multiple parts.
