@@ -120,7 +120,7 @@ if __name__ == "__main__":
             'auto_unique_co': 10,
             'max_intersection_depth': 3,
             'multiclass_te_co': 3,
-            'output_categories': False,
+            'output_categories': True,
             # 'subsample': 100000,
             'top_intersections': 4
         }

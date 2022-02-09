@@ -874,8 +874,9 @@ class CatIntersectionsEstimator(Estimator, HasOutputCols):
 
         if self.intersections is None:
             self.intersections = []
-            for i in range(2, min(self.max_depth, len(self.input_cols)) + 1):
-                self.intersections.extend(list(combinations(self.input_cols, i)))
+            # TODO: make self.input_cols = list and replace self.input_cols[0] to self.input_cols
+            for i in range(2, min(self.max_depth, len(self.input_cols[0])) + 1):
+                self.intersections.extend(list(combinations(self.input_cols[0], i)))
 
         self.output_cols = self.get_output_names()
         self.set(self.outputCols, self.get_output_names())
@@ -997,7 +998,7 @@ class CatIntersectionsEstimator(Estimator, HasOutputCols):
     #     inter_dataset = self._build_df(dataset)
     #     return super().transform(inter_dataset)
 
-class CatIntersectionsTransformer(Transformer):
+class CatIntersectionsTransformer(LabelEncoderTransformer):
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
@@ -1010,7 +1011,7 @@ class CatIntersectionsTransformer(Transformer):
                  input_roles: Optional[Dict[str, ColumnRole]] = None,
                  intersections: Optional[Sequence[Sequence[str]]] = None):
 
-        super().__init__()
+        Transformer.__init__(self)
         self.dicts = dicts
         self.input_roles = input_roles
         self.intersections = intersections
@@ -1027,7 +1028,7 @@ class CatIntersectionsTransformer(Transformer):
         columns_to_select = []
 
         for comb in self.intersections:
-            columns_to_select.append(CatIntersectstionsEstimator._make_category(comb))
+            columns_to_select.append(CatIntersectionsEstimator._make_category(comb))
             roles[f"({'__'.join(comb)})"] = CategoryRole(
                 object,
                 unknown=max((self.input_roles[x].unknown for x in comb)),
