@@ -14,7 +14,7 @@ from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LA
 from lightautoml.transformers.base import Roles
 
 from pyspark.ml import Transformer, Estimator
-from pyspark.ml.param.shared import HasInputCols, HasOutputCols
+from pyspark.ml.param.shared import HasInputCols, HasOutputCols, TypeConverters
 from pyspark.ml.param.shared import Param, Params
 from pyspark.ml.util import MLReadable, MLWritable, MLWriter
 
@@ -30,15 +30,51 @@ SparkEstOrTrans = Union[
 ]
 
 
-class SparkBaseEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable, ABC):
-    _fit_checks = ()
-    _fname_prefix = ""
+class HasInputRoles(Params):
+    """
+    Mixin for param inputCols: input column names.
+    """
 
     inputRoles = Param(Params._dummy(), "inputRoles",
                        "input roles (lama format)")
 
+    def __init__(self):
+        super().__init__()
+
+    def getInputRoles(self):
+        """
+        Gets the value of inputCols or its default value.
+        """
+        return self.getOrDefault(self.inputRoles)
+
+
+class HasOutputRoles(Params):
+    """
+    Mixin for param inputCols: input column names.
+    """
     outputRoles = Param(Params._dummy(), "outputRoles",
                         "output roles (lama format)")
+
+    def __init__(self):
+        super().__init__()
+
+    def getOutputRoles(self):
+        """
+        Gets the value of inputCols or its default value.
+        """
+        return self.getOrDefault(self.outputRoles)
+
+
+class SparkColumnsAndRoles(HasInputCols, HasOutputCols, HasInputRoles, HasOutputRoles):
+    doReplaceColumns = Param(Params._dummy(), "doReplaceColumns", "whatever it replaces columns or not")
+
+    def getDoReplaceColumns(self):
+        return self.getOrDefault(self.doReplaceColumns)
+
+
+class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, MLWritable, ABC):
+    _fit_checks = ()
+    _fname_prefix = ""
 
     def __init__(self,
                  input_cols: Optional[List[str]] = None,
@@ -51,12 +87,6 @@ class SparkBaseEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable, ABC
         self.set(self.outputCols, self._make_output_names(input_cols))
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self._make_output_roles())
-
-    def getOutputRoles(self):
-        """
-        Gets output roles or its default value.
-        """
-        return self.getOrDefault(self.outputRoles)
 
     def _make_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
@@ -72,14 +102,21 @@ class SparkBaseEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable, ABC
         return TmpСommonMLWriter(self.uid)
 
 
-class SparkBaseTransformer(Transformer, HasInputCols, HasOutputCols, MLWritable, ABC):
+class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
     _fname_prefix = ""
-    _transform_checks = ()
 
-    def __init__(self, input_cols: List[str], output_cols: Optional[List[str]] = None):
+    def __init__(self,
+                 input_cols: List[str],
+                 output_cols: List[str],
+                 input_roles: RolesDict,
+                 output_roles: RolesDict):
         super().__init__()
         self.set(self.inputCols, input_cols)
         self.set(self.outputCols, output_cols)
+        self.set(self.inputRoles, input_roles)
+        self.set(self.outputRoles, output_roles)
+
+    _transform_checks = ()
 
     def write(self) -> MLWriter:
         "Returns MLWriter instance that can save the Transformer instance."

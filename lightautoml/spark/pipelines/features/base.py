@@ -1,6 +1,5 @@
 """Basic classes for features generation."""
 import itertools
-from abc import ABC, abstractproperty, abstractmethod
 from copy import copy, deepcopy
 from typing import Any, Callable, Union, cast, Dict, Set
 from typing import List
@@ -18,18 +17,18 @@ from pyspark.sql import functions as F
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.utils import get_columns_by_role
+from lightautoml.pipelines.utils import map_pipeline_names
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
-from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator, FreqEncoder, FreqEncoderEstimator, LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
-    TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
-from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, \
     ChangeRoles, \
     UnionTransformer, SparkTransformer, SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
-    SparkSequentialTransformer, SparkEstOrTrans
-from lightautoml.pipelines.utils import map_pipeline_names
-from lightautoml.spark.transformers.numeric import QuantileBinning
-
+    SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
+from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator, FreqEncoder, FreqEncoderEstimator, \
+    LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
+    TargetEncoder, CatIntersectstions
 from lightautoml.spark.transformers.categorical import TargetEncoderEstimator
+from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer
+from lightautoml.spark.transformers.numeric import QuantileBinning
 
 
 def build_graph(begin: SparkEstOrTrans):
@@ -61,7 +60,7 @@ def build_graph(begin: SparkEstOrTrans):
         else:
             return [tr], [tr]
 
-    starts, _ = find_start_end(begin)
+    init_starts, _ = find_start_end(begin)
 
     return graph
 
@@ -118,9 +117,10 @@ class FeaturesPipelineSpark:
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.pipes: List[Callable[[SparkDataset], Estimator]] = [self.create_pipeline]
+        self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
         self._transformer: Optional[Transformer] = None
         self._input_features: Optional[List[str]] = None
+        self._input_roles: Optional[RolesDict] = None
         self._output_features: Optional[List[str]] = None
         self._output_roles: Optional[RolesDict] = None
 
@@ -145,6 +145,14 @@ class FeaturesPipelineSpark:
         self._input_features = deepcopy(val)
 
     @property
+    def input_roles(self) -> Optional[RolesDict]:
+        return self._input_roles
+
+    @input_roles.setter
+    def input_roles(self, val: RolesDict):
+        self._input_roles = deepcopy(RolesDict)
+
+    @property
     def output_features(self) -> Optional[List[str]]:
         """List of feature names that produces _pipeline."""
         return self._output_features
@@ -153,7 +161,7 @@ class FeaturesPipelineSpark:
     def output_roles(self) -> RolesDict:
         return self._output_roles
 
-    def create_pipeline(self, train: SparkDataset) -> Union[SparkUnionTransformer, SparkSequentialTransformer]:
+    def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
         """Analyse dataset and create composite transformer.
 
         Args:
@@ -175,15 +183,14 @@ class FeaturesPipelineSpark:
             Dataset with new features.
 
         """
+        assert self.input_features is not None, "Input features should be provided before the fit_transform"
+        assert self.input_roles is not None, "Input roles should be provided before the fit_transform"
 
         pipeline, last_cacher = self._merge(train)
 
-        # TODO: infer output features here
-
-        assert self._output_features is not None, "Output features cannot be None"
+        self._infer_output_features_and_roles(pipeline)
 
         self._transformer = cast(Transformer, pipeline.fit(train.data))
-
         sdf = last_cacher.dataset
 
         features = train.features + self._output_features
@@ -222,7 +229,8 @@ class FeaturesPipelineSpark:
         pipeline = Pipeline(stages=ests)
         return pipeline, last_cacher
 
-    def _optimize_for_caching(self, pipeline) -> Tuple[Estimator, Cacher]:
+    @staticmethod
+    def _optimize_for_caching(pipeline: SparkEstOrTrans) -> Tuple[Estimator, Cacher]:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
         stages = [tr for layer in tr_layers
@@ -234,6 +242,51 @@ class FeaturesPipelineSpark:
         spark_ml_pipeline = Pipeline(stages=stages)
 
         return spark_ml_pipeline, last_cacher
+
+    def _infer_output_features_and_roles(self, pipeline: Estimator):
+        # TODO: infer output features here
+        if isinstance(pipeline, Pipeline):
+            estimators = pipeline.stages
+        else:
+            estimators = [pipeline]
+
+        assert len(estimators) > 0, "Pipeline cannot be empty"
+
+        fp_input_features = set(self.input_features)
+
+        features = copy(fp_input_features)
+        roles = copy(self.input_roles)
+        for est in estimators:
+            assert isinstance(est, SparkColumnsAndRoles)
+
+            input_features = est.getInputCols()
+
+            assert est.getDoReplaceColumns() and any(f in fp_input_features for f in input_features), \
+                "Cannot replace input features of the feature pipeline itself"
+
+            if est.getDoReplaceColumns():
+                features.remove(est.getInputCols())
+                for col in est.getInputCols():
+                    del roles[col]
+
+            assert any(f in features for f in est.getOutputCols()), \
+                "Cannot add an already existing feature"
+
+            features.update(est.getOutputCols())
+            roles.update(est.getOutputRoles())
+
+        assert all((f in features) for f in self.input_features), \
+            "All input features should be present in the output features"
+        assert all((f in roles) for f in self.input_features), \
+            "All input features should be present in the output roles"
+
+        # we want to have only newly added features in out output features, not input features
+        features.remove(fp_input_features)
+        for col in self.input_roles:
+            del roles[col]
+
+        self._output_features = list(features)
+        self._output_roles = roles
 
 
 class TabularDataFeaturesSpark:
@@ -269,7 +322,7 @@ class TabularDataFeaturesSpark:
 
     def _cols_by_role(self, dataset: SparkDataset, role_name: str, **kwargs: Any) -> List[str]:
         cols = get_columns_by_role(dataset, role_name, **kwargs)
-        filtered_cols = [col for col in cols if col in self._input_features()]
+        filtered_cols = [col for col in cols if col in self._get_input_features()]
         return filtered_cols
 
     def get_cols_for_datetime(self, train: SparkDataset) -> Tuple[List[str], List[str]]:
