@@ -62,6 +62,10 @@ def build_graph(begin: SparkEstOrTrans):
 
     init_starts, _ = find_start_end(begin)
 
+    for st in init_starts:
+        if st not in graph:
+            graph[st] = set()
+
     return graph
 
 
@@ -194,7 +198,8 @@ class FeaturesPipelineSpark:
         sdf = last_cacher.dataset
 
         features = train.features + self._output_features
-        roles = copy(train.roles).update(self._output_roles)
+        roles = copy(train.roles)
+        roles.update(self._output_roles)
         transformed_ds = train.empty()
         transformed_ds.set_data(sdf, features, roles)
 
@@ -224,13 +229,13 @@ class FeaturesPipelineSpark:
 
     def _merge(self, data: SparkDataset) -> Tuple[Estimator, Cacher]:
         est_cachers = [self._optimize_for_caching(pipe(data)) for pipe in self.pipes]
-        ests = [est for est, _  in est_cachers]
+        ests = [e for est, _ in est_cachers for e in est]
         _, last_cacher = est_cachers[-1]
         pipeline = Pipeline(stages=ests)
         return pipeline, last_cacher
 
     @staticmethod
-    def _optimize_for_caching(pipeline: SparkEstOrTrans) -> Tuple[Estimator, Cacher]:
+    def _optimize_for_caching(pipeline: SparkEstOrTrans) -> Tuple[List[Estimator], Cacher]:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
         stages = [tr for layer in tr_layers
@@ -239,14 +244,12 @@ class FeaturesPipelineSpark:
         last_cacher = stages[-1]
         assert isinstance(last_cacher, Cacher)
 
-        spark_ml_pipeline = Pipeline(stages=stages)
-
-        return spark_ml_pipeline, last_cacher
+        return stages, last_cacher
 
     def _infer_output_features_and_roles(self, pipeline: Estimator):
         # TODO: infer output features here
         if isinstance(pipeline, Pipeline):
-            estimators = pipeline.stages
+            estimators = pipeline.getStages()
         else:
             estimators = [pipeline]
 
@@ -257,32 +260,35 @@ class FeaturesPipelineSpark:
         features = copy(fp_input_features)
         roles = copy(self.input_roles)
         for est in estimators:
+            if isinstance(est, Cacher):
+                continue
+
             assert isinstance(est, SparkColumnsAndRoles)
 
             input_features = est.getInputCols()
 
-            assert est.getDoReplaceColumns() and any(f in fp_input_features for f in input_features), \
+            assert not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features), \
                 "Cannot replace input features of the feature pipeline itself"
 
             if est.getDoReplaceColumns():
-                features.remove(est.getInputCols())
                 for col in est.getInputCols():
+                    features.remove(col)
                     del roles[col]
 
-            assert any(f in features for f in est.getOutputCols()), \
+            assert not any(f in features for f in est.getOutputCols()), \
                 "Cannot add an already existing feature"
 
             features.update(est.getOutputCols())
             roles.update(est.getOutputRoles())
 
-        assert all((f in features) for f in self.input_features), \
+        assert all((f in features) for f in fp_input_features), \
             "All input features should be present in the output features"
-        assert all((f in roles) for f in self.input_features), \
+        assert all((f in roles) for f in fp_input_features), \
             "All input features should be present in the output roles"
 
         # we want to have only newly added features in out output features, not input features
-        features.remove(fp_input_features)
-        for col in self.input_roles:
+        for col in fp_input_features:
+            features.remove(col)
             del roles[col]
 
         self._output_features = list(features)

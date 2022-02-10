@@ -96,18 +96,15 @@ class LabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
 
     _fillna_val = 0
 
-    inputRoles = Param(Params._dummy(), "inputRoles",
-                            "input roles (lama format)")
-
-    outputRoles = Param(Params._dummy(), "outputRoles",
-                            "output roles (lama format)")
-
     def __init__(self,
                  input_cols: Optional[List[str]] = None,
                  input_roles: Optional[Dict[str, ColumnRole]] = None,
                  subs: Optional[float] = None,
-                 random_state: Optional[int] = 42):
-       super().__init__(input_cols, input_roles)
+                 random_state: Optional[int] = 42,
+                 output_role: Optional[ColumnRole] = None):
+        if not output_role:
+            output_role = CategoryRole(np.int32, label_encoded=True)
+        super().__init__(input_cols, input_roles, output_role=output_role)
 
     def _fit(self, dataset: SparkDataFrame) -> "LabelEncoderTransformer":
         logger.info(f"[{type(self)} (LE)] fit is started")
@@ -237,7 +234,7 @@ class LabelEncoderTransformer(SparkBaseTransformer, TypesHelper):
                             col = F.when(_ic.isNull(), null_value) \
                                    .otherwise(pandas_dict_udf(labels)(_ic))
 
-            cols_to_select.append(out_col)
+            cols_to_select.append(col.alias(out_col))
 
         logger.info(f"[{type(self)} (LE)] Transform is finished")
 
@@ -259,7 +256,7 @@ class OrdinalEncoderEstimator(LabelEncoderEstimator):
                  input_roles: Optional[Dict[str, ColumnRole]] = None,
                  subs: Optional[float] = None,
                  random_state: Optional[int] = 42):
-        super().__init__(input_cols, input_roles, subs, random_state)
+        super().__init__(input_cols, input_roles, subs, random_state, output_role=NumericRole(np.float32))
         self.dicts = None
 
     def _fit(self, dataset: SparkDataFrame) -> "Transformer":

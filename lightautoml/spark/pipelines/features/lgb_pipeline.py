@@ -1,8 +1,9 @@
-from typing import cast, Optional, Union, Set
+from typing import cast, Optional, Union, Set, List
 from unicodedata import name
 
 import numpy as np
 
+from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.pipelines.utils import get_columns_by_role
@@ -29,8 +30,10 @@ class LGBSimpleFeaturesSpark(FeaturesPipelineSpark, TabularDataFeaturesSpark):
     Maps input to output features exactly one-to-one.
 
     """
-    def __init__(self):
+    def __init__(self, input_features: List[str], input_roles: RolesDict):
         super().__init__()
+        self._input_features = input_features
+        self._input_roles = input_roles
 
     def _get_input_features(self) -> Set[str]:
         return set(self.input_features)

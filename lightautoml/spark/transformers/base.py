@@ -79,19 +79,21 @@ class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, MLWritable, ABC):
     def __init__(self,
                  input_cols: Optional[List[str]] = None,
                  input_roles: Optional[Dict[str, ColumnRole]] = None,
-                 do_replace_columns: bool = False):
+                 do_replace_columns: bool = False,
+                 output_role: Optional[ColumnRole] = None):
         super().__init__()
+
+        self._output_role = output_role
 
         assert all((f in input_roles) for f in input_cols), \
             "All columns should have roles"
-
-        self._output_role: Optional[ColumnRole] = None
 
         self.set(self.inputCols, input_cols)
         self.set(self.outputCols, self._make_output_names(input_cols))
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self._make_output_roles())
         self.set(self.doReplaceColumns, do_replace_columns)
+
 
     def _make_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
@@ -235,7 +237,7 @@ class SparkTransformer(LAMLTransformer):
     def _get_updated_roles(dataset: SparkDataset, new_features: List[str], new_role: ColumnRole) -> RolesDict:
         new_roles = deepcopy(dataset.roles)
         new_roles.update({feat: new_role for feat in new_features})
-        return  new_roles
+        return new_roles
 
 
 class SequentialTransformer(SparkTransformer):
