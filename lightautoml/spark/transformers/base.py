@@ -94,7 +94,6 @@ class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, MLWritable, ABC):
         self.set(self.outputRoles, self._make_output_roles())
         self.set(self.doReplaceColumns, do_replace_columns)
 
-
     def _make_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
 

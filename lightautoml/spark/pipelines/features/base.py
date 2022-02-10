@@ -500,16 +500,14 @@ class TabularDataFeaturesSpark:
 
         if feats_to_select is None:
             feats_to_select = []
-            roles = dict()
             for i in ["auto", "oof", "int", "ohe"]:
-                feats, rls = self._cols_by_role(train, "Category", encoding_type=i)
+                feats = self._cols_by_role(train, "Category", encoding_type=i)
                 feats_to_select.extend(feats)
-                roles.update(rls)
 
         if len(feats_to_select) == 0:
             return
 
-        roles = {train.roles[f] for f in feats_to_select}
+        roles = {f: train.roles[f] for f in feats_to_select}
 
         cat_processing = LabelEncoderEstimator(input_cols=feats_to_select,
                                                input_roles=roles,
