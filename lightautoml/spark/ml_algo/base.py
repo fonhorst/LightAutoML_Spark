@@ -306,7 +306,8 @@ class TabularMLAlgo(MLAlgo):
 
         return full_preds_df
 
-    def _get_predict_column(self, model: SparkMLModel) -> str:
+    @staticmethod
+    def _get_predict_column(model: SparkMLModel) -> str:
         # TODO SPARK-LAMA: Rewrite using class recognition.
         try:
             return model.getPredictionCol()
@@ -383,23 +384,13 @@ class TabularMLAlgoTransformer(Transformer):
         preds_dfs = [
             self.predict_single_fold(dataset=dataset, model=model).select(
                 SparkDataset.ID_COLUMN,
-                F.col(self._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
+                F.col(TabularMLAlgo._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
             ) for i, model in enumerate(self._models)
         ]
 
         predict_sdf = self._average_predictions(dataset, preds_dfs, self._predict_feature_name)
 
         return predict_sdf
-
-    def _get_predict_column(self, model: SparkMLModel) -> str:
-        # TODO SPARK-LAMA: Rewrite using class recognition.
-        try:
-            return model.getPredictionCol()
-        except AttributeError:
-            if isinstance(model, PipelineModel):
-                return model.stages[-1].getPredictionCol()
-
-            raise TypeError("Unknown model type! Unable ro retrieve prediction column")
 
     def _average_predictions(self, 
                             preds_ds: SparkDataFrame,
