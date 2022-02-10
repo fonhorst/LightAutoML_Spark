@@ -8,11 +8,12 @@ import pandas as pd
 from pandas import Series
 from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame
 
+from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.transformers.datetime import datetime_check, date_attrs
 
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.transformers.base import SparkTransformer
+from lightautoml.spark.transformers.base import SparkTransformer, SparkBaseTransformer
 
 from pyspark.ml import Transformer, Estimator
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
@@ -59,7 +60,57 @@ is_holiday_udf = F.udf(lambda *args, **kwargs: is_holiday(*args, **kwargs), Spar
 get_timestamp_attr_udf = F.udf(lambda *args, **kwargs: get_timestamp_attr(*args, **kwargs), SparkTypes.IntegerType())
 
 
-# class SparkDatetimeHelper(SparkTransformer)
+class SparkDatetimeHelper(SparkTransformer):
+    basic_interval = "D"
+
+    _interval_mapping = {
+        "NS": 0.000000001,
+        "MS": 0.001,
+        "SEC": 1,
+        "MIN": 60,
+        "HOUR": 60 * 60,
+        "D": 60 * 60 * 24,
+
+        # FIXME SPARK-LAMA: Very rough rounding
+        "M": 60 * 60 * 24 * 30,
+        "Y": 60 * 60 * 24 * 365
+    }
+
+    _fit_checks = (datetime_check,)
+    _transform_checks = ()
+
+
+class SparkTimeToNumTransformer(SparkBaseTransformer, SparkDatetimeHelper):
+    basic_time = "2020-01-01"
+    _fname_prefix = "dtdiff"
+
+    def __init__(self, input_cols: List[str], input_roles: RolesDict, do_replace_columns: bool = False):
+        output_cols = [f"{self._fname_prefix}__{f}" for f in input_cols]
+        output_roles = {f: NumericRole(np.float32) for f in output_cols}
+        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+
+        df = dataset
+
+        # TODO SPARK-LAMA: It can be done easier without witColumn and withColumnRenamed.
+        # Use .alias instead of the latter one.
+        # https://github.com/fonhorst/LightAutoML/pull/57/files#r749549078
+        for i, out_col in zip(self.getInputCols(), self.getOutputCols()):
+            df = df.withColumn(
+                i,
+                (
+                    # TODO SPARK-LAMA: Spark gives wrong timestamp for parsed string even if we specify Timezone
+
+                    # TODO SPARK-LAMA: Actually, you can just subtract a python var without 'F.to_timestamp(F.lit(self.basic_time)).cast("long")'
+                    # basic_time_in_ts = datetime.to_unixtimestamp()
+                    # (F.to_timestamp(i).cast("long") - basic_time_in_ts) / ...
+                    # https://github.com/fonhorst/LightAutoML/pull/57/files#r749548681
+                    F.to_timestamp(F.col(i)).cast("long") - F.to_timestamp(F.lit(self.basic_time)).cast("long")
+                ) / self._interval_mapping[self.basic_interval]
+            ).withColumnRenamed(i, out_col)
+
+        return df
 
 
 class SparkDatetimeTransformer(SparkTransformer):

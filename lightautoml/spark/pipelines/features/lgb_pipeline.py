@@ -13,7 +13,7 @@ from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkTra
     UnionTransformer, \
     ColumnsSelector, ChangeRoles, SparkUnionTransformer, SparkSequentialTransformer
 from lightautoml.spark.transformers.categorical import OrdinalEncoder, TargetEncoderEstimator
-from lightautoml.spark.transformers.datetime import TimeToNum
+from lightautoml.spark.transformers.datetime import TimeToNum, SparkTimeToNumTransformer
 
 from pyspark.ml import Transformer, Pipeline, Estimator
 from lightautoml.spark.transformers.categorical import OrdinalEncoderEstimator
@@ -62,7 +62,8 @@ class LGBSimpleFeaturesSpark(FeaturesPipelineSpark, TabularDataFeaturesSpark):
         datetimes = self._cols_by_role(train, "Datetime")
         if len(datetimes) > 0:
             roles = {f: train.roles[f] for f in datetimes}
-            dt_processing = TimeToNum()
+            dt_processing = SparkTimeToNumTransformer(input_cols=datetimes,
+                                                      input_roles=roles)
             transformers_list.append(dt_processing)
 
         union_all = SparkUnionTransformer(transformers_list)
