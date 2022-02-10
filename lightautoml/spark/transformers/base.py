@@ -78,7 +78,8 @@ class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, MLWritable, ABC):
 
     def __init__(self,
                  input_cols: Optional[List[str]] = None,
-                 input_roles: Optional[Dict[str, ColumnRole]] = None):
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 do_replace_columns: bool = False):
         super().__init__()
 
         self._output_role: Optional[ColumnRole] = None
@@ -87,6 +88,7 @@ class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, MLWritable, ABC):
         self.set(self.outputCols, self._make_output_names(input_cols))
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, self._make_output_roles())
+        self.set(self.doReplaceColumns, do_replace_columns)
 
     def _make_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
@@ -109,12 +111,14 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
                  input_cols: List[str],
                  output_cols: List[str],
                  input_roles: RolesDict,
-                 output_roles: RolesDict):
+                 output_roles: RolesDict,
+                 do_replace_columns: bool = False):
         super().__init__()
         self.set(self.inputCols, input_cols)
         self.set(self.outputCols, output_cols)
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, output_roles)
+        self.set(self.doReplaceColumns, do_replace_columns)
 
     _transform_checks = ()
 

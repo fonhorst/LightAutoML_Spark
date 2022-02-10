@@ -149,6 +149,7 @@ class LabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
                                        output_cols=self.getOutputCols(),
                                        input_roles=self.getInputRoles(),
                                        output_roles=self.getOutputRoles(),
+                                       do_replace_columns=self.getDoReplaceColumns(),
                                        dicts=self.dicts)
 
 
@@ -165,8 +166,9 @@ class LabelEncoderTransformer(SparkBaseTransformer, TypesHelper):
                  output_cols: List[str],
                  input_roles: RolesDict,
                  output_roles: RolesDict,
+                 do_replace_columns: bool,
                  dicts: Dict):
-        super().__init__(input_cols, output_cols, input_roles, output_roles)
+        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
         self.set(self.fittedDicts, dicts)
         self._dicts = dicts
 
@@ -303,6 +305,7 @@ class OrdinalEncoderEstimator(LabelEncoderEstimator):
                                          output_cols=self.getOutputCols(),
                                          input_roles=self.getInputRoles(),
                                          output_roles=self.getOutputRoles(),
+                                         do_replace_columns=self.getDoReplaceColumns(),
                                          dicts=self.dicts)
 
 
@@ -316,8 +319,9 @@ class OrdinalEncoderTransformer(LabelEncoderTransformer):
                  output_cols: List[str],
                  input_roles: RolesDict,
                  output_roles: RolesDict,
+                 do_replace_columns: bool,
                  dicts: Dict):
-        super().__init__(input_cols, output_cols, input_roles, output_roles, dicts)
+        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns, dicts)
 
 
 class LabelEncoder(SparkTransformer):
@@ -881,14 +885,14 @@ class CatIntersectionsTransformer(LabelEncoderTransformer):
                  output_cols: List[str],
                  input_roles: RolesDict,
                  output_roles: RolesDict,
+                 do_replace_columns: bool,
                  dicts: Dict,
                  intersections: Optional[Sequence[Sequence[str]]] = None):
 
-        Transformer.__init__(self)
+        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns, dicts)
         self.dicts = dicts
         self.input_roles = input_roles
         self.intersections = intersections
-
 
     def _build_df(self, df: SparkDataFrame) -> SparkDataFrame:
 
