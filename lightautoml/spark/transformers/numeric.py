@@ -6,10 +6,11 @@ from pyspark.ml.feature import QuantileDiscretizer, Bucketizer
 from pyspark.sql import functions as F
 from pyspark.sql.pandas.functions import pandas_udf, PandasUDFType
 from pyspark.sql.types import FloatType, IntegerType
+from lightautoml.dataset.base import RolesDict
 
-from lightautoml.dataset.roles import NumericRole, CategoryRole
-from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.transformers.base import SparkTransformer
+from lightautoml.dataset.roles import ColumnRole, NumericRole, CategoryRole
+from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
+from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkTransformer
 from lightautoml.transformers.numeric import numeric_check
 
 
@@ -86,6 +87,39 @@ class FillInf(SparkTransformer):
 
         return output
 
+
+class FillInfTransformer(SparkBaseTransformer):
+
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    _fname_prefix = "fillinf"
+
+    _can_unwind_parents = False
+
+    def __init__(self, 
+                 input_cols: List[str],
+                 input_roles: RolesDict,
+                 role: ColumnRole):
+        super().__init__(
+            input_cols=input_cols,
+            output_cols=[f"{self._fname_prefix}__{feat}" for feat in input_cols],
+            input_roles=input_roles,
+            output_roles={f: NumericRole(np.float32) for f in input_cols},
+            do_replace_columns=False)
+
+    def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
+
+        cols_to_select = []
+        for i in self.getInputCols():
+            col = F.when(
+                    F.col(i).isin([F.lit("+Infinity").cast("double"), F.lit("-Infinity").cast("double")]),
+                    None) \
+                .otherwise(F.col(i))
+            cols_to_select.append(col.alias(f"{self._fname_prefix}__{i}"))
+
+        df = df.select('*', *cols_to_select)
+
+        return df
 
 class FillnaMedian(SparkTransformer):
     """Fillna with median."""
