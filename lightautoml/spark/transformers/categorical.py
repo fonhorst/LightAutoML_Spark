@@ -147,6 +147,8 @@ class LabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
 
         return LabelEncoderTransformer(input_cols=self.getInputCols(),
                                        output_cols=self.getOutputCols(),
+                                       input_roles=self.getInputRoles(),
+                                       output_roles=self.getOutputRoles(),
                                        dicts=self.dicts)
 
 
@@ -158,8 +160,13 @@ class LabelEncoderTransformer(SparkBaseTransformer, TypesHelper):
 
     fittedDicts = Param(Params._dummy(), "fittedDicts", "dicts from fitted Estimator")
 
-    def __init__(self, input_cols: List[str], output_cols: List[str], dicts: Dict):
-        super().__init__(input_cols, output_cols)
+    def __init__(self,
+                 input_cols: List[str],
+                 output_cols: List[str],
+                 input_roles: RolesDict,
+                 output_roles: RolesDict,
+                 dicts: Dict):
+        super().__init__(input_cols, output_cols, input_roles, output_roles)
         self.set(self.fittedDicts, dicts)
         self._dicts = dicts
 
@@ -294,6 +301,8 @@ class OrdinalEncoderEstimator(LabelEncoderEstimator):
 
         return OrdinalEncoderTransformer(input_cols=self.getInputCols(),
                                          output_cols=self.getOutputCols(),
+                                         input_roles=self.getInputRoles(),
+                                         output_roles=self.getOutputRoles(),
                                          dicts=self.dicts)
 
 
@@ -302,8 +311,13 @@ class OrdinalEncoderTransformer(LabelEncoderTransformer):
     _fname_prefix = "ord"
     _fillna_val = np.nan
 
-    def __init__(self, input_cols: List[str], output_cols: List[str], dicts: Dict):
-        super().__init__(input_cols, output_cols, dicts)
+    def __init__(self,
+                 input_cols: List[str],
+                 output_cols: List[str],
+                 input_roles: RolesDict,
+                 output_roles: RolesDict,
+                 dicts: Dict):
+        super().__init__(input_cols, output_cols, input_roles, output_roles, dicts)
 
 
 class LabelEncoder(SparkTransformer):
@@ -566,7 +580,8 @@ class FreqEncoderEstimator(Estimator, HasInputCols):
 
         logger.info(f"[{type(self)} (FE)] fit is finished")
 
-        return FreqEncoderTransformer(input_cols=self.getInputCols(), dicts=self.dicts)
+        return FreqEncoderTransformer(input_cols=self.getInputCols(),
+                                      dicts=self.dicts)
 
 
 class FreqEncoderTransformer(LabelEncoderTransformer):
@@ -852,6 +867,7 @@ class CatIntersectionsEstimator(Estimator, HasOutputCols):
     #     inter_dataset = self._build_df(dataset)
     #     return super().transform(inter_dataset)
 
+
 class CatIntersectionsTransformer(LabelEncoderTransformer):
 
     _fit_checks = (categorical_check,)
@@ -861,8 +877,11 @@ class CatIntersectionsTransformer(LabelEncoderTransformer):
     _fillna_val = 0
 
     def __init__(self,
+                 input_cols: List[str],
+                 output_cols: List[str],
+                 input_roles: RolesDict,
+                 output_roles: RolesDict,
                  dicts: Dict,
-                 input_roles: Optional[Dict[str, ColumnRole]] = None,
                  intersections: Optional[Sequence[Sequence[str]]] = None):
 
         Transformer.__init__(self)
