@@ -6,6 +6,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+import itertools
 import numpy as np
 import toposort
 from pandas import DataFrame
@@ -25,9 +26,12 @@ from lightautoml.spark.transformers.base import ChangeRolesTransformer, Sequenti
     SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
 from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator, FreqEncoder, FreqEncoderEstimator, \
     LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
-    TargetEncoder, CatIntersectstions
+    TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
 from lightautoml.spark.transformers.categorical import TargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer
+from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, ChangeRoles, \
+    UnionTransformer, SparkTransformer
+from lightautoml.pipelines.utils import map_pipeline_names
 from lightautoml.spark.transformers.numeric import QuantileBinning
 
 
@@ -77,7 +81,12 @@ class NoOpTransformer(Transformer):
 class Cacher(Estimator):
     _cacher_dict: Dict[str, SparkDataFrame] = dict()
 
-    def __init__(self, key: str, remember_dataset: bool = False):
+    @property
+    def dataset(self) -> SparkDataFrame:
+        """Returns chached dataframe"""
+        return self._cacher_dict[self._key]
+
+    def __init__(self, key: str):
         super().__init__()
         self._key = key
         self._remember_dataset = remember_dataset
@@ -97,10 +106,6 @@ class Cacher(Estimator):
             self._dataset = dataset
 
         return NoOpTransformer()
-
-    @property
-    def dataset(self) -> SparkDataFrame:
-        return self._dataset
 
 
 class FeaturesPipelineSpark:

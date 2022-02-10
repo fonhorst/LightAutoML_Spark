@@ -1,7 +1,7 @@
 import logging
 from abc import ABC
 from copy import copy, deepcopy
-from typing import Dict, cast, Sequence, List, Set, Optional, Union
+from typing import Dict, cast, Sequence, List, Set, Optional
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
@@ -421,11 +421,10 @@ class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols, MLWritabl
                             "output roles (lama format)")
 
     def __init__(self, 
-                 input_cols: Optional[List[str]] = None, 
-                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 input_cols: Optional[List[str]] = None,
                  roles: Roles = None):
         super().__init__()
-        self._output_role = roles # CHECK this
+        self._output_role = roles # TODO: SPARK-LAMA add support to several roles
         self.set(self.inputCols, input_cols)
         self.set(self.outputCols, self.get_output_names(input_cols))
         self.set(self.inputRoles, input_roles)
@@ -441,8 +440,16 @@ class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols, MLWritabl
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return copy(input_cols)
 
+
     def get_output_roles(self):
-        new_roles = deepcopy(self.getOrDefault(self.inputRoles))
+        new_roles = {}
         # TODO: change to use with different types of self._output_role
         new_roles.update({feat: self._output_role for feat in self.getInputCols()})
         return new_roles
+
+    # TODO: SPARK-LAMA add OutputRoles class like HasOutputCols
+    def getOutputRoles(self):
+        """
+        Gets output roles or its default value.
+        """
+        return self.getOrDefault(self.outputRoles)

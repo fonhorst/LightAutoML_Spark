@@ -5,14 +5,14 @@ from copy import copy
 from typing import Tuple, Optional, List
 from typing import Union
 
-from pyspark.ml import Pipeline
+from pyspark.ml import Pipeline, Transformer
 from pyspark.ml.classification import LogisticRegression, LogisticRegressionModel
 from pyspark.ml.feature import VectorAssembler, OneHotEncoder
 from pyspark.ml.regression import LinearRegression, LinearRegressionModel
 
 from pyspark.sql import functions as F
 
-from .base import TabularMLAlgo, SparkMLModel
+from .base import TabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ...utils.timer import TaskTimer
 from ...utils.tmp_utils import log_data
@@ -188,4 +188,34 @@ class LinearLBFGS(TabularMLAlgo):
 
         """
         pred = model.transform(dataset.data)
+        return pred
+
+    def _build_transformer(self) -> Transformer:
+        return LinearLBFGSTransformer(models=self.models,
+                                      predict_feature_name=self._predict_feature_name(),
+                                      task_name=self.task.name,
+                                      n_classes=self.n_classes)
+
+class LinearLBFGSTransformer(TabularMLAlgoTransformer):
+    """LinearLBFGS Spark MLlib Transformer"""
+
+    def __init__(self, models, predict_feature_name, task_name, n_classes):
+        super().__init__()
+        self._models = models
+        self._predict_feature_name = predict_feature_name
+        self._task_name = task_name
+        self._n_classes = n_classes
+
+    def predict_single_fold(self, dataset: SparkDataFrame, model: SparkMLModel) -> SparkDataFrame:
+        """Implements prediction on single fold.
+
+        Args:
+            model: Model uses to predict.
+            dataset: ``SparkDataFrame`` used for prediction.
+
+        Returns:
+            Predictions for input dataframe.
+
+        """
+        pred = model.transform(dataset)
         return pred

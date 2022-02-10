@@ -1,9 +1,9 @@
-from typing import cast, Optional, Union, Set, List
+from copy import deepcopy
+from typing import cast, Optional, Union
 from unicodedata import name
 
 import numpy as np
 
-from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.pipelines.utils import get_columns_by_role
@@ -362,9 +362,10 @@ class LGBAdvancedPipelineTmp(FeaturesPipeline, TabularDataFeatures):
 
         """
 
-        final_columns = []
-        # transformer_list = []
-        stages = []
+        features = train.features
+        roles = deepcopy(train.roles)
+        transformer_list = []
+        
         target_encoder = self.get_target_encoder_new(train)
 
         output_category_role = (
@@ -374,7 +375,11 @@ class LGBAdvancedPipelineTmp(FeaturesPipeline, TabularDataFeatures):
         # handle categorical feats
         # split categories by handling type. This pipe use 3 encodings - freq/label/target/ordinal
         # 1 - separate freqs. It does not need label encoding
-        stages.append(self.get_freq_encoding_new(train))
+        stage = self.get_freq_encoding_new(train)
+        if stage:
+            transformer_list.append(stage)
+            features = features + stage.getOutputCols()
+            roles.update(stage.getOutputRoles())
 
         # 2 - check different target encoding parts and split (ohe is the same as auto - no ohe in gbm)
         auto = get_columns_by_role(train, "Category", encoding_type="auto") + get_columns_by_role(
@@ -411,27 +416,26 @@ class LGBAdvancedPipelineTmp(FeaturesPipeline, TabularDataFeatures):
         le_part = self.get_categorical_raw_new(train, le)
         if le_part is not None:
             # le_part = SequentialTransformer([le_part, ChangeRoles(output_category_role)])
-            stages.append(le_part)
-            stages.append(ChangeRolesTransformer(input_cols=le_part.getOutputCols(),
-                                                 input_roles=le_part.getOutputRoles(),
-                                                 roles=output_category_role))
+            change_roles_stage = ChangeRolesTransformer(input_cols=le_part.getOutputCols(),
+                                                        roles=output_category_role)
+            features = features + le_part.getOutputCols()
+            roles.update(change_roles_stage.getOutputRoles())
+            le_part = SequentialTransformer([le_part, change_roles_stage])
+            transformer_list.append(le_part)
 
         # get target encoded part
         te_part = self.get_categorical_raw_new(train, te)
         if te_part is not None:
             # te_part = SequentialTransformer([te_part, target_encoder()])
-            stages.append(te_part)
-            stages.append(target_encoder(input_cols=te_part.getOutputCols(),
+            target_encoder_stage = target_encoder(input_cols=te_part.getOutputCols(),
                                          input_roles=te_part.getOutputRoles(),
                                          task_name=train.task.name,
                                          folds_column=train.folds_column,
-                                         target_column=train.target_column))
-            # stages.append(TargetEncoderEstimator(input_cols=te_part.getOutputCols(),
-            #                                     input_roles=te_part.getOutputRoles(),
-            #                                     task_name=train.task.name,
-            #                                     folds_column=train.folds_column,
-            #                                     target_column=train.target_column
-            #                                     ))
+                                         target_column=train.target_column)
+            features = features + target_encoder_stage.getOutputCols()
+            roles.update(target_encoder_stage.getOutputRoles())                                         
+            te_part = SequentialTransformer([te_part, target_encoder_stage])
+            transformer_list.append(te_part)
 
 
         # TODO: SPARK-LAMA fix bug with performance of catintersections
@@ -440,34 +444,45 @@ class LGBAdvancedPipelineTmp(FeaturesPipeline, TabularDataFeatures):
         if intersections is not None:
             if target_encoder is not None:
                 # ints_part = SequentialTransformer([intersections, target_encoder()])
-                stages.append(intersections)
-                stages.append(target_encoder(input_cols=intersections.getOutputCols(),
+                target_encoder_stage = target_encoder(input_cols=intersections.getOutputCols(),
                                              input_roles=intersections.getOutputRoles(),
                                              task_name=train.task.name,
                                              folds_column=train.folds_column,
-                                             target_column=train.target_column))
-                # stages.append(TargetEncoderEstimator(input_cols=intersections.getOutputCols(),
-                #                                     input_roles=intersections.getOutputRoles(),
-                #                                     task_name=train.task.name,
-                #                                     folds_column=train.folds_column,
-                #                                     target_column=train.target_column
-                #                                     ))
+                                             target_column=train.target_column)
+                features = features + target_encoder_stage.getOutputCols()
+                roles.update(target_encoder_stage.getOutputRoles())
+                ints_part = SequentialTransformer([intersections, target_encoder_stage])
+                transformer_list.append(ints_part)
+
             else:
                 # ints_part = SequentialTransformer([intersections, ChangeRoles(output_category_role)])
-                stages.append(intersections)
-                stages.append(ChangeRolesTransformer(input_cols=intersections.getOutputCols(), role=output_category_role))
+                change_roles_stage = ChangeRolesTransformer(input_cols=intersections.getOutputCols(),
+                                                           role=output_category_role)
+                features = features + intersections.getOutputCols()
+                roles.update(change_roles_stage.getOutputRoles())
+                ints_part = SequentialTransformer([intersections, change_roles_stage])
+                transformer_list.append(ints_part)
 
         # add numeric pipeline
-        stages.append(self.get_numeric_data_new(train))
-        stages.append(self.get_ordinal_encoding_new(train, ordinal))
+        if stage := self.get_numeric_data_new(train):
+            transformer_list.append(stage)
+            roles.update(stage.getOutputRoles())
+        if stage := self.get_ordinal_encoding_new(train, ordinal):
+            transformer_list.append(stage)
+            features = features + stage.getOutputCols()
+            roles.update(stage.getOutputRoles())
         # add difference with base date
-        stages.append(self.get_datetime_diffs_new(train))
+        if stage := self.get_datetime_diffs_new(train):
+            transformer_list.append(stage)
+            features = features + stage.getOutputCols()
+            roles.update(stage.getOutputRoles())
         # add datetime seasonality
-        stages.append(self.get_datetime_seasons_new(train, NumericRole(np.float32)))
+        if stage := self.get_datetime_seasons_new(train, NumericRole(np.float32)):
+            transformer_list.append(stage)
+            features = features + stage.getOutputCols()
+            roles.update(stage.getOutputRoles())
 
         # final pipeline
-        # union_all = UnionTransformer([x for x in stages if x is not None])
-        # pipeline = Pipeline(stages=[x for x in stages if x is not None] + ColumnsSelectorTransformer(input_cols=))
-        pipeline = Pipeline(stages=[x for x in stages if x is not None])
+        union_all = UnionTransformer([x for x in transformer_list if x is not None])
 
-        return pipeline
+        return union_all, features, roles

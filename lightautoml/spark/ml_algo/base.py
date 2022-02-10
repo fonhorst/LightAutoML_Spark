@@ -2,7 +2,7 @@ import logging
 from typing import Tuple, cast, List, Optional, Union
 
 import numpy as np
-from pyspark.ml import PredictionModel, PipelineModel
+from pyspark.ml import PredictionModel, PipelineModel, Transformer
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.sql import functions as F, Column
 
@@ -48,6 +48,15 @@ class TabularMLAlgo(MLAlgo):
     @property
     def prediction_column(self) -> str:
         return self._default_prediction_column_name
+
+    @property
+    def transformer(self) -> Transformer:
+        """Returns Spark MLlib Transformer.
+        Represents a Transformer with fitted models."""
+
+        assert self._transformer is not None, "Pipeline is not fitted!"
+
+        return self._transformer
 
     def fit_predict(self, train_valid_iterator: TrainValidIterator) -> SparkDataset:
         """Fit and then predict accordig the strategy that uses train_valid_iterator.
@@ -141,6 +150,9 @@ class TabularMLAlgo(MLAlgo):
                 if self.timer.time_limit_exceeded():
                     logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
                     break
+
+        # create Spark MLlib Transformer and save to property var
+        self._transformer = self._build_transformer()
 
         # combine predictions of all models and make them into the single one
         full_preds_df = self._average_predictions(valid_ds, preds_dfs, pred_col_prefix)
@@ -294,7 +306,8 @@ class TabularMLAlgo(MLAlgo):
 
         return full_preds_df
 
-    def _get_predict_column(self, model: SparkMLModel) -> str:
+    @staticmethod
+    def _get_predict_column(model: SparkMLModel) -> str:
         # TODO SPARK-LAMA: Rewrite using class recognition.
         try:
             return model.getPredictionCol()
@@ -343,3 +356,119 @@ class TabularMLAlgo(MLAlgo):
         if train.target_column not in train.data.columns:
             sdf = sdf.join(t_sdf, SparkDataset.ID_COLUMN)#.drop(t_sdf[SparkDataset.ID_COLUMN])
         return sdf
+
+    def _build_transformer(self) -> Transformer:
+        """Implements creation of Spark MLlib Transformer instance.
+
+        Returns:
+            Predictions for input dataset.
+
+        """
+        raise NotImplementedError
+
+
+class TabularMLAlgoTransformer(Transformer):
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        """Mean prediction for all fitted models.
+
+        Args:
+            dataset: Dataset used for prediction.
+
+        Returns:
+            Dataset with predicted values.
+
+        """
+        assert self._models != [], "Must have at least one fitted model."
+
+        preds_dfs = [
+            self.predict_single_fold(dataset=dataset, model=model).select(
+                SparkDataset.ID_COLUMN,
+                F.col(TabularMLAlgo._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
+            ) for i, model in enumerate(self._models)
+        ]
+
+        predict_sdf = self._average_predictions(dataset, preds_dfs, self._predict_feature_name)
+
+        return predict_sdf
+
+    def _average_predictions(self, 
+                            preds_ds: SparkDataFrame,
+                            preds_dfs: List[SparkDataFrame], 
+                            pred_col_prefix: str) -> SparkDataFrame:
+        # TODO: SPARK-LAMA probably one may write a scala udf function to join multiple arrays/vectors into the one
+        # TODO: reg and binary cases probably should be treated without arrays summation
+        # we need counter here for EACH row, because for some models there may be no predictions
+        # for some rows that means:
+        # 1. we need to do left_outer instead of inner join (because the right frame may not contain all rows)
+        # 2. we would like to find a mean prediction for each row, but the number of predictiosn may be variable,
+        #    that is why we need a counter for each row
+        # 3. this counter should depend on if there is None for the right row or not
+        # 4. we also need to substitute None's of the right dataframe with empty arrays
+        #    to provide uniformity for summing operations
+        # 5. we also convert output from vector to an array to combine them
+        counter_col_name = "counter"
+
+        if self._task_name == "multiclass":
+            empty_pred = F.array(*[F.lit(0) for _ in range(self._n_classes)])
+
+            def convert_col(prediction_column: str) -> Column:
+                return vector_to_array(F.col(prediction_column))
+
+            # full_preds_df
+            def sum_predictions_col() -> Column:
+                # curr_df[pred_col_prefix]
+                return F.transform(
+                    F.arrays_zip(pred_col_prefix, f"{pred_col_prefix}_{i}"),
+                    lambda x, y: x + y
+                ).alias(pred_col_prefix)
+
+            def avg_preds_sum_col() -> Column:
+                return array_to_vector(
+                    F.transform(pred_col_prefix, lambda x: x / F.col("counter"))
+                ).alias(pred_col_prefix)
+        else:
+            empty_pred = F.lit(0)
+
+            # trivial operator in this case
+            def convert_col(prediction_column: str) -> Column:
+                return F.col(prediction_column)
+
+            def sum_predictions_col() -> Column:
+                # curr_df[pred_col_prefix]
+                return (F.col(pred_col_prefix) + F.col(f"{pred_col_prefix}_{i}")).alias(pred_col_prefix)
+
+            def avg_preds_sum_col() -> Column:
+                return (F.col(pred_col_prefix) / F.col("counter")).alias(pred_col_prefix)
+
+        full_preds_df = preds_ds.select(
+            SparkDataset.ID_COLUMN,
+            F.lit(0).alias(counter_col_name),
+            empty_pred.alias(pred_col_prefix)
+        )
+        for i, pred_df in enumerate(preds_dfs):
+            pred_col = f"{pred_col_prefix}_{i}"
+            full_preds_df = (
+                full_preds_df
+                .join(pred_df, on=SparkDataset.ID_COLUMN, how="left_outer")
+                .select(
+                    full_preds_df[SparkDataset.ID_COLUMN],
+                    pred_col_prefix,
+                    F.when(F.col(pred_col).isNull(), empty_pred)
+                        .otherwise(convert_col(pred_col)).alias(pred_col),
+                    F.when(F.col(pred_col).isNull(), F.col(counter_col_name))
+                        .otherwise(F.col(counter_col_name) + 1).alias(counter_col_name)
+                )
+                .select(
+                    full_preds_df[SparkDataset.ID_COLUMN],
+                    counter_col_name,
+                    sum_predictions_col()
+                )
+            )
+
+        full_preds_df = full_preds_df.select(
+            SparkDataset.ID_COLUMN,
+            avg_preds_sum_col()
+        )
+
+        return full_preds_df

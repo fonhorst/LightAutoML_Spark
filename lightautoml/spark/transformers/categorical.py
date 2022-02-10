@@ -540,7 +540,7 @@ class FreqEncoder(LabelEncoder):
         return self
 
 
-class FreqEncoderEstimator(Estimator, HasInputCols):
+class FreqEncoderEstimator(Estimator, HasInputCols, HasOutputCols):
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
@@ -548,9 +548,29 @@ class FreqEncoderEstimator(Estimator, HasInputCols):
 
     _fillna_val = 1
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    outputRoles = Param(Params._dummy(), "outputRoles",
+                            "output roles (lama format)")
+
+    def __init__(self, input_cols: Optional[List[str]] = None):
+        super().__init__()
         self._output_role = NumericRole(np.float32)
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, self.get_output_names(input_cols))
+        self.set(self.outputRoles, self.get_output_roles())
+
+    def get_output_names(self, input_cols: List[str]) -> List[str]:
+        return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
+
+    def get_output_roles(self):
+        roles = {}
+        roles.update({feat: self._output_role for feat in self.getOutputCols()})
+        return roles
+
+    def getOutputRoles(self):
+        """
+        Gets output roles or its default value.
+        """
+        return self.getOrDefault(self.outputRoles)
 
     def _fit(self, dataset: SparkDataFrame) -> "FreqEncoderTransformer":
 
