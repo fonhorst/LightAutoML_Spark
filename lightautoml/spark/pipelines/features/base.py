@@ -2,7 +2,7 @@
 import itertools
 from abc import ABC, abstractproperty, abstractmethod
 from copy import copy, deepcopy
-from typing import Any, Callable, Union, cast, Dict
+from typing import Any, Callable, Union, cast, Dict, Set
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -22,8 +22,9 @@ from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator, FreqEncoder, FreqEncoderEstimator, LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
     TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
 from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, ChangeRoles, \
-    UnionTransformer, SparkTransformer
+from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, \
+    ChangeRoles, \
+    UnionTransformer, SparkTransformer, SparkBaseEstimator, SparkBaseTransformer
 from lightautoml.pipelines.utils import map_pipeline_names
 from lightautoml.spark.transformers.numeric import QuantileBinning
 
@@ -231,17 +232,12 @@ class FeaturesPipelineSpark:
         return spark_ml_pipeline, last_cacher
 
 
-class TabularDataFeaturesSpark(ABC):
+class TabularDataFeaturesSpark:
     """Helper class contains basic features transformations for tabular data.
 
     This method can de shared by all tabular feature pipelines,
     to simplify ``.create_automl`` definition.
     """
-
-    @property
-    @abstractmethod
-    def input_features(self) -> Optional[List[str]]:
-        pass
 
     def __init__(self, **kwargs: Any):
         """Set default parameters for tabular pipeline constructor.
@@ -264,9 +260,12 @@ class TabularDataFeaturesSpark(ABC):
         for k in kwargs:
             self.__dict__[k] = kwargs[k]
 
-    def cols_from_input_features(self, cols: List[str]) -> List[str]:
-        input_features = set(self.input_features)
-        filtered_cols = [col for col in cols if col in input_features]
+    def _input_features(self) -> Set[str]:
+        raise NotImplementedError()
+
+    def _cols_by_role(self, dataset: SparkDataset, role_name: str, **kwargs: Any) -> List[str]:
+        cols = get_columns_by_role(dataset, role_name, **kwargs)
+        filtered_cols = [col for col in cols if col in self._input_features()]
         return filtered_cols
 
     def get_cols_for_datetime(self, train: SparkDataset) -> Tuple[List[str], List[str]]:
@@ -279,17 +278,14 @@ class TabularDataFeaturesSpark(ABC):
             2 list of features names - base dates and common dates.
 
         """
-        base_dates = get_columns_by_role(train, "Datetime", base_date=True)
-        datetimes = get_columns_by_role(train, "Datetime", base_date=False) + get_columns_by_role(
+        base_dates = self._cols_by_role(train, "Datetime", base_date=True)
+        datetimes = self._cols_by_role(train, "Datetime", base_date=False) + self._cols_by_role(
             train, "Datetime", base_date=True, base_feats=True
         )
 
-        base_dates = self.cols_from_input_features(base_dates)
-        datetimes = self.cols_from_input_features(datetimes)
-
         return base_dates, datetimes
 
-    def get_datetime_diffs(self, train: SparkDataset) -> Optional[Transformer]:
+    def get_datetime_diffs(self, train: SparkDataset) -> Optional[SparkBaseTransformer]:
         """Difference for all datetimes with base date.
 
         Args:
@@ -308,9 +304,9 @@ class TabularDataFeaturesSpark(ABC):
 
         return base_diff
 
-    def get_datetime_seasons_new(
+    def get_datetime_seasons(
         self, train: SparkDataset, outp_role: Optional[ColumnRole] = None
-    ) -> Optional[Transformer]:
+    ) -> Optional[SparkBaseTransformer]:
         """Get season params from dates.
 
         Args:
@@ -332,16 +328,18 @@ class TabularDataFeaturesSpark(ABC):
         if outp_role is None:
             outp_role = NumericRole(np.float32)
 
-        date_as_cat = DateSeasonsTransformer(input_cols=datetimes, input_roles=train.roles, output_role=outp_role)
+        roles = {f: train.roles[f] for f in datetimes}
+
+        date_as_cat = DateSeasonsTransformer(input_cols=datetimes, input_roles=roles, output_role=outp_role)
 
         return date_as_cat
 
-    @staticmethod
-    def get_numeric_data_new(
+    def get_numeric_data(
+        self,
         train: SparkDataset,
         feats_to_select: Optional[List[str]] = None,
         prob: Optional[bool] = None,
-    ) -> Optional[Transformer]:
+    ) -> Optional[SparkBaseTransformer]:
         """Select numeric features.
 
         Args:
@@ -355,23 +353,23 @@ class TabularDataFeaturesSpark(ABC):
         """
         if feats_to_select is None:
             if prob is None:
-                feats_to_select = get_columns_by_role(train, "Numeric")
+                feats_to_select, roles = self._cols_by_role(train, "Numeric")
             else:
-                feats_to_select = get_columns_by_role(train, "Numeric", prob=prob)
+                feats_to_select, roles = self._cols_by_role(train, "Numeric", prob=prob)
 
         if len(feats_to_select) == 0:
             return None
 
+        roles = {train.roles[f] for f in feats_to_select}
+
         num_processing = ChangeRolesTransformer(input_cols=feats_to_select,
-                                                input_roles=train.roles,
+                                                input_roles=roles,
                                                 roles=NumericRole(np.float32))
 
         return num_processing
 
-    @staticmethod
-    def get_freq_encoding(
-        train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkTransformer]:
+    def get_freq_encoding(self, train: SparkDataset, feats_to_select: Optional[List[str]] = None) \
+            -> Optional[SparkBaseEstimator]:
         """Get frequency encoding part.
 
         Args:
@@ -383,10 +381,12 @@ class TabularDataFeaturesSpark(ABC):
 
         """
         if feats_to_select is None:
-            feats_to_select = get_columns_by_role(train, "Category", encoding_type="freq")
+            feats_to_select, roles = self._cols_by_role(train, "Category", encoding_type="freq")
 
         if len(feats_to_select) == 0:
             return None
+
+        roles = {train.roles[f] for f in feats_to_select}
 
         cat_processing = FreqEncoderEstimator(input_cols=feats_to_select)
 
@@ -394,7 +394,7 @@ class TabularDataFeaturesSpark(ABC):
 
     def get_ordinal_encoding(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkTransformer]:
+    ) -> Optional[SparkBaseEstimator]:
         """Get order encoded part.
 
         Args:
@@ -406,83 +406,23 @@ class TabularDataFeaturesSpark(ABC):
 
         """
         if feats_to_select is None:
-            feats_to_select = get_columns_by_role(train, "Category", ordinal=True)
+            feats_to_select, roles = self._cols_by_role(train, "Category", ordinal=True)
 
         if len(feats_to_select) == 0:
             return
 
-        cat_processing = SequentialTransformer(
-            [
-                ColumnsSelector(keys=feats_to_select),
-                OrdinalEncoder(subs=self.subsample, random_state=self.random_state),
-            ]
-        )
-        return cat_processing
+        roles = {train.roles[f] for f in feats_to_select}
 
-    def get_ordinal_encoding_new(
-        self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkTransformer]:
-        """Get order encoded part.
+        ord = OrdinalEncoderEstimator(input_cols=feats_to_select,
+                                      input_roles=roles,
+                                      subs=self.subsample,
+                                      random_state=self.random_state)
 
-        Args:
-            train: Dataset with train data.
-            feats_to_select: Features to handle. If ``None`` - default filter.
-
-        Returns:
-            Transformer.
-
-        """
-        if feats_to_select is None:
-            feats_to_select = get_columns_by_role(train, "Category", ordinal=True)
-
-        if len(feats_to_select) == 0:
-            return
-
-        # cat_processing = SequentialTransformer(
-        #     [
-        #         ColumnsSelector(keys=feats_to_select),
-        #         OrdinalEncoder(subs=self.subsample, random_state=self.random_state),
-        #     ]
-        # )
-        cat_processing = OrdinalEncoderEstimator(input_cols=feats_to_select,
-                                                 input_roles=train.roles,
-                                                 subs=self.subsample,
-                                                 random_state=self.random_state)
-
-        return cat_processing
-
-    def get_categorical_raw(
-        self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkTransformer]:
-        """Get label encoded categories data.
-
-        Args:
-            train: Dataset with train data.
-            feats_to_select: Features to handle. If ``None`` - default filter.
-
-        Returns:
-            Transformer.
-
-        """
-
-        if feats_to_select is None:
-            feats_to_select = []
-            for i in ["auto", "oof", "int", "ohe"]:
-                feats_to_select.extend(get_columns_by_role(train, "Category", encoding_type=i))
-
-        if len(feats_to_select) == 0:
-            return
-
-        cat_processing = [
-            ColumnsSelector(keys=feats_to_select),
-            LabelEncoder(subs=self.subsample, random_state=self.random_state),
-        ]
-        cat_processing = SequentialTransformer(cat_processing)
-        return cat_processing
+        return ord
 
     def get_categorical_raw_new(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[Estimator]:
+    ) -> Optional[SparkBaseEstimator]:
         """Get label encoded categories data.
 
         Args:
@@ -496,52 +436,24 @@ class TabularDataFeaturesSpark(ABC):
 
         if feats_to_select is None:
             feats_to_select = []
+            roles = dict()
             for i in ["auto", "oof", "int", "ohe"]:
-                feats_to_select.extend(get_columns_by_role(train, "Category", encoding_type=i))
+                feats, rls = self._cols_by_role(train, "Category", encoding_type=i)
+                feats_to_select.extend(feats)
+                roles.update(rls)
 
         if len(feats_to_select) == 0:
             return
 
-        # cat_processing = [
-        #     ColumnsSelector(keys=feats_to_select),
-        #     LabelEncoder(subs=self.subsample, random_state=self.random_state),
-        # ]
-        # cat_processing = SequentialTransformer(cat_processing)
+        roles = {train.roles[f] for f in feats_to_select}
 
         cat_processing = LabelEncoderEstimator(input_cols=feats_to_select,
+                                               input_roles=roles,
                                                subs=self.subsample,
-                                               random_state=self.random_state,
-                                               input_roles=train.roles)
+                                               random_state=self.random_state)
         return cat_processing
 
     def get_target_encoder(self, train: SparkDataset) -> Optional[type]:
-        """Get target encoder func for dataset.
-
-        Args:
-            train: Dataset with train data.
-
-        Returns:
-            Class
-
-        """
-        target_encoder = None
-        if train.folds is not None:
-            if train.task.name in ["binary", "reg"]:
-                target_encoder = TargetEncoder
-            else:
-                tds = cast(SparkDataFrame, train.target)
-                result = tds.select(F.max(train.target_column).alias("max")).first()
-                n_classes = result['max'] + 1
-
-                # TODO: SPARK-LAMA add warning here
-                target_encoder = None
-                # raise NotImplementedError()
-                # if n_classes <= self.multiclass_te_co:
-                #     target_encoder = MultiClassTargetEncoder
-
-        return target_encoder
-
-    def get_target_encoder_new(self, train: SparkDataset) -> Optional[type]:
         """Get target encoder func for dataset.
 
         Args:
@@ -562,7 +474,7 @@ class TabularDataFeaturesSpark(ABC):
 
                 # TODO: SPARK-LAMA add warning here
                 target_encoder = None
-                # raise NotImplementedError()
+                raise NotImplementedError()
                 # if n_classes <= self.multiclass_te_co:
                 #     target_encoder = MultiClassTargetEncoder
 
@@ -570,7 +482,7 @@ class TabularDataFeaturesSpark(ABC):
 
     def get_binned_data(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkTransformer]:
+    ) -> Optional[SparkBaseTransformer]:
         """Get encoded quantiles of numeric features.
 
         Args:
@@ -582,22 +494,20 @@ class TabularDataFeaturesSpark(ABC):
 
         """
         if feats_to_select is None:
-            feats_to_select = get_columns_by_role(train, "Numeric", discretization=True)
+            feats_to_select, roles = self._cols_by_role(train, "Numeric", discretization=True)
 
         if len(feats_to_select) == 0:
             return
 
-        binned_processing = SequentialTransformer(
-            [
-                ColumnsSelector(keys=feats_to_select),
-                QuantileBinning(nbins=self.max_bin_count),
-            ]
-        )
+        roles = {train.roles[f] for f in feats_to_select}
+
+        binned_processing = QuantileBinning(nbins=self.max_bin_count)
+
         return binned_processing
 
     def get_categorical_intersections(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkTransformer]:
+    ) -> Optional[SparkBaseTransformer]:
         """Get transformer that implements categorical intersections.
 
         Args:
@@ -610,7 +520,6 @@ class TabularDataFeaturesSpark(ABC):
         """
 
         if feats_to_select is None:
-
             categories = get_columns_by_role(train, "Category")
             feats_to_select = categories
 
@@ -623,62 +532,15 @@ class TabularDataFeaturesSpark(ABC):
         elif len(feats_to_select) <= 1:
             return
 
-        # TODO: removed from CatIntersection
-        # subs = self.subsample,
-        # random_state = self.random_state,
-        cat_processing = [
-            ColumnsSelector(keys=feats_to_select),
-            CatIntersectstions(
-                # intersections=feats_to_select,
-                max_depth=self.max_intersection_depth
-            ),
-        ]
-        cat_processing = SequentialTransformer(cat_processing)
-
-        return cat_processing
-
-    def get_categorical_intersections_new(
-        self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[Transformer]:
-        """Get transformer that implements categorical intersections.
-
-        Args:
-            train: Dataset with train data.
-            feats_to_select: features to handle. If ``None`` - default filter.
-
-        Returns:
-            Transformer.
-
-        """
-
-        if feats_to_select is None:
-
-            categories = get_columns_by_role(train, "Category")
-            feats_to_select = categories
-
-            if len(categories) <= 1:
-                return
-
-            elif len(categories) > self.top_intersections:
-                feats_to_select = self.get_top_categories(train, self.top_intersections)
-
-        elif len(feats_to_select) <= 1:
-            return
+        roles = {f: train.roles[f] for f in feats_to_select}
 
         # TODO: removed from CatIntersection
         # subs = self.subsample,
         # random_state = self.random_state,
-        # cat_processing = [
-        #     ColumnsSelector(keys=feats_to_select),
-        #     CatIntersectstions(
-        #         # intersections=feats_to_select,
-        #         max_depth=self.max_intersection_depth
-        #     ),
-        # ]
 
         cat_processing = CatIntersectionsEstimator(input_cols=feats_to_select,
-                                                     input_roles=train.roles,
-                                                     max_depth=self.max_intersection_depth)
+                                                   input_roles=roles,
+                                                   max_depth=self.max_intersection_depth)
 
         return cat_processing
 
@@ -753,7 +615,6 @@ class TabularDataFeaturesSpark(ABC):
         top = list(df.index[:top_n])
 
         return top
-
 
 
 class FeaturesPipeline:
