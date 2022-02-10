@@ -90,25 +90,17 @@ class SparkTimeToNumTransformer(SparkBaseTransformer, SparkDatetimeHelper):
         super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-
         df = dataset
 
-        # TODO SPARK-LAMA: It can be done easier without witColumn and withColumnRenamed.
-        # Use .alias instead of the latter one.
-        # https://github.com/fonhorst/LightAutoML/pull/57/files#r749549078
+        new_cols = []
         for i, out_col in zip(self.getInputCols(), self.getOutputCols()):
-            df = df.withColumn(
-                i,
-                (
-                    # TODO SPARK-LAMA: Spark gives wrong timestamp for parsed string even if we specify Timezone
+            new_col = (
+                    (F.to_timestamp(F.col(i)).cast("long") - F.to_timestamp(F.lit(self.basic_time)).cast("long"))
+                    / self._interval_mapping[self.basic_interval]
+            ).alias(out_col)
+            new_cols.append(new_col)
 
-                    # TODO SPARK-LAMA: Actually, you can just subtract a python var without 'F.to_timestamp(F.lit(self.basic_time)).cast("long")'
-                    # basic_time_in_ts = datetime.to_unixtimestamp()
-                    # (F.to_timestamp(i).cast("long") - basic_time_in_ts) / ...
-                    # https://github.com/fonhorst/LightAutoML/pull/57/files#r749548681
-                    F.to_timestamp(F.col(i)).cast("long") - F.to_timestamp(F.lit(self.basic_time)).cast("long")
-                ) / self._interval_mapping[self.basic_interval]
-            ).withColumnRenamed(i, out_col)
+        df = df.select('*', *new_cols)
 
         return df
 

@@ -82,6 +82,9 @@ class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, MLWritable, ABC):
                  do_replace_columns: bool = False):
         super().__init__()
 
+        assert all((f in input_roles) for f in input_cols), \
+            "All columns should have roles"
+
         self._output_role: Optional[ColumnRole] = None
 
         self.set(self.inputCols, input_cols)
@@ -114,6 +117,12 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
                  output_roles: RolesDict,
                  do_replace_columns: bool = False):
         super().__init__()
+
+        assert len(input_cols) == len(output_cols)
+        assert len(input_roles) == len(output_roles)
+        assert all((f in input_roles) for f in input_cols)
+        assert all((f in output_roles) for f in output_cols)
+
         self.set(self.inputCols, input_cols)
         self.set(self.outputCols, output_cols)
         self.set(self.inputRoles, input_roles)
