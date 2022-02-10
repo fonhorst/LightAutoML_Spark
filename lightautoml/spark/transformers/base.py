@@ -1,7 +1,7 @@
 import logging
 from abc import ABC
 from copy import copy, deepcopy
-from typing import Dict, cast, Sequence, List, Set, Optional
+from typing import Dict, cast, Sequence, List, Set, Optional, Union
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
@@ -410,7 +410,7 @@ class ChangeRoles(LAMAChangeRoles, SparkTransformer):
         return copy(input_cols)
 
 
-class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols, MLWritable):
+class ChangeRolesTransformer(SparkBaseTransformer):
     # _fname_prefix = "changeroles"
     # _can_unwind_parents = False
 
@@ -423,7 +423,12 @@ class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols, MLWritabl
     def __init__(self, 
                  input_cols: Optional[List[str]] = None,
                  roles: Roles = None):
-        super().__init__()
+        super().__init__(
+                input_cols:
+                 output_cols:
+                 input_roles:
+                 output_roles:
+                 do_replace_columns: bool = False)
         self._output_role = roles # TODO: SPARK-LAMA add support to several roles
         self.set(self.inputCols, input_cols)
         self.set(self.outputCols, self.get_output_names(input_cols))
@@ -436,20 +441,3 @@ class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols, MLWritabl
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset
-
-    def get_output_names(self, input_cols: List[str]) -> List[str]:
-        return copy(input_cols)
-
-
-    def get_output_roles(self):
-        new_roles = {}
-        # TODO: change to use with different types of self._output_role
-        new_roles.update({feat: self._output_role for feat in self.getInputCols()})
-        return new_roles
-
-    # TODO: SPARK-LAMA add OutputRoles class like HasOutputCols
-    def getOutputRoles(self):
-        """
-        Gets output roles or its default value.
-        """
-        return self.getOrDefault(self.outputRoles)

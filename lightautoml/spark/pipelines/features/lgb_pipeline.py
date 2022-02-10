@@ -1,9 +1,10 @@
 from copy import deepcopy
-from typing import cast, Optional, Union
+from typing import cast, Optional, Union, List, Set
 from unicodedata import name
 
 import numpy as np
 
+from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.pipelines.utils import get_columns_by_role

@@ -89,7 +89,6 @@ class Cacher(Estimator):
     def __init__(self, key: str):
         super().__init__()
         self._key = key
-        self._remember_dataset = remember_dataset
         self._dataset: Optional[SparkDataFrame] = None
 
     def _fit(self, dataset):
@@ -101,9 +100,6 @@ class Cacher(Estimator):
             previous_ds.unpersist()
 
         self._cacher_dict[self._key] = ds
-
-        if self._remember_dataset:
-            self._dataset = dataset
 
         return NoOpTransformer()
 
@@ -244,7 +240,7 @@ class FeaturesPipelineSpark:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
         stages = [tr for layer in tr_layers
-                  for tr in itertools.chain(layer, [Cacher('some_key', remember_dataset=True)])]
+                  for tr in itertools.chain(layer, [Cacher('some_key')])]
 
         last_cacher = stages[-1]
         assert isinstance(last_cacher, Cacher)
