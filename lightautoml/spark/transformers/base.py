@@ -411,33 +411,17 @@ class ChangeRoles(LAMAChangeRoles, SparkTransformer):
 
 
 class ChangeRolesTransformer(SparkBaseTransformer):
-    # _fname_prefix = "changeroles"
-    # _can_unwind_parents = False
-
-    inputRoles = Param(Params._dummy(), "inputRoles",
-                            "input roles (lama format)")
-
-    outputRoles = Param(Params._dummy(), "outputRoles",
-                            "output roles (lama format)")
-
+    # Note: this trasnformer cannot be applied directly to input columns of a feature pipeline
     def __init__(self, 
-                 input_cols: Optional[List[str]] = None,
-                 roles: Roles = None):
+                 input_cols: List[str],
+                 input_roles: RolesDict,
+                 role: ColumnRole):
         super().__init__(
-                input_cols:
-                 output_cols:
-                 input_roles:
-                 output_roles:
-                 do_replace_columns: bool = False)
-        self._output_role = roles # TODO: SPARK-LAMA add support to several roles
-        self.set(self.inputCols, input_cols)
-        self.set(self.outputCols, self.get_output_names(input_cols))
-        self.set(self.inputRoles, input_roles)
-        self.set(self.outputRoles, self.get_output_roles())
-
-    def write(self) -> MLWriter:
-        "Returns MLWriter instance that can save the Transformer instance."
-        return TmpСommonMLWriter(self.uid)
+            input_cols=input_cols,
+            output_cols=input_cols,
+            input_roles=input_roles,
+            output_roles={f: deepcopy(role) for f in input_cols},
+            do_replace_columns=True)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset
