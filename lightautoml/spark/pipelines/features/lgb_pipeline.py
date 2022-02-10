@@ -1,4 +1,4 @@
-from typing import cast, Optional, Union
+from typing import cast, Optional, Union, Set
 from unicodedata import name
 
 import numpy as np
@@ -7,16 +7,67 @@ from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.pipelines.features.base import FeaturesPipeline
+from lightautoml.spark.pipelines.features.base import FeaturesPipeline, FeaturesPipelineSpark, TabularDataFeaturesSpark
 from lightautoml.spark.pipelines.features.base import TabularDataFeatures
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkTransformer, SequentialTransformer, UnionTransformer, \
-    ColumnsSelector, ChangeRoles
+from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkTransformer, SequentialTransformer, \
+    UnionTransformer, \
+    ColumnsSelector, ChangeRoles, SparkUnionTransformer, SparkSequentialTransformer
 from lightautoml.spark.transformers.categorical import OrdinalEncoder, TargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import TimeToNum
 
-from pyspark.ml import Transformer, Pipeline
+from pyspark.ml import Transformer, Pipeline, Estimator
 from lightautoml.spark.transformers.categorical import OrdinalEncoderEstimator
 from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
+
+
+class LGBSimpleFeaturesSpark(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+    """Creates simple pipeline for tree based models.
+
+    Simple but is ok for select features.
+    Numeric stay as is, Datetime transforms to numeric.
+    Categorical label encoding.
+    Maps input to output features exactly one-to-one.
+
+    """
+    def __init__(self):
+        super().__init__()
+
+    def _get_input_features(self) -> Set[str]:
+        return set(self.input_features)
+
+    def create_pipeline(self, train: SparkDataset) -> Union[SparkUnionTransformer, SparkSequentialTransformer]:
+        """Create tree pipeline.
+
+        Args:
+            train: Dataset with train features.
+
+        Returns:
+            Composite datetime, categorical, numeric transformer.
+
+        """
+        # TODO: Transformer params to config
+        transformers_list = []
+
+        # process categories
+        categories = self._cols_by_role(train, "Category")
+        if len(categories) > 0:
+            roles = {f: train.roles[f] for f in categories}
+            cat_processing = OrdinalEncoderEstimator(input_cols=categories,
+                                                     input_roles=roles,
+                                                     subs=None,
+                                                     random_state=42)
+            transformers_list.append(cat_processing)
+
+        # process datetimes
+        datetimes = self._cols_by_role(train, "Datetime")
+        if len(datetimes) > 0:
+            roles = {f: train.roles[f] for f in datetimes}
+            dt_processing = TimeToNum()
+            transformers_list.append(dt_processing)
+
+        union_all = SparkUnionTransformer(transformers_list)
+
+        return union_all
 
 
 class LGBSimpleFeatures(FeaturesPipeline):

@@ -24,18 +24,20 @@ from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator
 from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, \
     ChangeRoles, \
-    UnionTransformer, SparkTransformer, SparkBaseEstimator, SparkBaseTransformer
+    UnionTransformer, SparkTransformer, SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
+    SparkSequentialTransformer, SparkEstOrTrans
 from lightautoml.pipelines.utils import map_pipeline_names
 from lightautoml.spark.transformers.numeric import QuantileBinning
 
 from lightautoml.spark.transformers.categorical import TargetEncoderEstimator
 
 
-def build_graph(begin: SparkTransformer):
+def build_graph(begin: SparkEstOrTrans):
     graph = dict()
-    def find_start_end(tr: SparkTransformer) -> Tuple[List[SparkTransformer], List[SparkTransformer]]:
-        if isinstance(tr, SequentialTransformer):
-            se = [st_or_end for el in tr.transformer_list for st_or_end in find_start_end(el)]
+
+    def find_start_end(tr: SparkEstOrTrans) -> Tuple[List[SparkEstOrTrans], List[SparkEstOrTrans]]:
+        if isinstance(tr, SparkSequentialTransformer):
+            se = [st_or_end for el in tr.transformers for st_or_end in find_start_end(el)]
 
             starts = se[0]
             ends = se[-1]
@@ -51,8 +53,8 @@ def build_graph(begin: SparkTransformer):
 
             return starts, ends
 
-        elif isinstance(tr, UnionTransformer):
-            se = [find_start_end(el) for el in tr.transformer_list]
+        elif isinstance(tr, SparkUnionTransformer):
+            se = [find_start_end(el) for el in tr.transformers]
             starts = [s_el for s, _ in se for s_el in s]
             ends = [e_el for _, e in se for e_el in e]
             return starts, ends
@@ -151,7 +153,7 @@ class FeaturesPipelineSpark:
     def output_roles(self) -> RolesDict:
         return self._output_roles
 
-    def create_pipeline(self, train: SparkDataset) -> Estimator:
+    def create_pipeline(self, train: SparkDataset) -> Union[SparkUnionTransformer, SparkSequentialTransformer]:
         """Analyse dataset and create composite transformer.
 
         Args:
@@ -175,6 +177,8 @@ class FeaturesPipelineSpark:
         """
 
         pipeline, last_cacher = self._merge(train)
+
+        # TODO: infer output features here
 
         assert self._output_features is not None, "Output features cannot be None"
 
@@ -260,7 +264,7 @@ class TabularDataFeaturesSpark:
         for k in kwargs:
             self.__dict__[k] = kwargs[k]
 
-    def _input_features(self) -> Set[str]:
+    def _get_input_features(self) -> Set[str]:
         raise NotImplementedError()
 
     def _cols_by_role(self, dataset: SparkDataset, role_name: str, **kwargs: Any) -> List[str]:
@@ -420,7 +424,7 @@ class TabularDataFeaturesSpark:
 
         return ord
 
-    def get_categorical_raw_new(
+    def get_categorical_raw(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
     ) -> Optional[SparkBaseEstimator]:
         """Get label encoded categories data.

@@ -1,7 +1,7 @@
 import logging
 from abc import ABC
 from copy import copy, deepcopy
-from typing import Dict, cast, Sequence, List, Set, Optional
+from typing import Dict, cast, Sequence, List, Set, Optional, Union
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
@@ -20,6 +20,14 @@ from pyspark.ml.util import MLReadable, MLWritable, MLWriter
 
 
 logger = logging.getLogger(__name__)
+
+
+SparkEstOrTrans = Union[
+    'SparkBaseEstimator',
+    'SparkBaseTransformer',
+    'SparkUnionTransformer',
+    'SparkSequentialTransformer'
+]
 
 
 class SparkBaseEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable, ABC):
@@ -76,6 +84,24 @@ class SparkBaseTransformer(Transformer, HasInputCols, HasOutputCols, MLWritable,
     def write(self) -> MLWriter:
         "Returns MLWriter instance that can save the Transformer instance."
         return TmpСommonMLWriter(self.uid)
+
+
+class SparkUnionTransformer:
+    def __init__(self, transformer_list: List[Union[SparkBaseEstimator, SparkBaseTransformer]]):
+        self._transformer_list = copy(transformer_list)
+
+    @property
+    def transformers(self) -> List[Union[SparkBaseEstimator, SparkBaseTransformer]]:
+        return self._transformer_list
+
+
+class SparkSequentialTransformer:
+    def __init__(self, transformer_list: List[Union[SparkBaseEstimator, SparkBaseTransformer]]):
+        self._transformer_list = copy(transformer_list)
+
+    @property
+    def transformers(self) -> List[Union[SparkBaseEstimator, SparkBaseTransformer]]:
+        return self._transformer_list
 
 
 # TODO: SPARK-LAMA make it ABC?
