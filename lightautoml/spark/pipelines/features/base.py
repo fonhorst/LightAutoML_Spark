@@ -28,7 +28,8 @@ from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator
     LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
     TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
 from lightautoml.spark.transformers.categorical import TargetEncoderEstimator
-from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer
+from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer, \
+    SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, ChangeRoles, \
     UnionTransformer, SparkTransformer
 from lightautoml.pipelines.utils import map_pipeline_names
@@ -363,8 +364,13 @@ class TabularDataFeaturesSpark:
         if len(datetimes) == 0 or len(base_dates) == 0:
             return None
 
-        base_diff = BaseDiffTransformer(base_names=base_dates,
-                                        diff_names=datetimes)
+        roles = {f: train.roles[f] for f in itertools.chain(base_dates, datetimes)}
+
+        base_diff = SparkBaseDiffTransformer(
+            input_roles=roles,
+            base_names=base_dates,
+            diff_names=datetimes
+        )
 
         return base_diff
 
@@ -394,7 +400,7 @@ class TabularDataFeaturesSpark:
 
         roles = {f: train.roles[f] for f in datetimes}
 
-        date_as_cat = DateSeasonsTransformer(input_cols=datetimes, input_roles=roles, output_role=outp_role)
+        date_as_cat = SparkDateSeasonsTransformer(input_cols=datetimes, input_roles=roles, output_role=outp_role)
 
         return date_as_cat
 
@@ -424,11 +430,11 @@ class TabularDataFeaturesSpark:
         if len(feats_to_select) == 0:
             return None
 
-        roles = {train.roles[f] for f in feats_to_select}
+        roles = {f: train.roles[f] for f in feats_to_select}
 
         num_processing = ChangeRolesTransformer(input_cols=feats_to_select,
                                                 input_roles=roles,
-                                                roles=NumericRole(np.float32))
+                                                role=NumericRole(np.float32))
 
         return num_processing
 
@@ -475,7 +481,7 @@ class TabularDataFeaturesSpark:
         if len(feats_to_select) == 0:
             return
 
-        roles = {train.roles[f] for f in feats_to_select}
+        roles = {f: train.roles[f] for f in feats_to_select}
 
         ord = OrdinalEncoderEstimator(input_cols=feats_to_select,
                                       input_roles=roles,
@@ -569,7 +575,7 @@ class TabularDataFeaturesSpark:
 
     def get_categorical_intersections(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkBaseTransformer]:
+    ) -> Optional[SparkBaseEstimator]:
         """Get transformer that implements categorical intersections.
 
         Args:
