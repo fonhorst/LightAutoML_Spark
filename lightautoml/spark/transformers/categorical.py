@@ -19,7 +19,7 @@ from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.mlwriters import TmpСommonMLWriter
-from lightautoml.spark.transformers.base import SparkTransformer
+from lightautoml.spark.transformers.base import SparkTransformer, SparkBaseEstimator, SparkBaseTransformer
 from lightautoml.spark.utils import get_cached_df_through_rdd, cache
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
     multiclass_task_check
@@ -41,12 +41,269 @@ logger = logging.getLogger(__name__)
 murmurhash3_32_udf = F.udf(lambda value: murmurhash3_32(value.replace("NaN", "nan"), seed=42) if value is not None else None, SparkTypes.IntegerType())
 
 
+class TypesHelper:
+    _ad_hoc_types_mapper = defaultdict(
+        lambda: "string",
+        {
+            "bool": "boolean",
+            "int": "int",
+            "int8": "int",
+            "int16": "int",
+            "int32": "int",
+            "int64": "int",
+            "int128": "bigint",
+            "int256": "bigint",
+            "integer": "int",
+            "uint8": "int",
+            "uint16": "int",
+            "uint32": "int",
+            "uint64": "int",
+            "uint128": "bigint",
+            "uint256": "bigint",
+            "longlong": "long",
+            "ulonglong": "long",
+            "float16": "float",
+            "float": "float",
+            "float32": "float",
+            "float64": "double",
+            "float128": "double"
+        }
+    )
+
+    _spark_numeric_types = (
+        SparkTypes.ShortType,
+        SparkTypes.IntegerType,
+        SparkTypes.LongType,
+        SparkTypes.FloatType,
+        SparkTypes.DoubleType,
+        SparkTypes.DecimalType
+    )
+
+
 def pandas_dict_udf(broadcasted_dict):
 
     def f(s: Series) -> Series:
         values_dict = broadcasted_dict.value
         return s.map(values_dict)
     return F.pandas_udf(f, "double")
+
+
+class LabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
+
+    _fit_checks = (categorical_check,)
+    _transform_checks = ()
+    _fname_prefix = "le"
+
+    _fillna_val = 0
+
+    inputRoles = Param(Params._dummy(), "inputRoles",
+                            "input roles (lama format)")
+
+    outputRoles = Param(Params._dummy(), "outputRoles",
+                            "output roles (lama format)")
+
+    def __init__(self,
+                 input_cols: Optional[List[str]] = None,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 subs: Optional[float] = None,
+                 random_state: Optional[int] = 42):
+       super().__init__(input_cols, input_roles)
+
+    def _fit(self, dataset: SparkDataFrame) -> "LabelEncoderTransformer":
+        logger.info(f"[{type(self)} (LE)] fit is started")
+
+        roles = self.getOrDefault(self.inputRoles)
+
+        df = dataset
+
+        self.dicts = dict()
+
+        for i in self.getInputCols():
+
+            logger.debug(f"[{type(self)} (LE)] fit column {i}")
+
+            role = roles[i]
+
+            # TODO: think what to do with this warning
+            co = role.unknown
+
+            # FIXME SPARK-LAMA: Possible OOM point
+            # TODO SPARK-LAMA: Can be implemented without multiple groupby and thus shuffling using custom UDAF.
+            # May be an alternative it there would be performance problems.
+            # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749539901
+            vals = df \
+                .groupBy(i).count() \
+                .where(F.col("count") > co) \
+                .select(i, F.col("count")) \
+                .toPandas()
+
+            logger.debug(f"[{type(self)} (LE)] toPandas is completed")
+
+            vals = vals.sort_values(["count", i], ascending=[False, True])
+            self.dicts[i] = Series(np.arange(vals.shape[0], dtype=np.int32) + 1, index=vals[i])
+            logger.debug(f"[{type(self)} (LE)] pandas processing is completed")
+
+        logger.info(f"[{type(self)} (LE)] fit is finished")
+
+        return LabelEncoderTransformer(input_cols=self.getInputCols(),
+                                       output_cols=self.getOutputCols(),
+                                       dicts=self.dicts)
+
+
+class LabelEncoderTransformer(SparkBaseTransformer, TypesHelper):
+    _transform_checks = ()
+    _fname_prefix = "le"
+
+    _fillna_val = 0
+
+    fittedDicts = Param(Params._dummy(), "fittedDicts", "dicts from fitted Estimator")
+
+    def __init__(self, input_cols: List[str], output_cols: List[str], dicts: Dict):
+        super().__init__(input_cols, output_cols)
+        self.set(self.fittedDicts, dicts)
+        self._dicts = dicts
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+
+        logger.info(f"[{type(self)} (LE)] transform is started")
+
+        df = dataset
+        sc = df.sql_ctx.sparkSession.sparkContext
+
+        cols_to_select = []
+
+        for i, out_col in zip(self.getInputCols(),  self.getOutputCols()):
+            logger.debug(f"[{type(self)} (LE)] transform col {i}")
+
+            _ic = F.col(i)
+
+            if i not in self._dicts:
+                col = _ic
+            elif len(self._dicts[i]) == 0:
+                col = F.lit(self._fillna_val)
+            else:
+                vals: dict = self._dicts[i].to_dict()
+
+                null_value = self._fillna_val
+                if None in vals:
+                    null_value = vals[None]
+                    _ = vals.pop(None, None)
+
+                if len(vals) == 0:
+                    col = F.when(_ic.isNull(), null_value).otherwise(None)
+                else:
+
+                    nan_value = self._fillna_val
+
+                    # if np.isnan(list(vals.keys())).any():  # not working
+                    # Вот этот кусок кода тут по сути из-за OrdinalEncoder, который
+                    # в КАЖДЫЙ dicts пихает nan. И вот из-за этого приходится его отсюда чистить.
+                    # Нужно подумать, как это всё зарефакторить.
+                    new_dict = {}
+                    for key, value in vals.items():
+                        try:
+                            if np.isnan(key):
+                                nan_value = value
+                            else:
+                                new_dict[key] = value
+                        except TypeError:
+                            new_dict[key] = value
+
+                    vals = new_dict
+
+                    if len(vals) == 0:
+                        col = F.when(F.isnan(_ic), nan_value).otherwise(None)
+                    else:
+                        logger.debug(f"[{type(self)} (LE)] map size: {len(vals)}")
+
+                        labels = sc.broadcast(vals)
+
+                        if type(df.schema[i].dataType) in self._spark_numeric_types:
+                            col = F.when(_ic.isNull(), null_value) \
+                                .otherwise(
+                                    F.when(F.isnan(_ic), nan_value)
+                                     .otherwise(pandas_dict_udf(labels)(_ic))
+                                )
+                        else:
+                            col = F.when(_ic.isNull(), null_value) \
+                                   .otherwise(pandas_dict_udf(labels)(_ic))
+
+            cols_to_select.append(out_col)
+
+        logger.info(f"[{type(self)} (LE)] Transform is finished")
+
+        output = df.select(
+                    *dataset.columns,
+                    *cols_to_select
+                ).fillna(self._fillna_val)
+
+        return output
+
+
+class OrdinalEncoderEstimator(LabelEncoderEstimator):
+    _fit_checks = (categorical_check,)
+    _fname_prefix = "ord"
+    _fillna_val = np.nan
+
+    def __init__(self,
+                 input_cols: Optional[List[str]] = None,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None,
+                 subs: Optional[float] = None,
+                 random_state: Optional[int] = 42):
+        super().__init__(input_cols, input_roles, subs, random_state)
+        self.dicts = None
+
+    def _fit(self, dataset: SparkDataFrame) -> "Transformer":
+
+        logger.info(f"[{type(self)} (ORD)] fit is started")
+
+        # roles = dataset.roles
+        roles = self.getOrDefault(self.inputRoles)
+
+        self.dicts = {}
+        for i in self.getInputCols():
+
+            logger.debug(f"[{type(self)} (ORD)] fit column {i}")
+
+            role = roles[i]
+
+            if not type(dataset.schema[i].dataType) in self._spark_numeric_types:
+
+                co = role.unknown
+
+                cnts = dataset \
+                    .groupBy(i).count() \
+                    .where((F.col("count") > co) & F.col(i).isNotNull()) \
+
+                # TODO SPARK-LAMA: isnan raises an exception if column is boolean.
+                if type(dataset.schema[i].dataType) != SparkTypes.BooleanType:
+                    cnts = cnts \
+                        .where(~F.isnan(F.col(i)))
+
+                cnts = cnts \
+                    .select(i) \
+                    .toPandas()
+
+                logger.debug(f"[{type(self)} (ORD)] toPandas is completed")
+
+                cnts = Series(cnts[i].astype(str).rank().values, index=cnts[i])
+                self.dicts[i] = cnts.append(Series([cnts.shape[0] + 1], index=[np.nan])).drop_duplicates()
+                logger.debug(f"[{type(self)} (ORD)] pandas processing is completed")
+
+        logger.info(f"[{type(self)} (ORD)] fit is finished")
+
+        return OrdinalEncoderTransformer(input_cols=self.getInputCols(),
+                                         output_cols=self.getOutputCols(),
+                                         dicts=self.dicts)
+
+
+class OrdinalEncoderTransformer(LabelEncoderTransformer):
+    _transform_checks = ()
+    _fname_prefix = "ord"
+    _fillna_val = np.nan
+
+    def __init__(self, input_cols: List[str], output_cols: List[str], dicts: Dict):
+        super().__init__(input_cols, output_cols, dicts)
 
 
 class LabelEncoder(SparkTransformer):
@@ -224,288 +481,6 @@ class LabelEncoder(SparkTransformer):
         return output
 
 
-class LabelEncoderTransformer(Transformer, HasInputCols, HasOutputCols, MLWritable):
-    _ad_hoc_types_mapper = defaultdict(
-        lambda: "string",
-        {
-            "bool": "boolean",
-            "int": "int",
-            "int8": "int",
-            "int16": "int",
-            "int32": "int",
-            "int64": "int",
-            "int128": "bigint",
-            "int256": "bigint",
-            "integer": "int",
-            "uint8": "int",
-            "uint16": "int",
-            "uint32": "int",
-            "uint64": "int",
-            "uint128": "bigint",
-            "uint256": "bigint",
-            "longlong": "long",
-            "ulonglong": "long",
-            "float16": "float",
-            "float": "float",
-            "float32": "float",
-            "float64": "double",
-            "float128": "double"
-        }
-    )
-
-    _spark_numeric_types = (
-        SparkTypes.ShortType,
-        SparkTypes.IntegerType,
-        SparkTypes.LongType,
-        SparkTypes.FloatType,
-        SparkTypes.DoubleType,
-        SparkTypes.DecimalType
-    )
-
-    _fit_checks = (categorical_check,)
-    _transform_checks = ()
-    _fname_prefix = "le"
-
-    _fillna_val = 0
-
-    fittedDicts = Param(Params._dummy(), "fittedDicts",
-                            "dicts from fitted Estimator")
-
-    def get_output_names(self, input_cols: List[str]) -> List[str]:
-        return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
-
-    def __init__(self, input_cols: List[str], dicts: Dict):
-        super().__init__()
-        self.set(self.inputCols, input_cols)
-        self.set(self.fittedDicts, dicts)
-        self.dicts = dicts
-
-    def write(self) -> MLWriter:
-        "Returns MLWriter instance that can save the Transformer instance."
-        return TmpСommonMLWriter(self.uid)
-
-    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-
-        logger.info(f"[{type(self)} (LE)] transform is started")
-
-        df = dataset
-        sc = df.sql_ctx.sparkSession.sparkContext
-
-        cols_to_select = []
-
-        for i in self.getInputCols():
-            logger.debug(f"[{type(self)} (LE)] transform col {i}")
-
-            _ic = F.col(i)
-
-            if i not in self.dicts:
-                col = _ic
-            elif len(self.dicts[i]) == 0:
-                col = F.lit(self._fillna_val)
-            else:
-                vals: dict = self.dicts[i].to_dict()
-
-                null_value = self._fillna_val
-                if None in vals:
-                    null_value = vals[None]
-                    _ = vals.pop(None, None)
-
-                if len(vals) == 0:
-                    col = F.when(_ic.isNull(), null_value).otherwise(None)
-                else:
-
-                    nan_value = self._fillna_val
-
-                    # if np.isnan(list(vals.keys())).any():  # not working
-                    # Вот этот кусок кода тут по сути из-за OrdinalEncoder, который
-                    # в КАЖДЫЙ dicts пихает nan. И вот из-за этого приходится его отсюда чистить.
-                    # Нужно подумать, как это всё зарефакторить.
-                    new_dict = {}
-                    for key, value in vals.items():
-                        try:
-                            if np.isnan(key):
-                                nan_value = value
-                            else:
-                                new_dict[key] = value
-                        except TypeError:
-                            new_dict[key] = value
-
-                    vals = new_dict
-
-                    if len(vals) == 0:
-                        col = F.when(F.isnan(_ic), nan_value).otherwise(None)
-                    else:
-                        logger.debug(f"[{type(self)} (LE)] map size: {len(vals)}")
-
-                        labels = sc.broadcast(vals)
-
-                        if type(df.schema[i].dataType) in self._spark_numeric_types:
-                            col = F.when(_ic.isNull(), null_value) \
-                                .otherwise(
-                                    F.when(F.isnan(_ic), nan_value)
-                                     .otherwise(pandas_dict_udf(labels)(_ic))
-                                )
-                        else:
-                            col = F.when(_ic.isNull(), null_value) \
-                                   .otherwise(pandas_dict_udf(labels)(_ic))
-
-            cols_to_select.append(col.alias(f"{self._fname_prefix}__{i}"))
-
-        # output: SparkDataset = dataset.empty()
-        # # *dataset.service_columns,
-        # output.set_data(
-        #     df.select(
-        #         *dataset.service_columns,
-        #         *dataset.features,
-        #         *cols_to_select
-        #     ).fillna(self._fillna_val),
-        #     dataset.features + self.features,
-        #     self._get_updated_roles(dataset, self.features, self._output_role)
-        # )
-
-        logger.info(f"[{type(self)} (LE)] Transform is finished")
-
-        output = df.select(
-                    *dataset.columns,
-                    *cols_to_select
-                ).fillna(self._fillna_val)
-
-        return output
-
-
-class LabelEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
-
-    _ad_hoc_types_mapper = defaultdict(
-        lambda: "string",
-        {
-            "bool": "boolean",
-            "int": "int",
-            "int8": "int",
-            "int16": "int",
-            "int32": "int",
-            "int64": "int",
-            "int128": "bigint",
-            "int256": "bigint",
-            "integer": "int",
-            "uint8": "int",
-            "uint16": "int",
-            "uint32": "int",
-            "uint64": "int",
-            "uint128": "bigint",
-            "uint256": "bigint",
-            "longlong": "long",
-            "ulonglong": "long",
-            "float16": "float",
-            "float": "float",
-            "float32": "float",
-            "float64": "double",
-            "float128": "double"
-        }
-    )
-
-    _spark_numeric_types = (
-        SparkTypes.ShortType,
-        SparkTypes.IntegerType,
-        SparkTypes.LongType,
-        SparkTypes.FloatType,
-        SparkTypes.DoubleType,
-        SparkTypes.DecimalType
-    )
-
-    _fit_checks = (categorical_check,)
-    _transform_checks = ()
-    _fname_prefix = "le"
-
-    _fillna_val = 0
-
-    inputRoles = Param(Params._dummy(), "inputRoles",
-                            "input roles (lama format)")
-
-    outputRoles = Param(Params._dummy(), "outputRoles",
-                            "output roles (lama format)")
-
-    def __init__(self,
-                 input_cols: Optional[List[str]] = None,
-                 input_roles: Optional[Dict[str, ColumnRole]] = None,
-                 subs: Optional[float] = None,
-                 random_state: Optional[int] = 42):
-        super().__init__()
-        self._output_role = CategoryRole(np.int32, label_encoded=True)
-        self.dicts = None
-        self.set(self.inputCols, input_cols)
-        self.set(self.outputCols, self.get_output_names(input_cols))
-        self.set(self.inputRoles, input_roles)
-        self.set(self.outputRoles, self.get_output_roles())
-
-    def get_output_names(self, input_cols: List[str]) -> List[str]:
-        return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
-
-    def get_output_roles(self):
-        new_roles = deepcopy(self.getOrDefault(self.inputRoles))
-        new_roles.update({feat: self._output_role for feat in self.getOutputCols()})
-        return new_roles
-
-    def getOutputRoles(self):
-        """
-        Gets output roles or its default value.
-        """
-        return self.getOrDefault(self.outputRoles)
-
-    def write(self) -> MLWriter:
-        "Returns MLWriter instance that can save the Estimator instance."
-        return TmpСommonMLWriter(self.uid)
-
-    def _fit(self, dataset: SparkDataFrame) -> "LabelEncoderTransformer":
-
-        logger.info(f"[{type(self)} (LE)] fit is started")
-
-        # roles = dataset.roles
-        roles = self.getOrDefault(self.inputRoles)
-
-        # TODO: think over it
-        # dataset.cache()
-        dataset = cache(dataset)
-
-        # df = dataset.data
-        df = dataset
-
-        self.dicts = dict()
-
-        for i in self.getInputCols():
-
-            logger.debug(f"[{type(self)} (LE)] fit column {i}")
-
-            role = roles[i]
-
-            # TODO: think what to do with this warning
-            co = role.unknown
-
-            # FIXME SPARK-LAMA: Possible OOM point
-            # TODO SPARK-LAMA: Can be implemented without multiple groupby and thus shuffling using custom UDAF.
-            # May be an alternative it there would be performance problems.
-            # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749539901
-            vals = df \
-                .groupBy(i).count() \
-                .where(F.col("count") > co) \
-                .select(i, F.col("count")) \
-                .toPandas()
-
-            logger.debug(f"[{type(self)} (LE)] toPandas is completed")
-
-            vals = vals.sort_values(["count", i], ascending=[False, True])
-            self.dicts[i] = Series(np.arange(vals.shape[0], dtype=np.int32) + 1, index=vals[i])
-            logger.debug(f"[{type(self)} (LE)] pandas processing is completed")
-
-        # TODO: think over it
-        # dataset.uncache()
-        # if not self.is_frozen_in_cache:
-        dataset.unpersist()
-
-        logger.info(f"[{type(self)} (LE)] fit is finished")
-
-        return LabelEncoderTransformer(input_cols=self.getInputCols(), dicts=self.dicts)
-
-
 class FreqEncoder(LabelEncoder):
 
     _fit_checks = (categorical_check,)
@@ -658,127 +633,6 @@ class OrdinalEncoder(LabelEncoder):
         logger.info(f"[{type(self)} (ORD)] fit is finished")
 
         return self
-
-
-class OrdinalEncoderEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable):
-
-    _spark_numeric_types = (
-        SparkTypes.ShortType,
-        SparkTypes.IntegerType,
-        SparkTypes.LongType,
-        SparkTypes.FloatType,
-        SparkTypes.DoubleType,
-        SparkTypes.DecimalType
-    )
-
-    _fit_checks = (categorical_check,)
-    _transform_checks = ()
-    _fname_prefix = "ord"
-
-    _fillna_val = np.nan
-
-    inputRoles = Param(Params._dummy(), "inputRoles",
-                            "input roles (lama format)")
-
-    outputRoles = Param(Params._dummy(), "outputRoles",
-                            "output roles (lama format)")
-
-    def __init__(self,
-                 input_cols: Optional[List[str]] = None,
-                 input_roles: Optional[Dict[str, ColumnRole]] = None,
-                 subs: Optional[float] = None,
-                 random_state: Optional[int] = 42):
-        super().__init__()
-        self._output_role = NumericRole(np.float32)
-        self.dicts = None
-        self.set(self.inputCols, input_cols)
-        self.set(self.outputCols, self.get_output_names(input_cols))
-        self.set(self.inputRoles, input_roles)
-        self.set(self.outputRoles, self.get_output_roles())
-
-    def write(self) -> MLWriter:
-        "Returns MLWriter instance that can save the Estimator instance."
-        return TmpСommonMLWriter(self.uid)
-
-    def get_output_names(self, input_cols: List[str]) -> List[str]:
-        return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
-
-    def get_output_roles(self):
-        new_roles = deepcopy(self.getOrDefault(self.inputRoles))
-        new_roles.update({feat: self._output_role for feat in self.getOutputCols()})
-        return new_roles
-
-    def getOutputRoles(self):
-        """
-        Gets output roles or its default value.
-        """
-        return self.getOrDefault(self.outputRoles)
-
-    def _fit(self, dataset: SparkDataFrame) -> "Transformer":
-
-        logger.info(f"[{type(self)} (ORD)] fit is started")
-
-        # roles = dataset.roles
-        roles = self.getOrDefault(self.inputRoles)
-
-        # dataset.cache()
-        dataset = cache(dataset)
-        # cached_dataset = dataset.data
-        cached_dataset = dataset
-
-        self.dicts = {}
-        for i in self.getInputCols():
-
-            logger.debug(f"[{type(self)} (ORD)] fit column {i}")
-
-            role = roles[i]
-
-            if not type(cached_dataset.schema[i].dataType) in self._spark_numeric_types:
-
-                co = role.unknown
-
-                cnts = cached_dataset \
-                    .groupBy(i).count() \
-                    .where((F.col("count") > co) & F.col(i).isNotNull()) \
-
-                # TODO SPARK-LAMA: isnan raises an exception if column is boolean.
-                if type(cached_dataset.schema[i].dataType) != SparkTypes.BooleanType:
-                    cnts = cnts \
-                        .where(~F.isnan(F.col(i)))
-
-                cnts = cnts \
-                    .select(i) \
-                    .toPandas()
-
-                logger.debug(f"[{type(self)} (ORD)] toPandas is completed")
-
-                cnts = Series(cnts[i].astype(str).rank().values, index=cnts[i])
-                self.dicts[i] = cnts.append(Series([cnts.shape[0] + 1], index=[np.nan])).drop_duplicates()
-                logger.debug(f"[{type(self)} (ORD)] pandas processing is completed")
-
-        # dataset.uncache()
-        dataset.unpersist()
-
-        logger.info(f"[{type(self)} (ORD)] fit is finished")
-
-        return OrdinalEncoderTransformer(input_cols=self.getInputCols(), dicts=self.dicts)
-
-
-class OrdinalEncoderTransformer(LabelEncoderTransformer):
-
-    _spark_numeric_types = (
-        SparkTypes.ShortType,
-        SparkTypes.IntegerType,
-        SparkTypes.LongType,
-        SparkTypes.FloatType,
-        SparkTypes.DoubleType,
-        SparkTypes.DecimalType
-    )
-
-    _fit_checks = (categorical_check,)
-    _transform_checks = ()
-    _fname_prefix = "ord"
-    _fillna_val = np.nan
 
 
 class CatIntersectstions(LabelEncoder):

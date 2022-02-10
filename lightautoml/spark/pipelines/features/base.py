@@ -289,7 +289,7 @@ class TabularDataFeaturesSpark(ABC):
 
         return base_dates, datetimes
 
-    def get_datetime_diffs(self, train: SparkDataset) -> Optional[Estimator]:
+    def get_datetime_diffs(self, train: SparkDataset) -> Optional[Transformer]:
         """Difference for all datetimes with base date.
 
         Args:
@@ -301,69 +301,12 @@ class TabularDataFeaturesSpark(ABC):
         """
         base_dates, datetimes = self.get_cols_for_datetime(train)
         if len(datetimes) == 0 or len(base_dates) == 0:
-            return
+            return None
 
-        base_diff = BaseDiff(base_names=base_dates, diff_names=datetimes)
+        base_diff = BaseDiffTransformer(base_names=base_dates,
+                                        diff_names=datetimes)
 
         return base_diff
-
-    def get_datetime_diffs_new(self, train: SparkDataset) -> Optional[Transformer]:
-        """Difference for all datetimes with base date.
-
-        Args:
-            train: Dataset with train data.
-
-        Returns:
-            Transformer or ``None`` if no required features.
-
-        """
-        base_dates, datetimes = self.get_cols_for_datetime(train)
-        if len(datetimes) == 0 or len(base_dates) == 0:
-            return
-
-        # dt_processing = SequentialTransformer(
-        #     [
-        #         ColumnsSelector(keys=list(set(datetimes + base_dates))),
-        #         BaseDiff(base_names=base_dates, diff_names=datetimes),
-        #     ]
-        # )
-
-        dt_processing = BaseDiffTransformer(base_names=base_dates,
-                                            diff_names=datetimes)
-
-        return dt_processing
-
-    def get_datetime_seasons(
-        self, train: SparkDataset, outp_role: Optional[ColumnRole] = None
-    ) -> Optional[SparkTransformer]:
-        """Get season params from dates.
-
-        Args:
-            train: Dataset with train data.
-            outp_role: Role associated with output features.
-
-        Returns:
-            Transformer or ``None`` if no required features.
-
-        """
-        _, datetimes = self.get_cols_for_datetime(train)
-        for col in copy(datetimes):
-            if len(train.roles[col].seasonality) == 0 and train.roles[col].country is None:
-                datetimes.remove(col)
-
-        if len(datetimes) == 0:
-            return
-
-        if outp_role is None:
-            outp_role = NumericRole(np.float32)
-
-        date_as_cat = SequentialTransformer(
-            [
-                ColumnsSelector(keys=datetimes),
-                DateSeasons(outp_role),
-            ]
-        )
-        return date_as_cat
 
     def get_datetime_seasons_new(
         self, train: SparkDataset, outp_role: Optional[ColumnRole] = None
@@ -389,53 +332,9 @@ class TabularDataFeaturesSpark(ABC):
         if outp_role is None:
             outp_role = NumericRole(np.float32)
 
-        # date_as_cat = SequentialTransformer(
-        #     [
-        #         ColumnsSelector(keys=datetimes),
-        #         DateSeasons(outp_role),
-        #     ]
-        # )
         date_as_cat = DateSeasonsTransformer(input_cols=datetimes, input_roles=train.roles, output_role=outp_role)
 
         return date_as_cat
-
-    @staticmethod
-    def get_numeric_data(
-        train: SparkDataset,
-        feats_to_select: Optional[List[str]] = None,
-        prob: Optional[bool] = None,
-    ) -> Optional[SparkTransformer]:
-        """Select numeric features.
-
-        Args:
-            train: Dataset with train data.
-            feats_to_select: Features to handle. If ``None`` - default filter.
-            prob: Probability flag.
-
-        Returns:
-            Transformer.
-
-        """
-        if feats_to_select is None:
-            if prob is None:
-                feats_to_select = get_columns_by_role(train, "Numeric")
-            else:
-                feats_to_select = get_columns_by_role(train, "Numeric", prob=prob)
-
-        if len(feats_to_select) == 0:
-            return
-
-        num_processing = SequentialTransformer(
-            [
-                ColumnsSelector(keys=feats_to_select),
-                # we don't need this because everything is handled by Spark
-                # thus we have no other dataset type except SparkDataset
-                # ConvertDataset(dataset_type=NumpyDataset),
-                ChangeRoles(NumericRole(np.float32)),
-            ]
-        )
-
-        return num_processing
 
     @staticmethod
     def get_numeric_data_new(
@@ -461,17 +360,7 @@ class TabularDataFeaturesSpark(ABC):
                 feats_to_select = get_columns_by_role(train, "Numeric", prob=prob)
 
         if len(feats_to_select) == 0:
-            return
-
-        # num_processing = SequentialTransformer(
-        #     [
-        #         ColumnsSelector(keys=feats_to_select),
-        #         # we don't need this because everything is handled by Spark
-        #         # thus we have no other dataset type except SparkDataset
-        #         # ConvertDataset(dataset_type=NumpyDataset),
-        #         ChangeRoles(NumericRole(np.float32)),
-        #     ]
-        # )
+            return None
 
         num_processing = ChangeRolesTransformer(input_cols=feats_to_select,
                                                 input_roles=train.roles,
@@ -497,42 +386,7 @@ class TabularDataFeaturesSpark(ABC):
             feats_to_select = get_columns_by_role(train, "Category", encoding_type="freq")
 
         if len(feats_to_select) == 0:
-            return
-
-        cat_processing = SequentialTransformer(
-            [
-                ColumnsSelector(keys=feats_to_select),
-                FreqEncoder(),
-            ]
-        )
-        return cat_processing
-
-    @staticmethod
-    def get_freq_encoding_new(
-        train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkTransformer]:
-        """Get frequency encoding part.
-
-        Args:
-            train: Dataset with train data.
-            feats_to_select: Features to handle. If ``None`` - default filter.
-
-        Returns:
-            Transformer.
-
-        """
-        if feats_to_select is None:
-            feats_to_select = get_columns_by_role(train, "Category", encoding_type="freq")
-
-        if len(feats_to_select) == 0:
-            return
-
-        # cat_processing = SequentialTransformer(
-        #     [
-        #         ColumnsSelector(keys=feats_to_select),
-        #         FreqEncoder(),
-        #     ]
-        # )
+            return None
 
         cat_processing = FreqEncoderEstimator(input_cols=feats_to_select)
 

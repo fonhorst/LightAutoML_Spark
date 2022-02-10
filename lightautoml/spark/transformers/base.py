@@ -1,4 +1,5 @@
 import logging
+from abc import ABC
 from copy import copy, deepcopy
 from typing import Dict, cast, Sequence, List, Set, Optional
 
@@ -12,13 +13,69 @@ from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LA
     ChangeRoles as LAMAChangeRoles
 from lightautoml.transformers.base import Roles
 
-from pyspark.ml import Transformer
+from pyspark.ml import Transformer, Estimator
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.param.shared import Param, Params
 from pyspark.ml.util import MLReadable, MLWritable, MLWriter
 
 
 logger = logging.getLogger(__name__)
+
+
+class SparkBaseEstimator(Estimator, HasInputCols, HasOutputCols, MLWritable, ABC):
+    _fit_checks = ()
+    _fname_prefix = ""
+
+    inputRoles = Param(Params._dummy(), "inputRoles",
+                       "input roles (lama format)")
+
+    outputRoles = Param(Params._dummy(), "outputRoles",
+                        "output roles (lama format)")
+
+    def __init__(self,
+                 input_cols: Optional[List[str]] = None,
+                 input_roles: Optional[Dict[str, ColumnRole]] = None):
+        super().__init__()
+
+        self._output_role: Optional[ColumnRole] = None
+
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, self._make_output_names(input_cols))
+        self.set(self.inputRoles, input_roles)
+        self.set(self.outputRoles, self._make_output_roles())
+
+    def getOutputRoles(self):
+        """
+        Gets output roles or its default value.
+        """
+        return self.getOrDefault(self.outputRoles)
+
+    def _make_output_names(self, input_cols: List[str]) -> List[str]:
+        return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
+
+    def _make_output_roles(self):
+        assert self._output_role is not None
+        new_roles = {}
+        new_roles.update({feat: self._output_role for feat in self.getOutputCols()})
+        return new_roles
+
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Estimator instance."
+        return TmpСommonMLWriter(self.uid)
+
+
+class SparkBaseTransformer(Transformer, HasInputCols, HasOutputCols, MLWritable, ABC):
+    _fname_prefix = ""
+    _transform_checks = ()
+
+    def __init__(self, input_cols: List[str], output_cols: Optional[List[str]] = None):
+        super().__init__()
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, output_cols)
+
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Transformer instance."
+        return TmpСommonMLWriter(self.uid)
 
 
 # TODO: SPARK-LAMA make it ABC?
@@ -274,6 +331,7 @@ class ChangeRoles(LAMAChangeRoles, SparkTransformer):
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return copy(input_cols)
 
+
 class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols, MLWritable):
     # _fname_prefix = "changeroles"
     # _can_unwind_parents = False
@@ -304,7 +362,6 @@ class ChangeRolesTransformer(Transformer, HasInputCols, HasOutputCols, MLWritabl
 
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return copy(input_cols)
-
 
     def get_output_roles(self):
         new_roles = deepcopy(self.getOrDefault(self.inputRoles))
