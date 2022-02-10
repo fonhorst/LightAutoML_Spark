@@ -2,7 +2,7 @@ import logging
 from typing import Tuple, cast, List, Optional, Union
 
 import numpy as np
-from pyspark.ml import PredictionModel, PipelineModel
+from pyspark.ml import PredictionModel, PipelineModel, Transformer
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.sql import functions as F, Column
 
@@ -48,6 +48,15 @@ class TabularMLAlgo(MLAlgo):
     @property
     def prediction_column(self) -> str:
         return self._default_prediction_column_name
+
+    @property
+    def transformer(self) -> Transformer:
+        """Returns Spark MLlib Transformer.
+        Represents a Transformer with fitted models."""
+
+        assert self._transformer is not None, "Pipeline is not fitted!"
+
+        return self._transformer
 
     def fit_predict(self, train_valid_iterator: TrainValidIterator) -> SparkDataset:
         """Fit and then predict accordig the strategy that uses train_valid_iterator.
@@ -141,6 +150,9 @@ class TabularMLAlgo(MLAlgo):
                 if self.timer.time_limit_exceeded():
                     logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
                     break
+
+        # create Spark MLlib Transformer and save to property var
+        self._transformer = self._build_transformer()
 
         # combine predictions of all models and make them into the single one
         full_preds_df = self._average_predictions(valid_ds, preds_dfs, pred_col_prefix)
@@ -343,3 +355,12 @@ class TabularMLAlgo(MLAlgo):
         if train.target_column not in train.data.columns:
             sdf = sdf.join(t_sdf, SparkDataset.ID_COLUMN)#.drop(t_sdf[SparkDataset.ID_COLUMN])
         return sdf
+
+    def _build_transformer(self) -> Transformer:
+        """Implements creation of Spark MLlib Transformer instance.
+
+        Returns:
+            Predictions for input dataset.
+
+        """
+        raise NotImplementedError

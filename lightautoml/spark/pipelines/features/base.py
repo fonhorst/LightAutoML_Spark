@@ -111,7 +111,7 @@ class FeaturesPipeline:
         """Returns Spark MLlib PipelineModel.
         Represents a compiled pipeline with transformers and fitted models."""
 
-        assert self._transformer is not None, "Pipline is not fitted!"
+        assert self._transformer is not None, "Pipeline is not fitted!"
 
         return self._transformer
 
