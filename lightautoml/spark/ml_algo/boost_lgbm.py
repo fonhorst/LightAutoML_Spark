@@ -20,7 +20,7 @@ from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel
+from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer
 from lightautoml.spark.mlwriters import TmpСommonMLWriter
 # from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
 import pandas as pd
@@ -361,7 +361,8 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 # taskName = Param(Params._dummy(), "taskName",
 #                         "Task type name: 'req', 'binary' or 'multiclass'")
 
-class BoostLGBMTransformer(Transformer, MLWritable):
+class BoostLGBMTransformer(TabularMLAlgoTransformer, MLWritable):
+    """BoostLGBM Spark MLlib Transformer"""
 
     def __init__(self, assembler, models, predict_feature_name, task_name, n_classes):
         super().__init__()
@@ -375,16 +376,6 @@ class BoostLGBMTransformer(Transformer, MLWritable):
         "Returns MLWriter instance that can save the Transformer instance."
         return TmpСommonMLWriter(self.uid)
 
-    def _get_predict_column(self, model: SparkMLModel) -> str:
-        # TODO SPARK-LAMA: Rewrite using class recognition.
-        try:
-            return model.getPredictionCol()
-        except AttributeError:
-            if isinstance(model, PipelineModel):
-                return model.stages[-1].getPredictionCol()
-
-            raise TypeError("Unknown model type! Unable ro retrieve prediction column")
-
     def predict_single_fold(self,
                             dataset: SparkDataFrame,
                             model: Union[LightGBMRegressor, LightGBMClassifier]) -> SparkDataFrame:
@@ -394,109 +385,3 @@ class BoostLGBMTransformer(Transformer, MLWritable):
         pred = model.transform(temp_sdf)
 
         return pred
-
-    def _average_predictions(self, 
-                            preds_ds: SparkDataFrame,
-                            preds_dfs: List[SparkDataFrame], 
-                            pred_col_prefix: str) -> SparkDataFrame:
-        # TODO: SPARK-LAMA probably one may write a scala udf function to join multiple arrays/vectors into the one
-        # TODO: reg and binary cases probably should be treated without arrays summation
-        # we need counter here for EACH row, because for some models there may be no predictions
-        # for some rows that means:
-        # 1. we need to do left_outer instead of inner join (because the right frame may not contain all rows)
-        # 2. we would like to find a mean prediction for each row, but the number of predictiosn may be variable,
-        #    that is why we need a counter for each row
-        # 3. this counter should depend on if there is None for the right row or not
-        # 4. we also need to substitute None's of the right dataframe with empty arrays
-        #    to provide uniformity for summing operations
-        # 5. we also convert output from vector to an array to combine them
-        counter_col_name = "counter"
-
-        if self._task_name == "multiclass":
-            empty_pred = F.array(*[F.lit(0) for _ in range(self._n_classes)])
-
-            def convert_col(prediction_column: str) -> Column:
-                return vector_to_array(F.col(prediction_column))
-
-            # full_preds_df
-            def sum_predictions_col() -> Column:
-                # curr_df[pred_col_prefix]
-                return F.transform(
-                    F.arrays_zip(pred_col_prefix, f"{pred_col_prefix}_{i}"),
-                    lambda x, y: x + y
-                ).alias(pred_col_prefix)
-
-            def avg_preds_sum_col() -> Column:
-                return array_to_vector(
-                    F.transform(pred_col_prefix, lambda x: x / F.col("counter"))
-                ).alias(pred_col_prefix)
-        else:
-            empty_pred = F.lit(0)
-
-            # trivial operator in this case
-            def convert_col(prediction_column: str) -> Column:
-                return F.col(prediction_column)
-
-            def sum_predictions_col() -> Column:
-                # curr_df[pred_col_prefix]
-                return (F.col(pred_col_prefix) + F.col(f"{pred_col_prefix}_{i}")).alias(pred_col_prefix)
-
-            def avg_preds_sum_col() -> Column:
-                return (F.col(pred_col_prefix) / F.col("counter")).alias(pred_col_prefix)
-
-        full_preds_df = preds_ds.select(
-            SparkDataset.ID_COLUMN,
-            F.lit(0).alias(counter_col_name),
-            empty_pred.alias(pred_col_prefix)
-        )
-        for i, pred_df in enumerate(preds_dfs):
-            pred_col = f"{pred_col_prefix}_{i}"
-            full_preds_df = (
-                full_preds_df
-                .join(pred_df, on=SparkDataset.ID_COLUMN, how="left_outer")
-                .select(
-                    full_preds_df[SparkDataset.ID_COLUMN],
-                    pred_col_prefix,
-                    F.when(F.col(pred_col).isNull(), empty_pred)
-                        .otherwise(convert_col(pred_col)).alias(pred_col),
-                    F.when(F.col(pred_col).isNull(), F.col(counter_col_name))
-                        .otherwise(F.col(counter_col_name) + 1).alias(counter_col_name)
-                )
-                .select(
-                    full_preds_df[SparkDataset.ID_COLUMN],
-                    counter_col_name,
-                    sum_predictions_col()
-                )
-            )
-
-        full_preds_df = full_preds_df.select(
-            SparkDataset.ID_COLUMN,
-            avg_preds_sum_col()
-        )
-
-        return full_preds_df
-
-    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        """Mean prediction for all fitted models.
-
-        Args:
-            dataset: Dataset used for prediction.
-
-        Returns:
-            Dataset with predicted values.
-
-        """
-        assert self.models != [], "Should be fitted first."
-
-        log_data(f"spark_predict_{type(self).__name__}", {"predict": dataset.to_pandas()})
-
-        preds_dfs = [
-            self.predict_single_fold(dataset=dataset, model=model).select(
-                SparkDataset.ID_COLUMN,
-                F.col(self._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
-            ) for i, model in enumerate(self._models)
-        ]
-
-        predict_sdf = self._average_predictions(dataset, preds_dfs, self._predict_feature_name)
-
-        return predict_sdf

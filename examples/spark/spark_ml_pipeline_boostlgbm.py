@@ -5,14 +5,18 @@ import logging.config
 from pyspark.ml import Pipeline
 
 from lightautoml.dataset.roles import FoldsRole, TargetRole
+from lightautoml.ml_algo.tuning.base import DefaultTuner
+from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.tasks.base import Task as SparkTask
-from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBMEstimator
+from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM as SparkBoostLGBM
 
 import numpy as np
+
+from lightautoml.validation.base import DummyIterator, HoldoutIterator
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
 logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
@@ -37,39 +41,31 @@ if __name__ == "__main__":
         sreader = SparkToSparkReader(task=SparkTask("reg"), cv=5)
         sdataset_tmp = sreader.fit_read(df, roles=roles)
 
+        feats_to_select_numeric = get_columns_by_role(sdataset_tmp, "Numeric")
         
         sdataset = sdataset_tmp.empty()
-        new_roles = deepcopy(sdataset_tmp.roles)
-        new_roles.update({sdataset_tmp.target_column: TargetRole(np.float32), sdataset_tmp.folds_column: FoldsRole()})
         sdataset.set_data(
-            sdataset_tmp.data \
-                .join(sdataset_tmp.target, SparkDataset.ID_COLUMN) \
-                .join(sdataset_tmp.folds, SparkDataset.ID_COLUMN),
+            sdataset_tmp.data.select(SparkDataset.ID_COLUMN, *feats_to_select_numeric),
             sdataset_tmp.features,
-            new_roles
+            sdataset_tmp.roles
         )
-        sdataset.to_pandas().data.to_csv("/tmp/sdataset_data.csv", index=False)
+        # new_roles = deepcopy(sdataset_tmp.roles)
+        # new_roles.update({sdataset_tmp.target_column: TargetRole(np.float32), sdataset_tmp.folds_column: FoldsRole()})
+        # sdataset.set_data(
+        #     sdataset_tmp.data \
+        #         .join(sdataset_tmp.target, SparkDataset.ID_COLUMN) \
+        #         .join(sdataset_tmp.folds, SparkDataset.ID_COLUMN),
+        #     sdataset_tmp.features,
+        #     new_roles
+        # )
+        # sdataset.to_pandas().data.to_csv("/tmp/sdataset_data.csv", index=False)
 
-        feats_to_select_numeric = get_columns_by_role(sdataset, "Numeric")
+        # Test SparkBoostLGBM and SparkBoostLGBM Transformer
+        iterator = DummyIterator(sdataset)
+        spark_ml_algo = SparkBoostLGBM()
+        spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+        spark_ml_algo.transformer.transform(sdataset.data)
 
-
-        # Test BoostLGBM
-        boostlgbm_estimator = BoostLGBMEstimator(input_cols=feats_to_select_numeric, 
-                                                input_roles=sdataset.roles,
-                                                task_name=sdataset.task.name,
-                                                folds_column=sdataset.folds_column,
-                                                target_column=sdataset.target_column,
-                                                folds_number=sreader.cv)
-
-        boostlgbm_pipline = Pipeline(stages=[boostlgbm_estimator])
-
-        boostlgbm_pipline.write().overwrite().save("/tmp/boostlgbm_pipline")
-
-        boostlgbm_model = boostlgbm_pipline.fit(sdataset.data)
-
-        result = boostlgbm_model.transform(sdataset.data).toPandas().to_csv("/tmp/boostlgbm_model_result.csv", index=False)
-
-        boostlgbm_model.write().overwrite().save("/tmp/boostlgbm_model")
 
         logger.info("Finished")
 
