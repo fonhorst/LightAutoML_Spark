@@ -9,6 +9,7 @@ from pyspark.ml import Pipeline, PipelineModel, Transformer, Estimator
 
 from lightautoml.dataset.roles import FoldsRole, TargetRole
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.pipelines.features.base import build_graph
 from lightautoml.spark.pipelines.features.lgb_pipeline import LGBAdvancedPipeline, LGBAdvancedPipelineTmp, LGBSimpleFeatures, LGBSimpleFeaturesTmp
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.transformers.base import SparkTransformer, SequentialTransformer, UnionTransformer
@@ -57,37 +58,7 @@ class Cacher(Estimator):
         return self._dataset
 
 
-def build_graph(begin: SparkTransformer):
-    graph = dict()
-    def find_start_end(tr: SparkTransformer) -> Tuple[List[SparkTransformer], List[SparkTransformer]]:
-        if isinstance(tr, SequentialTransformer):
-            se = [st_or_end for el in tr.transformer_list for st_or_end in find_start_end(el)]
 
-            starts = se[0]
-            ends = se[-1]
-            middle = se[1:-1]
-
-            i = 0
-            while i < len(middle):
-                for new_st, new_end in itertools.product(middle[i], middle[i + 1]):
-                    if new_end not in graph:
-                        graph[new_end] = set()
-                    graph[new_end].add(new_st)
-                i += 2
-
-            return starts, ends
-
-        elif isinstance(tr, UnionTransformer):
-            se = [find_start_end(el) for el in tr.transformer_list]
-            starts = [s_el for s, _ in se for s_el in s]
-            ends = [e_el for _, e in se for e_el in e]
-            return starts, ends
-        else:
-            return [tr], [tr]
-
-    starts, _ = find_start_end(begin)
-
-    return graph
 
 
 if __name__ == "__main__":
