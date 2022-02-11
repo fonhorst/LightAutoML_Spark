@@ -16,14 +16,14 @@ from lightautoml.spark.transformers.base import ColumnsSelector as SparkColumnsS
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
-    TargetEncoder as SparkTargetEncoder
+    TargetEncoder as SparkTargetEncoder, LabelEncoderEstimator
 from lightautoml.spark.utils import log_exec_time
 from lightautoml.tasks import Task
 from lightautoml.transformers.base import ColumnsSelector
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     OHEEncoder, TargetEncoder
 from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_datasets, compare_by_metadata, \
-    compare_by_content
+    compare_by_content, compare_sparkml_by_content
 
 DATASETS = [
 
@@ -48,6 +48,18 @@ DATASETS = [
     #                    "WoodDeckSF": CategoryRole(bool)
     #                })
 ]
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_sparkml_label_encoder(spark: SparkSession, dataset: DatasetForTest):
+
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
+
+    transformer = LabelEncoderEstimator(
+        input_cols=ds.features,
+        input_roles=ds.roles
+    )
+    compare_sparkml_by_content(spark, ds, LabelEncoder(), transformer)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

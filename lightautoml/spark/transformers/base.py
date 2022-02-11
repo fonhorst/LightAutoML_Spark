@@ -71,6 +71,15 @@ class SparkColumnsAndRoles(HasInputCols, HasOutputCols, HasInputRoles, HasOutput
     def getDoReplaceColumns(self):
         return self.getOrDefault(self.doReplaceColumns)
 
+    @staticmethod
+    def make_dataset(transformer: 'SparkColumnsAndRoles', base_dataset: SparkDataset, data: SparkDataFrame) -> SparkDataset:
+        # TODO: SPARK-LAMA deepcopy?
+        new_roles = copy(base_dataset.roles)
+        new_roles.update(transformer.getOutputRoles())
+        new_ds = base_dataset.empty()
+        new_ds.set_data(data, base_dataset.features + transformer.getOutputCols(),  new_roles)
+        return new_ds
+
 
 class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, MLWritable, ABC):
     _fit_checks = ()
