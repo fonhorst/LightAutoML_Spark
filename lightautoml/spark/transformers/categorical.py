@@ -934,6 +934,133 @@ class OHEEncoder(SparkTransformer):
         return output
 
 
+class OHEEncoderEstimator(SparkBaseEstimator):
+    """
+    Simple OneHotEncoder over label encoded categories.
+    """
+
+    _fit_checks = (categorical_check, encoding_check)
+    _transform_checks = ()
+    _fname_prefix = "ohe"
+
+    @property
+    def features(self) -> List[str]:
+        """Features list."""
+        return self._features
+
+    def __init__(
+        self,
+        input_cols: List[str],
+        input_roles: Dict[str, ColumnRole],
+        do_replace_columns: bool = False,
+        make_sparse: Optional[bool] = None,
+        total_feats_cnt: Optional[int] = None,
+        dtype: type = np.float32,
+    ):
+        """
+
+        Args:
+            make_sparse: Create sparse matrix.
+            total_feats_cnt: Initial features number.
+            dtype: Dtype of new features.
+
+        """
+        super().__init__(input_cols,
+                         input_roles,
+                         do_replace_columns=do_replace_columns,
+                         output_role=)
+
+        self.make_sparse = make_sparse
+        self.total_feats_cnt = total_feats_cnt
+        self.dtype = dtype
+
+        if self.make_sparse is None:
+            assert self.total_feats_cnt is not None, "Param total_feats_cnt should be defined if make_sparse is None"
+
+        self._ohe_transformer_and_roles: Optional[Tuple[Transformer, Dict[str, ColumnRole]]] = None
+
+
+    def _fit(self, sdf: SparkDataFrame) -> Transformer:
+        """Calc output shapes.
+
+        Automatically do ohe in sparse form if approximate fill_rate < `0.2`.
+
+        Args:
+            dataset: Pandas or Numpy dataset of categorical features.
+
+        Returns:
+            self.
+
+        """
+
+        temp_sdf = sdf.cache()
+        maxs = [F.max(c).alias(f"max_{c}") for c in self.getInputCols()]
+        mins = [F.min(c).alias(f"min_{c}") for c in self.getInputCols()]
+        mm = temp_sdf.select(maxs + mins).collect()[0].asDict()
+
+        ohe = OneHotEncoder(inputCols=self.getInputCols(), outputCols=self.getOutputCols(), handleInvalid="error")
+        transformer = ohe.fit(temp_sdf)
+        temp_sdf.unpersist()
+
+        # TODO: SPARK-LAMA roles are generated in _fit(), and need to think over it, how to get roles in pipline creation time
+        roles = {
+            f"{self._fname_prefix}__{c}": NumericVectorOrArrayRole(
+                size=mm[f"max_{c}"] - mm[f"min_{c}"] + 1,
+                element_col_name_template=[
+                    f"{self._fname_prefix}_{i}__{c}"
+                    for i in np.arange(mm[f"min_{c}"], mm[f"max_{c}"] + 1)
+                ]
+            ) for c in self.getInputCols()
+        }
+
+        self._ohe_transformer_and_roles = (transformer, roles)
+
+        return OHEEncoderTransformer(transformer,
+                            input_cols=self.getInputCols(),
+                            output_cols=self.getOutputCols(),
+                            input_roles=self.getInputRoles(),
+                            output_roles=roles)
+
+
+class OHEEncoderTransformer(SparkBaseTransformer):
+    """OHEEncoder Transformer"""
+
+    _fit_checks = (categorical_check, encoding_check)
+    _transform_checks = ()
+    _fname_prefix = "ohe"
+
+    @property
+    def features(self) -> List[str]:
+        """Features list."""
+        return self._features
+
+    def __init__(self,
+                 input_cols: List[str],
+                 output_cols: List[str],
+                 input_roles: RolesDict,
+                 output_roles: RolesDict,
+                 ohe_transformer: Tuple,
+                 do_replace_columns: bool = False):
+        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
+        self._ohe_transformer = ohe_transformer
+
+    def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
+        """Transform categorical dataset to ohe.
+
+        Args:
+            dataset: Pandas or Numpy dataset of categorical features.
+
+        Returns:
+            Numpy dataset with encoded labels.
+
+        """
+
+        # TODO: Check that ohe.transform() returns all columns, not just outputCols 
+        output = self._ohe_transformer.transform(sdf)
+
+        return output
+
+
 def te_mapping_udf(broadcasted_dict):
     def f(folds, current_column):
         values_dict = broadcasted_dict.value
