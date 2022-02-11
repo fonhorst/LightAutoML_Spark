@@ -101,7 +101,7 @@ class SparkTimeToNumTransformer(SparkBaseTransformer, SparkDatetimeHelper):
             ).alias(out_col)
             new_cols.append(new_col)
 
-        df = df.select('*', *new_cols)
+        df = self._make_output_df(df, new_cols)
 
         return df
 
@@ -150,7 +150,7 @@ class SparkBaseDiffTransformer(SparkBaseTransformer, SparkDatetimeHelper):
             for base in self.base_names
         ]
 
-        df = df.select('*', *new_cols)
+        df = self._make_output_df(df, new_cols)
 
         return df
 
@@ -207,7 +207,7 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer, SparkDatetimeHelper):
                 )
                 new_cols.append(hol_col)
 
-        df = df.select('*', *new_cols)
+        df = self._make_output_df(df, new_cols)
 
         return df
 

@@ -12,7 +12,7 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import SparkMLEstimatorWrapper
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.transformers.base import ChangeRoles, ChangeRolesTransformer, UnionTransformer, SequentialTransformer
-from lightautoml.spark.transformers.categorical import LabelEncoderEstimator, OrdinalEncoder, OrdinalEncoderEstimator, SparkTargetEncoderEstimator
+from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, OrdinalEncoder, OrdinalEncoderEstimatorSpark, SparkTargetEncoderEstimator
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.transformers.base import ColumnsSelector
@@ -57,13 +57,13 @@ def execute_lama_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordinal_
 
 
 def execute_sparkml_pipeline(sdataset: SparkDataset, cat_feats: List[str], ordinal_feats: List[str], numeric_feats: List[str]):
-    le_estimator = LabelEncoderEstimator(input_cols=cat_feats, input_roles=sdataset.roles)
+    le_estimator = SparkLabelEncoderEstimator(input_cols=cat_feats, input_roles=sdataset.roles)
     te_estimator = SparkTargetEncoderEstimator(input_cols=le_estimator.getOutputCols(),
                                                input_roles=le_estimator.getOutputRoles(),
                                                task_name=sdataset.task.name,
                                                folds_column=sdataset.folds_column,
                                                target_column=sdataset.target_column)
-    ord_estimator = OrdinalEncoderEstimator(input_cols=ordinal_feats, input_roles=te_estimator.getOutputRoles())
+    ord_estimator = OrdinalEncoderEstimatorSpark(input_cols=ordinal_feats, input_roles=te_estimator.getOutputRoles())
     num_transformer = ChangeRolesTransformer(roles=NumericRole(np.float32), 
                                             input_cols=numeric_feats, 
                                             input_roles=ord_estimator.getOutputRoles())
