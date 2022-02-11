@@ -267,9 +267,6 @@ class FeaturesPipelineSpark:
 
             input_features = est.getInputCols()
 
-            if not(not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features)):
-                k = 0
-
             assert not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features), \
                 "Cannot replace input features of the feature pipeline itself"
 
@@ -286,6 +283,10 @@ class FeaturesPipelineSpark:
 
         assert all((f in features) for f in fp_input_features), \
             "All input features should be present in the output features"
+
+        if not all((f in roles) for f in fp_input_features):
+            k = 0
+
         assert all((f in roles) for f in fp_input_features), \
             "All input features should be present in the output roles"
 

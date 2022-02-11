@@ -462,41 +462,39 @@ class SparkLGBAdvancedPipeline(FeaturesPipelineSpark, TabularDataFeaturesSpark):
 
         # get target encoded part
         te_part = self.get_categorical_raw(train, te)
-        # TODO: SPARK-LAMA return back later
-        # if te_part is not None:
-        #     # te_part = SequentialTransformer([te_part, target_encoder()])
-        #     target_encoder_stage = target_encoder(
-        #         input_cols=te_part.getOutputCols(),
-        #         input_roles=te_part.getOutputRoles(),
-        #         task_name=train.task.name,
-        #         folds_column=train.folds_column,
-        #         target_column=train.target_column,
-        #         do_replace_columns=True
-        #     )
-        #     te_part = SparkSequentialTransformer([te_part, target_encoder_stage])
-        #     transformer_list.append(te_part)
+        if te_part is not None:
+            # te_part = SequentialTransformer([te_part, target_encoder()])
+            target_encoder_stage = target_encoder(
+                input_cols=te_part.getOutputCols(),
+                input_roles=te_part.getOutputRoles(),
+                task_name=train.task.name,
+                folds_column=train.folds_column,
+                target_column=train.target_column,
+                do_replace_columns=True
+            )
+            te_part = SparkSequentialTransformer([te_part, target_encoder_stage])
+            transformer_list.append(te_part)
 
         # get intersection of top categories
         intersections = self.get_categorical_intersections(train)
         if intersections is not None:
-            # TODO: SPARK-LAMA return it back
-            # if target_encoder is not None:
-            #     target_encoder_stage = target_encoder(
-            #         input_cols=intersections.getOutputCols(),
-            #         input_roles=intersections.getOutputRoles(),
-            #         task_name=train.task.name,
-            #         folds_column=train.folds_column,
-            #         target_column=train.target_column,
-            #         do_replace_columns=True
-            #     )
-            #     ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
-            # else:
-            change_roles_stage = ChangeRolesTransformer(
-                input_cols=intersections.getOutputCols(),
-                input_roles=intersections.getOutputRoles(),
-                role=output_category_role
-            )
-            ints_part = SparkSequentialTransformer([intersections, change_roles_stage])
+            if target_encoder is not None:
+                target_encoder_stage = target_encoder(
+                    input_cols=intersections.getOutputCols(),
+                    input_roles=intersections.getOutputRoles(),
+                    task_name=train.task.name,
+                    folds_column=train.folds_column,
+                    target_column=train.target_column,
+                    do_replace_columns=True
+                )
+                ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
+            else:
+                change_roles_stage = ChangeRolesTransformer(
+                    input_cols=intersections.getOutputCols(),
+                    input_roles=intersections.getOutputRoles(),
+                    role=output_category_role
+                )
+                ints_part = SparkSequentialTransformer([intersections, change_roles_stage])
 
             transformer_list.append(ints_part)
 

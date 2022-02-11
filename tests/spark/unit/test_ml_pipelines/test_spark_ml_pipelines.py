@@ -1,5 +1,8 @@
+from copy import copy
+
 from pyspark.sql import SparkSession
 
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import Task as SparkTask
@@ -55,6 +58,16 @@ def test_lgb_advanced_pipeline(spark: SparkSession):
     df = spark.read.csv(path, header=True, escape="\"")
     sreader = SparkToSparkReader(task=SparkTask(task_type), cv=2)
     sdataset = sreader.fit_read(df, roles=roles)
+
+    # features = copy(sdataset.features)
+    # roles = copy(sdataset.roles)
+
+    sdataset.data = (
+        sdataset
+        .data
+        .join(sdataset.target, on=SparkDataset.ID_COLUMN)
+        .join(sdataset.folds, on=SparkDataset.ID_COLUMN)
+    )
 
     fp = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles)
     out_ds = fp.fit_transform(sdataset)

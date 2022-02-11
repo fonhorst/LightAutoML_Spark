@@ -1362,9 +1362,9 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer):
         # В оригинальной ламе об этом не парились, т.к. сразу переходили в numpy. Если прислали датасет не с тем
         # порядком строк - ну штоош, это проблемы того, кто датасет этот сюда вкинул. Стоит ли нам тоже придерживаться
         # этой логики?
-        for i, (col_name, out_name) in enumerate(zip(self.getInputCols()), self.getOutputCols()):
+        for i, (col_name, out_name) in enumerate(zip(self.getInputCols(), self.getOutputCols())):
             _cur_col = F.col(col_name)
-            logger.debug(f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self.encodings[i])}")
+            logger.debug(f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._encodings[i])}")
 
             values = sc.broadcast(self._encodings[i])
 
