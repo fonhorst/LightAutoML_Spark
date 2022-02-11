@@ -231,6 +231,53 @@ class LogOdds(SparkTransformer):
         return output
 
 
+class LogOddsTransformer(SparkBaseTransformer):
+    """Convert probs to logodds."""
+
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    _fname_prefix = "logodds"
+
+    _can_unwind_parents = False
+
+    def __init__(self,
+                 input_cols: List[str],
+                 input_roles: RolesDict):
+        super().__init__(input_cols=input_cols,
+                         output_cols=[f"{self._fname_prefix}__{feat}" for feat in input_cols],
+                         input_roles=input_roles,
+                         output_roles={f: NumericRole(np.float32) for f in input_cols},
+                         do_replace_columns=False)
+
+    def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
+        """Transform - convert num values to logodds.
+
+        Args:
+            dataset: SparkDataFrame dataset of categorical features.
+
+        Returns:
+            SparkDataFrame with encoded labels.
+
+        """
+
+        # # transform
+        # # TODO: maybe np.exp and then cliping and logodds?
+        # data = np.clip(data, 1e-7, 1 - 1e-7)
+        # data = np.log(data / (1 - data))
+
+        cols_to_select = []
+        for i in self.getInputCols():
+            col = F.when(F.col(i) < 1e-7, 1e-7) \
+                .when(F.col(i) > 1 - 1e-7, 1 - 1e-7) \
+                .otherwise(F.col(i))
+            col = F.log(col / (F.lit(1) - col))
+            cols_to_select.append(col.alias(f"{self._fname_prefix}__{i}"))
+
+        sdf = sdf.select('*', *cols_to_select)
+
+        return sdf
+
+
 class StandardScaler(SparkTransformer):
     """Classic StandardScaler."""
 
