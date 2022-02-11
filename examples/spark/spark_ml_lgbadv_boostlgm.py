@@ -17,6 +17,7 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPi
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
+from lightautoml.spark.validation.folds_iterator import FoldsIterator
 from lightautoml.validation.base import DummyIterator
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
@@ -37,8 +38,8 @@ if __name__ == "__main__":
         }
 
         # data reading and converting to SparkDataset
-        df = spark.read.csv("examples/data/tiny_used_cars_data.csv", header=True, escape="\"")
-        sreader = SparkToSparkReader(task=SparkTask("reg"), cv=5)
+        df = spark.read.csv("examples/data/small_used_cars_data.csv", header=True, escape="\"")
+        sreader = SparkToSparkReader(task=SparkTask("reg"), cv=3)
         sdataset_tmp = sreader.fit_read(df, roles=roles)
         
         sdataset = sdataset_tmp.empty()
@@ -67,7 +68,7 @@ if __name__ == "__main__":
         simple_pipline_builder = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles, **ml_alg_kwargs)
         sdataset_feats = simple_pipline_builder.fit_transform(sdataset)
 
-        iterator = DummyIterator(sdataset_feats)
+        iterator = FoldsIterator(sdataset_feats, n_folds=3)
         spark_ml_algo = BoostLGBM(input_cols=simple_pipline_builder.output_features)
         spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
         spark_ml_algo = cast(BoostLGBM, spark_ml_algo)
