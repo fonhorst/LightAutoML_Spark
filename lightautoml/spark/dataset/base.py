@@ -120,7 +120,7 @@ class SparkDataset(LAMLDataset):
         self._data = None
         self._is_frozen_in_cache: bool = False
         self._dependencies = [] if dependencies is None else dependencies
-        self._service_columns: Set[str] = {self.ID_COLUMN}
+        self._service_columns: Set[str] = {self.ID_COLUMN, self.target_column, self.folds_column}
 
         roles = roles if roles else dict()
 

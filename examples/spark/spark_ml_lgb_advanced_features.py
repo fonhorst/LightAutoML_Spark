@@ -10,7 +10,7 @@ from pyspark.ml import Pipeline, PipelineModel, Transformer, Estimator
 from lightautoml.dataset.roles import FoldsRole, TargetRole
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.pipelines.features.base import build_graph
-from lightautoml.spark.pipelines.features.lgb_pipeline import LGBAdvancedPipeline, LGBAdvancedPipelineTmp, LGBSimpleFeatures, LGBSimpleFeaturesTmp
+from lightautoml.spark.pipelines.features.lgb_pipeline import LGBAdvancedPipeline, SparkLGBAdvancedPipeline, LGBSimpleFeatures, LGBSimpleFeaturesTmp
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.transformers.base import SparkTransformer, SequentialTransformer, UnionTransformer
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
@@ -116,7 +116,7 @@ if __name__ == "__main__":
 
 
         # # Spark ML pipeline
-        simple_pipline_builder = LGBAdvancedPipelineTmp(**ml_alg_kwargs)
+        simple_pipline_builder = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
         # spark_pipeline, features, roles = simple_pipline_builder.create_pipeline(sdataset)
         simple_pipline_builder.fit_transform(sdataset)
 

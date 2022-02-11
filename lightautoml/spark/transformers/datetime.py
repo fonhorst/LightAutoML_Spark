@@ -101,7 +101,7 @@ class SparkTimeToNumTransformer(SparkBaseTransformer, SparkDatetimeHelper):
             ).alias(out_col)
             new_cols.append(new_col)
 
-        df = df.select('*', *new_cols)
+        df = self._make_output_df(df, new_cols)
 
         return df
 
@@ -126,31 +126,35 @@ class SparkBaseDiffTransformer(SparkBaseTransformer, SparkDatetimeHelper):
                  do_replace_columns: bool = False):
         input_cols = list(base_names) + list(diff_names)
 
+        self.base_names = base_names
+        self.diff_names = diff_names
+        self.basic_interval = basic_interval
+
         output_cols = [
             f"{self._fname_prefix}_{col}__{x}"
-            for col in self.base_names
-            for x in self.diff_names
+            for col in base_names
+            for x in diff_names
         ]
 
         output_roles = {col: NumericRole(dtype=np.float32) for col in output_cols}
 
         super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
 
-        self.set(self.baseNames, base_names)
-        self.set(self.diffNames, diff_names)
-        self.set(self.basicInterval, basic_interval)
+        self.set(self.baseNames, self.base_names)
+        self.set(self.diffNames, self.diff_names)
+        self.set(self.basicInterval, self.basic_interval)
 
     def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
 
         new_cols = [
-            (
+            ((
                     F.to_timestamp(F.col(dif)).cast("long") - F.to_timestamp(F.col(base)).cast("long")
-            ) / self._interval_mapping[self.basic_interval]
-            for dif in self.diff_names
+            ) / self._interval_mapping[self.basic_interval]).alias(f"{self._fname_prefix}_{base}__{dif}")
             for base in self.base_names
+            for dif in self.diff_names
         ]
 
-        df = df.select('*', *new_cols)
+        df = self._make_output_df(df, new_cols)
 
         return df
 
@@ -194,12 +198,12 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer, SparkDatetimeHelper):
                 .alias(f"{self._fname_prefix}_{seas}__{col}")
             ) for seas in self.transformations[col]]
 
-            new_cols.append(seas_cols)
+            new_cols.extend(seas_cols)
 
             if roles[col].country is not None:
                 hol_col = (
                     is_holiday_udf(
-                        F.col(col),
+                        fcol,
                         F.lit(roles[col].country),
                         F.lit(roles[col].state),
                         F.lit(roles[col].prov)
@@ -207,7 +211,7 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer, SparkDatetimeHelper):
                 )
                 new_cols.append(hol_col)
 
-        df = df.select('*', *new_cols)
+        df = self._make_output_df(df, new_cols)
 
         return df
 

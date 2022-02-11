@@ -3,6 +3,8 @@ from abc import ABC
 from copy import copy, deepcopy
 from typing import Dict, cast, Sequence, List, Set, Optional, Union
 
+from pyspark.sql import Column
+
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
 from lightautoml.dataset.utils import concatenate
@@ -71,6 +73,15 @@ class SparkColumnsAndRoles(HasInputCols, HasOutputCols, HasInputRoles, HasOutput
     def getDoReplaceColumns(self):
         return self.getOrDefault(self.doReplaceColumns)
 
+    @staticmethod
+    def make_dataset(transformer: 'SparkColumnsAndRoles', base_dataset: SparkDataset, data: SparkDataFrame) -> SparkDataset:
+        # TODO: SPARK-LAMA deepcopy?
+        new_roles = copy(base_dataset.roles)
+        new_roles.update(transformer.getOutputRoles())
+        new_ds = base_dataset.empty()
+        new_ds.set_data(data, base_dataset.features + transformer.getOutputCols(),  new_roles)
+        return new_ds
+
 
 class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, MLWritable, ABC):
     _fit_checks = ()
@@ -119,8 +130,8 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
                  do_replace_columns: bool = False):
         super().__init__()
 
-        assert len(input_cols) == len(output_cols)
-        assert len(input_roles) == len(output_roles)
+        # assert len(input_cols) == len(output_cols)
+        # assert len(input_roles) == len(output_roles)
         assert all((f in input_roles) for f in input_cols)
         assert all((f in output_roles) for f in output_cols)
 
@@ -135,6 +146,14 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
     def write(self) -> MLWriter:
         "Returns MLWriter instance that can save the Transformer instance."
         return TmpСommonMLWriter(self.uid)
+
+    def _make_output_df(self, input_df: SparkDataFrame, cols_to_add: List[Union[str, Column]]):
+        if not self.getDoReplaceColumns():
+            return input_df.select('*', *cols_to_add)
+
+        input_cols = set(self.getInputCols())
+        cols_to_leave = [f for f in input_df.columns if f not in input_cols]
+        return input_df.select(*cols_to_leave, *cols_to_add)
 
 
 class SparkUnionTransformer:

@@ -16,11 +16,11 @@ from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkTra
     ColumnsSelector, ChangeRoles, SparkUnionTransformer, SparkSequentialTransformer, SparkEstOrTrans
 from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
 from lightautoml.spark.transformers.categorical import OrdinalEncoder
-from lightautoml.spark.transformers.categorical import OrdinalEncoderEstimator
+from lightautoml.spark.transformers.categorical import OrdinalEncoderEstimatorSpark
 from lightautoml.spark.transformers.datetime import TimeToNum, SparkTimeToNumTransformer
 
 
-class LGBSimpleFeaturesSpark(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+class SparkLGBSimpleFeatures(FeaturesPipelineSpark, TabularDataFeaturesSpark):
     """Creates simple pipeline for tree based models.
 
     Simple but is ok for select features.
@@ -54,10 +54,10 @@ class LGBSimpleFeaturesSpark(FeaturesPipelineSpark, TabularDataFeaturesSpark):
         categories = self._cols_by_role(train, "Category")
         if len(categories) > 0:
             roles = {f: train.roles[f] for f in categories}
-            cat_processing = OrdinalEncoderEstimator(input_cols=categories,
-                                                     input_roles=roles,
-                                                     subs=None,
-                                                     random_state=42)
+            cat_processing = OrdinalEncoderEstimatorSpark(input_cols=categories,
+                                                          input_roles=roles,
+                                                          subs=None,
+                                                          random_state=42)
             transformers_list.append(cat_processing)
 
         # process datetimes
@@ -168,7 +168,7 @@ class LGBSimpleFeaturesTmp(FeaturesPipeline):
 
         categories = get_columns_by_role(train, "Category")
         if len(categories) > 0:
-            ord_estimator = OrdinalEncoderEstimator(input_cols=categories, input_roles=train.roles)
+            ord_estimator = OrdinalEncoderEstimatorSpark(input_cols=categories, input_roles=train.roles)
             stages.append(ord_estimator)
             final_columns = categories + ord_estimator.getOutputCols()
 
@@ -349,7 +349,50 @@ class LGBAdvancedPipeline(FeaturesPipeline, TabularDataFeatures):
         return seq
 
 
-class LGBAdvancedPipelineTmp(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+class SparkLGBAdvancedPipeline(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+    def __init__(
+            self,
+            input_features: List[str],
+            input_roles: RolesDict,
+            feats_imp: Optional[ImportanceEstimator] = None,
+            top_intersections: int = 5,
+            max_intersection_depth: int = 3,
+            subsample: Optional[Union[int, float]] = None,
+            multiclass_te_co: int = 3,
+            auto_unique_co: int = 10,
+            output_categories: bool = False,
+            **kwargs
+    ):
+        """
+
+        Args:
+            feats_imp: Features importances mapping.
+            top_intersections: Max number of categories
+              to generate intersections.
+            max_intersection_depth: Max depth of cat intersection.
+            subsample: Subsample to calc data statistics.
+            multiclass_te_co: Cutoff if use target encoding in cat
+              handling on multiclass task if number of classes is high.
+            auto_unique_co: Switch to target encoding if high cardinality.
+
+        """
+        print("lama advanced pipeline ctr")
+        super().__init__(
+            multiclass_te_co=multiclass_te_co,
+            top_intersections=top_intersections,
+            max_intersection_depth=max_intersection_depth,
+            subsample=subsample,
+            feats_imp=feats_imp,
+            auto_unique_co=auto_unique_co,
+            output_categories=output_categories,
+            ascending_by_cardinality=False,
+        )
+        self._input_features = input_features
+        self._input_roles = input_roles
+
+    def _get_input_features(self) -> Set[str]:
+        return set(self.input_features)
+
     def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
         """Create tree pipeline.
 
@@ -426,25 +469,26 @@ class LGBAdvancedPipelineTmp(FeaturesPipelineSpark, TabularDataFeaturesSpark):
                 input_roles=te_part.getOutputRoles(),
                 task_name=train.task.name,
                 folds_column=train.folds_column,
-                target_column=train.target_column)
-
+                target_column=train.target_column,
+                do_replace_columns=True
+            )
             te_part = SparkSequentialTransformer([te_part, target_encoder_stage])
             transformer_list.append(te_part)
 
-        # TODO: SPARK-LAMA fix bug with performance of catintersections
         # get intersection of top categories
         intersections = self.get_categorical_intersections(train)
         if intersections is not None:
             if target_encoder is not None:
-                # ints_part = SequentialTransformer([intersections, target_encoder()])
-                target_encoder_stage = target_encoder(input_cols=intersections.getOutputCols(),
-                                             input_roles=intersections.getOutputRoles(),
-                                             task_name=train.task.name,
-                                             folds_column=train.folds_column,
-                                             target_column=train.target_column)
+                target_encoder_stage = target_encoder(
+                    input_cols=intersections.getOutputCols(),
+                    input_roles=intersections.getOutputRoles(),
+                    task_name=train.task.name,
+                    folds_column=train.folds_column,
+                    target_column=train.target_column,
+                    do_replace_columns=True
+                )
                 ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
             else:
-                # ints_part = SequentialTransformer([intersections, ChangeRoles(output_category_role)])
                 change_roles_stage = ChangeRolesTransformer(
                     input_cols=intersections.getOutputCols(),
                     input_roles=intersections.getOutputRoles(),
@@ -455,7 +499,8 @@ class LGBAdvancedPipelineTmp(FeaturesPipelineSpark, TabularDataFeaturesSpark):
             transformer_list.append(ints_part)
 
         # add numeric pipeline
-        transformer_list.append(self.get_numeric_data(train))
+        # TODO: SPARK-LAMA return get_numeric_data later
+        # transformer_list.append(self.get_numeric_data(train))
         transformer_list.append(self.get_ordinal_encoding(train, ordinal))
         transformer_list.append(self.get_datetime_diffs(train))
         transformer_list.append(self.get_datetime_seasons(train, NumericRole(np.float32)))

@@ -58,9 +58,9 @@ if __name__ == "__main__":
         spark_pipeline_model.transform(sdataset.data).toPandas().to_csv("/tmp/spark_pipeline_model.csv", index=False)
 
         # SparkTransformer pipeline
-        lgb_simple_feature_builder = LGBSimpleFeatures()
-        pipeline = lgb_simple_feature_builder.create_pipeline(sdataset)
-        pipeline.fit_transform(sdataset).to_pandas().data.to_csv("/tmp/pipeline_model.csv", index=False)
+        # lgb_simple_feature_builder = LGBSimpleFeatures()
+        # pipeline = lgb_simple_feature_builder.create_pipeline(sdataset)
+        # pipeline.fit_transform(sdataset).to_pandas().data.to_csv("/tmp/pipeline_model.csv", index=False)
 
         logger.info("Finished")
 

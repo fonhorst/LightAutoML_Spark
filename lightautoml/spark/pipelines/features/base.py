@@ -6,7 +6,6 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-import itertools
 import numpy as np
 import toposort
 from pandas import DataFrame
@@ -22,17 +21,16 @@ from lightautoml.pipelines.utils import map_pipeline_names
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, \
     ChangeRoles, \
-    UnionTransformer, SparkTransformer, SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
-    SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
-from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator, FreqEncoder, FreqEncoderEstimator, \
-    LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
-    TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
-from lightautoml.spark.transformers.categorical import TargetEncoderEstimator
-from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer, \
-    SparkBaseDiffTransformer, SparkDateSeasonsTransformer
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, ChangeRoles, \
     UnionTransformer, SparkTransformer
-from lightautoml.pipelines.utils import map_pipeline_names
+from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
+    SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
+from lightautoml.spark.transformers.categorical import CatIntersectionsEstimatorSpark, FreqEncoder, \
+    FreqEncoderEstimatorSpark, \
+    SparkLabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimatorSpark, \
+    TargetEncoder, CatIntersectstions
+from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
+from lightautoml.spark.transformers.datetime import BaseDiff, DateSeasons, DateSeasonsTransformer, \
+    SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.numeric import QuantileBinning
 
 
@@ -285,6 +283,10 @@ class FeaturesPipelineSpark:
 
         assert all((f in features) for f in fp_input_features), \
             "All input features should be present in the output features"
+
+        if not all((f in roles) for f in fp_input_features):
+            k = 0
+
         assert all((f in roles) for f in fp_input_features), \
             "All input features should be present in the output roles"
 
@@ -423,9 +425,9 @@ class TabularDataFeaturesSpark:
         """
         if feats_to_select is None:
             if prob is None:
-                feats_to_select, roles = self._cols_by_role(train, "Numeric")
+                feats_to_select = self._cols_by_role(train, "Numeric")
             else:
-                feats_to_select, roles = self._cols_by_role(train, "Numeric", prob=prob)
+                feats_to_select = self._cols_by_role(train, "Numeric", prob=prob)
 
         if len(feats_to_select) == 0:
             return None
@@ -451,14 +453,14 @@ class TabularDataFeaturesSpark:
 
         """
         if feats_to_select is None:
-            feats_to_select, roles = self._cols_by_role(train, "Category", encoding_type="freq")
+            feats_to_select = self._cols_by_role(train, "Category", encoding_type="freq")
 
         if len(feats_to_select) == 0:
             return None
 
-        roles = {train.roles[f] for f in feats_to_select}
+        roles = {f: train.roles[f] for f in feats_to_select}
 
-        cat_processing = FreqEncoderEstimator(input_cols=feats_to_select)
+        cat_processing = FreqEncoderEstimatorSpark(input_cols=feats_to_select, input_roles=roles)
 
         return cat_processing
 
@@ -476,17 +478,17 @@ class TabularDataFeaturesSpark:
 
         """
         if feats_to_select is None:
-            feats_to_select, roles = self._cols_by_role(train, "Category", ordinal=True)
+            feats_to_select = self._cols_by_role(train, "Category", ordinal=True)
 
         if len(feats_to_select) == 0:
             return
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        ord = OrdinalEncoderEstimator(input_cols=feats_to_select,
-                                      input_roles=roles,
-                                      subs=self.subsample,
-                                      random_state=self.random_state)
+        ord = OrdinalEncoderEstimatorSpark(input_cols=feats_to_select,
+                                           input_roles=roles,
+                                           subs=self.subsample,
+                                           random_state=self.random_state)
 
         return ord
 
@@ -515,10 +517,10 @@ class TabularDataFeaturesSpark:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        cat_processing = LabelEncoderEstimator(input_cols=feats_to_select,
-                                               input_roles=roles,
-                                               subs=self.subsample,
-                                               random_state=self.random_state)
+        cat_processing = SparkLabelEncoderEstimator(input_cols=feats_to_select,
+                                                    input_roles=roles,
+                                                    subs=self.subsample,
+                                                    random_state=self.random_state)
         return cat_processing
 
     def get_target_encoder(self, train: SparkDataset) -> Optional[type]:
@@ -534,7 +536,7 @@ class TabularDataFeaturesSpark:
         target_encoder = None
         if train.folds is not None:
             if train.task.name in ["binary", "reg"]:
-                target_encoder = TargetEncoderEstimator
+                target_encoder = SparkTargetEncoderEstimator
             else:
                 tds = cast(SparkDataFrame, train.target)
                 result = tds.select(F.max(train.target_column).alias("max")).first()
@@ -562,12 +564,12 @@ class TabularDataFeaturesSpark:
 
         """
         if feats_to_select is None:
-            feats_to_select, roles = self._cols_by_role(train, "Numeric", discretization=True)
+            feats_to_select = self._cols_by_role(train, "Numeric", discretization=True)
 
         if len(feats_to_select) == 0:
             return
 
-        roles = {train.roles[f] for f in feats_to_select}
+        roles = {f: train.roles[f] for f in feats_to_select}
 
         binned_processing = QuantileBinning(nbins=self.max_bin_count)
 
@@ -606,9 +608,9 @@ class TabularDataFeaturesSpark:
         # subs = self.subsample,
         # random_state = self.random_state,
 
-        cat_processing = CatIntersectionsEstimator(input_cols=feats_to_select,
-                                                   input_roles=roles,
-                                                   max_depth=self.max_intersection_depth)
+        cat_processing = CatIntersectionsEstimatorSpark(input_cols=feats_to_select,
+                                                        input_roles=roles,
+                                                        max_depth=self.max_intersection_depth)
 
         return cat_processing
 
@@ -1126,7 +1128,7 @@ class TabularDataFeatures:
         #     ]
         # )
 
-        cat_processing = FreqEncoderEstimator(input_cols=feats_to_select)
+        cat_processing = FreqEncoderEstimatorSpark(input_cols=feats_to_select)
 
         return cat_processing
 
@@ -1182,10 +1184,10 @@ class TabularDataFeatures:
         #         OrdinalEncoder(subs=self.subsample, random_state=self.random_state),
         #     ]
         # )
-        cat_processing = OrdinalEncoderEstimator(input_cols=feats_to_select,
-                                                 input_roles=train.roles,
-                                                 subs=self.subsample,
-                                                 random_state=self.random_state)
+        cat_processing = OrdinalEncoderEstimatorSpark(input_cols=feats_to_select,
+                                                      input_roles=train.roles,
+                                                      subs=self.subsample,
+                                                      random_state=self.random_state)
 
         return cat_processing
 
@@ -1246,10 +1248,10 @@ class TabularDataFeatures:
         # ]
         # cat_processing = SequentialTransformer(cat_processing)
 
-        cat_processing = LabelEncoderEstimator(input_cols=feats_to_select,
-                                               subs=self.subsample,
-                                               random_state=self.random_state,
-                                               input_roles=train.roles)
+        cat_processing = SparkLabelEncoderEstimator(input_cols=feats_to_select,
+                                                    subs=self.subsample,
+                                                    random_state=self.random_state,
+                                                    input_roles=train.roles)
         return cat_processing
 
     def get_target_encoder(self, train: SparkDataset) -> Optional[type]:
@@ -1292,7 +1294,7 @@ class TabularDataFeatures:
         target_encoder = None
         if train.folds is not None:
             if train.task.name in ["binary", "reg"]:
-                target_encoder = TargetEncoderEstimator
+                target_encoder = SparkTargetEncoderEstimator
             else:
                 tds = cast(SparkDataFrame, train.target)
                 result = tds.select(F.max(train.target_column).alias("max")).first()
@@ -1414,9 +1416,9 @@ class TabularDataFeatures:
         #     ),
         # ]
 
-        cat_processing = CatIntersectionsEstimator(input_cols=feats_to_select,
-                                                     input_roles=train.roles,
-                                                     max_depth=self.max_intersection_depth)
+        cat_processing = CatIntersectionsEstimatorSpark(input_cols=feats_to_select,
+                                                        input_roles=train.roles,
+                                                        max_depth=self.max_intersection_depth)
 
         return cat_processing
 

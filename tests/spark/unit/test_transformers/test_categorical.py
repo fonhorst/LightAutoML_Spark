@@ -16,14 +16,15 @@ from lightautoml.spark.transformers.base import ColumnsSelector as SparkColumnsS
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
-    TargetEncoder as SparkTargetEncoder
+    TargetEncoder as SparkTargetEncoder, SparkLabelEncoderEstimator, FreqEncoderEstimatorSpark, \
+    OrdinalEncoderEstimatorSpark, CatIntersectionsEstimatorSpark
 from lightautoml.spark.utils import log_exec_time
 from lightautoml.tasks import Task
 from lightautoml.transformers.base import ColumnsSelector
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     OHEEncoder, TargetEncoder
 from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_datasets, compare_by_metadata, \
-    compare_by_content
+    compare_by_content, compare_sparkml_by_content
 
 DATASETS = [
 
@@ -51,141 +52,165 @@ DATASETS = [
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_label_encoder(spark: SparkSession, dataset: DatasetForTest):
+def test_sparkml_label_encoder(spark: SparkSession, dataset: DatasetForTest):
 
-    ds = PandasDataset(dataset.dataset, roles=dataset.roles)
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
-    compare_by_content(spark, ds, LabelEncoder(), SparkLabelEncoder())
+    transformer = SparkLabelEncoderEstimator(
+        input_cols=ds.features,
+        input_roles=ds.roles
+    )
+    compare_sparkml_by_content(spark, ds, LabelEncoder(), transformer)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_freq_encoder(spark: SparkSession, dataset: DatasetForTest):
 
-    ds = PandasDataset(dataset.dataset, roles=dataset.roles)
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
-    compare_by_content(spark, ds, FreqEncoder(), SparkFreqEncoder())
+    transformer = FreqEncoderEstimatorSpark(
+        input_cols=ds.features,
+        input_roles=ds.roles
+    )
+    compare_sparkml_by_content(spark, ds, FreqEncoder(), transformer)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_ordinal_encoder(spark: SparkSession, dataset: DatasetForTest):
 
-    ds = PandasDataset(dataset.dataset, roles=dataset.roles)
-
-    compare_by_content(spark, ds, OrdinalEncoder(), SparkOrdinalEncoder())
-
-
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_cat_intersectstions(spark: SparkSession, dataset: DatasetForTest):
-
-    ds = PandasDataset(dataset.dataset, roles=dataset.roles)
-
-    # sds = SparkDataset.from_lama(ds, spark)
-    sds = from_pandas_to_spark(ds, spark, ds.target)
-
-    lama_transformer = CatIntersectstions()
-    lama_transformer.fit(ds)
-    lama_output = lama_transformer.transform(ds)
-
-    spark_transformer = SparkCatIntersectstions()
-    spark_transformer.fit(sds)
-    spark_output = spark_transformer.transform(sds)
-
-    compare_obtained_datasets(lama_output, spark_output)
-
-
-def test_ohe(spark: SparkSession):
-    make_sparse = False
-    source_data = pd.DataFrame(data={
-        "a": [1, 4, 5, 4, 2, 3],
-        "b": [1, 4, 4, 4, 2, 3],
-        "c": [1, 1, 1, 1, 1, 1],
-        "d": [3, 1, 3, 2, 2, 1]
-    })
-
-    ds = PandasDataset(source_data, roles={
-        name: CategoryRole(dtype=np.int32, label_encoded=True)
-        for name in source_data.columns
-    })
-
-    # ds = PandasDataset(dataset.dataset, roles=dataset.roles)
-    _, _ = compare_by_metadata(spark, ds, OHEEncoder(make_sparse), SparkOHEEncoder(make_sparse))
-
-
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
-# def test_target_encoder(spark: SparkSession):
-#     with open("unit/resources/datasets/dataset_after_reader_dump.pickle", "rb") as f:
-#         (data, features, roles, target) = pickle.load(f)
-#
-#     ds = PandasDataset(data, roles=roles, task=Task("binary"))
-#     ds.target = target
 
-    label_encoder = LabelEncoder()
-    label_encoder.fit(ds)
-    labeled_ds = label_encoder.transform(ds)
-
-    cols = ["le__Id", "le__MSSubClass", "le__LotFrontage"]
-    folds_col = "le__MSZoning"
-    target_col = "le__WoodDeckSF"
-
-    lpds = labeled_ds.to_pandas()
-    _trg = lpds.data[target_col]
-    _trg[_trg == 2] = 0
-
-    n_ds = NumpyDataset(
-        data=lpds.data[cols].to_numpy(),
-        features=cols,
-        roles=[labeled_ds.roles[col] for col in cols],
-        task=labeled_ds.task,
-        target=_trg,
-        folds=lpds.data[folds_col].to_numpy()
+    transformer = OrdinalEncoderEstimatorSpark(
+        input_cols=ds.features,
+        input_roles=ds.roles
     )
-    n_ds = n_ds.to_pandas()
-    # n_ds = labeled_ds.to_pandas()
-
-    sds = from_pandas_to_spark(n_ds, spark, fill_folds_with_zeros_if_not_present=True)
-
-    with log_exec_time():
-        target_encoder = TargetEncoder()
-        lama_output = target_encoder.fit_transform(n_ds)
-
-    with log_exec_time():
-        spark_encoder = SparkTargetEncoder()
-        spark_output = spark_encoder.fit_transform(sds)
-
-    compare_obtained_datasets(lama_output, spark_output)
-
-    transformed_lama = target_encoder.transform(n_ds)
-    transformed_spark = spark_encoder.transform(sds)
-
-    compare_obtained_datasets(transformed_lama, transformed_spark)
+    compare_sparkml_by_content(spark, ds, OrdinalEncoder(), transformer)
 
 
-def test_target_encoder_2(spark: SparkSession):
-    df = pd.read_csv("../../examples/data/sampled_app_train.csv")
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_catintersections_encoder(spark: SparkSession, dataset: DatasetForTest):
 
-    with log_exec_time():
-        sreader = PandasToPandasReader(task=Task("binary"), cv=5)
-        sds = sreader.fit_read(df, roles={"target": "TARGET"})
+    ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
-    feats_to_select = get_columns_by_role(sds, "Category")
-    with log_exec_time():
-        cs = ColumnsSelector(keys=feats_to_select)
-        cs_sds = cs.fit_transform(sds)
+    transformer = CatIntersectionsEstimatorSpark(
+        input_cols=ds.features,
+        input_roles=ds.roles
+    )
+    compare_sparkml_by_content(spark, ds, CatIntersectstions(), transformer)
 
-    with log_exec_time():
-        slabel_encoder = LabelEncoder()
-        labeled_sds = slabel_encoder.fit_transform(cs_sds)
 
-    sds = from_pandas_to_spark(labeled_sds.to_pandas(), spark)
-
-    with log_exec_time():
-        spark_encoder = SparkTargetEncoder()
-        spark_output = spark_encoder.fit_transform(sds)
-
-    res = spark_output.to_pandas()
-    # res.data.to_csv("res_SPARK.csv")
+# @pytest.mark.parametrize("dataset", DATASETS)
+# def test_cat_intersectstions(spark: SparkSession, dataset: DatasetForTest):
+#
+#     ds = PandasDataset(dataset.dataset, roles=dataset.roles)
+#
+#     # sds = SparkDataset.from_lama(ds, spark)
+#     sds = from_pandas_to_spark(ds, spark, ds.target)
+#
+#     lama_transformer = CatIntersectstions()
+#     lama_transformer.fit(ds)
+#     lama_output = lama_transformer.transform(ds)
+#
+#     spark_transformer = SparkCatIntersectstions()
+#     spark_transformer.fit(sds)
+#     spark_output = spark_transformer.transform(sds)
+#
+#     compare_obtained_datasets(lama_output, spark_output)
+#
+#
+# def test_ohe(spark: SparkSession):
+#     make_sparse = False
+#     source_data = pd.DataFrame(data={
+#         "a": [1, 4, 5, 4, 2, 3],
+#         "b": [1, 4, 4, 4, 2, 3],
+#         "c": [1, 1, 1, 1, 1, 1],
+#         "d": [3, 1, 3, 2, 2, 1]
+#     })
+#
+#     ds = PandasDataset(source_data, roles={
+#         name: CategoryRole(dtype=np.int32, label_encoded=True)
+#         for name in source_data.columns
+#     })
+#
+#     # ds = PandasDataset(dataset.dataset, roles=dataset.roles)
+#     _, _ = compare_by_metadata(spark, ds, OHEEncoder(make_sparse), SparkOHEEncoder(make_sparse))
+#
+#
+# @pytest.mark.parametrize("dataset", DATASETS)
+# def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
+#     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
+# # def test_target_encoder(spark: SparkSession):
+# #     with open("unit/resources/datasets/dataset_after_reader_dump.pickle", "rb") as f:
+# #         (data, features, roles, target) = pickle.load(f)
+# #
+# #     ds = PandasDataset(data, roles=roles, task=Task("binary"))
+# #     ds.target = target
+#
+#     label_encoder = LabelEncoder()
+#     label_encoder.fit(ds)
+#     labeled_ds = label_encoder.transform(ds)
+#
+#     cols = ["le__Id", "le__MSSubClass", "le__LotFrontage"]
+#     folds_col = "le__MSZoning"
+#     target_col = "le__WoodDeckSF"
+#
+#     lpds = labeled_ds.to_pandas()
+#     _trg = lpds.data[target_col]
+#     _trg[_trg == 2] = 0
+#
+#     n_ds = NumpyDataset(
+#         data=lpds.data[cols].to_numpy(),
+#         features=cols,
+#         roles=[labeled_ds.roles[col] for col in cols],
+#         task=labeled_ds.task,
+#         target=_trg,
+#         folds=lpds.data[folds_col].to_numpy()
+#     )
+#     n_ds = n_ds.to_pandas()
+#     # n_ds = labeled_ds.to_pandas()
+#
+#     sds = from_pandas_to_spark(n_ds, spark, fill_folds_with_zeros_if_not_present=True)
+#
+#     with log_exec_time():
+#         target_encoder = TargetEncoder()
+#         lama_output = target_encoder.fit_transform(n_ds)
+#
+#     with log_exec_time():
+#         spark_encoder = SparkTargetEncoder()
+#         spark_output = spark_encoder.fit_transform(sds)
+#
+#     compare_obtained_datasets(lama_output, spark_output)
+#
+#     transformed_lama = target_encoder.transform(n_ds)
+#     transformed_spark = spark_encoder.transform(sds)
+#
+#     compare_obtained_datasets(transformed_lama, transformed_spark)
+#
+#
+# def test_target_encoder_2(spark: SparkSession):
+#     df = pd.read_csv("../../examples/data/sampled_app_train.csv")
+#
+#     with log_exec_time():
+#         sreader = PandasToPandasReader(task=Task("binary"), cv=5)
+#         sds = sreader.fit_read(df, roles={"target": "TARGET"})
+#
+#     feats_to_select = get_columns_by_role(sds, "Category")
+#     with log_exec_time():
+#         cs = ColumnsSelector(keys=feats_to_select)
+#         cs_sds = cs.fit_transform(sds)
+#
+#     with log_exec_time():
+#         slabel_encoder = LabelEncoder()
+#         labeled_sds = slabel_encoder.fit_transform(cs_sds)
+#
+#     sds = from_pandas_to_spark(labeled_sds.to_pandas(), spark)
+#
+#     with log_exec_time():
+#         spark_encoder = SparkTargetEncoder()
+#         spark_output = spark_encoder.fit_transform(sds)
+#
+#     res = spark_output.to_pandas()
+#     # res.data.to_csv("res_SPARK.csv")
 
 
 # def test_just_a_test(spark: SparkSession):
