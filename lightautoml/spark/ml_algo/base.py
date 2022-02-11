@@ -167,7 +167,7 @@ class TabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
         """
         self.timer.start()
 
-        log_data(f"spark_fit_predict_{type(self).__name__}", {"train": train_valid_iterator.train.to_pandas()})
+        # log_data(f"spark_fit_predict_{type(self).__name__}", {"train": train_valid_iterator.train.to_pandas()})
 
         assert self.is_fitted is False, "Algo is already fitted"
         # init params on input if no params was set before
@@ -364,9 +364,9 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
             def sum_arrays(x):
                 return sum(x[c] for c in pred_cols) / len(pred_cols)
 
-            out_df = dataset.select(F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.prediction_column))
+            out_df = dataset.select(F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol()))
         else:
-            out_df = dataset.select((F.sum(*pred_cols) / F.lit(len(pred_cols))).alias(self.prediction_column))
+            out_df = dataset.select((F.sum(*pred_cols) / F.lit(len(pred_cols))).alias(self.getOutputCol()))
 
         return out_df
 
