@@ -425,6 +425,93 @@ class StandardScaler(SparkTransformer):
         return output
 
 
+class StandardScalerEstimator(SparkBaseEstimator):
+    """Classic StandardScaler."""
+
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    _fname_prefix = "scaler"
+
+    def __init__(self,
+                 input_cols: List[str],
+                 input_roles: Dict[str, ColumnRole],
+                 do_replace_columns: bool = False):
+        super().__init__(input_cols,
+                         input_roles,
+                         do_replace_columns=do_replace_columns,
+                         output_role=NumericRole(np.float32))
+        self._means_and_stds: Optional[Dict[str, float]] = None
+
+    def _fit(self, sdf: SparkDataFrame) -> Transformer:
+        """Estimate means and stds.
+
+        Args:
+            sdf: SparkDataFrame of categorical features.
+
+        Returns:
+            StandardScalerTransformer instance
+
+        """
+
+        means = [F.mean(c).alias(f"mean_{c}") for c in self.getInputCols()]
+        stds = [
+            F.when(F.stddev(c) == 0, 1).when(F.isnan(F.stddev(c)), 1).otherwise(F.stddev(c)).alias(f"std_{c}")
+            for c in self.getInputCols()
+        ]
+
+        self._means_and_stds = sdf\
+            .select(means + stds)\
+            .collect()[0].asDict()
+
+        return StandardScalerTransformer(input_cols=self.getInputCols(),
+                                         output_cols=self.getOutputCols(),
+                                         input_roles=self.getInputRoles(),
+                                         output_roles=self.getOutputRoles(),
+                                         means_and_stds=self._means_and_stds)
+
+
+class StandardScalerTransformer(SparkBaseTransformer):
+    """Classic StandardScaler."""
+
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    _fname_prefix = "scaler"
+
+    def __init__(self,
+                 input_cols: List[str],
+                 output_cols: List[str],
+                 input_roles: RolesDict,
+                 output_roles: RolesDict,
+                 means_and_stds: Dict,
+                 do_replace_columns: bool = False):
+        super().__init__(input_cols=input_cols,
+                         output_cols=output_cols,
+                         input_roles=input_roles,
+                         output_roles=output_roles,
+                         do_replace_columns=do_replace_columns)
+        self._means_and_stds = means_and_stds
+
+    def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
+        """Scale test data.
+
+        Args:
+            sdf: SparkDataFrame of numeric features.
+
+        Returns:
+            SparkDataFrame with encoded labels.
+
+        """
+
+        cols_to_select = []
+        for c in self.getInputCols():
+            col = (F.col(c) - self._means_and_stds[f"mean_{c}"]) / F.lit(self._means_and_stds[f"std_{c}"])
+            cols_to_select.append(col.alias(f"{self._fname_prefix}__{c}"))
+
+        sdf = sdf.select('*', *cols_to_select)
+
+        return sdf
+
+
 class QuantileBinning(SparkTransformer):
     """Discretization of numeric features by quantiles."""
 
