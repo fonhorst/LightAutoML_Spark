@@ -20,7 +20,7 @@ from lightautoml.spark.transformers.categorical import OrdinalEncoderEstimatorSp
 from lightautoml.spark.transformers.datetime import TimeToNum, SparkTimeToNumTransformer
 
 
-class LGBSimpleFeaturesSpark(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+class SparkLGBSimpleFeatures(FeaturesPipelineSpark, TabularDataFeaturesSpark):
     """Creates simple pipeline for tree based models.
 
     Simple but is ok for select features.
@@ -350,6 +350,49 @@ class LGBAdvancedPipeline(FeaturesPipeline, TabularDataFeatures):
 
 
 class SparkLGBAdvancedPipeline(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+    def __init__(
+            self,
+            input_features: List[str],
+            input_roles: RolesDict,
+            feats_imp: Optional[ImportanceEstimator] = None,
+            top_intersections: int = 5,
+            max_intersection_depth: int = 3,
+            subsample: Optional[Union[int, float]] = None,
+            multiclass_te_co: int = 3,
+            auto_unique_co: int = 10,
+            output_categories: bool = False,
+            **kwargs
+    ):
+        """
+
+        Args:
+            feats_imp: Features importances mapping.
+            top_intersections: Max number of categories
+              to generate intersections.
+            max_intersection_depth: Max depth of cat intersection.
+            subsample: Subsample to calc data statistics.
+            multiclass_te_co: Cutoff if use target encoding in cat
+              handling on multiclass task if number of classes is high.
+            auto_unique_co: Switch to target encoding if high cardinality.
+
+        """
+        print("lama advanced pipeline ctr")
+        super().__init__(
+            multiclass_te_co=multiclass_te_co,
+            top_intersections=top_intersections,
+            max_intersection_depth=max_intersection_depth,
+            subsample=subsample,
+            feats_imp=feats_imp,
+            auto_unique_co=auto_unique_co,
+            output_categories=output_categories,
+            ascending_by_cardinality=False,
+        )
+        self._input_features = input_features
+        self._input_roles = input_roles
+
+    def _get_input_features(self) -> Set[str]:
+        return set(self.input_features)
+
     def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
         """Create tree pipeline.
 
