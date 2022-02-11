@@ -976,7 +976,7 @@ class OHEEncoderEstimator(SparkBaseEstimator):
         super().__init__(input_cols,
                          input_roles,
                          do_replace_columns=do_replace_columns,
-                         output_role=)
+                         output_role=None) # TODO: temporary stub, output roles are not calculated at this moment
 
         self.make_sparse = make_sparse
         self.total_feats_cnt = total_feats_cnt
