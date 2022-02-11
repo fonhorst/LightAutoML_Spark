@@ -63,11 +63,13 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
     }
 
     def __init__(self,
-            default_params: Optional[dict] = None,
-            freeze_defaults: bool = True,
-            timer: Optional[TaskTimer] = None,
-            optimization_search_space: Optional[dict] = {}):
+                 input_cols: List[str],
+                 default_params: Optional[dict] = None,
+                 freeze_defaults: bool = True,
+                 timer: Optional[TaskTimer] = None,
+                 optimization_search_space: Optional[dict] = {}):
         TabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
+        self._input_cols = input_cols
         self._prediction_col = f"prediction_{self._name}"
         self._assembler = None
 
@@ -305,7 +307,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         # TODO: reconsider using of 'keep' as a handleInvalid value
         if self._assembler is None:
             self._assembler = VectorAssembler(
-                inputCols=train.features,
+                inputCols=self._input_cols,
                 outputCol=f"{self._name}_vassembler_features",
                 handleInvalid="keep"
             )

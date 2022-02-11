@@ -57,7 +57,8 @@ class FoldsIterator(TrainValidIterator):
 
         dataset = cast(SparkDataset, self.train)
 
-        self._df = dataset.data.join(dataset.folds, SparkDataset.ID_COLUMN).cache()
+        # self._df = dataset.data.join(dataset.folds, SparkDataset.ID_COLUMN).cache()
+        self._df = dataset.data
 
         return self
 
@@ -72,7 +73,7 @@ class FoldsIterator(TrainValidIterator):
 
         if self._curr_idx == self.n_folds:
             logger.debug("No more folds to continue, stopping iterations")
-            self._df.unpersist()
+            # self._df.unpersist()
             raise StopIteration
 
         train_ds, valid_ds = self.__split_by_fold(self._df, self._curr_idx)

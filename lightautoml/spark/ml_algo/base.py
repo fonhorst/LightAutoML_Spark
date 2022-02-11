@@ -230,12 +230,12 @@ class TabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
 
         pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
 
-        if iterator_len > 1:
-            logger.info(
-                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(pred_ds)}\x1b[0m")
-
-        if iterator_len > 1 or "Tuned" not in self._name:
-            logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
+        # if iterator_len > 1:
+        #     logger.info(
+        #         f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(pred_ds)}\x1b[0m")
+        #
+        # if iterator_len > 1 or "Tuned" not in self._name:
+        #     logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
 
         return pred_ds
 
@@ -366,7 +366,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
 
             out_df = dataset.select(F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol()))
         else:
-            out_df = dataset.select((F.sum(*pred_cols) / F.lit(len(pred_cols))).alias(self.getOutputCol()))
+            out_df = dataset.select((sum(F.col(c) for c in pred_cols) / F.lit(len(pred_cols))).alias(self.getOutputCol()))
 
         return out_df
 
