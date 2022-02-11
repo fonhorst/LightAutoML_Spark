@@ -164,6 +164,29 @@ class SparkUnionTransformer:
     def transformers(self) -> List[Union[SparkBaseEstimator, SparkBaseTransformer]]:
         return self._transformer_list
 
+    def get_output_cols(self) -> List[str]:
+        """Get list of output columns from all stages
+
+        Returns:
+            List[str]: output columns
+        """
+        output_cols = []
+        for stage in self._transformer_list:
+            output_cols.extend(stage.getOutputCols())
+        return list(set(output_cols))
+
+    def get_output_roles(self) -> RolesDict:
+        """Get output roles from all stages
+
+        Returns:
+            RolesDict: output roles
+        """
+        roles = {}
+        for stage in self._transformer_list:
+            roles.update(deepcopy(stage.getOutputRoles()))        
+
+        return roles
+
 
 class SparkSequentialTransformer:
     def __init__(self, transformer_list: List[Union[SparkBaseEstimator, SparkBaseTransformer]]):

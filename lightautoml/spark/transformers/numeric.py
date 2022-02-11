@@ -61,6 +61,86 @@ class NaNFlags(SparkTransformer):
         return output
 
 
+class NaNFlagsEstimator(SparkBaseEstimator):
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    # TODO: the value is copied from the corresponding LAMA transformer.
+    # TODO: it is better to be taken from shared module as a string constant
+    _fname_prefix = "nanflg"
+
+    def __init__(self,
+                 input_cols: List[str],
+                 input_roles: Dict[str, ColumnRole],
+                 do_replace_columns: bool = False,
+                 nan_rate: float = 0.005):
+        """
+
+        Args:
+            nan_rate: Nan rate cutoff.
+
+        """
+        super().__init__(input_cols,
+                         input_roles,
+                         do_replace_columns=do_replace_columns,
+                         output_role=NumericRole(np.float32))
+        self.nan_rate = nan_rate
+        self.nan_cols: Optional[str] = None
+        # self._features: Optional[List[str]] = None
+
+    def _fit(self, sdf: SparkDataFrame) -> "Transformer":
+
+        row = sdf\
+            .select([F.mean(F.isnan(c).astype(FloatType())).alias(c) for c in self.getInputCols()])\
+            .collect()[0]
+
+        self.nan_cols = [col for col, col_nan_rate in row.asDict(True).items() if col_nan_rate > self.nan_rate]
+        # self._features = list(self.nan_cols)
+
+        return NaNFlagsTransformer(input_cols=self.getInputCols(), 
+                                    input_roles=self.getInputRoles(),
+                                    output_cols=self.getOutputCols(),
+                                    nan_cols=self.nan_cols
+                                    )
+
+
+class NaNFlagsTransformer(SparkBaseTransformer):
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    # TODO: the value is copied from the corresponding LAMA transformer.
+    # TODO: it is better to be taken from shared module as a string constant
+    _fname_prefix = "nanflg"
+
+    def __init__(self, 
+                 input_cols: List[str],
+                 input_roles: RolesDict,
+                 output_cols: List[str],
+                 nan_cols: List[str]):
+        super().__init__(
+            input_cols=input_cols,
+            output_cols=output_cols,
+            input_roles=input_roles,
+            output_roles={f: NumericRole(np.float32) for f in input_cols},
+            do_replace_columns=True)
+        self._nan_cols = nan_cols
+
+    def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
+
+        # new_sdf = sdf.select(*dataset.service_columns, *[
+        #     F.isnan(c).astype(FloatType()).alias(feat)
+        #     for feat, c in zip(self.features, self.nan_cols)
+        # ])
+
+        cols_to_select = []
+        # TODO: WARNING: here dynamic number of columns, need to have predefined column!
+        for c in self._nan_cols:
+            col = F.isnan(c).astype(FloatType())
+            cols_to_select.append(col.alias(f"{self._fname_prefix}__{c}"))
+
+        sdf = sdf.select('*', *cols_to_select)
+
+        return sdf
+
+
 class FillInf(SparkTransformer):
 
     _fit_checks = (numeric_check,)
@@ -99,8 +179,7 @@ class FillInfTransformer(SparkBaseTransformer):
 
     def __init__(self, 
                  input_cols: List[str],
-                 input_roles: RolesDict,
-                 role: ColumnRole):
+                 input_roles: RolesDict):
         super().__init__(
             input_cols=input_cols,
             output_cols=[f"{self._fname_prefix}__{feat}" for feat in input_cols],
