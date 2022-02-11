@@ -2,6 +2,7 @@ from typing import Optional, Dict, List
 
 import numpy as np
 import pandas as pd
+from pyspark.ml import Transformer
 from pyspark.ml.feature import QuantileDiscretizer, Bucketizer
 from pyspark.sql import functions as F
 from pyspark.sql.pandas.functions import pandas_udf, PandasUDFType
@@ -180,6 +181,91 @@ class FillnaMedian(SparkTransformer):
         output.set_data(new_sdf, self.features, NumericRole(np.float32))
 
         return output
+
+
+class FillnaMedianEstimator(SparkBaseEstimator):
+    """Fillna with median."""
+
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    _fname_prefix = "fillnamed"
+
+    def __init__(self,
+                 input_cols: List[str],
+                 input_roles: Dict[str, ColumnRole],
+                 do_replace_columns: bool = False):
+        super().__init__(input_cols,
+                         input_roles,
+                         do_replace_columns=do_replace_columns,
+                         output_role=NumericRole(np.float32))
+        self.meds: Optional[Dict[str, float]] = None
+
+    def _fit(self, sdf: SparkDataFrame) -> Transformer:
+        """Approximately estimates medians.
+
+        Args:
+            dataset: SparkDataFrame with numerical features.
+
+        Returns:
+            Spark MLlib Transformer
+
+        """
+
+        rows = sdf\
+            .select([F.percentile_approx(c, 0.5).alias(c) for c in self.getInputCols()])\
+            .select([F.when(F.isnan(c), 0).otherwise(F.col(c)).alias(c) for c in self.getInputCols()])\
+            .collect()
+
+        assert len(rows) == 1, f"Results count should be exactly 1, but it is {len(rows)}"
+
+        self.meds = rows[0].asDict()
+
+        return FillnaMedianTransformer(input_cols=self.getInputCols(),
+                                       output_cols=self.getOutputCols(),
+                                       input_roles=self.getInputRoles(),
+                                       output_roles=self.getOutputRoles(),
+                                       meds=self.meds)
+
+
+class FillnaMedianTransformer(SparkBaseTransformer):
+    """Fillna with median."""
+
+    _fit_checks = (numeric_check,)
+    _transform_checks = ()
+    _fname_prefix = "fillnamed"
+
+    def __init__(self, input_cols: List[str],
+                 output_cols: List[str],
+                 input_roles: RolesDict,
+                 output_roles: RolesDict,
+                 meds: Dict,
+                 do_replace_columns: bool = False,):
+        super().__init__(input_cols=input_cols,
+                         output_cols=output_cols,
+                         input_roles=input_roles,
+                         output_roles=output_roles,
+                         do_replace_columns=do_replace_columns)
+        self._meds = meds
+
+    def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
+        """Transform - fillna with medians.
+
+        Args:
+            dataset: SparkDataFrame of numerical features
+
+        Returns:
+            SparkDataFrame with replaced NaN with medians
+
+        """
+
+        cols_to_select = []
+        for c in self.getInputCols():
+            col = F.when(F.isnan(c), self.meds[c]).otherwise(F.col(c))
+            cols_to_select.append(col.alias(f"{self._fname_prefix}__{c}"))
+
+        sdf = sdf.select('*', *cols_to_select)
+
+        return sdf
 
 
 class LogOdds(SparkTransformer):
