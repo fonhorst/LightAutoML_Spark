@@ -69,7 +69,7 @@ if __name__ == "__main__":
         sdataset_feats = simple_pipline_builder.fit_transform(sdataset)
 
         iterator = FoldsIterator(sdataset_feats, n_folds=3)
-        spark_ml_algo = BoostLGBM(input_cols=simple_pipline_builder.output_features)
+        spark_ml_algo = BoostLGBM(input_cols=simple_pipline_builder.output_features, freeze_defaults=False)
         spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
         spark_ml_algo = cast(BoostLGBM, spark_ml_algo)
 
