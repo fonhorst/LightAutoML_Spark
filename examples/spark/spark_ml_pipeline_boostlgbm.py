@@ -23,7 +23,6 @@ logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 
-
 if __name__ == "__main__":
     with spark_session(master="local[4]") as spark:
         roles = {

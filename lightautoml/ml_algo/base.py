@@ -15,6 +15,7 @@ from typing import Union
 from typing import cast
 
 import numpy as np
+from pyspark.ml import Model
 
 from lightautoml.validation.base import TrainValidIterator
 
@@ -118,7 +119,7 @@ class MLAlgo(ABC):
 
         self.default_params = {**self._default_params, **default_params}
 
-        self.models = []
+        self.models: List[Model] = []
         self._features = None
 
         self.timer = timer

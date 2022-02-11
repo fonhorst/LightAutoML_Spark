@@ -9,9 +9,9 @@ from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.classification import GBTClassifier
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import GBTRegressor
-from pyspark.ml import Transformer, Estimator, PipelineModel
+from pyspark.ml import Transformer, Estimator, PipelineModel, Pipeline
 from pyspark.ml.util import MLReadable, MLWritable, MLWriter
-from pyspark.ml.param.shared import HasInputCols, HasOutputCols
+from pyspark.ml.param.shared import HasInputCols, HasOutputCols, HasOutputCol
 from pyspark.ml.param.shared import Param, Params
 from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
 from lightautoml.dataset.roles import ColumnRole, NumericRole
@@ -20,7 +20,7 @@ from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer
+from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
 from lightautoml.spark.mlwriters import TmpСommonMLWriter
 # from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
 import pandas as pd
@@ -282,7 +282,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         return pred
 
-    def fit_predict_single_fold(self, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+    def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         if self.task is None:
             self.task = train.task
 
@@ -294,8 +294,8 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         ) = self._infer_params()
 
         is_val_col = 'is_val'
-        train_sdf = self._make_sdf_with_target(train).withColumn(is_val_col, F.lit(0))
-        valid_sdf = self._make_sdf_with_target(valid).withColumn(is_val_col, F.lit(1))
+        train_sdf = train.data.withColumn(is_val_col, F.lit(0))
+        valid_sdf = valid.data.withColumn(is_val_col, F.lit(1))
 
         train_valid_sdf = train_sdf.union(valid_sdf)
 
@@ -313,13 +313,13 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         LGBMBooster = LightGBMRegressor if train.task.name == "reg" else LightGBMClassifier
 
         if train.task.name == "multiclass":
-            params["probabilityCol"] = self._prediction_col
+            params["probabilityCol"] = fold_prediction_column
 
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=train.target_column,
-            predictionCol=self._prediction_col if train.task.name != "multiclass" else "prediction",
+            predictionCol=fold_prediction_column if train.task.name != "multiclass" else "prediction",
             validationIndicatorCol=is_val_col,
             verbosity=verbose_eval
         )
@@ -333,10 +333,10 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         ml_model = lgbm.fit(temp_sdf)
 
-        val_pred = ml_model.transform(self._assembler.transform(valid_sdf))
-        val_pred = val_pred.select(*valid_sdf.columns, self._prediction_col)
+        val_pred = ml_model.transform(self._assembler.transform(valid.data))
+        val_pred = val_pred.select('*', fold_prediction_column)
 
-        return ml_model, val_pred, self._prediction_col
+        return ml_model, val_pred, fold_prediction_column
 
     def fit(self, train_valid: TrainValidIterator):
         self.fit_predict(train_valid)
@@ -352,7 +352,10 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         return result
 
     def _build_transformer(self) -> Transformer:
-        return BoostLGBMTransformer(self._assembler, self.models, self._predict_feature_name(), self.task.name, self.n_classes)
+        avr = AveragingTransformer(self.task.name, input_cols=self._models_prediction_columns, output_col=self.prediction_column)
+        averaging_model = PipelineModel(stages=[self._assembler] + self.models + [avr])
+        return averaging_model
+
 
 
 # outputRoles = Param(Params._dummy(), "outputRoles",
