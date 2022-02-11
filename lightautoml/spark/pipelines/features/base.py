@@ -27,7 +27,7 @@ from lightautoml.spark.transformers.base import ChangeRolesTransformer, Sequenti
 from lightautoml.spark.transformers.categorical import CatIntersectionsEstimator, FreqEncoder, FreqEncoderEstimator, \
     LabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimator, \
     TargetEncoder, MultiClassTargetEncoder, CatIntersectstions
-from lightautoml.spark.transformers.categorical import TargetEncoderEstimator
+from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import BaseDiff, BaseDiffTransformer, DateSeasons, DateSeasonsTransformer, \
     SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, ChangeRoles, \
@@ -534,7 +534,7 @@ class TabularDataFeaturesSpark:
         target_encoder = None
         if train.folds is not None:
             if train.task.name in ["binary", "reg"]:
-                target_encoder = TargetEncoderEstimator
+                target_encoder = SparkTargetEncoderEstimator
             else:
                 tds = cast(SparkDataFrame, train.target)
                 result = tds.select(F.max(train.target_column).alias("max")).first()
@@ -1292,7 +1292,7 @@ class TabularDataFeatures:
         target_encoder = None
         if train.folds is not None:
             if train.task.name in ["binary", "reg"]:
-                target_encoder = TargetEncoderEstimator
+                target_encoder = SparkTargetEncoderEstimator
             else:
                 tds = cast(SparkDataFrame, train.target)
                 result = tds.select(F.max(train.target_column).alias("max")).first()

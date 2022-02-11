@@ -349,7 +349,7 @@ class LGBAdvancedPipeline(FeaturesPipeline, TabularDataFeatures):
         return seq
 
 
-class LGBAdvancedPipelineTmp(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+class SparkLGBAdvancedPipeline(FeaturesPipelineSpark, TabularDataFeaturesSpark):
     def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
         """Create tree pipeline.
 
@@ -426,25 +426,26 @@ class LGBAdvancedPipelineTmp(FeaturesPipelineSpark, TabularDataFeaturesSpark):
                 input_roles=te_part.getOutputRoles(),
                 task_name=train.task.name,
                 folds_column=train.folds_column,
-                target_column=train.target_column)
-
+                target_column=train.target_column,
+                do_replace_columns=True
+            )
             te_part = SparkSequentialTransformer([te_part, target_encoder_stage])
             transformer_list.append(te_part)
 
-        # TODO: SPARK-LAMA fix bug with performance of catintersections
         # get intersection of top categories
         intersections = self.get_categorical_intersections(train)
         if intersections is not None:
             if target_encoder is not None:
-                # ints_part = SequentialTransformer([intersections, target_encoder()])
-                target_encoder_stage = target_encoder(input_cols=intersections.getOutputCols(),
-                                             input_roles=intersections.getOutputRoles(),
-                                             task_name=train.task.name,
-                                             folds_column=train.folds_column,
-                                             target_column=train.target_column)
+                target_encoder_stage = target_encoder(
+                    input_cols=intersections.getOutputCols(),
+                    input_roles=intersections.getOutputRoles(),
+                    task_name=train.task.name,
+                    folds_column=train.folds_column,
+                    target_column=train.target_column,
+                    do_replace_columns=True
+                )
                 ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
             else:
-                # ints_part = SequentialTransformer([intersections, ChangeRoles(output_category_role)])
                 change_roles_stage = ChangeRolesTransformer(
                     input_cols=intersections.getOutputCols(),
                     input_roles=intersections.getOutputRoles(),
