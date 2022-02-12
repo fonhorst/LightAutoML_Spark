@@ -9,7 +9,7 @@ from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.pipelines.features.base import FeaturesPipeline, FeaturesPipelineSpark, TabularDataFeaturesSpark
+from lightautoml.spark.pipelines.features.base import FeaturesPipeline, SparkFeaturesPipeline, TabularDataFeaturesSpark
 from lightautoml.spark.pipelines.features.base import TabularDataFeatures
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkTransformer, SequentialTransformer, \
     UnionTransformer, \
@@ -20,7 +20,7 @@ from lightautoml.spark.transformers.categorical import OrdinalEncoderEstimatorSp
 from lightautoml.spark.transformers.datetime import TimeToNum, SparkTimeToNumTransformer
 
 
-class SparkLGBSimpleFeatures(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+class SparkLGBSimpleFeatures(SparkFeaturesPipeline, TabularDataFeaturesSpark):
     """Creates simple pipeline for tree based models.
 
     Simple but is ok for select features.
@@ -349,7 +349,7 @@ class LGBAdvancedPipeline(FeaturesPipeline, TabularDataFeatures):
         return seq
 
 
-class SparkLGBAdvancedPipeline(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, TabularDataFeaturesSpark):
     def __init__(
             self,
             input_features: List[str],

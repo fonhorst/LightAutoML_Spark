@@ -44,7 +44,7 @@ if __name__ == "__main__":
         
         sdataset = sdataset_tmp.empty()
         new_roles = deepcopy(sdataset_tmp.roles)
-        # new_roles.update({sdataset_tmp.target_column: TargetRole(np.float32), sdataset_tmp.folds_column: FoldsRole()})
+
         sdataset.set_data(
             sdataset_tmp.data \
                 .join(sdataset_tmp.target, SparkDataset.ID_COLUMN) \
@@ -52,17 +52,14 @@ if __name__ == "__main__":
             sdataset_tmp.features,
             new_roles
         )
-        # sdataset.to_pandas().data.to_csv("/tmp/sdataset_data.csv")
 
         ml_alg_kwargs = {
             'auto_unique_co': 10,
             'max_intersection_depth': 3,
             'multiclass_te_co': 3,
             'output_categories': True,
-            # 'subsample': 100000,
             'top_intersections': 4
         }
-
 
         # # Spark ML pipeline
         simple_pipline_builder = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles, **ml_alg_kwargs)

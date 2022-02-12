@@ -118,7 +118,7 @@ class TabularMLAlgoHelper:
         return full_preds_df
 
 
-class TabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
+class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "TabularAlgo"
@@ -391,7 +391,7 @@ class TabularMLAlgoTransformer(Transformer, TabularMLAlgoHelper):
         preds_dfs = [
             self.predict_single_fold(dataset=dataset, model=model).select(
                 SparkDataset.ID_COLUMN,
-                F.col(TabularMLAlgo._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
+                F.col(SparkTabularMLAlgo._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
             ) for i, model in enumerate(self._models)
         ]
 

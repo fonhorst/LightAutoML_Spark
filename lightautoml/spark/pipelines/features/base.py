@@ -103,7 +103,7 @@ class Cacher(Estimator):
         return NoOpTransformer()
 
 
-class FeaturesPipelineSpark:
+class SparkFeaturesPipeline:
     """Abstract class.
 
     Analyze train dataset and create composite transformer
@@ -206,7 +206,7 @@ class FeaturesPipelineSpark:
         return transformed_ds
 
     def append(self, pipeline):
-        if isinstance(pipeline, FeaturesPipelineSpark):
+        if isinstance(pipeline, SparkFeaturesPipeline):
             pipeline = [pipeline]
 
         for _pipeline in pipeline:
@@ -215,7 +215,7 @@ class FeaturesPipelineSpark:
         return self
 
     def prepend(self, pipeline):
-        if isinstance(pipeline, FeaturesPipelineSpark):
+        if isinstance(pipeline, SparkFeaturesPipeline):
             pipeline = [pipeline]
 
         for _pipeline in reversed(pipeline):

@@ -20,7 +20,7 @@ from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
 from lightautoml.spark.mlwriters import TmpСommonMLWriter
 # from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
 import pandas as pd
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # LightGBM = Union[LightGBMClassifier, LightGBMRegressor]
 
 
-class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
+class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     _name: str = "LightGBM"
 
@@ -68,7 +68,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
                  freeze_defaults: bool = True,
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {}):
-        TabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
+        SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
         self._input_cols = input_cols
         self._prediction_col = f"prediction_{self._name}"
         self._assembler = None

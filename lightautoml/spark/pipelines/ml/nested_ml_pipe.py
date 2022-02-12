@@ -3,19 +3,19 @@ from typing import Union, Tuple, Optional, Sequence
 from lightautoml.ml_algo.tuning.base import ParamsTuner
 from lightautoml.pipelines.ml.nested_ml_pipe import NestedTabularMLPipeline as LAMANestedTabularMLPipeline
 from lightautoml.pipelines.selection.base import SelectionPipeline
-from lightautoml.spark.ml_algo.base import TabularMLAlgo
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo
 from lightautoml.spark.pipelines.features.base import FeaturesPipeline
-from lightautoml.spark.pipelines.ml.base import SparkMLPipelineMixin
+from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 
 
-class NestedTabularMLPipeline(SparkMLPipelineMixin, LAMANestedTabularMLPipeline):
+class NestedTabularMLPipeline(SparkMLPipeline, LAMANestedTabularMLPipeline):
     """
         Same as NestedTabularMLPipeline of LAMA, but redefines a couple of methods via SparkMLPipelineMixin
     """
 
     def __init__(
             self,
-            ml_algos: Sequence[Union[TabularMLAlgo, Tuple[TabularMLAlgo, ParamsTuner]]],
+            ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
             force_calc: Union[bool, Sequence[bool]] = True,
             pre_selection: Optional[SelectionPipeline] = None,
             features_pipeline: Optional[FeaturesPipeline] = None,
