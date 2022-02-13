@@ -68,8 +68,7 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                  freeze_defaults: bool = True,
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {}):
-        SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
-        self._input_cols = input_cols
+        SparkTabularMLAlgo.__init__(self, input_cols, default_params, freeze_defaults, timer, optimization_search_space)
         self._prediction_col = f"prediction_{self._name}"
         self._assembler = None
 

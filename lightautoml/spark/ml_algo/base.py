@@ -128,16 +128,26 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
 
     def __init__(
             self,
+            input_cols: List[str],
             default_params: Optional[dict] = None,
             freeze_defaults: bool = True,
             timer: Optional[TaskTimer] = None,
             optimization_search_space: Optional[dict] = {},
     ):
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
+        self._input_cols = input_cols
         self.n_classes: Optional[int] = None
         # names of columns that should contain predictions of individual models
         self._models_prediction_columns: Optional[List[str]] = None
         self._transformer: Optional[Transformer] = None
+
+    @property
+    def input_cols(self) -> List[str]:
+        return self._input_cols
+
+    @input_cols.setter
+    def input_cols(self, input_cols: List[str]):
+        self._input_cols = input_cols
 
     @property
     def prediction_column(self) -> str:
