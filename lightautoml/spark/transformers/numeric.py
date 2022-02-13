@@ -119,7 +119,7 @@ class NaNFlagsTransformer(SparkBaseTransformer):
             input_cols=input_cols,
             output_cols=output_cols,
             input_roles=input_roles,
-            output_roles={f: NumericRole(np.float32) for f in input_cols},
+            output_roles={f: NumericRole(np.float32) for f in output_cols},
             do_replace_columns=False)
         self._nan_cols = nan_cols
 
@@ -340,7 +340,7 @@ class FillnaMedianTransformer(SparkBaseTransformer):
 
         cols_to_select = []
         for c in self.getInputCols():
-            col = F.when(F.isnan(c), self.meds[c]).otherwise(F.col(c))
+            col = F.when(F.isnan(c), self._meds[c]).otherwise(F.col(c))
             cols_to_select.append(col.alias(f"{self._fname_prefix}__{c}"))
 
         sdf = sdf.select('*', *cols_to_select)
