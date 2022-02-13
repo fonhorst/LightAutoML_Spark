@@ -42,6 +42,8 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
             Dataset with selected features.
 
         """
+        # TODO: SPARK-LAMA selector should have cacher with different name
+        # TODO: SPARK-LAMA cacher should be cleared here
         if not selector.is_fitted:
             selector.fit(self)
         train_valid = copy(self)

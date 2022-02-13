@@ -11,7 +11,7 @@ from pyspark.ml.evaluation import RegressionEvaluator, BinaryClassificationEvalu
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
 
-from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
+from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import log_exec_time, spark_session
@@ -49,7 +49,7 @@ def calculate_automl(path: str,
             #     .drop(F.col(target_col)).cache()
             test_data_dropped = test_data.cache()
 
-            automl = TabularAutoML(
+            automl = SparkTabularAutoML(
                 spark=spark,
                 task=task,
                 general_params={"use_algos": use_algos},

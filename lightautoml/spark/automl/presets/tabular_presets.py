@@ -24,6 +24,7 @@ from lightautoml.spark.pipelines.ml.nested_ml_pipe import NestedTabularMLPipelin
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.validation.folds_iterator import SparkFoldsIterator
 from lightautoml.tasks import Task
+from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
 from lightautoml.validation.base import HoldoutIterator, DummyIterator
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ ReadableIntoSparkDf = Union[str, SparkDataFrame, dict, pd.DataFrame]
 base_dir = os.path.dirname(__file__)
 
 
-class TabularAutoML(AutoMLPreset):
+class SparkTabularAutoML(AutoMLPreset):
     _default_config_path = "tabular_config.yml"
 
     # set initial runtime rate guess for first level models
@@ -134,7 +135,6 @@ class TabularAutoML(AutoMLPreset):
 
         if not self.general_params["nested_cv"]:
             self.nested_cv_params["cv"] = 1
-
 
     def get_time_score(self, n_level: int, model_type: str, nested: Optional[bool] = None):
 
@@ -492,7 +492,139 @@ class TabularAutoML(AutoMLPreset):
         if valid_data is not None:
             data, _ = self._read_data(valid_data, valid_features, read_csv_params)
 
-        oof_pred = super().fit_predict(train, roles=roles, cv_iter=cv_iter, valid_data=valid_data, verbose=verbose)
+        self.set_verbosity_level(verbose)
+
+        self.create_automl(
+            train_data=train_data,
+            roles=roles,
+            train_features=train_features,
+            cv_iter=cv_iter,
+            valid_data=valid_data,
+            valid_features=valid_features,
+        )
+        logger.info(f"Task: {self.task.name}\n")
+
+        logger.info("Start automl preset with listed constraints:")
+        logger.info(f"- time: {self.timer.timeout:.2f} seconds")
+        logger.info(f"- CPU: {self.cpu_limit} cores")
+        logger.info(f"- memory: {self.memory_limit} GB\n")
+
+        self.timer.start()
+
+        """Fit on input data and make prediction on validation part.
+
+        Args:
+            train_data: Dataset to train.
+            roles: Roles dict.
+            train_features: Optional features names,
+              if cannot be inferred from train_data.
+            cv_iter: Custom cv iterator. For example,
+              :class:`~lightautoml.validation.np_iterators.TimeSeriesIterator`.
+            valid_data: Optional validation dataset.
+            valid_features: Optional validation dataset
+              features if can't be inferred from `valid_data`.
+
+        Returns:
+            Predicted values.
+
+        """
+        set_stdout_level(verbosity_to_loglevel(verbose))
+        self.timer.start()
+
+        train_dataset = self.reader.fit_read(train_data, train_features, roles)
+
+        assert (
+                len(self._levels) <= 1 or train_dataset.folds is not None
+        ), "Not possible to fit more than 1 level without cv folds"
+
+        assert (
+                len(self._levels) <= 1 or valid_data is None
+        ), "Not possible to fit more than 1 level with holdout validation"
+
+        valid_dataset = None
+        if valid_data is not None:
+            valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True)
+
+        # TODO: SPARK-LAMA need cache for train_valid (use 'with' syntax below)
+        train_valid = self._create_validation_iterator(train_dataset, valid_dataset, n_folds=None, cv_iter=cv_iter)
+
+        # for pycharm)
+        level_predictions = None
+        pipes = None
+
+        self.levels = []
+
+        for leven_number, level in enumerate(self._levels, 1):
+            pipes = []
+            level_predictions = []
+            flg_last_level = leven_number == len(self._levels)
+
+            logger.info(
+                f"Layer \x1b[1m{leven_number}\x1b[0m train process start. Time left {self.timer.time_left:.2f} secs"
+            )
+
+            with train_valid:
+                for k, ml_pipe in enumerate(level):
+
+                    pipe_pred = ml_pipe.fit_predict(train_valid)
+                    level_predictions.append(pipe_pred)
+                    pipes.append(ml_pipe)
+
+                    logger.info("Time left {:.2f} secs\n".format(self.timer.time_left))
+
+                    if self.timer.time_limit_exceeded():
+                        logger.info(
+                            "Time limit exceeded. Last level models will be blended and unused pipelines will be pruned.\n"
+                        )
+
+                        flg_last_level = True
+                        break
+                else:
+                    if self.timer.child_out_of_time:
+                        logger.info(
+                            "Time limit exceeded in one of the tasks. AutoML will blend level {0} models.\n".format(
+                                leven_number
+                            )
+                        )
+                        flg_last_level = True
+
+                logger.info("\x1b[1mLayer {} training completed.\x1b[0m\n".format(leven_number))
+
+                # here is split on exit condition
+                if not flg_last_level:
+
+                    self.levels.append(pipes)
+                    level_predictions = self._concatenate_datasets(level_predictions)
+
+                    if self.skip_conn:
+                        valid_part = train_valid.get_validation_data()
+                        try:
+                            # convert to initital dataset type
+                            level_predictions = valid_part.from_dataset(level_predictions)
+                        except TypeError:
+                            raise TypeError(
+                                "Can not convert prediction dataset type to input features. Set skip_conn=False"
+                            )
+                        level_predictions = self._concatenate_datasets([level_predictions, valid_part])
+                    train_valid = self._create_validation_iterator(level_predictions, None, n_folds=None,
+                                                                   cv_iter=None)
+                else:
+                    break
+
+        blended_prediction, last_pipes = self.blender.fit_predict(level_predictions, pipes)
+        self.levels.append(last_pipes)
+
+        self.reader.upd_used_features(remove=list(set(self.reader.used_features) - set(self.collect_used_feats())))
+
+        del self._levels
+
+        if self.return_all_predictions:
+            oof_pred = self._concatenate_datasets(level_predictions)
+        else:
+            oof_pred = blended_prediction
+
+        logger.info("\x1b[1mAutoml preset training completed in {:.2f} seconds\x1b[0m\n".format(self.timer.time_spent))
+        logger.info(f"Model description:\n{self.create_model_str_desc()}\n")
 
         return cast(SparkDataset, oof_pred)
 
