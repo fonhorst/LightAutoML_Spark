@@ -10,6 +10,7 @@ from ..features.base import SparkFeaturesPipeline
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
+from ....dataset.base import RolesDict
 from ....ml_algo.tuning.base import ParamsTuner
 from ....ml_algo.utils import tune_and_fit_predict
 from ....pipelines.features.base import FeaturesPipeline
@@ -21,6 +22,7 @@ class SparkMLPipeline(LAMAMLPipeline):
     def __init__(
         self,
         input_features: List[str],
+        input_roles: RolesDict,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
         pre_selection: Optional[SelectionPipeline] = None,
@@ -29,8 +31,27 @@ class SparkMLPipeline(LAMAMLPipeline):
     ):
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
         self._input_features = input_features
+        self._input_roles = input_roles
+        self._output_features = None
+        self._output_roles = None
         self._transformer: Optional[Transformer] = None
         self.ml_algos: List[SparkTabularMLAlgo] = []
+
+    @property
+    def input_features(self) -> List[str]:
+        return self._input_features
+
+    @property
+    def input_roles(self) -> RolesDict:
+        return self._input_roles
+
+    @property
+    def output_features(self) -> List[str]:
+        return self._output_features
+
+    @property
+    def output_roles(self) -> RolesDict:
+        return self._output_roles
 
     @property
     def transformer(self):
@@ -82,29 +103,43 @@ class SparkMLPipeline(LAMAMLPipeline):
         # TODO: build pipeline_model
         stages = []
         out_roles = dict()
-        if self.pre_selection:
-            # TODO: cast
-            pre_sel = None
-            stages.append(pre_sel.transformer)
-            out_roles = copy(pre_sel.output_roles)
+        # if self.pre_selection:
+        #     # TODO: cast
+        #     pre_sel = None
+        #     stages.append(pre_sel.transformer)
+        #     out_roles = copy(pre_sel.output_roles)
 
         if self.features_pipeline:
             stages.append(fp.transformer)
             out_roles = copy(fp.output_roles)
 
-        if self.post_selection:
-            # TODO: cast
-            post_sel = None
-            stages.append(post_sel.transformer)
-            out_roles = copy(post_sel.output_roles)
+        # if self.post_selection:
+        #     # TODO: cast
+        #     post_sel = None
+        #     stages.append(post_sel.transformer)
+        #     out_roles = copy(post_sel.output_roles)
 
-        self._transformer = PipelineModel(stages=[stages, ml_algo_transformers])
+
+
+        self._transformer = PipelineModel(stages=stages + [ml_algo_transformers])
 
         out_roles.update({ml_algo.prediction_feature: ml_algo.prediction_role
                           for ml_algo in self.ml_algos})
 
-        val_preds = (ml_algo_transformers.transform(valid_ds) for _, full_ds, valid_ds in train_valid)
-        val_preds = functools.reduce(lambda x,y: x.union(y), val_preds)
+        self._output_roles = out_roles
+        self._output_features = list(out_roles.keys())
+
+        # all out roles for the output dataset
+        out_roles.update(self.input_roles)
+
+        val_preds = (ml_algo_transformers.transform(valid_ds.data) for _, full_ds, valid_ds in train_valid)
+        # TODO: depending on train_valid logic there may be several ways of treating predictions results:
+        # TODO: 1. for folds iterators - just union the results, it will yield the full train dataset
+        # TODO: 2. for holdout iterators - create None predictions in train_part and union with valid part
+        # TODO: 3. for custom iterators which may put the same records in different folds: union + groupby + (optionally) union with None-fied train_part
+        # TODO: 4. for dummy - do nothing
+        # TODO: probably this logic should be a part of a special logic in TrainValidIterator method
+        val_preds = functools.reduce(lambda x, y: x.union(y), val_preds)
         val_preds_ds = train_valid.train.empty()
         val_preds_ds.set_data(val_preds, None, out_roles)
 

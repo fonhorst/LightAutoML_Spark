@@ -7,7 +7,7 @@ from pyspark.sql import SparkSession
 from lightautoml.tasks.base import Task
 from lightautoml.validation.base import DummyIterator
 from lightautoml.dataset.np_pd_dataset import NumpyDataset
-from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM
+from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.dataset.base import SparkDataset
 from .. import from_pandas_to_spark, spark_with_deps
 
@@ -26,7 +26,7 @@ def test_smoke_boost_lgbm_v2(spark: SparkSession):
     sds = from_pandas_to_spark(pds, spark, target)
     iterator = DummyIterator(train=sds)
 
-    ml_algo = BoostLGBM()
+    ml_algo = SparkBoostLGBM()
     pred_ds = ml_algo.fit_predict(iterator)
 
     predicted_sdf = pred_ds.data

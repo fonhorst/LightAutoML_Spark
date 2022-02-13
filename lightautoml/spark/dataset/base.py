@@ -299,7 +299,8 @@ class SparkDataset(LAMLDataset):
             f"Presented: {self.features}\n" \
             f"Asked for: {clice}"
 
-        sdf = cast(SparkDataFrame, self.data.select(self.ID_COLUMN, *clice))
+        present_svc_cols = [c for c in self.data.columns if c in self.service_columns]
+        sdf = cast(SparkDataFrame, self.data.select(*present_svc_cols, *clice))
         roles = {c: self.roles[c] for c in clice}
 
         output = self.empty()

@@ -6,7 +6,7 @@ from pyspark.sql.session import SparkSession
 from lightautoml.dataset.np_pd_dataset import NumpyDataset, PandasDataset
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM
+from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures, LGBAdvancedPipeline
 from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures
@@ -49,7 +49,7 @@ def test_nested_tabular_ml_pipeline_with_linear_bgfs(spark: SparkSession):
     linear_l2_feats = LinearFeatures(**linear_feat_kwargs)
 
     selection_feats = LGBSimpleFeatures()
-    selection_gbm = BoostLGBM()
+    selection_gbm = SparkBoostLGBM()
     selection_gbm.set_prefix("Selector")
 
     importance = ModelBasedImportanceEstimator()
@@ -93,11 +93,11 @@ def test_nested_tabular_ml_pipeline_with_boost_lgbm(spark: SparkSession):
         'top_intersections': 4
     }
 
-    ml_model = BoostLGBM()
+    ml_model = SparkBoostLGBM()
     ml_model_feats = LGBAdvancedPipeline(**ml_alg_kwargs)
 
     selection_feats = LGBSimpleFeatures()
-    selection_gbm = BoostLGBM()
+    selection_gbm = SparkBoostLGBM()
     selection_gbm.set_prefix("Selector")
 
     importance = ModelBasedImportanceEstimator()

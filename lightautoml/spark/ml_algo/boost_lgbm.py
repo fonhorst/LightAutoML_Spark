@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # LightGBM = Union[LightGBMClassifier, LightGBMRegressor]
 
 
-class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
+class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     _name: str = "LightGBM"
 
@@ -71,7 +71,6 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {}):
         SparkTabularMLAlgo.__init__(self, task, input_features, default_params, freeze_defaults, timer, optimization_search_space)
-        self._prediction_col = f"prediction_{self._name}"
         self._assembler = None
 
     def _infer_params(self) -> Tuple[dict, int, Optional[Callable], Optional[Callable]]:
@@ -351,7 +350,10 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return result
 
     def _build_transformer(self) -> Transformer:
-        avr = AveragingTransformer(self.task.name, input_cols=self._models_prediction_columns, output_col=self.prediction_feature)
+        avr = AveragingTransformer(self.task.name,
+                                   input_cols=self._models_prediction_columns,
+                                   output_col=self.prediction_feature,
+                                   remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns)
         averaging_model = PipelineModel(stages=[self._assembler] + self.models + [avr])
         return averaging_model
 

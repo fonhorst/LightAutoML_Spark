@@ -123,7 +123,6 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "SparkTabularMLAlgo"
-    _prediction_col: str = f"prediction"
     _default_validation_col_name: str = SparkBaseTrainValidIterator.TRAIN_VAL_COLUMN
 
     def __init__(
@@ -144,6 +143,7 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
         self._transformer: Optional[Transformer] = None
 
         prob = self.task.name in ["binary", "multiclass"]
+        self._prediction_col = f"prediction_{self._name}"
         self._prediction_role = NumericRole(np.float32, force_input=True, prob=prob)
 
     @property
@@ -376,12 +376,22 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
 
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     taskName = Param(Params._dummy(), "taskName", "task name")
+    removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
 
-    def __init__(self, task_name: str, input_cols: List[str], output_col: str):
+    def __init__(self, task_name: str,
+                 input_cols: List[str],
+                 output_col: str,
+                 remove_cols: Optional[List[str]] = None):
         super().__init__()
         self.set(self.taskName, task_name)
         self.set(self.inputCols, input_cols)
         self.set(self.outputCol, output_col)
+        if not remove_cols:
+            remove_cols = []
+        self.set(self.removeCols, remove_cols)
+
+    def getRemoveCols(self) -> List[str]:
+        return self.getOrDefault(self.removeCols)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         pred_cols = self.getInputCols()
@@ -389,10 +399,13 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
             def sum_arrays(x):
                 return sum(x[c] for c in pred_cols) / len(pred_cols)
 
-            out_df = dataset.select(F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol()))
+            out_col = F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol())
         else:
-            out_df = dataset.select((sum(F.col(c) for c in pred_cols) / F.lit(len(pred_cols))).alias(self.getOutputCol()))
+            out_col = (sum(F.col(c) for c in pred_cols) / F.lit(len(pred_cols))).alias(self.getOutputCol())
 
+        cols_to_remove = set(self.getRemoveCols())
+        cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
+        out_df = dataset.select(*cols_to_select, out_col)
         return out_df
 
     def write(self):

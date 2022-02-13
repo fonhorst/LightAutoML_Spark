@@ -12,7 +12,7 @@ from lightautoml.dataset.roles import FoldsRole, TargetRole
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM
+from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
@@ -64,11 +64,12 @@ if __name__ == "__main__":
 
         iterator = SparkFoldsIterator(sdataset, n_folds=3)
 
-        spark_ml_algo = BoostLGBM(task, freeze_defaults=False)
+        spark_ml_algo = SparkBoostLGBM(task, freeze_defaults=False)
         spark_features_pipeline = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles, **ml_alg_kwargs)
 
         ml_pipe = SparkMLPipeline(
             input_features=sdataset.features,
+            input_roles=sdataset.roles,
             ml_algos=[spark_ml_algo],
             pre_selection=None,
             features_pipeline=spark_features_pipeline,
