@@ -1,9 +1,8 @@
 from contextlib import contextmanager
 from copy import copy
-from typing import Sequence, Any, Tuple, Union, Optional, NewType, List, cast, Dict, Set
+from typing import Sequence, Any, Tuple, Union, Optional, List, cast, Dict, Set
 
 import pandas as pd
-import numpy as np
 import pyspark
 from pyspark.ml.functions import vector_to_array
 from pyspark.sql import functions as F, Column
@@ -13,6 +12,7 @@ from lightautoml.dataset.base import LAMLDataset, IntIdx, RowSlice, ColSlice, LA
     valid_array_attributes, array_attr_roles
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset, NpRoles
 from lightautoml.dataset.roles import ColumnRole, NumericRole, DropRole
+from lightautoml.spark import VALIDATION_COLUMN
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.tasks import Task
 
@@ -120,7 +120,12 @@ class SparkDataset(LAMLDataset):
         self._data = None
         self._is_frozen_in_cache: bool = False
         self._dependencies = [] if dependencies is None else dependencies
-        self._service_columns: Set[str] = {self.ID_COLUMN, self.target_column, self.folds_column}
+        self._service_columns: Set[str] = {
+            self.ID_COLUMN,
+            self.target_column,
+            self.folds_column,
+            VALIDATION_COLUMN
+        }
 
         roles = roles if roles else dict()
 

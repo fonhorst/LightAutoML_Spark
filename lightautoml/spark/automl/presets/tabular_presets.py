@@ -22,7 +22,7 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures,
 from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.spark.pipelines.ml.nested_ml_pipe import NestedTabularMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.validation.folds_iterator import FoldsIterator
+from lightautoml.spark.validation.folds_iterator import SparkFoldsIterator
 from lightautoml.tasks import Task
 from lightautoml.validation.base import HoldoutIterator, DummyIterator
 
@@ -672,7 +672,7 @@ class TabularAutoML(AutoMLPreset):
         elif cv_iter:
             raise NotImplementedError("Not supported now")
         elif train.folds:
-            iterator = FoldsIterator(sds, n_folds)
+            iterator = SparkFoldsIterator(sds, n_folds)
         else:
             iterator = DummyIterator(train)
 

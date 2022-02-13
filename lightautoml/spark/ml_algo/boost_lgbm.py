@@ -285,6 +285,8 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return pred
 
     def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+        assert self.validation_column in train.data.columns, 'Train should contain validation column'
+
         if self.task is None:
             self.task = train.task
 
@@ -294,12 +296,6 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             fobj,
             feval,
         ) = self._infer_params()
-
-        is_val_col = 'is_val'
-        train_sdf = train.data.withColumn(is_val_col, F.lit(0))
-        valid_sdf = valid.data.withColumn(is_val_col, F.lit(1))
-
-        train_valid_sdf = train_sdf.union(valid_sdf)
 
         logger.info(f"Input cols for the vector assembler: {train.features}")
         logger.info(f"Running lgb with the following params: {params}")
@@ -322,7 +318,7 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             featuresCol=self._assembler.getOutputCol(),
             labelCol=train.target_column,
             predictionCol=fold_prediction_column if train.task.name != "multiclass" else "prediction",
-            validationIndicatorCol=is_val_col,
+            validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval
         )
 
@@ -331,7 +327,7 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         if train.task.name == "reg":
             lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
 
-        temp_sdf = self._assembler.transform(train_valid_sdf)
+        temp_sdf = self._assembler.transform(train.data)
 
         ml_model = lgbm.fit(temp_sdf)
 

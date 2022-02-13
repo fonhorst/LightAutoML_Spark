@@ -16,6 +16,7 @@ from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.tasks.base import Task
+from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.utils.tmp_utils import log_data, log_metric, is_datalog_enabled
 from lightautoml.validation.base import TrainValidIterator
@@ -123,6 +124,7 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
 
     _name: str = "TabularAlgo"
     _default_prediction_column_name: str = "prediction"
+    _default_validation_col_name: str = SparkBaseTrainValidIterator.TRAIN_VAL_COLUMN
 
     def __init__(
             self,
@@ -140,6 +142,10 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
     @property
     def prediction_column(self) -> str:
         return self._default_prediction_column_name
+
+    @property
+    def validation_column(self) -> str:
+        return self._default_validation_col_name
 
     @property
     def transformer(self) -> Transformer:
