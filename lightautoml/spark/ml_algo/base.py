@@ -11,7 +11,7 @@ from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
 from pyspark.ml.util import MLWritable
 from pyspark.sql import functions as F, Column
 
-from lightautoml.dataset.roles import NumericRole
+from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
@@ -122,36 +122,45 @@ class TabularMLAlgoHelper:
 class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
-    _name: str = "TabularAlgo"
-    _default_prediction_column_name: str = "prediction"
+    _name: str = "SparkTabularMLAlgo"
+    _prediction_col: str = f"prediction"
     _default_validation_col_name: str = SparkBaseTrainValidIterator.TRAIN_VAL_COLUMN
 
     def __init__(
             self,
-            input_cols: List[str],
+            task: Task,
+            input_features: Optional[List[str]] = None,
             default_params: Optional[dict] = None,
             freeze_defaults: bool = True,
             timer: Optional[TaskTimer] = None,
             optimization_search_space: Optional[dict] = {},
     ):
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
-        self._input_cols = input_cols
+        self.task = task
+        self._input_features = input_features
         self.n_classes: Optional[int] = None
         # names of columns that should contain predictions of individual models
         self._models_prediction_columns: Optional[List[str]] = None
         self._transformer: Optional[Transformer] = None
 
-    @property
-    def input_cols(self) -> List[str]:
-        return self._input_cols
-
-    @input_cols.setter
-    def input_cols(self, input_cols: List[str]):
-        self._input_cols = input_cols
+        prob = self.task.name in ["binary", "multiclass"]
+        self._prediction_role = NumericRole(np.float32, force_input=True, prob=prob)
 
     @property
-    def prediction_column(self) -> str:
-        return self._default_prediction_column_name
+    def input_features(self) -> List[str]:
+        return self._input_features
+
+    @input_features.setter
+    def input_features(self, input_cols: List[str]):
+        self._input_features = input_cols
+
+    @property
+    def prediction_feature(self) -> str:
+        return self._prediction_col
+
+    @property
+    def prediction_role(self) -> ColumnRole:
+        return self._prediction_role
 
     @property
     def validation_column(self) -> str:

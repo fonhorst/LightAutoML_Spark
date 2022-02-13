@@ -39,7 +39,8 @@ if __name__ == "__main__":
 
         # data reading and converting to SparkDataset
         df = spark.read.csv("examples/data/tiny_used_cars_data.csv", header=True, escape="\"")
-        sreader = SparkToSparkReader(task=SparkTask("reg"), cv=3)
+        task = SparkTask("reg")
+        sreader = SparkToSparkReader(task=task, cv=3)
         sdataset_tmp = sreader.fit_read(df, roles=roles)
         
         sdataset = sdataset_tmp.empty()
@@ -66,7 +67,7 @@ if __name__ == "__main__":
         sdataset_feats = simple_pipline_builder.fit_transform(sdataset)
 
         iterator = SparkFoldsIterator(sdataset_feats, n_folds=3)
-        spark_ml_algo = BoostLGBM(input_cols=simple_pipline_builder.output_features, freeze_defaults=False)
+        spark_ml_algo = BoostLGBM(task, input_features=simple_pipline_builder.output_features, freeze_defaults=False)
         spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
         spark_ml_algo = cast(BoostLGBM, spark_ml_algo)
 

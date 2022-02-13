@@ -25,6 +25,7 @@ from lightautoml.spark.mlwriters import TmpСommonMLWriter
 # from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
 import pandas as pd
 
+from lightautoml.spark.tasks.base import Task
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.utils.tmp_utils import log_data
 from lightautoml.validation.base import TrainValidIterator
@@ -63,12 +64,13 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     }
 
     def __init__(self,
-                 input_cols: List[str],
+                 task: Task,
+                 input_features: Optional[List[str]] = None,
                  default_params: Optional[dict] = None,
                  freeze_defaults: bool = True,
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {}):
-        SparkTabularMLAlgo.__init__(self, input_cols, default_params, freeze_defaults, timer, optimization_search_space)
+        SparkTabularMLAlgo.__init__(self, task, input_features, default_params, freeze_defaults, timer, optimization_search_space)
         self._prediction_col = f"prediction_{self._name}"
         self._assembler = None
 
@@ -302,7 +304,7 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         # TODO: reconsider using of 'keep' as a handleInvalid value
         if self._assembler is None:
             self._assembler = VectorAssembler(
-                inputCols=self._input_cols,
+                inputCols=self._input_features,
                 outputCol=f"{self._name}_vassembler_features",
                 handleInvalid="keep"
             )
@@ -349,7 +351,7 @@ class BoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return result
 
     def _build_transformer(self) -> Transformer:
-        avr = AveragingTransformer(self.task.name, input_cols=self._models_prediction_columns, output_col=self.prediction_column)
+        avr = AveragingTransformer(self.task.name, input_cols=self._models_prediction_columns, output_col=self.prediction_feature)
         averaging_model = PipelineModel(stages=[self._assembler] + self.models + [avr])
         return averaging_model
 
