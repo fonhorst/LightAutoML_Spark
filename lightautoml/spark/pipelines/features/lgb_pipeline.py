@@ -29,9 +29,8 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, TabularDataFeaturesSpark):
     Maps input to output features exactly one-to-one.
 
     """
-    def __init__(self, input_roles: Optional[RolesDict] = None):
+    def __init__(self):
         super().__init__()
-        self.input_roles = input_roles
 
     def _get_input_features(self) -> Set[str]:
         return set(self.input_features)

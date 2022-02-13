@@ -2,9 +2,10 @@ import logging.config
 import logging.config
 from copy import deepcopy
 
+from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
-from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
+from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import Task as SparkTask
@@ -56,16 +57,17 @@ if __name__ == "__main__":
 
         spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
         spark_features_pipeline = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
-        # spark_selector = SparkImportanceCutoffSelector(
-        #     cutoff=0.0,
-        #     features_pipeline=SparkLGBSimpleFeatures(),
-        #     ml_algo=SparkBoostLGBM(task, freeze_defaults=False)
-        # )
+        spark_selector = ImportanceCutoffSelector(
+            cutoff=0.0,
+            feature_pipeline=SparkLGBSimpleFeatures(),
+            ml_algo=SparkBoostLGBM(freeze_defaults=False),
+            imp_estimator=ModelBasedImportanceEstimator()
+        )
 
         ml_pipe = SparkMLPipeline(
             input_roles=sdataset.roles,
             ml_algos=[spark_ml_algo],
-            pre_selection=None,
+            pre_selection=spark_selector,
             features_pipeline=spark_features_pipeline,
             post_selection=None
         )
