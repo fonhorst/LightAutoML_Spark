@@ -596,25 +596,22 @@ class SparkTabularAutoML(AutoMLPreset):
 
             logger.info("\x1b[1mLayer {} training completed.\x1b[0m\n".format(leven_number))
 
-            # here is split on exit condition
             if not flg_last_level:
-
                 self.levels.append(pipes)
 
-                if self.skip_conn:
-                    level_predictions = train_valid.train
-                else:
-                    roles = dict()
-                    for p in pipes:
-                        roles.update(p.output_roles)
-                    sds = cast(SparkDataset, train_valid.train)
-                    sdf = sds.data.select(*sds.service_columns, *list(roles.keys()))
-                    level_predictions = sds.empty()
-                    level_predictions.set_data(sdf, None, roles)
-
-                train_valid = self._create_validation_iterator(level_predictions, None, n_folds=None, cv_iter=None)
+            # here is split on exit condition
+            if not flg_last_level and self.skip_conn:
+                level_predictions = train_valid.train
             else:
-                break
+                roles = dict()
+                for p in pipes:
+                    roles.update(p.output_roles)
+                sds = cast(SparkDataset, train_valid.train)
+                sdf = sds.data.select(*sds.service_columns, *list(roles.keys()))
+                level_predictions = sds.empty()
+                level_predictions.set_data(sdf, None, roles)
+                
+            train_valid = self._create_validation_iterator(level_predictions, None, n_folds=None, cv_iter=None)
 
         blended_prediction, last_pipes = self.blender.fit_predict(level_predictions, pipes)
         self.levels.append(last_pipes)
