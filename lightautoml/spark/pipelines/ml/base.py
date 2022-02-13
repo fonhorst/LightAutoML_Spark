@@ -7,6 +7,7 @@ from pyspark.ml import Transformer, PipelineModel
 
 from lightautoml.validation.base import TrainValidIterator
 from ..features.base import SparkFeaturesPipeline
+from ..selection.base import SparkEmptySelector
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
@@ -29,7 +30,16 @@ class SparkMLPipeline(LAMAMLPipeline):
         features_pipeline: Optional[SparkFeaturesPipeline] = None,
         post_selection: Optional[SelectionPipeline] = None,
     ):
+        if not pre_selection:
+            pre_selection = SparkEmptySelector(input_features, input_roles)
+
+        # TODO: SPARK-LAMA replace empty feature pipeline
+
+        if not post_selection:
+            post_selection = SparkEmptySelector(input_features, input_roles)
+
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
+
         self._input_features = input_features
         self._input_roles = input_roles
         self._output_features = None
@@ -140,6 +150,9 @@ class SparkMLPipeline(LAMAMLPipeline):
         # TODO: 4. for dummy - do nothing
         # TODO: probably this logic should be a part of a special logic in TrainValidIterator method
         val_preds = functools.reduce(lambda x, y: x.union(y), val_preds)
+
+        # TODO: how about to select only necessary fields?
+        # TODO: add cacher here
         val_preds_ds = train_valid.train.empty()
         val_preds_ds.set_data(val_preds, None, out_roles)
 

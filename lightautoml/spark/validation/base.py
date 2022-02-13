@@ -1,12 +1,11 @@
 from abc import ABC
-from typing import Optional, Iterable, Tuple, cast
-
-from lightautoml.dataset.base import LAMLDataset
-from lightautoml.spark import VALIDATION_COLUMN
-from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
-from lightautoml.validation.base import TrainValidIterator
+from typing import Tuple, cast
 
 from pyspark.sql import functions as F
+
+from lightautoml.spark import VALIDATION_COLUMN
+from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.validation.base import TrainValidIterator
 
 
 class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
@@ -15,6 +14,24 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
     def __init__(self, train: SparkDataset):
         assert train.folds_column in train.data.columns
         super().__init__(train)
+
+    def apply_selector(self, selector) -> "TrainValidIterator":
+        """Select features on train data.
+
+        Check if selector is fitted.
+        If not - fit and then perform selection.
+        If fitted, check if it's ok to apply.
+
+        Args:
+            selector: Uses for feature selection.
+
+        Returns:
+            Dataset with selected features.
+
+        """
+        if not selector.is_fitted:
+            selector.fit(self)
+        return self
 
     def _split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         train = cast(SparkDataset, self.train)
