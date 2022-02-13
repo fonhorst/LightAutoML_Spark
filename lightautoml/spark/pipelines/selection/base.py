@@ -13,6 +13,7 @@ from lightautoml.pipelines.selection.base import SelectionPipeline, ImportanceEs
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo
+from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
 from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline
 from lightautoml.spark.transformers.base import HasInputRoles, HasOutputRoles
 from lightautoml.validation.base import TrainValidIterator
@@ -35,26 +36,16 @@ class SparkImportanceEstimator:
         return self.raw_importances
 
 
-class SparkSelectionPipeline(SelectionPipeline, ABC):
+class SparkSelectionPipeline(SelectionPipeline, InputFeaturesAndRoles, ABC):
     def __init__(self,
-                 input_features: List[str],
-                 input_roles: RolesDict,
+                 input_roles: Optional[RolesDict] = None,
                  features_pipeline: Optional[SparkFeaturesPipeline] = None,
                  ml_algo: Optional[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]] = None,
                  imp_estimator: Optional[ImportanceEstimator] = None,
                  fit_on_holdout: bool = False,
                  **kwargs: Any):
         super().__init__(features_pipeline, ml_algo, imp_estimator, fit_on_holdout, **kwargs)
-        self._input_features = input_features
-        self._input_roles = input_roles
-
-    @property
-    def input_features(self) -> List[str]:
-        return self._input_features
-
-    @property
-    def input_roles(self) -> RolesDict:
-        return self._input_roles
+        self.input_roles = input_roles
 
     def select(self, dataset: LAMLDataset):
         raise NotImplementedError("Not supported for Spark version")
@@ -66,16 +57,15 @@ class SparkEmptySelector(SparkSelectionPipeline):
         self._selected_features = self.input_features
 
 
-class SparkImportanceCutoffSelector(SparkSelectionPipeline, ImportanceCutoffSelector):
+class SparkImportanceCutoffSelector(SparkSelectionPipeline):
     def __init__(self,
-                 input_cols: List[str],
-                 input_roles: RolesDict,
+                 input_roles: Optional[RolesDict] = None,
                  features_pipeline: Optional[SparkFeaturesPipeline] = None,
                  ml_algo: Optional[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]] = None,
                  imp_estimator: Optional[ImportanceEstimator] = None,
                  fit_on_holdout: bool = False,
                  cutoff: float = 0.0):
-        super().__init__(input_cols, input_roles, features_pipeline, ml_algo, imp_estimator, fit_on_holdout)
+        super().__init__(input_roles, features_pipeline, ml_algo, imp_estimator, fit_on_holdout)
         self._cutoff = cutoff
 
     def perform_selection(self, train_valid: Optional[TrainValidIterator] = None):

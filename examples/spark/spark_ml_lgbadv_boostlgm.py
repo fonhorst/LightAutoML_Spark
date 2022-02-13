@@ -63,7 +63,7 @@ if __name__ == "__main__":
         }
 
         # # Spark ML pipeline
-        simple_pipline_builder = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles, **ml_alg_kwargs)
+        simple_pipline_builder = SparkLGBAdvancedPipeline(sdataset.roles, **ml_alg_kwargs)
         sdataset_feats = simple_pipline_builder.fit_transform(sdataset)
 
         iterator = SparkFoldsIterator(sdataset_feats, n_folds=3)

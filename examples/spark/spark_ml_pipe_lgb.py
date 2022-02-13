@@ -13,8 +13,10 @@ from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
-from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
+from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, LGBSimpleFeaturesTmp, \
+    SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
+from lightautoml.spark.pipelines.selection.base import SparkImportanceCutoffSelector
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
@@ -65,10 +67,14 @@ if __name__ == "__main__":
         iterator = SparkFoldsIterator(sdataset, n_folds=3)
 
         spark_ml_algo = SparkBoostLGBM(task, freeze_defaults=False)
-        spark_features_pipeline = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles, **ml_alg_kwargs)
+        spark_features_pipeline = SparkLGBAdvancedPipeline(sdataset.roles, **ml_alg_kwargs)
+        # spark_selector = SparkImportanceCutoffSelector(
+        #     cutoff=0.0,
+        #     features_pipeline=SparkLGBSimpleFeatures(),
+        #     ml_algo=SparkBoostLGBM(task, freeze_defaults=False)
+        # )
 
         ml_pipe = SparkMLPipeline(
-            input_features=sdataset.features,
             input_roles=sdataset.roles,
             ml_algos=[spark_ml_algo],
             pre_selection=None,

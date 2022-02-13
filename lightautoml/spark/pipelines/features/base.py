@@ -14,11 +14,11 @@ from pyspark.ml import Transformer, Estimator, Pipeline
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.sql import functions as F
 
-from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.pipelines.utils import map_pipeline_names
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, \
     ChangeRoles, \
     UnionTransformer, SparkTransformer
@@ -103,7 +103,7 @@ class Cacher(Estimator):
         return NoOpTransformer()
 
 
-class SparkFeaturesPipeline:
+class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles):
     """Abstract class.
 
     Analyze train dataset and create composite transformer
@@ -123,47 +123,10 @@ class SparkFeaturesPipeline:
         super().__init__(**kwargs)
         self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
         self._transformer: Optional[Transformer] = None
-        self._input_features: Optional[List[str]] = None
-        self._input_roles: Optional[RolesDict] = None
-        self._output_features: Optional[List[str]] = None
-        self._output_roles: Optional[RolesDict] = None
 
     @property
     def transformer(self) -> Optional[Transformer]:
         return self._transformer
-
-    # TODO: visualize pipeline ?
-    @property
-    def input_features(self) -> Optional[List[str]]:
-        """Names of input features of train data."""
-        return self._input_features
-
-    @input_features.setter
-    def input_features(self, val: List[str]):
-        """Setter for input_features.
-
-        Args:
-            val: List of strings.
-
-        """
-        self._input_features = deepcopy(val)
-
-    @property
-    def input_roles(self) -> Optional[RolesDict]:
-        return self._input_roles
-
-    @input_roles.setter
-    def input_roles(self, val: RolesDict):
-        self._input_roles = deepcopy(RolesDict)
-
-    @property
-    def output_features(self) -> Optional[List[str]]:
-        """List of feature names that produces _pipeline."""
-        return self._output_features
-
-    @property
-    def output_roles(self) -> RolesDict:
-        return self._output_roles
 
     def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
         """Analyse dataset and create composite transformer.
@@ -197,7 +160,7 @@ class SparkFeaturesPipeline:
         self._transformer = cast(Transformer, pipeline.fit(train.data))
         sdf = last_cacher.dataset
 
-        features = train.features + self._output_features
+        features = train.features + self.output_features
         roles = copy(train.roles)
         roles.update(self._output_roles)
         transformed_ds = train.empty()
@@ -284,9 +247,6 @@ class SparkFeaturesPipeline:
         assert all((f in features) for f in fp_input_features), \
             "All input features should be present in the output features"
 
-        if not all((f in roles) for f in fp_input_features):
-            k = 0
-
         assert all((f in roles) for f in fp_input_features), \
             "All input features should be present in the output roles"
 
@@ -295,7 +255,6 @@ class SparkFeaturesPipeline:
             features.remove(col)
             del roles[col]
 
-        self._output_features = list(features)
         self._output_roles = roles
 
 
@@ -922,8 +881,8 @@ class TabularDataFeatures:
         #     ]
         # )
 
-        dt_processing = BaseDiffTransformer(base_names=base_dates,
-                                            diff_names=datetimes)
+        dt_processing = SparkBaseDiffTransformer(base_names=base_dates,
+                                                 diff_names=datetimes)
 
         return dt_processing
 

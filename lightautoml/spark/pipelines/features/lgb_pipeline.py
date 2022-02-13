@@ -29,10 +29,9 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, TabularDataFeaturesSpark):
     Maps input to output features exactly one-to-one.
 
     """
-    def __init__(self, input_features: List[str], input_roles: RolesDict):
+    def __init__(self, input_roles: Optional[RolesDict] = None):
         super().__init__()
-        self._input_features = input_features
-        self._input_roles = input_roles
+        self.input_roles = input_roles
 
     def _get_input_features(self) -> Set[str]:
         return set(self.input_features)
@@ -352,7 +351,6 @@ class LGBAdvancedPipeline(FeaturesPipeline, TabularDataFeatures):
 class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, TabularDataFeaturesSpark):
     def __init__(
             self,
-            input_features: List[str],
             input_roles: RolesDict,
             feats_imp: Optional[ImportanceEstimator] = None,
             top_intersections: int = 5,
@@ -387,8 +385,7 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, TabularDataFeaturesSpark):
             output_categories=output_categories,
             ascending_by_cardinality=False,
         )
-        self._input_features = input_features
-        self._input_roles = input_roles
+        self.input_roles = input_roles
 
     def _get_input_features(self) -> Set[str]:
         return set(self.input_features)

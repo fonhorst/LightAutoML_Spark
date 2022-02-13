@@ -6,6 +6,7 @@ from typing import List, cast, Sequence, Union, Tuple, Optional
 from pyspark.ml import Transformer, PipelineModel
 
 from lightautoml.validation.base import TrainValidIterator
+from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
 from ..features.base import SparkFeaturesPipeline
 from ..selection.base import SparkEmptySelector
 from ...dataset.base import LAMLDataset, SparkDataset
@@ -19,10 +20,9 @@ from ....pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from ....pipelines.selection.base import SelectionPipeline
 
 
-class SparkMLPipeline(LAMAMLPipeline):
+class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRoles):
     def __init__(
         self,
-        input_features: List[str],
         input_roles: RolesDict,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
@@ -31,37 +31,20 @@ class SparkMLPipeline(LAMAMLPipeline):
         post_selection: Optional[SelectionPipeline] = None,
     ):
         if not pre_selection:
-            pre_selection = SparkEmptySelector(input_features, input_roles)
+            pre_selection = SparkEmptySelector(input_roles)
 
         # TODO: SPARK-LAMA replace empty feature pipeline
 
         if not post_selection:
-            post_selection = SparkEmptySelector(input_features, input_roles)
+            post_selection = SparkEmptySelector(input_roles)
 
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
-        self._input_features = input_features
-        self._input_roles = input_roles
+        self.input_roles = input_roles
         self._output_features = None
         self._output_roles = None
         self._transformer: Optional[Transformer] = None
         self.ml_algos: List[SparkTabularMLAlgo] = []
-
-    @property
-    def input_features(self) -> List[str]:
-        return self._input_features
-
-    @property
-    def input_roles(self) -> RolesDict:
-        return self._input_roles
-
-    @property
-    def output_features(self) -> List[str]:
-        return self._output_features
-
-    @property
-    def output_roles(self) -> RolesDict:
-        return self._output_roles
 
     @property
     def transformer(self):
