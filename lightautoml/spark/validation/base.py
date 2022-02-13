@@ -1,21 +1,34 @@
 from abc import ABC
-from typing import Tuple, cast
+from copy import copy
+from typing import Tuple, cast, Optional, List
 
 from pyspark.sql import functions as F
 
+from lightautoml.pipelines.features.base import FeaturesPipeline
+from lightautoml.pipelines.selection.base import SelectionPipeline
+from lightautoml.reader.base import RolesDict
 from lightautoml.spark import VALIDATION_COLUMN
 from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
+from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline
 from lightautoml.validation.base import TrainValidIterator
 
 
-class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
+class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC):
     TRAIN_VAL_COLUMN = VALIDATION_COLUMN
 
-    def __init__(self, train: SparkDataset):
+    def __init__(self, train: SparkDataset, input_roles: Optional[RolesDict] = None):
         assert train.folds_column in train.data.columns
         super().__init__(train)
+        if not input_roles:
+            input_roles = train.roles
+        self._input_roles = input_roles
 
-    def apply_selector(self, selector) -> "TrainValidIterator":
+    @property
+    def features(self) -> List[str]:
+        return self.input_features
+
+    def apply_selector(self, selector: SelectionPipeline) -> "TrainValidIterator":
         """Select features on train data.
 
         Check if selector is fitted.
@@ -31,7 +44,16 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         """
         if not selector.is_fitted:
             selector.fit(self)
-        return self
+        train_valid = copy(self)
+        train_valid.input_roles = {feat: self.input_roles[feat]
+                                   for feat in selector.selected_features}
+        return train_valid
+
+    def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "TrainValidIterator":
+        features_pipeline.input_roles = self.input_roles
+        train_valid = cast(SparkBaseTrainValidIterator, super().apply_feature_pipeline(features_pipeline))
+        train_valid.input_roles = features_pipeline.output_roles
+        return train_valid
 
     def _split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         train = cast(SparkDataset, self.train)

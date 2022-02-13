@@ -15,6 +15,7 @@ from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
+from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
 from lightautoml.spark.tasks.base import Task
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
@@ -119,7 +120,7 @@ class TabularMLAlgoHelper:
         return full_preds_df
 
 
-class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
+class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles, TabularMLAlgoHelper):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "SparkTabularMLAlgo"
@@ -127,32 +128,19 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
 
     def __init__(
             self,
-            task: Task,
-            input_features: Optional[List[str]] = None,
             default_params: Optional[dict] = None,
             freeze_defaults: bool = True,
             timer: Optional[TaskTimer] = None,
             optimization_search_space: Optional[dict] = {},
     ):
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
-        self.task = task
-        self._input_features = input_features
         self.n_classes: Optional[int] = None
         # names of columns that should contain predictions of individual models
         self._models_prediction_columns: Optional[List[str]] = None
         self._transformer: Optional[Transformer] = None
 
-        prob = self.task.name in ["binary", "multiclass"]
         self._prediction_col = f"prediction_{self._name}"
-        self._prediction_role = NumericRole(np.float32, force_input=True, prob=prob)
-
-    @property
-    def input_features(self) -> List[str]:
-        return self._input_features
-
-    @input_features.setter
-    def input_features(self, input_cols: List[str]):
-        self._input_features = input_cols
+        self._prediction_role = None
 
     @property
     def prediction_feature(self) -> str:
@@ -175,7 +163,7 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
 
         return self._transformer
 
-    def fit_predict(self, train_valid_iterator: TrainValidIterator) -> SparkDataset:
+    def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
         """Fit and then predict accordig the strategy that uses train_valid_iterator.
 
         If item uses more then one time it will
@@ -191,6 +179,10 @@ class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
 
         """
         self.timer.start()
+
+        prob = train_valid_iterator.train.task.name in ["binary", "multiclass"]
+        self.input_roles = train_valid_iterator.input_roles
+        self._prediction_role = NumericRole(np.float32, force_input=True, prob=prob)
 
         # log_data(f"spark_fit_predict_{type(self).__name__}", {"train": train_valid_iterator.train.to_pandas()})
 

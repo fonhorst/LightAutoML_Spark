@@ -18,6 +18,7 @@ class InputFeaturesAndRoles:
 
     @input_roles.setter
     def input_roles(self, roles: RolesDict):
+        assert isinstance(roles, dict)
         self._input_roles = roles
 
 

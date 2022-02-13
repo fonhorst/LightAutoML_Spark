@@ -62,16 +62,16 @@ if __name__ == "__main__":
             'top_intersections': 4
         }
 
-        # # Spark ML pipeline
-        simple_pipline_builder = SparkLGBAdvancedPipeline(sdataset.roles, **ml_alg_kwargs)
-        sdataset_feats = simple_pipline_builder.fit_transform(sdataset)
+        iterator = SparkFoldsIterator(sdataset, n_folds=3)
+        lgb_features = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
+        spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
 
-        iterator = SparkFoldsIterator(sdataset_feats, n_folds=3)
-        spark_ml_algo = SparkBoostLGBM(task, input_features=simple_pipline_builder.output_features, freeze_defaults=False)
+        # # Process features and train the model
+        iterator = iterator.apply_feature_pipeline(lgb_features)
         spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
         spark_ml_algo = cast(SparkBoostLGBM, spark_ml_algo)
 
-        final = PipelineModel(stages=[simple_pipline_builder.transformer, spark_ml_algo.transformer])
+        final = PipelineModel(stages=[lgb_features.transformer, spark_ml_algo.transformer])
 
         final_result = final.transform(sdataset_tmp.data)
         final_result.write.mode('overwrite').format('noop').save()

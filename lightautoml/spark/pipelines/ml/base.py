@@ -8,7 +8,6 @@ from pyspark.ml import Transformer, PipelineModel
 from lightautoml.validation.base import TrainValidIterator
 from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
 from ..features.base import SparkFeaturesPipeline
-from ..selection.base import SparkEmptySelector
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
@@ -30,14 +29,6 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
         features_pipeline: Optional[SparkFeaturesPipeline] = None,
         post_selection: Optional[SelectionPipeline] = None,
     ):
-        if not pre_selection:
-            pre_selection = SparkEmptySelector(input_roles)
-
-        # TODO: SPARK-LAMA replace empty feature pipeline
-
-        if not post_selection:
-            post_selection = SparkEmptySelector(input_roles)
-
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
         self.input_roles = input_roles
@@ -76,7 +67,6 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
 
         for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
             ml_algo = cast(SparkTabularMLAlgo, ml_algo)
-            ml_algo.input_features = fp.output_features
             ml_algo, preds = tune_and_fit_predict(ml_algo, param_tuner, train_valid, force_calc)
             if ml_algo is not None:
                 self.ml_algos.append(ml_algo)

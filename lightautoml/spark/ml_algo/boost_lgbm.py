@@ -64,13 +64,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     }
 
     def __init__(self,
-                 task: Task,
-                 input_features: Optional[List[str]] = None,
                  default_params: Optional[dict] = None,
                  freeze_defaults: bool = True,
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {}):
-        SparkTabularMLAlgo.__init__(self, task, input_features, default_params, freeze_defaults, timer, optimization_search_space)
+        SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
         self._assembler = None
 
     def _infer_params(self) -> Tuple[dict, int, Optional[Callable], Optional[Callable]]:
@@ -303,7 +301,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         # TODO: reconsider using of 'keep' as a handleInvalid value
         if self._assembler is None:
             self._assembler = VectorAssembler(
-                inputCols=self._input_features,
+                inputCols=self.input_features,
                 outputCol=f"{self._name}_vassembler_features",
                 handleInvalid="keep"
             )
