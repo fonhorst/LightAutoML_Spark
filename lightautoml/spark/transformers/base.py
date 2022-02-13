@@ -164,6 +164,12 @@ class SparkUnionTransformer:
     def transformers(self) -> List[Union[SparkBaseEstimator, SparkBaseTransformer]]:
         return self._transformer_list
 
+    def _find_last_stage(self, stage):
+        if isinstance(stage, SparkSequentialTransformer):
+            stage = stage.transformers[-1]
+            return stage
+        return stage
+
     def get_output_cols(self) -> List[str]:
         """Get list of output columns from all stages
 
@@ -172,6 +178,7 @@ class SparkUnionTransformer:
         """
         output_cols = []
         for stage in self._transformer_list:
+            stage = self._find_last_stage(stage)
             output_cols.extend(stage.getOutputCols())
         return list(set(output_cols))
 
@@ -183,6 +190,7 @@ class SparkUnionTransformer:
         """
         roles = {}
         for stage in self._transformer_list:
+            stage = self._find_last_stage(stage)
             roles.update(deepcopy(stage.getOutputRoles()))        
 
         return roles

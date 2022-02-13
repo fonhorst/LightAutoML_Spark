@@ -1,11 +1,11 @@
-from typing import List, Optional, Union, cast
+from typing import List, Optional, Set, Union, cast
 import numpy as np
 
 from lightautoml.dataset.base import LAMLDataset, RolesDict
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures as LAMALinearFeatures
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.pipelines.features.base import FeaturesPipelineSpark, TabularDataFeatures, TabularDataFeaturesSpark
+from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline, TabularDataFeatures, TabularDataFeaturesSpark
 
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.dataset.roles import CategoryRole
@@ -227,7 +227,7 @@ class LinearFeatures(TabularDataFeatures, LAMALinearFeatures):
         return union_all
 
 
-class SparkLinearFeatures(FeaturesPipelineSpark, TabularDataFeaturesSpark):
+class SparkLinearFeatures(SparkFeaturesPipeline, TabularDataFeaturesSpark):
     def __init__(
         self,
         input_features: List[str],
@@ -260,20 +260,33 @@ class SparkLinearFeatures(FeaturesPipelineSpark, TabularDataFeaturesSpark):
               on multiclass task if number of classes is high.
 
         """
-        LAMALinearFeatures.__init__(
-            self,
-            feats_imp,
-            top_intersections,
-            max_bin_count,
-            max_intersection_depth,
-            subsample,
-            sparse_ohe,
-            auto_unique_co,
-            output_categories,
-            multiclass_te_co,
+        # LAMALinearFeatures.__init__(
+        #     self,
+        #     feats_imp,
+        #     top_intersections,
+        #     max_bin_count,
+        #     max_intersection_depth,
+        #     subsample,
+        #     sparse_ohe,
+        #     auto_unique_co,
+        #     output_categories,
+        #     multiclass_te_co,
+        # )
+        super().__init__(
+            multiclass_te_co=multiclass_te_co,
+            top_intersections=top_intersections,
+            max_intersection_depth=max_intersection_depth,
+            subsample=subsample,
+            feats_imp=feats_imp,
+            auto_unique_co=auto_unique_co,
+            output_categories=output_categories,
+            ascending_by_cardinality=False,
         )
         self._input_features = input_features
         self._input_roles = input_roles
+
+    def _get_input_features(self) -> Set[str]:
+        return set(self.input_features)
 
     def create_pipeline(self, train: SparkDataset) -> SparkTransformer:
         """Create linear pipeline.
@@ -394,7 +407,7 @@ class SparkLinearFeatures(FeaturesPipelineSpark, TabularDataFeaturesSpark):
             standerd_scaler_stage = StandardScalerEstimator(input_cols=fill_na_median_stage.getOutputCols(),
                                                             input_roles=fill_na_median_stage.getOutputRoles())
 
-            dense_pipe = SequentialTransformer(
+            dense_pipe = SparkSequentialTransformer(
                 [
                     dense_pipe1,
                     SparkUnionTransformer(

@@ -120,7 +120,7 @@ class NaNFlagsTransformer(SparkBaseTransformer):
             output_cols=output_cols,
             input_roles=input_roles,
             output_roles={f: NumericRole(np.float32) for f in input_cols},
-            do_replace_columns=True)
+            do_replace_columns=False)
         self._nan_cols = nan_cols
 
     def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
@@ -180,11 +180,12 @@ class FillInfTransformer(SparkBaseTransformer):
     def __init__(self, 
                  input_cols: List[str],
                  input_roles: RolesDict):
+        output_cols = [f"{self._fname_prefix}__{feat}" for feat in input_cols]
         super().__init__(
             input_cols=input_cols,
-            output_cols=[f"{self._fname_prefix}__{feat}" for feat in input_cols],
+            output_cols=output_cols,
             input_roles=input_roles,
-            output_roles={f: NumericRole(np.float32) for f in input_cols},
+            output_roles={f: NumericRole(np.float32) for f in output_cols},
             do_replace_columns=False)
 
     def _transform(self, df: SparkDataFrame) -> SparkDataFrame:

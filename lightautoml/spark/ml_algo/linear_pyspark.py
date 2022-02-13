@@ -196,6 +196,7 @@ class LinearLBFGS(SparkTabularMLAlgo):
                                       task_name=self.task.name,
                                       n_classes=self.n_classes)
 
+
 class LinearLBFGSTransformer(TabularMLAlgoTransformer):
     """LinearLBFGS Spark MLlib Transformer"""
 
