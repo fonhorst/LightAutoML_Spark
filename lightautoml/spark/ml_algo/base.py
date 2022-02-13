@@ -11,11 +11,12 @@ from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
 from pyspark.ml.util import MLWritable
 from pyspark.sql import functions as F, Column
 
-from lightautoml.dataset.roles import NumericRole
+from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.tasks.base import Task
+from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.utils.tmp_utils import log_data, log_metric, is_datalog_enabled
 from lightautoml.validation.base import TrainValidIterator
@@ -118,28 +119,52 @@ class TabularMLAlgoHelper:
         return full_preds_df
 
 
-class TabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
+class SparkTabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
-    _name: str = "TabularAlgo"
-    _default_prediction_column_name: str = "prediction"
+    _name: str = "SparkTabularMLAlgo"
+    _default_validation_col_name: str = SparkBaseTrainValidIterator.TRAIN_VAL_COLUMN
 
     def __init__(
             self,
+            task: Task,
+            input_features: Optional[List[str]] = None,
             default_params: Optional[dict] = None,
             freeze_defaults: bool = True,
             timer: Optional[TaskTimer] = None,
             optimization_search_space: Optional[dict] = {},
     ):
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
+        self.task = task
+        self._input_features = input_features
         self.n_classes: Optional[int] = None
         # names of columns that should contain predictions of individual models
         self._models_prediction_columns: Optional[List[str]] = None
         self._transformer: Optional[Transformer] = None
 
+        prob = self.task.name in ["binary", "multiclass"]
+        self._prediction_col = f"prediction_{self._name}"
+        self._prediction_role = NumericRole(np.float32, force_input=True, prob=prob)
+
     @property
-    def prediction_column(self) -> str:
-        return self._default_prediction_column_name
+    def input_features(self) -> List[str]:
+        return self._input_features
+
+    @input_features.setter
+    def input_features(self, input_cols: List[str]):
+        self._input_features = input_cols
+
+    @property
+    def prediction_feature(self) -> str:
+        return self._prediction_col
+
+    @property
+    def prediction_role(self) -> ColumnRole:
+        return self._prediction_role
+
+    @property
+    def validation_column(self) -> str:
+        return self._default_validation_col_name
 
     @property
     def transformer(self) -> Transformer:
@@ -351,12 +376,22 @@ class TabularMLAlgo(MLAlgo, TabularMLAlgoHelper):
 
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     taskName = Param(Params._dummy(), "taskName", "task name")
+    removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
 
-    def __init__(self, task_name: str, input_cols: List[str], output_col: str):
+    def __init__(self, task_name: str,
+                 input_cols: List[str],
+                 output_col: str,
+                 remove_cols: Optional[List[str]] = None):
         super().__init__()
         self.set(self.taskName, task_name)
         self.set(self.inputCols, input_cols)
         self.set(self.outputCol, output_col)
+        if not remove_cols:
+            remove_cols = []
+        self.set(self.removeCols, remove_cols)
+
+    def getRemoveCols(self) -> List[str]:
+        return self.getOrDefault(self.removeCols)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         pred_cols = self.getInputCols()
@@ -364,10 +399,13 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
             def sum_arrays(x):
                 return sum(x[c] for c in pred_cols) / len(pred_cols)
 
-            out_df = dataset.select(F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol()))
+            out_col = F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol())
         else:
-            out_df = dataset.select((sum(F.col(c) for c in pred_cols) / F.lit(len(pred_cols))).alias(self.getOutputCol()))
+            out_col = (sum(F.col(c) for c in pred_cols) / F.lit(len(pred_cols))).alias(self.getOutputCol())
 
+        cols_to_remove = set(self.getRemoveCols())
+        cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
+        out_df = dataset.select(*cols_to_select, out_col)
         return out_df
 
     def write(self):
@@ -391,7 +429,7 @@ class TabularMLAlgoTransformer(Transformer, TabularMLAlgoHelper):
         preds_dfs = [
             self.predict_single_fold(dataset=dataset, model=model).select(
                 SparkDataset.ID_COLUMN,
-                F.col(TabularMLAlgo._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
+                F.col(SparkTabularMLAlgo._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
             ) for i, model in enumerate(self._models)
         ]
 

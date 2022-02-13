@@ -1,7 +1,9 @@
 import logging
-from typing import Optional, cast, Tuple
+from typing import Optional, cast, Tuple, Iterable
 
+from lightautoml.dataset.base import LAMLDataset
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.validation.base import TrainValidIterator, HoldoutIterator
 
 from pyspark.sql import functions as F
@@ -10,7 +12,41 @@ from pyspark.sql import functions as F
 logger = logging.getLogger(__name__)
 
 
-class FoldsIterator(TrainValidIterator):
+class SparkHoldoutIterator(SparkBaseTrainValidIterator):
+    def __init__(self, train: SparkDataset):
+        super().__init__(train)
+        self._curr_idx = 0
+
+    def __iter__(self) -> Iterable:
+        return self
+
+    def __len__(self) -> Optional[int]:
+        return 1
+
+    def __next__(self) -> Tuple[None, SparkDataset, SparkDataset]:
+        """Define how to get next object.
+
+        Returns:
+            None, train dataset, validation dataset.
+
+        """
+        if self._curr_idx > 1:
+            raise StopIteration
+
+        full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
+        self._curr_idx += 1
+
+        return None, full_ds, valid_part_ds
+
+    def get_validation_data(self) -> SparkDataset:
+        full_ds, train_part_ds, valid_part_ds = self._split_by_fold(fold=0)
+        return valid_part_ds
+
+    def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
+        return self
+
+
+class SparkFoldsIterator(SparkBaseTrainValidIterator):
     """Classic cv iterator.
 
     Folds should be defined in Reader, based on cross validation method.
@@ -24,16 +60,12 @@ class FoldsIterator(TrainValidIterator):
             n_folds: Number of folds.
 
         """
-        assert hasattr(train, "folds"), "Folds in dataset should be defined to make folds iterator."
-
         super().__init__(train)
-        folds = cast(SparkDataFrame, train.folds)
-        num_folds = folds.select(F.max(train.folds_column).alias("max")).first()["max"]
+
+        num_folds = train.data.select(F.max(train.folds_column).alias('max')).first()['max']
         self.n_folds = num_folds + 1
         if n_folds is not None:
             self.n_folds = min(self.n_folds, n_folds)
-
-        self._df: Optional[SparkDataFrame] = None
 
     def __len__(self) -> int:
         """Get len of iterator.
@@ -44,7 +76,7 @@ class FoldsIterator(TrainValidIterator):
         """
         return self.n_folds
 
-    def __iter__(self) -> "FoldsIterator":
+    def __iter__(self) -> "SparkFoldsIterator":
         """Set counter to 0 and return self.
 
         Returns:
@@ -54,11 +86,6 @@ class FoldsIterator(TrainValidIterator):
         logger.debug("Creating folds iterator")
 
         self._curr_idx = 0
-
-        dataset = cast(SparkDataset, self.train)
-
-        # self._df = dataset.data.join(dataset.folds, SparkDataset.ID_COLUMN).cache()
-        self._df = dataset.data
 
         return self
 
@@ -73,13 +100,12 @@ class FoldsIterator(TrainValidIterator):
 
         if self._curr_idx == self.n_folds:
             logger.debug("No more folds to continue, stopping iterations")
-            # self._df.unpersist()
             raise StopIteration
 
-        train_ds, valid_ds = self.__split_by_fold(self._df, self._curr_idx)
+        full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
         self._curr_idx += 1
 
-        return None, train_ds, valid_ds
+        return None, full_ds, valid_part_ds
 
     def get_validation_data(self) -> SparkDataset:
         """Just return train dataset.
@@ -90,7 +116,7 @@ class FoldsIterator(TrainValidIterator):
         """
         return self.train
 
-    def convert_to_holdout_iterator(self) -> HoldoutIterator:
+    def convert_to_holdout_iterator(self) -> SparkHoldoutIterator:
         """Convert iterator to hold-out-iterator.
 
         Fold 0 is used for validation, everything else is used for training.
@@ -99,21 +125,4 @@ class FoldsIterator(TrainValidIterator):
             new hold-out-iterator.
 
         """
-        # TODO: SPARK-LAMA need to uncache later
-        dataset = cast(SparkDataset, self.train)
-        df = dataset.data.join(dataset.folds, SparkDataset.ID_COLUMN).cache()
-
-        train_ds, valid_ds = self.__split_by_fold(df, 0)
-
-        return HoldoutIterator(train_ds, valid_ds)
-
-    def __split_by_fold(self, df: SparkDataFrame, fold: int) -> Tuple[SparkDataset, SparkDataset]:
-        train_df = df.where(F.col(self.train.folds_column) != fold).drop(self.train.folds_column)
-        valid_df = df.where(F.col(self.train.folds_column) == fold).drop(self.train.folds_column)
-
-        train_ds = cast(SparkDataset, self.train.empty())
-        train_ds.set_data(train_df, self.train.features, self.train.roles)
-        valid_ds = cast(SparkDataset, self.train.empty())
-        valid_ds.set_data(valid_df, self.train.features, self.train.roles)
-
-        return train_ds, valid_ds
+        return SparkHoldoutIterator(self.train)

@@ -16,13 +16,13 @@ from lightautoml.spark.pipelines.selection.permutation_importance_based import N
 from lightautoml.reader.tabular_batch_generator import ReadableToDf, read_data
 from lightautoml.spark.automl.blend import WeightedBlender
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
-from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM
+from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures, LGBAdvancedPipeline
 from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.spark.pipelines.ml.nested_ml_pipe import NestedTabularMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.validation.folds_iterator import FoldsIterator
+from lightautoml.spark.validation.folds_iterator import SparkFoldsIterator
 from lightautoml.tasks import Task
 from lightautoml.validation.base import HoldoutIterator, DummyIterator
 
@@ -182,7 +182,7 @@ class TabularAutoML(AutoMLPreset):
             sel_timer_0 = self.timer.get_task_timer("lgb", time_score)
             selection_feats = LGBSimpleFeatures()
 
-            selection_gbm = BoostLGBM(timer=sel_timer_0, **lgb_params)
+            selection_gbm = SparkBoostLGBM(timer=sel_timer_0, **lgb_params)
             selection_gbm.set_prefix("Selector")
 
             if selection_params["importance_type"] == "permutation":
@@ -202,7 +202,7 @@ class TabularAutoML(AutoMLPreset):
 
                 sel_timer_1 = self.timer.get_task_timer("lgb", time_score)
                 selection_feats = LGBSimpleFeatures()
-                selection_gbm = BoostLGBM(timer=sel_timer_1, **lgb_params)
+                selection_gbm = SparkBoostLGBM(timer=sel_timer_1, **lgb_params)
                 selection_gbm.set_prefix("Selector")
 
                 # # TODO: Check about reusing permutation importance
@@ -256,7 +256,7 @@ class TabularAutoML(AutoMLPreset):
             time_score = self.get_time_score(n_level, key)
             gbm_timer = self.timer.get_task_timer(algo_key, time_score)
             if algo_key == "lgb":
-                gbm_model = BoostLGBM(timer=gbm_timer, **self.lgb_params)
+                gbm_model = SparkBoostLGBM(timer=gbm_timer, **self.lgb_params)
             elif algo_key == "cb":
                 # TODO: SPARK-LAMA implement this later
                 raise NotImplementedError("Not supported yet")
@@ -672,7 +672,7 @@ class TabularAutoML(AutoMLPreset):
         elif cv_iter:
             raise NotImplementedError("Not supported now")
         elif train.folds:
-            iterator = FoldsIterator(sds, n_folds)
+            iterator = SparkFoldsIterator(sds, n_folds)
         else:
             iterator = DummyIterator(train)
 

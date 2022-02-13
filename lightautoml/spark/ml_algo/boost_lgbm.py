@@ -20,11 +20,12 @@ from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
 from lightautoml.spark.mlwriters import TmpСommonMLWriter
 # from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
 import pandas as pd
 
+from lightautoml.spark.tasks.base import Task
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.utils.tmp_utils import log_data
 from lightautoml.validation.base import TrainValidIterator
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 # LightGBM = Union[LightGBMClassifier, LightGBMRegressor]
 
 
-class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
+class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     _name: str = "LightGBM"
 
@@ -63,14 +64,13 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
     }
 
     def __init__(self,
-                 input_cols: List[str],
+                 task: Task,
+                 input_features: Optional[List[str]] = None,
                  default_params: Optional[dict] = None,
                  freeze_defaults: bool = True,
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {}):
-        TabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
-        self._input_cols = input_cols
-        self._prediction_col = f"prediction_{self._name}"
+        SparkTabularMLAlgo.__init__(self, task, input_features, default_params, freeze_defaults, timer, optimization_search_space)
         self._assembler = None
 
     def _infer_params(self) -> Tuple[dict, int, Optional[Callable], Optional[Callable]]:
@@ -285,6 +285,8 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         return pred
 
     def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+        assert self.validation_column in train.data.columns, 'Train should contain validation column'
+
         if self.task is None:
             self.task = train.task
 
@@ -295,19 +297,13 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             feval,
         ) = self._infer_params()
 
-        is_val_col = 'is_val'
-        train_sdf = train.data.withColumn(is_val_col, F.lit(0))
-        valid_sdf = valid.data.withColumn(is_val_col, F.lit(1))
-
-        train_valid_sdf = train_sdf.union(valid_sdf)
-
         logger.info(f"Input cols for the vector assembler: {train.features}")
         logger.info(f"Running lgb with the following params: {params}")
 
         # TODO: reconsider using of 'keep' as a handleInvalid value
         if self._assembler is None:
             self._assembler = VectorAssembler(
-                inputCols=self._input_cols,
+                inputCols=self._input_features,
                 outputCol=f"{self._name}_vassembler_features",
                 handleInvalid="keep"
             )
@@ -322,7 +318,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             featuresCol=self._assembler.getOutputCol(),
             labelCol=train.target_column,
             predictionCol=fold_prediction_column if train.task.name != "multiclass" else "prediction",
-            validationIndicatorCol=is_val_col,
+            validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval
         )
 
@@ -331,7 +327,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         if train.task.name == "reg":
             lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
 
-        temp_sdf = self._assembler.transform(train_valid_sdf)
+        temp_sdf = self._assembler.transform(train.data)
 
         ml_model = lgbm.fit(temp_sdf)
 
@@ -354,7 +350,10 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         return result
 
     def _build_transformer(self) -> Transformer:
-        avr = AveragingTransformer(self.task.name, input_cols=self._models_prediction_columns, output_col=self.prediction_column)
+        avr = AveragingTransformer(self.task.name,
+                                   input_cols=self._models_prediction_columns,
+                                   output_col=self.prediction_feature,
+                                   remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns)
         averaging_model = PipelineModel(stages=[self._assembler] + self.models + [avr])
         return averaging_model
 

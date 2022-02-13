@@ -18,7 +18,7 @@ from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.utils import spark_session, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.validation.base import DummyIterator, HoldoutIterator
-from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM as SparkBoostLGBM
+from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM as SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS as SparkLinearLBFGS
 
 from pyspark.sql import functions as F

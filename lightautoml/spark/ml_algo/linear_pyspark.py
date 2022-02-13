@@ -12,7 +12,7 @@ from pyspark.ml.regression import LinearRegression, LinearRegressionModel
 
 from pyspark.sql import functions as F
 
-from .base import TabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer
+from .base import SparkTabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ...utils.timer import TaskTimer
 from ...utils.tmp_utils import log_data
@@ -26,7 +26,7 @@ LinearEstimator = Union[LogisticRegression, LinearRegression]
 LinearEstimatorModel = Union[LogisticRegressionModel, LinearRegressionModel]
 
 
-class LinearLBFGS(TabularMLAlgo):
+class LinearLBFGS(SparkTabularMLAlgo):
 
     _name: str = "LinearL2"
 

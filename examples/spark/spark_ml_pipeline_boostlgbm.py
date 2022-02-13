@@ -13,7 +13,7 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.tasks.base import Task as SparkTask
-from lightautoml.spark.ml_algo.boost_lgbm import BoostLGBM as SparkBoostLGBM
+from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM as SparkBoostLGBM
 
 import numpy as np
 

@@ -14,6 +14,7 @@ from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
+from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
@@ -23,7 +24,6 @@ from lightautoml.validation.base import DummyIterator
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
 logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
-
 
 if __name__ == "__main__":
     with spark_session(master="local[4]") as spark:
@@ -42,7 +42,7 @@ if __name__ == "__main__":
         task = SparkTask("reg")
         sreader = SparkToSparkReader(task=task, cv=3)
         sdataset_tmp = sreader.fit_read(df, roles=roles)
-        
+
         sdataset = sdataset_tmp.empty()
         new_roles = deepcopy(sdataset_tmp.roles)
 
@@ -62,18 +62,23 @@ if __name__ == "__main__":
             'top_intersections': 4
         }
 
-        # # Spark ML pipeline
-        simple_pipline_builder = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles, **ml_alg_kwargs)
-        sdataset_feats = simple_pipline_builder.fit_transform(sdataset)
+        iterator = SparkFoldsIterator(sdataset, n_folds=3)
 
-        iterator = SparkFoldsIterator(sdataset_feats, n_folds=3)
-        spark_ml_algo = SparkBoostLGBM(task, input_features=simple_pipline_builder.output_features, freeze_defaults=False)
-        spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
-        spark_ml_algo = cast(SparkBoostLGBM, spark_ml_algo)
+        spark_ml_algo = SparkBoostLGBM(task, freeze_defaults=False)
+        spark_features_pipeline = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles, **ml_alg_kwargs)
 
-        final = PipelineModel(stages=[simple_pipline_builder.transformer, spark_ml_algo.transformer])
+        ml_pipe = SparkMLPipeline(
+            input_features=sdataset.features,
+            input_roles=sdataset.roles,
+            ml_algos=[spark_ml_algo],
+            pre_selection=None,
+            features_pipeline=spark_features_pipeline,
+            post_selection=None
+        )
 
-        final_result = final.transform(sdataset_tmp.data)
+        _ = ml_pipe.fit_predict(iterator)
+
+        final_result = ml_pipe.transformer.transform(sdataset_tmp.data)
         final_result.write.mode('overwrite').format('noop').save()
 
         logger.info("Finished")
