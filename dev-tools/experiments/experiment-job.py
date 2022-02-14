@@ -1,15 +1,13 @@
 import itertools
+import json
 import logging
 import os
 import subprocess
 import time
-import json
-import re
 import uuid
+from copy import copy
 from dataclasses import dataclass, field
-from datetime import datetime
-from copy import deepcopy, copy
-from typing import Iterable, List, Set, Dict, Any, Iterator, Tuple, Optional
+from typing import List, Set, Dict, Any, Iterator, Optional
 
 import yaml
 from tqdm import tqdm
@@ -64,7 +62,7 @@ def process_state_file(config_data: Dict[str, Any]) -> Set[str]:
 
     if state_file_mode == "use" and os.path.exists(state_file_path):
         with open(state_file_path, "r") as f:
-            exp_instances = [json.loads(line) for line in  f.readlines()]
+            exp_instances = [json.loads(line) for line in f.readlines()]
         exp_instances_ids = {exp_inst["instance_id"] for exp_inst in exp_instances}
     elif state_file_mode == "use" and not os.path.exists(state_file_path):
         exp_instances_ids = set()
@@ -257,6 +255,8 @@ def process_outfile(exp_instance: ExpInstanceConfig, outfile: str, result_file: 
 
 
 def register_results(exp_procs: Iterator[ExpInstanceProc], total: int):
+    os.makedirs(statefile_path, exist_ok=True)
+
     state_file_path = f"{statefile_path}/state_file.json"
 
     exp_proc: ExpInstanceProc

@@ -16,10 +16,10 @@ spec:
           persistentVolumeClaim:
             claimName: spark-lama-data
             readOnly: True
-        - name: spark-lama-ivy2-cache
-          persistentVolumeClaim:
-            claimName: spark-lama-ivy2-cache
-            readOnly: True
+#        - name: spark-lama-ivy2-cache
+#          persistentVolumeClaim:
+#            claimName: spark-lama-ivy2-cache
+#            readOnly: True
         - name: exp-results-vol
           persistentVolumeClaim:
             claimName: exp-results-vol
@@ -37,9 +37,9 @@ spec:
           - mountPath: /opt
             name: spark-lama-data
             readOnly: true
-          - mountPath: /root/.ivy2/cache
-            name: spark-lama-ivy2-cache
-            readOnly: true
+#          - mountPath: /root/.ivy2/cache
+#            name: spark-lama-ivy2-cache
+#            readOnly: true
           - name: scripts-volume
             mountPath: /scripts
           - name: exp-results-vol

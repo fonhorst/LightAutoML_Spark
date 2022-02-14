@@ -13,7 +13,6 @@ COPY requirements.txt /src
 # workaround to make poetry not so painly slow on dependency resolution
 # before this image building: poetry export -f requirements.txt > requirements.txt
 RUN pip install -r requirements.txt
-#COPY ${spark_jars_cache} /root/.ivy2/cache
 
 RUN pip install torchvision==0.9.1
 
