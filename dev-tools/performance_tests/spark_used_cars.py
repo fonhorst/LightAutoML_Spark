@@ -5,6 +5,7 @@ Simple example for binary classification on tabular data.
 """
 import logging
 import logging.config
+import os
 from typing import Dict, Any, Optional
 
 from dataset_utils import datasets
@@ -19,7 +20,7 @@ from lightautoml.spark.automl.presets.tabular_presets import TabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import spark_session, logging_config, VERBOSE_LOGGING_FORMAT, log_exec_timer
-from lightautoml.utils.tmp_utils import log_data
+from lightautoml.utils.tmp_utils import log_data, LAMA_LIBRARY
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ def calculate_automl(path: str,
                      spark_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     roles = roles if roles else {}
 
+    os.environ[LAMA_LIBRARY] = "spark"
     if not spark_config:
         spark_args = {"master": "local[4]"}
     else:

@@ -1,19 +1,15 @@
-import logging
+import logging.config
 import logging.config
 import os
 import shutil
 from copy import deepcopy, copy
 from pprint import pprint
-from typing import Any, Callable, Dict
+from typing import Callable
 
-from pyspark.ml import Pipeline
 from dataset_utils import datasets
-
-from lama_used_cars import calculate_automl as lama_automl
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.utils.tmp_utils import LOG_DATA_DIR, log_config
 from spark_used_cars import calculate_automl as spark_automl
-
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -22,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
-    # dataset_name = "used_cars_dataset"
-    dataset_name = "buzz_dataset"
+    dataset_name = "used_cars_dataset"
+    # dataset_name = "buzz_dataset"
 
     config = copy(datasets()[dataset_name])
     config["use_algos"] = [["lgb"]]
