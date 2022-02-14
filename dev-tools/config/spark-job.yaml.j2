@@ -34,7 +34,7 @@ spec:
         args: ["/scripts/{{launchscript}}", "/scripts/config.yaml"]
         imagePullPolicy: Always
         volumeMounts:
-          - mountPath: /opt
+          - mountPath: /opt/spark_data
             name: spark-lama-data
             readOnly: true
 #          - mountPath: /root/.ivy2/cache

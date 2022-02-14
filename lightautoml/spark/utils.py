@@ -1,5 +1,6 @@
 import logging
 import os
+import socket
 import time
 from contextlib import contextmanager
 from datetime import datetime
@@ -53,6 +54,11 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[]", 
         )
         for arg, value in session_args.items():
             spark_sess_builder = spark_sess_builder.config(arg, value)
+
+        if 'spark.master' in session_args and not session_args['spark.master'].startswith('local['):
+            local_ip_address = socket.gethostbyname(socket.gethostname())
+            logger.info(f"Using IP address for spark driver: {local_ip_address}")
+            spark_sess_builder = spark_sess_builder.config('spark.driver.host', local_ip_address)
 
     spark_sess = spark_sess_builder.getOrCreate()
 

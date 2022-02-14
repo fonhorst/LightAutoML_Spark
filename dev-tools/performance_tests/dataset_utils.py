@@ -4,7 +4,7 @@ from typing import Any, Dict
 def datasets() -> Dict[str, Any]:
     all_datastes = {
         "used_cars_dataset": {
-            "path": "/opt/small_used_cars_data.csv",
+            "path": "/opt/spark_data/small_used_cars_data.csv",
             "task_type": "reg",
             "metric_name": "mse",
             "target_col": "price",
@@ -27,7 +27,7 @@ def datasets() -> Dict[str, Any]:
         },
 
         "lama_test_dataset": {
-            "path": "/opt/sampled_app_train.csv",
+            "path": "/opt/spark_data/sampled_app_train.csv",
             "task_type": "binary",
             "metric_name": "areaUnderROC",
             "target_col": "TARGET",
@@ -36,7 +36,7 @@ def datasets() -> Dict[str, Any]:
 
         # https://www.openml.org/d/734
         "ailerons_dataset": {
-            "path": "/opt/ailerons.csv",
+            "path": "/opt/spark_data/ailerons.csv",
             "task_type": "binary",
             "metric_name": "areaUnderROC",
             "target_col": "binaryClass",
@@ -45,7 +45,7 @@ def datasets() -> Dict[str, Any]:
 
         # https://www.openml.org/d/4534
         "phishing_websites_dataset": {
-            "path": "/opt/PhishingWebsites.csv",
+            "path": "/opt/spark_data/PhishingWebsites.csv",
             "task_type": "binary",
             "metric_name": "areaUnderROC",
             "target_col": "Result",
@@ -54,7 +54,7 @@ def datasets() -> Dict[str, Any]:
 
         # https://www.openml.org/d/981
         "kdd_internet_usage": {
-            "path": "/opt/kdd_internet_usage.csv",
+            "path": "/opt/spark_data/kdd_internet_usage.csv",
             "task_type": "binary",
             "metric_name": "areaUnderROC",
             "target_col": "Who_Pays_for_Access_Work",
@@ -63,7 +63,7 @@ def datasets() -> Dict[str, Any]:
 
         # https://www.openml.org/d/42821
         "nasa_dataset": {
-            "path": "/opt/nasa_phm2008.csv",
+            "path": "/opt/spark_data/nasa_phm2008.csv",
             "task_type": "reg",
             "metric_name": "mse",
             "target_col": "class",
@@ -72,7 +72,7 @@ def datasets() -> Dict[str, Any]:
 
         # https://www.openml.org/d/4549
         "buzz_dataset": {
-            "path": "/opt/Buzzinsocialmedia_Twitter_25k.csv",
+            "path": "/opt/spark_data/Buzzinsocialmedia_Twitter_25k.csv",
             "task_type": "reg",
             "metric_name": "mse",
             "target_col": "Annotation",
@@ -81,7 +81,7 @@ def datasets() -> Dict[str, Any]:
 
         # https://www.openml.org/d/372
         "internet_usage": {
-            "path": "/opt/internet_usage.csv",
+            "path": "/opt/spark_data/internet_usage.csv",
             "task_type": "multiclass",
             "metric_name": "ova",
             "target_col": "Actual_Time",
@@ -90,7 +90,7 @@ def datasets() -> Dict[str, Any]:
 
         # https://www.openml.org/d/4538
         "gesture_segmentation": {
-            "path": "/opt/gesture_segmentation.csv",
+            "path": "/opt/spark_data/gesture_segmentation.csv",
             "task_type": "multiclass",
             "metric_name": "ova",
             "target_col": "Phase",
@@ -99,7 +99,7 @@ def datasets() -> Dict[str, Any]:
 
         # https://www.openml.org/d/382
         "ipums_97": {
-            "path": "/opt/ipums_97.csv",
+            "path": "/opt/spark_data/ipums_97.csv",
             "task_type": "multiclass",
             "metric_name": "ova",
             "target_col": "movedin",
