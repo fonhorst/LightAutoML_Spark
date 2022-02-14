@@ -162,7 +162,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             current_score = self.score(preds_to_score)
             if current_score > best_score:
                 best_score = current_score
-                best_model = ml_model
+                best_model = ml_model.stages[-1]
                 best_val_pred = val_pred
                 es = 0
             else:
