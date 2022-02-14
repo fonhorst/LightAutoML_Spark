@@ -170,10 +170,8 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         assert self.input_roles is not None, "Input roles should be provided before the fit_transform"
 
         pipeline, last_cacher = self._merge(train)
-
-        self._infer_output_features_and_roles(pipeline)
-
         self._transformer = cast(Transformer, pipeline.fit(train.data))
+        self._infer_output_features_and_roles(pipeline)
         sdf = last_cacher.dataset
 
         features = train.features + self.output_features
