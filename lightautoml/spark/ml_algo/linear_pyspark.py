@@ -13,6 +13,7 @@ from pyspark.ml.regression import LinearRegression, LinearRegressionModel
 from pyspark.sql import functions as F
 
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
+from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ...utils.timer import TaskTimer
 from ...utils.tmp_utils import log_data
@@ -79,17 +80,6 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         logger.debug("Building pipeline in linear lGBFS")
         params = copy(self.params)
 
-        # categorical features
-        cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name == "Category"]
-        non_cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name != "Category"]
-
-        if self._ohe is None:
-            self._ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_{self._name}_ohe" for f in cat_feats])
-        if self._assembler is None:
-            self._assembler = VectorAssembler(
-                inputCols=non_cat_feats + self._ohe.getOutputCols(),
-                outputCol=f"{self._name}_vassembler_features"
-            )
 
         if "regParam" in params:
             reg_params = params["regParam"]
@@ -121,9 +111,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             else:
                 raise ValueError("Task not supported")
 
-            pipeline = Pipeline(stages=[self._ohe, self._assembler, model])
-
-            return pipeline
+            return model
 
         estimators = [(rp, build_pipeline(rp)) for rp in reg_params]
 
@@ -162,8 +150,9 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
         best_model: Optional[SparkMLModel] = None
         best_val_pred: Optional[SparkDataFrame] = None
-        for rp, pipeline in estimators:
+        for rp, model in estimators:
             logger.debug(f"Fitting estimators with regParam {rp}")
+            pipeline = Pipeline(stages=[self._ohe, self._assembler, model])
             ml_model = pipeline.fit(train_sdf)
             val_pred = ml_model.transform(val_sdf)
             preds_to_score = val_pred.select(
@@ -202,7 +191,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        averaging_model = PipelineModel(stages=self.models + [avr])
+        averaging_model = PipelineModel(stages=[self._ohe] + [self._assembler] + self.models + [avr])
         return averaging_model
 
     def _build_averaging_transformer(self) -> Transformer:
@@ -211,3 +200,33 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
                                    output_col=self.prediction_feature,
                                    remove_cols=self._ohe.getOutputCols() + [self._assembler.getOutputCol()] + self._models_prediction_columns)
         return avr
+
+    def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
+        """Fit and then predict accordig the strategy that uses train_valid_iterator.
+
+        If item uses more then one time it will
+        predict mean value of predictions.
+        If the element is not used in training then
+        the prediction will be ``numpy.nan`` for this item
+
+        Args:
+            train_valid_iterator: Classic cv-iterator.
+
+        Returns:
+            Dataset with predicted values.
+
+        """
+        self.timer.start()
+
+        self.input_roles = train_valid_iterator.input_roles
+        cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name == "Category"]
+        self._ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_{self._name}_ohe" for f in cat_feats])
+        self._ohe = self._ohe.fit(train_valid_iterator.train.data)
+
+        non_cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name != "Category"]
+        self._assembler = VectorAssembler(
+            inputCols=non_cat_feats + self._ohe.getOutputCols(),
+            outputCol=f"{self._name}_vassembler_features"
+        )
+
+        return super().fit_predict(train_valid_iterator)
