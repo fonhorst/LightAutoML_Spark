@@ -1,7 +1,7 @@
 """Basic classes for features generation."""
 import itertools
 from copy import copy
-from typing import Any, Callable, Union, cast, Dict, Set
+from typing import Any, Callable, cast, Dict, Set
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -12,7 +12,6 @@ from pandas import DataFrame
 from pandas import Series
 from pyspark.ml import Transformer, Estimator, Pipeline
 from pyspark.ml.param import Param, Params
-from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.sql import functions as F
 
 from lightautoml.dataset.roles import ColumnRole, NumericRole
@@ -20,18 +19,14 @@ from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, SequentialTransformer, ColumnsSelector, \
-    ChangeRoles, \
-    SparkTransformer
+from lightautoml.spark.transformers.base import ChangeRolesTransformer
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
     SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
-from lightautoml.spark.transformers.categorical import CatIntersectionsEstimatorSpark, FreqEncoder, \
-    FreqEncoderEstimatorSpark, \
-    SparkLabelEncoderEstimator, OrdinalEncoder, LabelEncoder, OrdinalEncoderEstimatorSpark, \
-    TargetEncoder, CatIntersectstions
+from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEstimator, \
+    SparkFreqEncoderEstimator, \
+    SparkLabelEncoderEstimator, SparkOrdinalEncoderEstimator
 from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
-from lightautoml.spark.transformers.datetime import BaseDiff, DateSeasons, DateSeasonsTransformer, \
-    SparkBaseDiffTransformer, SparkDateSeasonsTransformer
+from lightautoml.spark.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.numeric import QuantileBinning
 
 
@@ -444,7 +439,7 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        cat_processing = FreqEncoderEstimatorSpark(input_cols=feats_to_select, input_roles=roles)
+        cat_processing = SparkFreqEncoderEstimator(input_cols=feats_to_select, input_roles=roles)
 
         return cat_processing
 
@@ -469,7 +464,7 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        ord = OrdinalEncoderEstimatorSpark(input_cols=feats_to_select,
+        ord = SparkOrdinalEncoderEstimator(input_cols=feats_to_select,
                                            input_roles=roles,
                                            subs=self.subsample,
                                            random_state=self.random_state)
@@ -592,7 +587,7 @@ class SparkTabularDataFeatures:
         # subs = self.subsample,
         # random_state = self.random_state,
 
-        cat_processing = CatIntersectionsEstimatorSpark(input_cols=feats_to_select,
+        cat_processing = SparkCatIntersectionsEstimator(input_cols=feats_to_select,
                                                         input_roles=roles,
                                                         max_depth=self.max_intersection_depth)
 

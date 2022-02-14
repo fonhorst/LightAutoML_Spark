@@ -16,8 +16,8 @@ from lightautoml.spark.transformers.base import ColumnsSelector as SparkColumnsS
 from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
     FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
     CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
-    TargetEncoder as SparkTargetEncoder, SparkLabelEncoderEstimator, FreqEncoderEstimatorSpark, \
-    OrdinalEncoderEstimatorSpark, CatIntersectionsEstimatorSpark
+    TargetEncoder as SparkTargetEncoder, SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
+    SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator
 from lightautoml.spark.utils import log_exec_time
 from lightautoml.tasks import Task
 from lightautoml.transformers.base import ColumnsSelector
@@ -68,7 +68,7 @@ def test_freq_encoder(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
-    transformer = FreqEncoderEstimatorSpark(
+    transformer = SparkFreqEncoderEstimator(
         input_cols=ds.features,
         input_roles=ds.roles
     )
@@ -80,7 +80,7 @@ def test_ordinal_encoder(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
-    transformer = OrdinalEncoderEstimatorSpark(
+    transformer = SparkOrdinalEncoderEstimator(
         input_cols=ds.features,
         input_roles=ds.roles
     )
@@ -92,7 +92,7 @@ def test_catintersections_encoder(spark: SparkSession, dataset: DatasetForTest):
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
-    transformer = CatIntersectionsEstimatorSpark(
+    transformer = SparkCatIntersectionsEstimator(
         input_cols=ds.features,
         input_roles=ds.roles
     )

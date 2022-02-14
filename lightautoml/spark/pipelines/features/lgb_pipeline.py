@@ -9,7 +9,7 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline, SparkTabularDataFeatures
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkUnionTransformer, \
     SparkSequentialTransformer, SparkEstOrTrans
-from lightautoml.spark.transformers.categorical import OrdinalEncoderEstimatorSpark
+from lightautoml.spark.transformers.categorical import SparkOrdinalEncoderEstimator
 from lightautoml.spark.transformers.datetime import SparkTimeToNumTransformer
 
 
@@ -45,7 +45,7 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         categories = self._cols_by_role(train, "Category")
         if len(categories) > 0:
             roles = {f: train.roles[f] for f in categories}
-            cat_processing = OrdinalEncoderEstimatorSpark(input_cols=categories,
+            cat_processing = SparkOrdinalEncoderEstimator(input_cols=categories,
                                                           input_roles=roles,
                                                           subs=None,
                                                           random_state=42)
