@@ -32,7 +32,7 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
             None, train dataset, validation dataset.
 
         """
-        if self._curr_idx > 1:
+        if self._curr_idx > 0:
             raise StopIteration
 
         full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
@@ -47,8 +47,14 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         return self
 
-    def combine_train_and_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
+    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
+        if len(val_preds) != 1:
+            k = 0
         assert len(val_preds) == 1
+
+        if not include_train:
+            return val_preds[0]
+
         val_pred_cols = set(val_preds[0].columns)
         train_cols = set(self.train.columns)
         assert len(train_cols.difference(val_pred_cols)) == 0
@@ -142,6 +148,6 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         """
         return SparkHoldoutIterator(self.train)
 
-    def combine_train_and_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
+    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
         full_val_preds = functools.reduce(lambda x, y: x.unionByName(y), val_preds)
         return full_val_preds

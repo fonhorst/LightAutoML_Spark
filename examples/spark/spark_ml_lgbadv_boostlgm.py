@@ -1,14 +1,10 @@
-from copy import deepcopy
 import logging.config
-
 import logging.config
 from copy import deepcopy
 from typing import cast
 
-import numpy as np
 from pyspark.ml import PipelineModel
 
-from lightautoml.dataset.roles import FoldsRole, TargetRole
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.dataset.base import SparkDataset
@@ -18,7 +14,6 @@ from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
-from lightautoml.validation.base import DummyIterator
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
 logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
