@@ -53,10 +53,12 @@ if __name__ == "__main__":
             'top_intersections': 4
         }
 
+        cacher_key = "main_cache"
+
         iterator = SparkFoldsIterator(sdataset, n_folds=3)
 
         spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
-        spark_features_pipeline = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
+        spark_features_pipeline = SparkLGBAdvancedPipeline(cacher_key=cacher_key, **ml_alg_kwargs)
         spark_selector = ImportanceCutoffSelector(
             cutoff=0.0,
             feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),
@@ -65,6 +67,7 @@ if __name__ == "__main__":
         )
 
         ml_pipe = SparkMLPipeline(
+            cacher_key=cacher_key,
             input_roles=sdataset.roles,
             ml_algos=[spark_ml_algo],
             pre_selection=spark_selector,

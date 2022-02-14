@@ -11,6 +11,7 @@ import toposort
 from pandas import DataFrame
 from pandas import Series
 from pyspark.ml import Transformer, Estimator, Pipeline
+from pyspark.ml.param import Param, Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.sql import functions as F
 
@@ -70,6 +71,21 @@ def build_graph(begin: SparkEstOrTrans):
             graph[st] = set()
 
     return graph
+
+
+class SelectTransformer(Transformer):
+    colsToSelect = Param(Params._dummy(), "colsToSelect",
+                        "columns to select from the dataframe")
+
+    def __init__(self, cols_to_select: List[str]):
+        super().__init__()
+        self.set(self.colsToSelect, cols_to_select)
+
+    def getColsToSelect(self) -> List[str]:
+        return self.getOrDefault(self.colsToSelect)
+
+    def _transform(self, dataset):
+        return dataset.select(self.getColsToSelect())
 
 
 class NoOpTransformer(Transformer):

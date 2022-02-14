@@ -3,11 +3,12 @@ import functools
 from copy import copy
 from typing import List, cast, Sequence, Union, Tuple, Optional
 
+from numpy import format_parser
 from pyspark.ml import Transformer, PipelineModel
 
 from lightautoml.validation.base import TrainValidIterator
 from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from ..features.base import SparkFeaturesPipeline
+from ..features.base import SparkFeaturesPipeline, SelectTransformer, Cacher
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
@@ -22,6 +23,7 @@ from ....pipelines.selection.base import SelectionPipeline
 class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRoles):
     def __init__(
         self,
+        cacher_key: str,
         input_roles: RolesDict,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
@@ -32,6 +34,7 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
         self.input_roles = input_roles
+        self._cacher_key = cacher_key
         self._output_features = None
         self._output_roles = None
         self._transformer: Optional[Transformer] = None
@@ -81,43 +84,29 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
 
         del self._ml_algos
 
-        ml_algo_transformers = PipelineModel(stages=[ml_algo.transformer for ml_algo in self.ml_algos])
-
-        # TODO: build pipeline_model
-        stages = []
-        out_roles = dict()
-        # if self.pre_selection:
-        #     # TODO: cast
-        #     pre_sel = None
-        #     stages.append(pre_sel.transformer)
-        #     out_roles = copy(pre_sel.output_roles)
-
-        if self.features_pipeline:
-            stages.append(fp.transformer)
-            out_roles = copy(fp.output_roles)
-
-        # if self.post_selection:
-        #     # TODO: cast
-        #     post_sel = None
-        #     stages.append(post_sel.transformer)
-        #     out_roles = copy(post_sel.output_roles)
-
-
-
-        self._transformer = PipelineModel(stages=stages + [ml_algo_transformers])
-
-        out_roles.update({ml_algo.prediction_feature: ml_algo.prediction_role
-                          for ml_algo in self.ml_algos})
-
-        self._output_roles = out_roles
-        self._output_features = list(out_roles.keys())
+        self._output_roles = {ml_algo.prediction_feature: ml_algo.prediction_role
+                              for ml_algo in self.ml_algos}
 
         # all out roles for the output dataset
+        out_roles = copy(self._output_roles)
         out_roles.update(self.input_roles)
+
+        select_transformer = SelectTransformer([
+            SparkDataset.ID_COLUMN,
+            *list(out_roles.keys())
+        ])
+        ml_algo_transformers = PipelineModel(stages=[ml_algo.transformer for ml_algo in self.ml_algos])
+        self._transformer = PipelineModel(stages=[fp.transformer, ml_algo_transformers, select_transformer])
 
         val_preds = [ml_algo_transformers.transform(valid_ds.data) for _, full_ds, valid_ds in train_valid]
         val_preds_df = train_valid.combine_train_and_preds(val_preds)
-
+        val_preds_df = val_preds_df.select(
+            SparkDataset.ID_COLUMN,
+            train_valid.train.target_column,
+            train_valid.train.folds_column,
+            *list(out_roles.keys())
+        )
+        val_preds_df = Cacher(key=self._cacher_key).fit(val_preds_df).transform(val_preds_df)
         val_preds_ds = train_valid.train.empty()
         val_preds_ds.set_data(val_preds_df, None, out_roles)
 
