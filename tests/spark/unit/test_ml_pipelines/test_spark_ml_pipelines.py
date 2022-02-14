@@ -31,7 +31,7 @@ def test_lgb_simple_pipeline(spark: SparkSession):
     sreader = SparkToSparkReader(task=SparkTask(task_type), cv=2)
     sdataset = sreader.fit_read(df, roles=roles)
 
-    fp = SparkLGBSimpleFeatures(sdataset.features, sdataset.roles)
+    fp = SparkLGBSimpleFeatures(sdataset.roles)
     out_ds = fp.fit_transform(sdataset)
     transformer = fp.transformer
 
@@ -69,7 +69,7 @@ def test_lgb_advanced_pipeline(spark: SparkSession):
         .join(sdataset.folds, on=SparkDataset.ID_COLUMN)
     )
 
-    fp = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles)
+    fp = SparkLGBAdvancedPipeline(sdataset.roles)
     out_ds = fp.fit_transform(sdataset)
     transformer = fp.transformer
 

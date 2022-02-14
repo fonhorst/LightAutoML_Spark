@@ -11,7 +11,7 @@ from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.dataset.roles import CategoryRole
 
 # Same comments as for spark.pipelines.features.base
-from lightautoml.spark.transformers.base import SequentialTransformer, SparkTransformer, UnionTransformer, ChangeRoles
+from lightautoml.spark.transformers.base import SequentialTransformer, ObsoleteSparkTransformer, UnionTransformer, ChangeRoles
 from lightautoml.spark.transformers.categorical import LabelEncoder, OHEEncoder, OHEEncoderEstimator, SparkLabelEncoderEstimator
 from lightautoml.spark.transformers.numeric import FillInf, FillInfTransformer, FillnaMedian, FillnaMedianEstimator, \
     LogOdds, LogOddsTransformer, NaNFlagsEstimator, StandardScaler, NaNFlags, StandardScalerEstimator
@@ -80,11 +80,11 @@ class LinearFeatures(TabularDataFeatures, LAMALinearFeatures):
             multiclass_te_co,
         )
 
-    def _merge_seq(self, data: LAMLDataset) -> SparkTransformer:
+    def _merge_seq(self, data: LAMLDataset) -> ObsoleteSparkTransformer:
         data = cast(SparkDataset, data)
         pipes = []
         for pipe in self.pipes:
-            _pipe = cast(SparkTransformer, pipe(data))
+            _pipe = cast(ObsoleteSparkTransformer, pipe(data))
 
             with data.applying_temporary_caching():
                 data = cast(SparkDataset, _pipe.fit_transform(data))
@@ -94,15 +94,15 @@ class LinearFeatures(TabularDataFeatures, LAMALinearFeatures):
 
         return SequentialTransformer(pipes, is_already_fitted=True) if len(pipes) > 1 else pipes[-1]
 
-    def _merge(self, data: SparkDataset) -> SparkTransformer:
-        pipes = [cast(SparkTransformer, pipe(data))
+    def _merge(self, data: SparkDataset) -> ObsoleteSparkTransformer:
+        pipes = [cast(ObsoleteSparkTransformer, pipe(data))
                  for pipe in self.pipes]
 
         union = UnionTransformer(pipes) if len(pipes) > 1 else pipes[0]
         print(f"Producing union: {type(union)}")
         return union
 
-    def create_pipeline(self, train: SparkDataset) -> SparkTransformer:
+    def create_pipeline(self, train: SparkDataset) -> ObsoleteSparkTransformer:
         """Create linear pipeline.
 
         Args:

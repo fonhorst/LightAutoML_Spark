@@ -1,41 +1,21 @@
 import logging
-from copy import copy, deepcopy
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast
+from copy import copy
+from typing import Callable, Dict, Optional, Tuple, Union, cast
 
-import numpy as np
+import pandas as pd
 from pandas import Series
-from pyspark.sql import functions as F, Column
-from pyspark.ml.functions import vector_to_array, array_to_vector
-from pyspark.ml.classification import GBTClassifier
+from pyspark.ml import Transformer, PipelineModel
 from pyspark.ml.feature import VectorAssembler
-from pyspark.ml.regression import GBTRegressor
-from pyspark.ml import Transformer, Estimator, PipelineModel, Pipeline
-from pyspark.ml.util import MLReadable, MLWritable, MLWriter
-from pyspark.ml.param.shared import HasInputCols, HasOutputCols, HasOutputCol
-from pyspark.ml.param.shared import Param, Params
 from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
-from lightautoml.dataset.roles import ColumnRole, NumericRole
 
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
-from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
-from lightautoml.spark.mlwriters import TmpСommonMLWriter
-# from lightautoml.spark.validation.base import TmpIterator, TrainValidIterator
-import pandas as pd
-
-from lightautoml.spark.tasks.base import Task
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from lightautoml.utils.timer import TaskTimer
-from lightautoml.utils.tmp_utils import log_data
 from lightautoml.validation.base import TrainValidIterator
 
-from pyspark.sql import functions as F
-
 logger = logging.getLogger(__name__)
-
-
-# LightGBM = Union[LightGBMClassifier, LightGBMRegressor]
 
 
 class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
@@ -64,13 +44,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     }
 
     def __init__(self,
-                 task: Task,
-                 input_features: Optional[List[str]] = None,
                  default_params: Optional[dict] = None,
                  freeze_defaults: bool = True,
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {}):
-        SparkTabularMLAlgo.__init__(self, task, input_features, default_params, freeze_defaults, timer, optimization_search_space)
+        SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
         self._assembler = None
 
     def _infer_params(self) -> Tuple[dict, int, Optional[Callable], Optional[Callable]]:
@@ -303,7 +281,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         # TODO: reconsider using of 'keep' as a handleInvalid value
         if self._assembler is None:
             self._assembler = VectorAssembler(
-                inputCols=self._input_features,
+                inputCols=self.input_features,
                 outputCol=f"{self._name}_vassembler_features",
                 handleInvalid="keep"
             )
@@ -356,36 +334,3 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                                    remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns)
         averaging_model = PipelineModel(stages=[self._assembler] + self.models + [avr])
         return averaging_model
-
-
-
-# outputRoles = Param(Params._dummy(), "outputRoles",
-#                         "output roles (lama format)")
-
-# taskName = Param(Params._dummy(), "taskName",
-#                         "Task type name: 'req', 'binary' or 'multiclass'")
-
-class BoostLGBMTransformer(TabularMLAlgoTransformer, MLWritable):
-    """BoostLGBM Spark MLlib Transformer"""
-
-    def __init__(self, assembler, models, predict_feature_name, task_name, n_classes):
-        super().__init__()
-        self._models = models
-        self._assembler = assembler
-        self._predict_feature_name = predict_feature_name
-        self._task_name = task_name
-        self._n_classes = n_classes
-
-    def write(self) -> MLWriter:
-        "Returns MLWriter instance that can save the Transformer instance."
-        return TmpСommonMLWriter(self.uid)
-
-    def predict_single_fold(self,
-                            dataset: SparkDataFrame,
-                            model: Union[LightGBMRegressor, LightGBMClassifier]) -> SparkDataFrame:
-
-        temp_sdf = self._assembler.transform(dataset)
-
-        pred = model.transform(temp_sdf)
-
-        return pred

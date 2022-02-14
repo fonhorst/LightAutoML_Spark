@@ -1,25 +1,16 @@
-from copy import deepcopy
 import logging.config
-
 import logging.config
 from copy import deepcopy
-from typing import cast
 
-import numpy as np
-from pyspark.ml import PipelineModel
-
-from lightautoml.dataset.roles import FoldsRole, TargetRole
-from lightautoml.ml_algo.tuning.base import DefaultTuner
-from lightautoml.ml_algo.utils import tune_and_fit_predict
+from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
-from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
+from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import Task as SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
-from lightautoml.validation.base import DummyIterator
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
 logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
@@ -62,16 +53,24 @@ if __name__ == "__main__":
             'top_intersections': 4
         }
 
+        cacher_key = "main_cache"
+
         iterator = SparkFoldsIterator(sdataset, n_folds=3)
 
-        spark_ml_algo = SparkBoostLGBM(task, freeze_defaults=False)
-        spark_features_pipeline = SparkLGBAdvancedPipeline(sdataset.features, sdataset.roles, **ml_alg_kwargs)
+        spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
+        spark_features_pipeline = SparkLGBAdvancedPipeline(cacher_key=cacher_key, **ml_alg_kwargs)
+        spark_selector = ImportanceCutoffSelector(
+            cutoff=0.0,
+            feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),
+            ml_algo=SparkBoostLGBM(freeze_defaults=False),
+            imp_estimator=ModelBasedImportanceEstimator()
+        )
 
         ml_pipe = SparkMLPipeline(
-            input_features=sdataset.features,
+            cacher_key=cacher_key,
             input_roles=sdataset.roles,
             ml_algos=[spark_ml_algo],
-            pre_selection=None,
+            pre_selection=spark_selector,
             features_pipeline=spark_features_pipeline,
             post_selection=None
         )

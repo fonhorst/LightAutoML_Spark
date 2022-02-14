@@ -11,11 +11,11 @@ from lightautoml.dataset.base import RolesDict
 
 from lightautoml.dataset.roles import ColumnRole, NumericRole, CategoryRole
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
-from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkTransformer
+from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, ObsoleteSparkTransformer
 from lightautoml.transformers.numeric import numeric_check
 
 
-class NaNFlags(SparkTransformer):
+class NaNFlags(ObsoleteSparkTransformer):
     _fit_checks = (numeric_check,)
     _transform_checks = ()
     # TODO: the value is copied from the corresponding LAMA transformer.
@@ -141,7 +141,7 @@ class NaNFlagsTransformer(SparkBaseTransformer):
         return sdf
 
 
-class FillInf(SparkTransformer):
+class FillInf(ObsoleteSparkTransformer):
 
     _fit_checks = (numeric_check,)
     _transform_checks = ()
@@ -202,7 +202,7 @@ class FillInfTransformer(SparkBaseTransformer):
 
         return df
 
-class FillnaMedian(SparkTransformer):
+class FillnaMedian(ObsoleteSparkTransformer):
     """Fillna with median."""
 
     _fit_checks = (numeric_check,)
@@ -348,7 +348,7 @@ class FillnaMedianTransformer(SparkBaseTransformer):
         return sdf
 
 
-class LogOdds(SparkTransformer):
+class LogOdds(ObsoleteSparkTransformer):
     """Convert probs to logodds."""
 
     _fit_checks = (numeric_check,)
@@ -444,7 +444,7 @@ class LogOddsTransformer(SparkBaseTransformer):
         return sdf
 
 
-class StandardScaler(SparkTransformer):
+class StandardScaler(ObsoleteSparkTransformer):
     """Classic StandardScaler."""
 
     _fit_checks = (numeric_check,)
@@ -592,7 +592,7 @@ class StandardScalerTransformer(SparkBaseTransformer):
         return sdf
 
 
-class QuantileBinning(SparkTransformer):
+class QuantileBinning(ObsoleteSparkTransformer):
     """Discretization of numeric features by quantiles."""
 
     _fit_checks = (numeric_check,)

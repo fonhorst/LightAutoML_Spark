@@ -3,11 +3,12 @@ import functools
 from copy import copy
 from typing import List, cast, Sequence, Union, Tuple, Optional
 
+from numpy import format_parser
 from pyspark.ml import Transformer, PipelineModel
 
 from lightautoml.validation.base import TrainValidIterator
-from ..features.base import SparkFeaturesPipeline
-from ..selection.base import SparkEmptySelector
+from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
+from ..features.base import SparkFeaturesPipeline, SelectTransformer, Cacher
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
@@ -19,10 +20,10 @@ from ....pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from ....pipelines.selection.base import SelectionPipeline
 
 
-class SparkMLPipeline(LAMAMLPipeline):
+class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRoles):
     def __init__(
         self,
-        input_features: List[str],
+        cacher_key: str,
         input_roles: RolesDict,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
@@ -30,38 +31,14 @@ class SparkMLPipeline(LAMAMLPipeline):
         features_pipeline: Optional[SparkFeaturesPipeline] = None,
         post_selection: Optional[SelectionPipeline] = None,
     ):
-        if not pre_selection:
-            pre_selection = SparkEmptySelector(input_features, input_roles)
-
-        # TODO: SPARK-LAMA replace empty feature pipeline
-
-        if not post_selection:
-            post_selection = SparkEmptySelector(input_features, input_roles)
-
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
-        self._input_features = input_features
-        self._input_roles = input_roles
+        self.input_roles = input_roles
+        self._cacher_key = cacher_key
         self._output_features = None
         self._output_roles = None
         self._transformer: Optional[Transformer] = None
         self.ml_algos: List[SparkTabularMLAlgo] = []
-
-    @property
-    def input_features(self) -> List[str]:
-        return self._input_features
-
-    @property
-    def input_roles(self) -> RolesDict:
-        return self._input_roles
-
-    @property
-    def output_features(self) -> List[str]:
-        return self._output_features
-
-    @property
-    def output_roles(self) -> RolesDict:
-        return self._output_roles
 
     @property
     def transformer(self):
@@ -93,7 +70,6 @@ class SparkMLPipeline(LAMAMLPipeline):
 
         for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
             ml_algo = cast(SparkTabularMLAlgo, ml_algo)
-            ml_algo.input_features = fp.output_features
             ml_algo, preds = tune_and_fit_predict(ml_algo, param_tuner, train_valid, force_calc)
             if ml_algo is not None:
                 self.ml_algos.append(ml_algo)
@@ -108,53 +84,31 @@ class SparkMLPipeline(LAMAMLPipeline):
 
         del self._ml_algos
 
-        ml_algo_transformers = PipelineModel(stages=[ml_algo.transformer for ml_algo in self.ml_algos])
-
-        # TODO: build pipeline_model
-        stages = []
-        out_roles = dict()
-        # if self.pre_selection:
-        #     # TODO: cast
-        #     pre_sel = None
-        #     stages.append(pre_sel.transformer)
-        #     out_roles = copy(pre_sel.output_roles)
-
-        if self.features_pipeline:
-            stages.append(fp.transformer)
-            out_roles = copy(fp.output_roles)
-
-        # if self.post_selection:
-        #     # TODO: cast
-        #     post_sel = None
-        #     stages.append(post_sel.transformer)
-        #     out_roles = copy(post_sel.output_roles)
-
-
-
-        self._transformer = PipelineModel(stages=stages + [ml_algo_transformers])
-
-        out_roles.update({ml_algo.prediction_feature: ml_algo.prediction_role
-                          for ml_algo in self.ml_algos})
-
-        self._output_roles = out_roles
-        self._output_features = list(out_roles.keys())
+        self._output_roles = {ml_algo.prediction_feature: ml_algo.prediction_role
+                              for ml_algo in self.ml_algos}
 
         # all out roles for the output dataset
+        out_roles = copy(self._output_roles)
         out_roles.update(self.input_roles)
 
-        val_preds = (ml_algo_transformers.transform(valid_ds.data) for _, full_ds, valid_ds in train_valid)
-        # TODO: depending on train_valid logic there may be several ways of treating predictions results:
-        # TODO: 1. for folds iterators - just union the results, it will yield the full train dataset
-        # TODO: 2. for holdout iterators - create None predictions in train_part and union with valid part
-        # TODO: 3. for custom iterators which may put the same records in different folds: union + groupby + (optionally) union with None-fied train_part
-        # TODO: 4. for dummy - do nothing
-        # TODO: probably this logic should be a part of a special logic in TrainValidIterator method
-        val_preds = functools.reduce(lambda x, y: x.union(y), val_preds)
+        select_transformer = SelectTransformer([
+            SparkDataset.ID_COLUMN,
+            *list(out_roles.keys())
+        ])
+        ml_algo_transformers = PipelineModel(stages=[ml_algo.transformer for ml_algo in self.ml_algos])
+        self._transformer = PipelineModel(stages=[fp.transformer, ml_algo_transformers, select_transformer])
 
-        # TODO: how about to select only necessary fields?
-        # TODO: add cacher here
+        val_preds = [ml_algo_transformers.transform(valid_ds.data) for _, full_ds, valid_ds in train_valid]
+        val_preds_df = train_valid.combine_train_and_preds(val_preds)
+        val_preds_df = val_preds_df.select(
+            SparkDataset.ID_COLUMN,
+            train_valid.train.target_column,
+            train_valid.train.folds_column,
+            *list(out_roles.keys())
+        )
+        val_preds_df = Cacher(key=self._cacher_key).fit(val_preds_df).transform(val_preds_df)
         val_preds_ds = train_valid.train.empty()
-        val_preds_ds.set_data(val_preds, None, out_roles)
+        val_preds_ds.set_data(val_preds_df, None, out_roles)
 
         return val_preds_ds
 
