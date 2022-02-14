@@ -98,7 +98,7 @@ class NaNFlagsEstimator(SparkBaseEstimator):
 
         return NaNFlagsTransformer(input_cols=self.getInputCols(), 
                                     input_roles=self.getInputRoles(),
-                                    output_cols=self.getOutputCols(),
+                                    output_cols=self.nan_cols,
                                     nan_cols=self.nan_cols
                                     )
 
