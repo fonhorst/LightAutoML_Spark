@@ -243,7 +243,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
             input_features = est.getInputCols()
 
-            assert not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features), \
+            assert isinstance(est, ChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features), \
                 "Cannot replace input features of the feature pipeline itself"
 
             if est.getDoReplaceColumns():
