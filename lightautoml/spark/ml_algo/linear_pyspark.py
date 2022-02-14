@@ -80,8 +80,8 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         params = copy(self.params)
 
         # categorical features
-        cat_feats = [feat for feat in train.features if train.roles[feat].name == "Category"]
-        non_cat_feats = [feat for feat in train.features if train.roles[feat].name != "Category"]
+        cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name == "Category"]
+        non_cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name != "Category"]
 
         if self._ohe is None:
             self._ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_{self._name}_ohe" for f in cat_feats])
@@ -144,7 +144,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             Target predictions for valid dataset.
 
         """
-        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(train.features)} ")
+        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(self.input_features)} ")
 
         if self.task is None:
             self.task = train.task
@@ -209,5 +209,5 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         avr = AveragingTransformer(self.task.name,
                                    input_cols=self._models_prediction_columns,
                                    output_col=self.prediction_feature,
-                                   remove_cols=[self._ohe.getOutputCols()] + [self._assembler.getOutputCol()] + self._models_prediction_columns)
+                                   remove_cols=self._ohe.getOutputCols() + [self._assembler.getOutputCol()] + self._models_prediction_columns)
         return avr
