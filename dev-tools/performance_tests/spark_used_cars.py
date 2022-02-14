@@ -37,9 +37,11 @@ def calculate_automl(path: str,
     roles = roles if roles else {}
 
     if not spark_config:
-        spark_config = {"master": "local[4]"}
+        spark_args = {"master": "local[4]"}
+    else:
+        spark_args = {'session_args': spark_config}
 
-    with spark_session(spark_config) as spark:
+    with spark_session(**spark_args) as spark:
         with log_exec_timer("spark-lama training") as train_timer:
             task = SparkTask(task_type)
             data = spark.read.csv(path, header=True, escape="\"").repartition(4)
@@ -61,7 +63,8 @@ def calculate_automl(path: str,
                 spark=spark,
                 task=task,
                 general_params={"use_algos": use_algos},
-                reader_params={"cv": cv}
+                reader_params={"cv": cv},
+                tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3000}
             )
 
             oof_predictions = automl.fit_predict(
