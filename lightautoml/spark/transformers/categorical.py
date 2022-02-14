@@ -19,7 +19,7 @@ from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.mlwriters import TmpСommonMLWriter
-from lightautoml.spark.transformers.base import SparkTransformer, SparkBaseEstimator, SparkBaseTransformer
+from lightautoml.spark.transformers.base import ObsoleteSparkTransformer, SparkBaseEstimator, SparkBaseTransformer
 from lightautoml.spark.utils import get_cached_df_through_rdd, cache
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
     multiclass_task_check
@@ -495,7 +495,7 @@ class SparkCatIntersectionsTransformer(SparkLabelEncoderTransformer, SparkCatInt
         return out_df
 
 
-class OHEEncoder(SparkTransformer):
+class OHEEncoder(ObsoleteSparkTransformer):
     """
     Simple OneHotEncoder over label encoded categories.
     """
@@ -812,7 +812,7 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer):
         return output
 
 
-class MultiClassTargetEncoder(SparkTransformer):
+class MultiClassTargetEncoder(ObsoleteSparkTransformer):
 
     _fit_checks = (categorical_check, multiclass_task_check, encoding_check)
     _transform_checks = ()

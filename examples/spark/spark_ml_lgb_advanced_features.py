@@ -12,7 +12,7 @@ from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.pipelines.features.base import build_graph
 from lightautoml.spark.pipelines.features.lgb_pipeline import LGBAdvancedPipeline, SparkLGBAdvancedPipeline, LGBSimpleFeatures, LGBSimpleFeaturesTmp
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.transformers.base import SparkTransformer, SequentialTransformer, UnionTransformer
+from lightautoml.spark.transformers.base import ObsoleteSparkTransformer, SequentialTransformer, UnionTransformer
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.tasks.base import Task as SparkTask
 

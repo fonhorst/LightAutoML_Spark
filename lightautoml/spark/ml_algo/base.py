@@ -1,5 +1,4 @@
 import functools
-import itertools
 import logging
 from typing import Tuple, cast, List, Optional, Union
 
@@ -19,8 +18,7 @@ from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
 from lightautoml.spark.tasks.base import Task
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
-from lightautoml.utils.tmp_utils import log_data, log_metric, is_datalog_enabled
-from lightautoml.validation.base import TrainValidIterator
+from lightautoml.utils.tmp_utils import log_data
 
 # from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
 
@@ -120,7 +118,7 @@ class TabularMLAlgoHelper:
         return full_preds_df
 
 
-class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles, TabularMLAlgoHelper):
+class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "SparkTabularMLAlgo"
@@ -404,7 +402,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
         pass
 
 
-class TabularMLAlgoTransformer(Transformer, TabularMLAlgoHelper):
+class TabularMLAlgoTransformer(Transformer):
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         """Mean prediction for all fitted models.

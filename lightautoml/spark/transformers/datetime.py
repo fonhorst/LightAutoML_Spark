@@ -14,7 +14,7 @@ from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.transformers.datetime import datetime_check, date_attrs
 
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.transformers.base import SparkTransformer, SparkBaseTransformer
+from lightautoml.spark.transformers.base import ObsoleteSparkTransformer, SparkBaseTransformer
 
 from pyspark.ml import Transformer, Estimator
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
@@ -61,7 +61,7 @@ is_holiday_udf = F.udf(lambda *args, **kwargs: is_holiday(*args, **kwargs), Spar
 get_timestamp_attr_udf = F.udf(lambda *args, **kwargs: get_timestamp_attr(*args, **kwargs), SparkTypes.IntegerType())
 
 
-class SparkDatetimeHelper(SparkTransformer):
+class SparkDatetimeHelper(ObsoleteSparkTransformer):
     basic_interval = "D"
 
     _interval_mapping = {

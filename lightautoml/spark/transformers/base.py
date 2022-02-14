@@ -175,7 +175,7 @@ class SparkSequentialTransformer:
 
 
 # TODO: SPARK-LAMA make it ABC?
-class SparkTransformer(LAMLTransformer):
+class ObsoleteSparkTransformer(LAMLTransformer):
 
     _features = []
 
@@ -186,7 +186,7 @@ class SparkTransformer(LAMLTransformer):
     def get_output_names(self, input_cols: List[str]) -> List[str]:
         return [f"{self._fname_prefix}__{feat}" for feat in input_cols]
 
-    def fit(self, dataset: SparkDataset, use_features: Optional[List[str]] = None) -> "SparkTransformer":
+    def fit(self, dataset: SparkDataset, use_features: Optional[List[str]] = None) -> "ObsoleteSparkTransformer":
 
         logger.info(f"SparkTransformer of type: {type(self)}")
 
@@ -216,7 +216,7 @@ class SparkTransformer(LAMLTransformer):
 
         return self._fit(dataset)
 
-    def _fit(self, dataset: SparkDataset) -> "SparkTransformer":
+    def _fit(self, dataset: SparkDataset) -> "ObsoleteSparkTransformer":
         return self
 
     def transform(self, dataset: SparkDataset) -> SparkDataset:

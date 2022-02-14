@@ -13,7 +13,7 @@ from lightautoml.dataset.roles import ColumnRole, CategoryRole
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.tasks.base import Task as SparkTask
-from lightautoml.spark.transformers.base import SparkTransformer, SparkBaseEstimator, SparkBaseTransformer, \
+from lightautoml.spark.transformers.base import ObsoleteSparkTransformer, SparkBaseEstimator, SparkBaseTransformer, \
     SparkColumnsAndRoles
 from lightautoml.transformers.base import LAMLTransformer
 from lightautoml.transformers.numeric import NumpyTransformable
@@ -173,7 +173,7 @@ def compare_sparkml_by_content(spark: SparkSession,
 def compare_transformers_results(spark: SparkSession,
                                  ds: PandasDataset,
                                  t_lama: LAMLTransformer,
-                                 t_spark: SparkTransformer,
+                                 t_spark: ObsoleteSparkTransformer,
                                  compare_metadata_only: bool = False) -> Tuple[NumpyDataset, NumpyDataset]:
     """
     Args:
@@ -249,7 +249,7 @@ def compare_transformers_results(spark: SparkSession,
 def compare_by_content(spark: SparkSession,
                        ds: PandasDataset,
                        t_lama: LAMLTransformer,
-                       t_spark: SparkTransformer) -> Tuple[NumpyDataset, NumpyDataset]:
+                       t_spark: ObsoleteSparkTransformer) -> Tuple[NumpyDataset, NumpyDataset]:
     """
         Args:
             spark: session to be used for calculating the example
@@ -266,7 +266,7 @@ def compare_by_content(spark: SparkSession,
 def compare_by_metadata(spark: SparkSession,
                         ds: PandasDataset,
                         t_lama: LAMLTransformer,
-                        t_spark: SparkTransformer) -> Tuple[NumpyDataset, NumpyDataset]:
+                        t_spark: ObsoleteSparkTransformer) -> Tuple[NumpyDataset, NumpyDataset]:
     """
 
         Args:
@@ -284,7 +284,7 @@ def compare_by_metadata(spark: SparkSession,
     return compare_transformers_results(spark, ds, t_lama, t_spark, compare_metadata_only=True)
 
 
-def smoke_check(spark: SparkSession, ds: PandasDataset, t_spark: SparkTransformer) -> NumpyDataset:
+def smoke_check(spark: SparkSession, ds: PandasDataset, t_spark: ObsoleteSparkTransformer) -> NumpyDataset:
     sds = from_pandas_to_spark(ds, spark)
 
     t_spark.fit(sds)

@@ -9,11 +9,11 @@ from pyspark.sql.types import FloatType, IntegerType
 
 from lightautoml.dataset.roles import NumericRole, CategoryRole
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.transformers.base import SparkTransformer
+from lightautoml.spark.transformers.base import ObsoleteSparkTransformer
 from lightautoml.transformers.numeric import numeric_check
 
 
-class NaNFlags(SparkTransformer):
+class NaNFlags(ObsoleteSparkTransformer):
     _fit_checks = (numeric_check,)
     _transform_checks = ()
     # TODO: the value is copied from the corresponding LAMA transformer.
@@ -59,7 +59,7 @@ class NaNFlags(SparkTransformer):
         return output
 
 
-class FillInf(SparkTransformer):
+class FillInf(ObsoleteSparkTransformer):
 
     _fit_checks = (numeric_check,)
     _transform_checks = ()
@@ -87,7 +87,7 @@ class FillInf(SparkTransformer):
         return output
 
 
-class FillnaMedian(SparkTransformer):
+class FillnaMedian(ObsoleteSparkTransformer):
     """Fillna with median."""
 
     _fit_checks = (numeric_check,)
@@ -148,7 +148,7 @@ class FillnaMedian(SparkTransformer):
         return output
 
 
-class LogOdds(SparkTransformer):
+class LogOdds(ObsoleteSparkTransformer):
     """Convert probs to logodds."""
 
     _fit_checks = (numeric_check,)
@@ -197,7 +197,7 @@ class LogOdds(SparkTransformer):
         return output
 
 
-class StandardScaler(SparkTransformer):
+class StandardScaler(ObsoleteSparkTransformer):
     """Classic StandardScaler."""
 
     _fit_checks = (numeric_check,)
@@ -258,7 +258,7 @@ class StandardScaler(SparkTransformer):
         return output
 
 
-class QuantileBinning(SparkTransformer):
+class QuantileBinning(ObsoleteSparkTransformer):
     """Discretization of numeric features by quantiles."""
 
     _fit_checks = (numeric_check,)
