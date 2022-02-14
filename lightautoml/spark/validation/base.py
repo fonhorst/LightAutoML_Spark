@@ -64,7 +64,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
         train_valid.input_roles = features_pipeline.output_roles
         return train_valid
 
-    def combine_train_and_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
+    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
         # depending on train_valid logic there may be several ways of treating predictions results:
         # 1. for folds iterators - just union the results, it will yield the full train dataset
         # 2. for holdout iterators - create None predictions in train_part and union with valid part

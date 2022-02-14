@@ -99,7 +99,7 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
         self._transformer = PipelineModel(stages=[fp.transformer, ml_algo_transformers, select_transformer])
 
         val_preds = [ml_algo_transformers.transform(valid_ds.data) for _, full_ds, valid_ds in train_valid]
-        val_preds_df = train_valid.combine_train_and_preds(val_preds)
+        val_preds_df = train_valid.combine_val_preds(val_preds, include_train=True)
         val_preds_df = val_preds_df.select(
             SparkDataset.ID_COLUMN,
             train_valid.train.target_column,

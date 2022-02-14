@@ -237,14 +237,32 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
                     logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
                     break
 
-        # first averaging
-        full_preds_df = functools.reduce(lambda x, y: x.union(y), preds_dfs)
+        # combining results for different folds
+        # 1. folds - union
+        # 2. dummy - nothing
+        # 3. holdout - nothing
+        # 4. custom - union + groupby
+        neutral_element = (
+            F.array(*[F.lit(0.0) for _ in range(self.n_classes)])
+            if self.task.name in ["binary", "multiclass"]
+            else F.lit(0.0)
+        )
+        preds_dfs = [
+            df.select(
+                '*',
+                *[F.lit(neutral_element).alias(c) for c in self._models_prediction_columns if c not in df.columns]
+            )
+            for df in preds_dfs
+        ]
+        full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs, include_train=False)
+        full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
 
         # create Spark MLlib Transformer and save to property var
         self._transformer = self._build_transformer()
 
         pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
 
+        # TODO: SPARK-LAMA repair it later
         # if iterator_len > 1:
         #     logger.info(
         #         f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(pred_ds)}\x1b[0m")
@@ -268,46 +286,12 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         raise NotImplementedError
 
     def predict_single_fold(self, model: SparkMLModel, dataset: SparkDataset) -> SparkDataFrame:
-        """Implements prediction on single fold.
-
-        Args:
-            model: Model uses to predict.
-            dataset: Dataset used for prediction.
-
-        Returns:
-            Predictions for input dataset.
-
-        """
-        raise NotImplementedError
+        raise NotImplementedError("Not supported for Spark. Use transformer property instead ")
+        pass
 
     def predict(self, dataset: SparkDataset) -> SparkDataset:
-        """Mean prediction for all fitted models.
-
-        Args:
-            dataset: Dataset used for prediction.
-
-        Returns:
-            Dataset with predicted values.
-
-        """
-        assert self.models != [], "Should be fitted first."
-
-        log_data(f"spark_predict_{type(self).__name__}", {"predict": dataset.to_pandas()})
-
-        pred_col_prefix = self._predict_feature_name()
-        preds_dfs = [
-            self.predict_single_fold(dataset=dataset, model=model).select(
-                SparkDataset.ID_COLUMN,
-                F.col(self._get_predict_column(model)).alias(f"{pred_col_prefix}_{i}")
-            ) for i, model in enumerate(self.models)
-        ]
-
-        predict_sdf = self._average_predictions(dataset, preds_dfs, pred_col_prefix)
-
-        preds_ds = dataset.empty()
-        preds_ds = self._set_prediction(preds_ds, predict_sdf)
-
-        return preds_ds
+        raise NotImplementedError("Not supported for Spark. Use transformer property instead ")
+        pass
 
     @staticmethod
     def _get_predict_column(model: SparkMLModel) -> str:
@@ -363,12 +347,16 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
     def _build_transformer(self) -> Transformer:
         raise NotImplementedError()
 
+    def _build_averaging_transformer(self) -> Transformer:
+        raise NotImplementedError()
+
 
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     taskName = Param(Params._dummy(), "taskName", "task name")
     removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
 
-    def __init__(self, task_name: str,
+    def __init__(self,
+                 task_name: str,
                  input_cols: List[str],
                  output_col: str,
                  remove_cols: Optional[List[str]] = None):
@@ -388,10 +376,12 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
         if self.taskName in ["multiclass"]:
             def sum_arrays(x):
                 return sum(x[c] for c in pred_cols) / len(pred_cols)
-
+            # TODO: SPARK-LAMA make processing of None
             out_col = F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol())
         else:
-            out_col = (sum(F.col(c) for c in pred_cols) / F.lit(len(pred_cols))).alias(self.getOutputCol())
+            out_col = (sum(
+                F.col(c) for c in pred_cols
+            ) / F.lit(len(pred_cols))).alias(self.getOutputCol())
 
         cols_to_remove = set(self.getRemoveCols())
         cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]

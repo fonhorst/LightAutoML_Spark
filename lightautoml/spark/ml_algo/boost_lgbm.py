@@ -12,6 +12,7 @@ from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
+from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.validation.base import TrainValidIterator
 
@@ -310,11 +311,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         ml_model = lgbm.fit(temp_sdf)
 
         val_pred = ml_model.transform(self._assembler.transform(valid.data))
-        val_pred = val_pred.select('*', fold_prediction_column)
+        # val_pred = val_pred.select('*', fold_prediction_column)
 
         return ml_model, val_pred, fold_prediction_column
 
-    def fit(self, train_valid: TrainValidIterator):
+    def fit(self, train_valid: SparkBaseTrainValidIterator):
         self.fit_predict(train_valid)
 
     def get_features_score(self) -> Series:
@@ -328,9 +329,15 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return result
 
     def _build_transformer(self) -> Transformer:
+        avr = self._build_averaging_transformer()
+        averaging_model = PipelineModel(stages=[self._assembler] + self.models + [avr])
+        return averaging_model
+
+    def _build_averaging_transformer(self) -> Transformer:
         avr = AveragingTransformer(self.task.name,
                                    input_cols=self._models_prediction_columns,
                                    output_col=self.prediction_feature,
                                    remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns)
-        averaging_model = PipelineModel(stages=[self._assembler] + self.models + [avr])
-        return averaging_model
+        return avr
+
+
