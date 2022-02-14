@@ -1,6 +1,7 @@
+import functools
 from abc import ABC
 from copy import copy
-from typing import Tuple, cast, Optional, List
+from typing import Tuple, cast, Optional, List, Sequence
 
 from pyspark.sql import functions as F
 
@@ -8,7 +9,7 @@ from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.selection.base import SelectionPipeline
 from lightautoml.reader.base import RolesDict
 from lightautoml.spark import VALIDATION_COLUMN
-from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
 from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline
 from lightautoml.validation.base import TrainValidIterator
@@ -62,6 +63,15 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
         train_valid = cast(SparkBaseTrainValidIterator, super().apply_feature_pipeline(features_pipeline))
         train_valid.input_roles = features_pipeline.output_roles
         return train_valid
+
+    def combine_train_and_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
+        # depending on train_valid logic there may be several ways of treating predictions results:
+        # 1. for folds iterators - just union the results, it will yield the full train dataset
+        # 2. for holdout iterators - create None predictions in train_part and union with valid part
+        # 3. for custom iterators which may put the same records in
+        #   different folds: union + groupby + (optionally) union with None-fied train_part
+        # 4. for dummy - do nothing
+        raise NotImplementedError()
 
     def _split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         train = cast(SparkDataset, self.train)

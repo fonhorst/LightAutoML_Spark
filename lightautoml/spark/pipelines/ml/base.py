@@ -115,19 +115,11 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
         # all out roles for the output dataset
         out_roles.update(self.input_roles)
 
-        val_preds = (ml_algo_transformers.transform(valid_ds.data) for _, full_ds, valid_ds in train_valid)
-        # TODO: depending on train_valid logic there may be several ways of treating predictions results:
-        # TODO: 1. for folds iterators - just union the results, it will yield the full train dataset
-        # TODO: 2. for holdout iterators - create None predictions in train_part and union with valid part
-        # TODO: 3. for custom iterators which may put the same records in different folds: union + groupby + (optionally) union with None-fied train_part
-        # TODO: 4. for dummy - do nothing
-        # TODO: probably this logic should be a part of a special logic in TrainValidIterator method
-        val_preds = functools.reduce(lambda x, y: x.union(y), val_preds)
+        val_preds = [ml_algo_transformers.transform(valid_ds.data) for _, full_ds, valid_ds in train_valid]
+        val_preds_df = train_valid.combine_train_and_preds(val_preds)
 
-        # TODO: how about to select only necessary fields?
-        # TODO: add cacher here
         val_preds_ds = train_valid.train.empty()
-        val_preds_ds.set_data(val_preds, None, out_roles)
+        val_preds_ds.set_data(val_preds_df, None, out_roles)
 
         return val_preds_ds
 

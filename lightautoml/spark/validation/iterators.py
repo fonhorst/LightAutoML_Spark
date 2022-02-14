@@ -1,5 +1,6 @@
+import functools
 import logging
-from typing import Optional, cast, Tuple, Iterable
+from typing import Optional, cast, Tuple, Iterable, Sequence
 
 from lightautoml.dataset.base import LAMLDataset
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
@@ -18,6 +19,7 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         self._curr_idx = 0
 
     def __iter__(self) -> Iterable:
+        self._curr_idx = 0
         return self
 
     def __len__(self) -> Optional[int]:
@@ -44,6 +46,19 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
 
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         return self
+
+    def combine_train_and_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
+        assert len(val_preds) == 1
+        val_pred_cols = set(val_preds[0].columns)
+        train_cols = set(self.train.columns)
+        assert len(train_cols.difference(val_pred_cols)) == 0
+        new_feats = val_pred_cols.difference(train_cols)
+
+        _, train_ds, _ = self._split_by_fold(0)
+        missing_cols = [F.lit(None).alias(f) for f in new_feats]
+        full_val_preds = train_ds.select('*', *missing_cols).unionByName(val_preds[0])
+
+        return full_val_preds
 
 
 class SparkFoldsIterator(SparkBaseTrainValidIterator):
@@ -126,3 +141,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
 
         """
         return SparkHoldoutIterator(self.train)
+
+    def combine_train_and_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
+        full_val_preds = functools.reduce(lambda x, y: x.unionByName(y), val_preds)
+        return full_val_preds
