@@ -59,7 +59,7 @@ if __name__ == "__main__":
         spark_features_pipeline = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
         spark_selector = ImportanceCutoffSelector(
             cutoff=0.0,
-            feature_pipeline=SparkLGBSimpleFeatures(),
+            feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),
             ml_algo=SparkBoostLGBM(freeze_defaults=False),
             imp_estimator=ModelBasedImportanceEstimator()
         )

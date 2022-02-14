@@ -29,8 +29,8 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, TabularDataFeaturesSpark):
     Maps input to output features exactly one-to-one.
 
     """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, cacher_key: str = 'default_cacher'):
+        super().__init__(cacher_key)
 
     def _get_input_features(self) -> Set[str]:
         return set(self.input_features)
@@ -357,6 +357,7 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, TabularDataFeaturesSpark):
             multiclass_te_co: int = 3,
             auto_unique_co: int = 10,
             output_categories: bool = False,
+            cacher_key: str = 'default_cacher',
             **kwargs
     ):
         """
@@ -374,6 +375,7 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, TabularDataFeaturesSpark):
         """
         print("lama advanced pipeline ctr")
         super().__init__(
+            cacher_key=cacher_key,
             multiclass_te_co=multiclass_te_co,
             top_intersections=top_intersections,
             max_intersection_depth=max_intersection_depth,

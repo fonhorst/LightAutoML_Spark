@@ -28,7 +28,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
     def features(self) -> List[str]:
         return self.input_features
 
-    def apply_selector(self, selector: SelectionPipeline) -> "TrainValidIterator":
+    def apply_selector(self, selector: SelectionPipeline) -> "SparkBaseTrainValidIterator":
         """Select features on train data.
 
         Check if selector is fitted.
@@ -42,16 +42,22 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
             Dataset with selected features.
 
         """
-        # TODO: SPARK-LAMA selector should have cacher with different name
-        # TODO: SPARK-LAMA cacher should be cleared here
         if not selector.is_fitted:
             selector.fit(self)
         train_valid = copy(self)
+        # we don't need to create transformer for subselecting
+        # because train_valid.input_roles is used in fit_... methods
+        # of features pipelines and ml_algo to define columns they work with
         train_valid.input_roles = {feat: self.input_roles[feat]
                                    for feat in selector.selected_features}
+
+        sfp = cast(SparkFeaturesPipeline, selector.features_pipeline)
+        if sfp is not None:
+            sfp.release_cache()
+
         return train_valid
 
-    def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "TrainValidIterator":
+    def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
         features_pipeline.input_roles = self.input_roles
         train_valid = cast(SparkBaseTrainValidIterator, super().apply_feature_pipeline(features_pipeline))
         train_valid.input_roles = features_pipeline.output_roles

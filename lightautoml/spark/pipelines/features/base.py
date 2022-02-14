@@ -80,6 +80,10 @@ class NoOpTransformer(Transformer):
 class Cacher(Estimator):
     _cacher_dict: Dict[str, SparkDataFrame] = dict()
 
+    @classmethod
+    def get_dataset_by_key(cls, key: str) -> Optional[SparkDataFrame]:
+        return cls._cacher_dict.get(key, None)
+
     @property
     def dataset(self) -> SparkDataFrame:
         """Returns chached dataframe"""
@@ -119,8 +123,9 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles):
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, cacher_key: str = 'default_cacher', **kwargs):
         super().__init__(**kwargs)
+        self._cacher_key = cacher_key
         self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
         self._transformer: Optional[Transformer] = None
 
@@ -197,12 +202,11 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles):
         pipeline = Pipeline(stages=ests)
         return pipeline, last_cacher
 
-    @staticmethod
-    def _optimize_for_caching(pipeline: SparkEstOrTrans) -> Tuple[List[Estimator], Cacher]:
+    def _optimize_for_caching(self, pipeline: SparkEstOrTrans) -> Tuple[List[Estimator], Cacher]:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
         stages = [tr for layer in tr_layers
-                  for tr in itertools.chain(layer, [Cacher('some_key')])]
+                  for tr in itertools.chain(layer, [Cacher(self._cacher_key)])]
 
         last_cacher = stages[-1]
         assert isinstance(last_cacher, Cacher)
@@ -256,6 +260,11 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles):
             del roles[col]
 
         self._output_roles = roles
+
+    def release_cache(self):
+        sdf = Cacher.get_dataset_by_key(self._cacher_key)
+        if sdf is not None:
+            sdf.unpersist()
 
 
 class TabularDataFeaturesSpark:
