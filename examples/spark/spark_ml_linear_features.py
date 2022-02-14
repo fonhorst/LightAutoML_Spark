@@ -1,11 +1,6 @@
-from copy import deepcopy
 import logging.config
-
 import logging.config
 from copy import deepcopy
-from typing import cast
-
-from pyspark.ml import PipelineModel
 
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures

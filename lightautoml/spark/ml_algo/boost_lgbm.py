@@ -298,7 +298,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             labelCol=train.target_column,
             predictionCol=fold_prediction_column if train.task.name != "multiclass" else "prediction",
             validationIndicatorCol=self.validation_column,
-            verbosity=verbose_eval
+            verbosity=verbose_eval,
+            isProvideTrainingMetric=True
         )
 
         logger.info(f"In GBM with params: {lgbm.params}")
