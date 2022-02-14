@@ -5,38 +5,20 @@ from lightautoml.dataset.base import LAMLDataset, RolesDict
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures as LAMALinearFeatures
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline, TabularDataFeatures, TabularDataFeaturesSpark
+from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline, SparkTabularDataFeatures
 
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.dataset.roles import CategoryRole
 
 # Same comments as for spark.pipelines.features.base
-from lightautoml.spark.transformers.base import SequentialTransformer, ObsoleteSparkTransformer, UnionTransformer, ChangeRoles
-from lightautoml.spark.transformers.categorical import LabelEncoder, OHEEncoder, OHEEncoderEstimator, SparkLabelEncoderEstimator
+from lightautoml.spark.transformers.categorical import OHEEncoderEstimator, SparkLabelEncoderEstimator
 from lightautoml.spark.transformers.numeric import FillInf, FillInfTransformer, FillnaMedian, FillnaMedianEstimator, \
     LogOdds, LogOddsTransformer, NaNFlagsEstimator, StandardScaler, NaNFlags, StandardScalerEstimator
 
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkTransformer, SequentialTransformer, \
-    UnionTransformer, \
-    ChangeRoles, SparkUnionTransformer, SparkSequentialTransformer, SparkEstOrTrans
+from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkUnionTransformer, SparkSequentialTransformer, SparkEstOrTrans
 
 
-class LinearFeatures(TabularDataFeatures, LAMALinearFeatures):
-    """
-    Creates pipeline for linear models and nnets.
-
-    Includes:
-
-        - Create categorical intersections.
-        - OHE or embed idx encoding for categories.
-        - Other cats to numbers ways if defined in role params.
-        - Standartization and nan handling for numbers.
-        - Numbers discretization if needed.
-        - Dates handling.
-        - Handling probs (output of lower level models).
-
-    """
-
+class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
     def __init__(
         self,
         feats_imp: Optional[ImportanceEstimator] = None,
@@ -67,211 +49,6 @@ class LinearFeatures(TabularDataFeatures, LAMALinearFeatures):
               on multiclass task if number of classes is high.
 
         """
-        LAMALinearFeatures.__init__(
-            self,
-            feats_imp,
-            top_intersections,
-            max_bin_count,
-            max_intersection_depth,
-            subsample,
-            sparse_ohe,
-            auto_unique_co,
-            output_categories,
-            multiclass_te_co,
-        )
-
-    def _merge_seq(self, data: LAMLDataset) -> ObsoleteSparkTransformer:
-        data = cast(SparkDataset, data)
-        pipes = []
-        for pipe in self.pipes:
-            _pipe = cast(ObsoleteSparkTransformer, pipe(data))
-
-            with data.applying_temporary_caching():
-                data = cast(SparkDataset, _pipe.fit_transform(data))
-                data.cache_and_materialize()
-
-            pipes.append(_pipe)
-
-        return SequentialTransformer(pipes, is_already_fitted=True) if len(pipes) > 1 else pipes[-1]
-
-    def _merge(self, data: SparkDataset) -> ObsoleteSparkTransformer:
-        pipes = [cast(ObsoleteSparkTransformer, pipe(data))
-                 for pipe in self.pipes]
-
-        union = UnionTransformer(pipes) if len(pipes) > 1 else pipes[0]
-        print(f"Producing union: {type(union)}")
-        return union
-
-    def create_pipeline(self, train: SparkDataset) -> ObsoleteSparkTransformer:
-        """Create linear pipeline.
-
-        Args:
-            train: Dataset with train features.
-
-        Returns:
-            Transformer.
-
-        """
-        transformers_list = []
-        dense_list = []
-        sparse_list = []
-        probs_list = []
-        target_encoder = self.get_target_encoder(train)
-        te_list = dense_list if train.task.name == "reg" else probs_list
-
-        # handle categorical feats
-        # split categories by handling type. This pipe use 4 encodings - freq/label/target/ohe/ordinal
-        # 1 - separate freqs. It does not need label encoding
-        dense_list.append(self.get_freq_encoding(train))
-
-        # 2 - check 'auto' type (int is the same - no label encoded numbers in linear models)
-        auto = get_columns_by_role(train, "Category", encoding_type="auto") + get_columns_by_role(
-            train, "Category", encoding_type="int"
-        )
-
-        # if self.output_categories or target_encoder is None:
-        if target_encoder is None:
-            le = (
-                    auto
-                    + get_columns_by_role(train, "Category", encoding_type="oof")
-                    + get_columns_by_role(train, "Category", encoding_type="ohe")
-            )
-            te = []
-
-        else:
-            te = get_columns_by_role(train, "Category", encoding_type="oof")
-            le = get_columns_by_role(train, "Category", encoding_type="ohe")
-            # split auto categories by unique values cnt
-            un_values = self.get_uniques_cnt(train, auto)
-            te = te + [x for x in un_values.index if un_values[x] > self.auto_unique_co]
-            le = le + list(set(auto) - set(te))
-
-        # get label encoded categories
-        sparse_list.append(self.get_categorical_raw(train, le))
-
-        # TODO: fix the performance and uncomment
-        # get target encoded categories
-        te_part = self.get_categorical_raw(train, te)
-        if te_part is not None:
-            te_part = SequentialTransformer([te_part, target_encoder()])
-            te_list.append(te_part)
-        
-        # get intersection of top categories
-        intersections = self.get_categorical_intersections(train)
-        if intersections is not None:
-            if target_encoder is not None:
-                ints_part = SequentialTransformer([intersections, target_encoder()])
-                te_list.append(ints_part)
-            else:
-                sparse_list.append(intersections)
-
-        # add datetime seasonality
-        seas_cats = self.get_datetime_seasons(train, CategoryRole(np.int32))
-        if seas_cats is not None:
-            sparse_list.append(SequentialTransformer([seas_cats, LabelEncoder()]))
-
-        # get quantile binning
-        sparse_list.append(self.get_binned_data(train))
-        # add numeric pipeline wo probs
-        dense_list.append(self.get_numeric_data(train, prob=False))
-        # add ordinal categories
-        dense_list.append(self.get_ordinal_encoding(train))
-        # add probs
-        probs_list.append(self.get_numeric_data(train, prob=True))
-        # add difference with base date
-        dense_list.append(self.get_datetime_diffs(train))
-
-        # combine it all together
-        # handle probs if exists
-        probs_list = [x for x in probs_list if x is not None]
-        if len(probs_list) > 0:
-            probs_pipe = UnionTransformer(probs_list)
-            probs_pipe = SequentialTransformer([probs_pipe, LogOdds()])
-            dense_list.append(probs_pipe)
-
-        # handle dense
-        dense_list = [x for x in dense_list if x is not None]
-        if len(dense_list) > 0:
-            # standartize, fillna, add null flags
-            dense_pipe = SequentialTransformer(
-                [
-                    UnionTransformer(dense_list),
-                    UnionTransformer(
-                        [
-                            SequentialTransformer([FillInf(), FillnaMedian(), StandardScaler()]),
-                            NaNFlags(),
-                        ]
-                    ),
-                ]
-            )
-            transformers_list.append(dense_pipe)
-
-        # handle categories - cast to float32 if categories are inputs or make ohe
-        sparse_list = [x for x in sparse_list if x is not None]
-        if len(sparse_list) > 0:
-            sparse_pipe = UnionTransformer(sparse_list)
-            if self.output_categories:
-                final = ChangeRoles(CategoryRole(np.float32))
-            else:
-                if self.sparse_ohe == "auto":
-                    final = OHEEncoder(total_feats_cnt=train.shape[1])
-                else:
-                    final = OHEEncoder(make_sparse=self.sparse_ohe)
-            sparse_pipe = SequentialTransformer([sparse_pipe, final])
-
-            transformers_list.append(sparse_pipe)
-
-        # final pipeline
-        union_all = UnionTransformer(transformers_list)
-
-        return union_all
-
-
-class SparkLinearFeatures(SparkFeaturesPipeline, TabularDataFeaturesSpark):
-    def __init__(
-        self,
-        input_features: List[str],
-        input_roles: RolesDict,
-        feats_imp: Optional[ImportanceEstimator] = None,
-        top_intersections: int = 5,
-        max_bin_count: int = 10,
-        max_intersection_depth: int = 3,
-        subsample: Optional[Union[int, float]] = None,
-        sparse_ohe: Union[str, bool] = "auto",
-        auto_unique_co: int = 50,
-        output_categories: bool = True,
-        multiclass_te_co: int = 3,
-        **_
-    ):
-        """
-
-        Args:
-            feats_imp: Features importances mapping.
-            top_intersections: Max number of categories
-              to generate intersections.
-            max_bin_count: Max number of bins to discretize numbers.
-            max_intersection_depth: Max depth of cat intersection.
-            subsample: Subsample to calc data statistics.
-            sparse_ohe: Should we output sparse if ohe encoding
-              was used during cat handling.
-            auto_unique_co: Switch to target encoding if high cardinality.
-            output_categories: Output encoded categories or embed idxs.
-            multiclass_te_co: Cutoff if use target encoding in cat handling
-              on multiclass task if number of classes is high.
-
-        """
-        # LAMALinearFeatures.__init__(
-        #     self,
-        #     feats_imp,
-        #     top_intersections,
-        #     max_bin_count,
-        #     max_intersection_depth,
-        #     subsample,
-        #     sparse_ohe,
-        #     auto_unique_co,
-        #     output_categories,
-        #     multiclass_te_co,
-        # )
         super().__init__(
             multiclass_te_co=multiclass_te_co,
             top_intersections=top_intersections,
@@ -282,13 +59,13 @@ class SparkLinearFeatures(SparkFeaturesPipeline, TabularDataFeaturesSpark):
             output_categories=output_categories,
             ascending_by_cardinality=False,
         )
-        self._input_features = input_features
-        self._input_roles = input_roles
+        # self._input_features = input_features
+        # self._input_roles = input_roles
 
     def _get_input_features(self) -> Set[str]:
         return set(self.input_features)
 
-    def create_pipeline(self, train: SparkDataset) -> SparkTransformer:
+    def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
         """Create linear pipeline.
 
         Args:
