@@ -1,3 +1,4 @@
+import datetime
 import itertools
 import json
 import logging
@@ -243,7 +244,11 @@ def process_outfile(exp_instance: ExpInstanceConfig, outfile: str, result_file: 
     if len(result_str) == 0:
         logger.error(f"Found result line for exp with instance id {exp_instance['instance_id']} in {outfile} is empty")
 
+    curr_time = datetime.datetime.now()
+
     record = {
+        "time": curr_time.strftime('%Y-%m-%d %H:%M:%S'),
+        "timestamp": curr_time.timestamp(),
         "exp_instance": exp_instance,
         "outfile": outfile,
         "result": result_str
