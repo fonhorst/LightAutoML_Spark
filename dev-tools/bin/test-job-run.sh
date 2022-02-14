@@ -14,6 +14,7 @@ kubectl -n ${kube_ns} create configmap "${job_name}-scripts" \
   --from-file=config.yaml="${cfg_file}"
 
 kubectl -n ${kube_ns} delete job "${job_name}" --ignore-not-found
+kubectl -n ${kube_ns} delete svc "${job_name}" --ignore-not-found
 sed -e "s/{{jobname}}/${job_name}/g" -e "s/{{launchscript}}/${launch_script_name}/g" dev-tools/config/spark-job.yaml.j2 | kubectl apply -f -
 
 echo "Waiting for spark-job to complete..."
