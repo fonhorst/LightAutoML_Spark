@@ -235,12 +235,11 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
                 high=1.0,
             )
 
-            # # TODO: SPARK-LAMA is there an alternative in synapse ml ?
-            # optimization_search_space["min_sum_hessian_in_leaf"] = SearchSpace(
-            #     Distribution.LOGUNIFORM,
-            #     low=1e-3,
-            #     high=10.0,
-            # )
+            optimization_search_space["minSumHessianInLeaf"] = SearchSpace(
+                Distribution.LOGUNIFORM,
+                low=1e-3,
+                high=10.0,
+            )
 
         if estimated_n_trials > 100:
             if self.task.name == "reg":

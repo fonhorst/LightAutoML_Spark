@@ -64,7 +64,7 @@ def calculate_automl(path: str,
                 task=task,
                 general_params={"use_algos": use_algos},
                 reader_params={"cv": cv},
-                tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3000}
+                tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
             )
 
             oof_predictions = automl.fit_predict(

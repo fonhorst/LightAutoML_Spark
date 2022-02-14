@@ -22,7 +22,7 @@ MARKER = "EXP-RESULT:"
 
 statefile_path = "/tmp/exp-job"
 results_path = "/tmp/exp-job"
-cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster.yaml"
+cfg_path = "./dev-tools/config/experiments/experiment-config-spark-single-node-tuned.yaml"
 all_results_path = "/tmp/exp-job/results.txt"
 
 
@@ -130,7 +130,7 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
             use_algos = '__'.join(['_'.join(layer) for layer in params['use_algos']])
 
             instance_id = f"{name}-{library}-n{repeat_seq_id}-{params['dataset'].replace('_', '-')}" \
-                          f"-{use_algos}-" \
+                          f"-{use_algos.replace('_', '-')}-" \
                           f"cv{params['cv']}-seed{params['seed']}-" \
                           f"ei{spark_config['spark.executor.instances'] if spark_config else ''}"
 
@@ -298,7 +298,7 @@ def main():
 
     cfg = read_config(cfg_path)
     exp_cfgs = generate_experiments(cfg)
-    exp_procs = limit_procs(run_experiments(exp_cfgs), max_parallel_ops=2)
+    exp_procs = limit_procs(run_experiments(exp_cfgs), max_parallel_ops=32)
     register_results(exp_procs, total=len(exp_cfgs))
     print_all_results_file()
 
