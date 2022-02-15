@@ -216,7 +216,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         optimization_search_space["numLeaves"] = SearchSpace(
             Distribution.INTUNIFORM,
-            low=16,
+            low=4,
             high=255,
         )
 
