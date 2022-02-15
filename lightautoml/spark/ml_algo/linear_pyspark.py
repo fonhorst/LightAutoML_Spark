@@ -80,7 +80,6 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         logger.debug("Building pipeline in linear lGBFS")
         params = copy(self.params)
 
-
         if "regParam" in params:
             reg_params = params["regParam"]
             del params["regParam"]
@@ -191,7 +190,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        averaging_model = PipelineModel(stages=[self._ohe] + [self._assembler] + self.models + [avr])
+        averaging_model = PipelineModel(stages=[self._ohe, self._assembler] + self.models + [avr])
         return averaging_model
 
     def _build_averaging_transformer(self) -> Transformer:

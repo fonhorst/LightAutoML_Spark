@@ -596,7 +596,7 @@ class OHEEncoder(ObsoleteSparkTransformer):
         return output
 
 
-class OHEEncoderEstimator(SparkBaseEstimator):
+class SparkOHEEncoderEstimator(SparkBaseEstimator):
     """
     Simple OneHotEncoder over label encoded categories.
     """
@@ -632,15 +632,14 @@ class OHEEncoderEstimator(SparkBaseEstimator):
                          do_replace_columns=do_replace_columns,
                          output_role=None) # TODO: temporary stub, output roles are not calculated at this moment
 
-        self.make_sparse = make_sparse
-        self.total_feats_cnt = total_feats_cnt
+        self._make_sparse = make_sparse
+        self._total_feats_cnt = total_feats_cnt
         self.dtype = dtype
 
-        if self.make_sparse is None:
-            assert self.total_feats_cnt is not None, "Param total_feats_cnt should be defined if make_sparse is None"
+        if self._make_sparse is None:
+            assert self._total_feats_cnt is not None, "Param total_feats_cnt should be defined if make_sparse is None"
 
         self._ohe_transformer_and_roles: Optional[Tuple[Transformer, Dict[str, ColumnRole]]] = None
-
 
     def _fit(self, sdf: SparkDataFrame) -> Transformer:
         """Calc output shapes.
@@ -655,16 +654,13 @@ class OHEEncoderEstimator(SparkBaseEstimator):
 
         """
 
-        temp_sdf = sdf.cache()
         maxs = [F.max(c).alias(f"max_{c}") for c in self.getInputCols()]
         mins = [F.min(c).alias(f"min_{c}") for c in self.getInputCols()]
-        mm = temp_sdf.select(maxs + mins).collect()[0].asDict()
+        mm = sdf.select(maxs + mins).first().asDict()
 
         ohe = OneHotEncoder(inputCols=self.getInputCols(), outputCols=self.getOutputCols(), handleInvalid="error")
-        transformer = ohe.fit(temp_sdf)
-        temp_sdf.unpersist()
+        transformer = ohe.fit(sdf)
 
-        # TODO: SPARK-LAMA roles are generated in _fit(), and need to think over it, how to get roles in pipline creation time
         roles = {
             f"{self._fname_prefix}__{c}": NumericVectorOrArrayRole(
                 size=mm[f"max_{c}"] - mm[f"min_{c}"] + 1,
@@ -677,11 +673,13 @@ class OHEEncoderEstimator(SparkBaseEstimator):
 
         self._ohe_transformer_and_roles = (transformer, roles)
 
-        return OHEEncoderTransformer(transformer,
-                            input_cols=self.getInputCols(),
-                            output_cols=self.getOutputCols(),
-                            input_roles=self.getInputRoles(),
-                            output_roles=roles)
+        return OHEEncoderTransformer(
+            transformer,
+            input_cols=self.getInputCols(),
+            output_cols=self.getOutputCols(),
+            input_roles=self.getInputRoles(),
+            output_roles=roles
+        )
 
 
 class OHEEncoderTransformer(SparkBaseTransformer):
@@ -697,11 +695,11 @@ class OHEEncoderTransformer(SparkBaseTransformer):
         return self._features
 
     def __init__(self,
+                 ohe_transformer: Transformer,
                  input_cols: List[str],
                  output_cols: List[str],
                  input_roles: RolesDict,
                  output_roles: RolesDict,
-                 ohe_transformer: Tuple,
                  do_replace_columns: bool = False):
         super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
         self._ohe_transformer = ohe_transformer
@@ -716,8 +714,6 @@ class OHEEncoderTransformer(SparkBaseTransformer):
             Numpy dataset with encoded labels.
 
         """
-
-        # TODO: Check that ohe.transform() returns all columns, not just outputCols 
         output = self._ohe_transformer.transform(sdf)
 
         return output

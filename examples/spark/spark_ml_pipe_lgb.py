@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
         with log_exec_time():
             # data reading and converting to SparkDataset
-            df = spark.read.csv("examples/data/small_used_cars_data.csv", header=True, escape="\"")
+            df = spark.read.csv("examples/data/tiny_used_cars_data.csv", header=True, escape="\"")
             task = SparkTask("reg")
             sreader = SparkToSparkReader(task=task, cv=3)
             sdataset_tmp = sreader.fit_read(df, roles=roles)
