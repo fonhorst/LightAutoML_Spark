@@ -1,28 +1,25 @@
 """Base AutoML class."""
 
 import logging
-
-from typing import Any, Callable, cast
+from copy import copy
+from typing import Any, Callable
 from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Sequence
 
-from pyspark.ml import PipelineModel, Transformer
+from pyspark.ml import PipelineModel, Transformer, Estimator
+from pyspark.sql import functions as F
 
-from ..dataset.base import LAMLDataset, SparkDataset
-from ..dataset.utils import concatenate
-from ..pipelines.ml.base import MLPipeline, SparkMLPipeline
-from ..reader.base import Reader, SparkToSparkReader
-from ..utils.logging import set_stdout_level
-from ..utils.logging import verbosity_to_loglevel
-from ..utils.timer import PipelineTimer
+from .blend import SparkBlender, SparkBestModelSelector
+from ..dataset.base import SparkDataset
+from ..pipelines.ml.base import SparkMLPipeline
+from ..reader.base import SparkToSparkReader
 from ..validation.base import SparkBaseTrainValidIterator
-from ..validation.utils import create_validation_iterator
-from .blend import BestModelSelector, SparkBlender, SparkBestModelSelector
-from .blend import Blender
-
+from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
+from ...utils.logging import set_stdout_level, verbosity_to_loglevel
+from ...utils.timer import PipelineTimer
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +63,9 @@ class SparkAutoML:
 
     """
 
-    def __init__(
-        self,
-        reader: SparkToSparkReader,
-        levels: Sequence[Sequence[SparkMLPipeline]],
-        timer: Optional[PipelineTimer] = None,
-        blender: Optional[SparkBlender] = None,
-        skip_conn: bool = False,
-        return_all_predictions: bool = False,
-    ):
+    def __init__(self, reader: SparkToSparkReader, levels: Sequence[Sequence[SparkMLPipeline]],
+                 timer: Optional[PipelineTimer] = None, blender: Optional[SparkBlender] = None, skip_conn: bool = False,
+                 return_all_predictions: bool = False):
         """
 
         Args:
@@ -100,13 +91,14 @@ class SparkAutoML:
                 - `3`: Debug.
 
         """
-        self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
+        super().__init__()
+        self.levels = None
         self._transformer = None
+        self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
-    @property
-    def transformer(self) -> Transformer:
+    def get_transformer(self, return_all_predictions: bool = False) -> Transformer:
         assert self._transformer, "AutoML has not been fitted yet"
-        return self._transformer
+        return self._build_transformer(return_all_predictions)
 
     def _initialize(
         self,
@@ -206,14 +198,11 @@ class SparkAutoML:
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
 
         # for pycharm)
-        level_predictions = train_dataset
-        pipes = None
-
+        level_predictions = self._merge_train_and_valid_datasets(train_dataset, valid_dataset)
+        pipes: List[SparkMLPipeline] = []
         self.levels = []
-        train_valid = self._create_validation_iterator(train_dataset, valid_dataset, n_folds=None, cv_iter=cv_iter)
-
         for leven_number, level in enumerate(self._levels, 1):
-            pipes: List[SparkMLPipeline] = []
+            pipes = []
             flg_last_level = leven_number == len(self._levels)
             initial_level_roles = level_predictions.roles
 
@@ -252,9 +241,7 @@ class SparkAutoML:
                 self.levels.append(pipes)
 
             # here is split on exit condition
-            if not flg_last_level and self.skip_conn:
-                level_predictions = train_valid.train
-            else:
+            if flg_last_level or not self.skip_conn:
                 # we leave only prediction columns in the dataframe with this roles
                 roles = dict()
                 for p in pipes:
@@ -267,7 +254,7 @@ class SparkAutoML:
         blended_prediction, last_pipes = self.blender.fit_predict(level_predictions, pipes)
         self.levels.append(last_pipes)
         self.reader.upd_used_features(remove=list(set(self.reader.used_features) - set(self.collect_used_feats())))
-        self._transformer = self._build_transformer()
+        # self._transformer = self._build_transformer()
 
         del self._levels
 
@@ -279,7 +266,7 @@ class SparkAutoML:
     #     data: Any,
     #     features_names: Optional[Sequence[str]] = None,
     #     return_all_predictions: Optional[bool] = None,
-    # ) -> LAMLDataset:
+    # ) -> SparkDataset:
     #     """Predict with automl on new dataset.
     #
     #     Args:
@@ -292,35 +279,7 @@ class SparkAutoML:
     #         Dataset with predictions.
     #
     #     """
-    #     dataset = self.reader.read(data, features_names=features_names, add_array_attrs=False)
-    #
-    #     for n, level in enumerate(self.levels, 1):
-    #         # check if last level
-    #
-    #         level_predictions = []
-    #         for _n, ml_pipe in enumerate(level):
-    #             level_predictions.append(ml_pipe.predict(dataset))
-    #
-    #         if n != len(self.levels):
-    #
-    #             level_predictions = self._concatenate_datasets(level_predictions)
-    #
-    #             if self.skip_conn:
-    #
-    #                 try:
-    #                     # convert to initital dataset type
-    #                     level_predictions = dataset.from_dataset(level_predictions)
-    #                 except TypeError:
-    #                     raise TypeError(
-    #                         "Can not convert prediction dataset type to input features. Set skip_conn=False"
-    #                     )
-    #                 dataset = self._concatenate_datasets([level_predictions, dataset])
-    #             else:
-    #                 dataset = level_predictions
-    #         else:
-    #             if (return_all_predictions is None and self.return_all_predictions) or return_all_predictions:
-    #                 return self._concatenate_datasets(level_predictions)
-    #             return self.blender.predict(level_predictions)
+    #     self.get_transformer(return_all_predictions).transform(data)
 
     def collect_used_feats(self) -> List[str]:
         """Get feats that automl uses on inference.
@@ -355,20 +314,56 @@ class SparkAutoML:
 
         return model_stats
 
-    def _create_validation_iterator(self, train: LAMLDataset,
-                                    valid: Optional[LAMLDataset],
+    def _create_validation_iterator(self,
+                                    train: SparkDataset,
+                                    valid: Optional[SparkDataset],
                                     n_folds: Optional[int],
                                     cv_iter: Optional[Callable]) -> SparkBaseTrainValidIterator:
-        return create_validation_iterator(train, valid, n_folds=n_folds, cv_iter=cv_iter)
+        if valid:
+            dataset = self._merge_train_and_valid_datasets(train, valid)
+            iterator = SparkHoldoutIterator(dataset)
+        elif cv_iter:
+            raise NotImplementedError("Not supported now")
+        elif train.folds:
+            iterator = SparkFoldsIterator(train, n_folds)
+        else:
+            iterator = SparkDummyIterator(train)
 
-    def _concatenate_datasets(self, datasets: Sequence[LAMLDataset]) -> LAMLDataset:
-        return concatenate(datasets)
+        logger.info(f"Using train valid iterator of type: {type(iterator)}")
 
-    def _build_transformer(self) -> Transformer:
+        return iterator
+
+    @staticmethod
+    def _merge_train_and_valid_datasets(train: SparkDataset, valid: SparkDataset) -> SparkDataset:
+        assert len(set(train.features).symmetric_difference(set(valid.features))) == 0
+
+        tcols = copy(train.data.columns)
+        vcols = copy(valid.data.columns)
+
+        if train.folds_column:
+            tcols.remove(train.folds_column)
+        if valid.folds_column:
+            vcols.remove(valid.folds_column)
+
+        folds_col = train.folds_column if train.folds_column else SparkToSparkReader.DEFAULT_READER_FOLD_COL
+
+        tdf = train.data.select(*tcols, F.lit(0).alias(folds_col))
+        vdf = valid.data.select(*vcols, F.lit(1).alias(folds_col))
+        sdf = tdf.unionByName(vdf)
+
+        dataset = train.empty()
+        dataset.set_data(sdf, sdf.columns, train.roles)
+
+        return dataset
+
+    def _build_transformer(self, return_all_predictions: bool = False) -> Transformer:
         # TODO: build transformer
         stages = [self.reader.transformer] \
-                 + [ml_pipe.transformer for level in self.levels for ml_pipe in level] \
-                 + [self.blender.transformer]
+                 + [ml_pipe.transformer for level in self.levels for ml_pipe in level]
+
+        if not return_all_predictions:
+            stages.append(self.blender.transformer)
+
         automl_transformer = PipelineModel(stages=stages)
 
         return automl_transformer

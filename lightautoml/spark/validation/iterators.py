@@ -13,6 +13,46 @@ from pyspark.sql import functions as F
 logger = logging.getLogger(__name__)
 
 
+class SparkDummyIterator(SparkBaseTrainValidIterator):
+    def __init__(self, train: SparkDataset):
+        super().__init__(train)
+        self._curr_idx = 0
+
+    def __iter__(self) -> Iterable:
+        self._curr_idx = 0
+        return self
+
+    def __len__(self) -> Optional[int]:
+        return 1
+
+    def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
+        """Define how to get next object.
+
+        Returns:
+            None, train dataset, validation dataset.
+
+        """
+        if self._curr_idx > 0:
+            raise StopIteration
+
+        self._curr_idx += 1
+
+        return self.train, self.train, self.train
+
+    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
+        assert len(val_preds) == 1
+        return val_preds[0]
+
+    def get_validation_data(self) -> SparkDataset:
+        return self.train
+
+    def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
+        sds = cast(SparkDataset, self.train)
+        assert sds.folds_column is not None, \
+            "Cannot convert to Holdout iterator when folds_column is not defined"
+        return SparkHoldoutIterator(self.train)
+
+
 class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def __init__(self, train: SparkDataset):
         super().__init__(train)
