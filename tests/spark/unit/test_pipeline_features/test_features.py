@@ -6,9 +6,10 @@ from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.pipelines.features.lgb_pipeline import LGBSimpleFeatures, LGBAdvancedPipeline
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.lgb_pipeline import \
-    LGBSimpleFeatures as SparkLGBSimpleFeatures, LGBAdvancedPipeline as SparkLGBAdvancedPipeline
-from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures as SparkLinearFeatures
+    SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
+from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.spark.transformers.base import log_exec_time
 from lightautoml.tasks import Task
 from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_datasets
@@ -58,6 +59,8 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
 
     spark_linear_features = SparkLinearFeatures(**kwargs)
 
+    spark_linear_features.input_roles = sds.roles
+
     spark_transformer = spark_linear_features.create_pipeline(sds)
 
     print()
@@ -69,19 +72,24 @@ def test_linear_features(spark: SparkSession, dataset: DatasetForTest):
     print("===================================================")
 
     print()
-    print(spark_transformer.print_structure())
+    # print(spark_transformer.print_structure())
     print()
     print()
-    print(spark_transformer.print_tr_types())
+    # print(spark_transformer.print_tr_types())
 
     with log_exec_time():
         lama_ds = linear_features.fit_transform(ds).to_numpy()
 
     with log_exec_time():
         spark_ds = spark_linear_features.fit_transform(sds)
+        cutted_spark_ds = spark_ds.empty()
+        sdf = spark_ds.data.select(SparkDataset.ID_COLUMN, *spark_linear_features.output_features)
+        cutted_spark_ds.set_data(sdf,
+                                 spark_linear_features.output_features,
+                                 spark_linear_features.output_roles)
 
     # time.sleep(600)
-    compare_obtained_datasets(lama_ds, spark_ds)
+    compare_obtained_datasets(lama_ds, cutted_spark_ds)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -97,6 +105,7 @@ def test_lgb_simple_features(spark: SparkSession, dataset: DatasetForTest):
     lama_transformer = lgb_features.create_pipeline(ds)
 
     spark_lgb_features = SparkLGBSimpleFeatures()
+    spark_lgb_features.input_roles = sds.roles
     spark_transformer = spark_lgb_features.create_pipeline(sds)
 
     with log_exec_time():
@@ -104,8 +113,13 @@ def test_lgb_simple_features(spark: SparkSession, dataset: DatasetForTest):
 
     with log_exec_time():
         spark_ds = spark_lgb_features.fit_transform(sds)
+        cutted_spark_ds = spark_ds.empty()
+        sdf = spark_ds.data.select(SparkDataset.ID_COLUMN, *spark_lgb_features.output_features)
+        cutted_spark_ds.set_data(sdf,
+                                 spark_lgb_features.output_features,
+                                 spark_lgb_features.output_roles)
 
-    compare_obtained_datasets(lama_ds, spark_ds)
+    compare_obtained_datasets(lama_ds, cutted_spark_ds)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -131,6 +145,7 @@ def test_lgb_advanced_features(spark: SparkSession, dataset: DatasetForTest):
     lama_transformer = lgb_features.create_pipeline(ds)
 
     spark_lgb_features = SparkLGBAdvancedPipeline(**kwargs)
+    spark_lgb_features.input_roles = sds.roles
     spark_transformer = spark_lgb_features.create_pipeline(sds)
 
     with log_exec_time():
@@ -138,5 +153,10 @@ def test_lgb_advanced_features(spark: SparkSession, dataset: DatasetForTest):
 
     with log_exec_time():
         spark_ds = spark_lgb_features.fit_transform(sds)
+        cutted_spark_ds = spark_ds.empty()
+        sdf = spark_ds.data.select(SparkDataset.ID_COLUMN, *spark_lgb_features.output_features)
+        cutted_spark_ds.set_data(sdf,
+                                 spark_lgb_features.output_features,
+                                 spark_lgb_features.output_roles)
 
-    compare_obtained_datasets(lama_ds, spark_ds)
+    compare_obtained_datasets(lama_ds, cutted_spark_ds)

@@ -394,12 +394,27 @@ def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):
 
     lama_data: np.ndarray = lama_np_ds.data
     spark_data: np.ndarray = spark_np_ds.data
-    features: List[int] = [i for i, _ in sorted(enumerate(lama_np_ds.features), key=lambda x: x[1])]
+    # features: List[int] = [i for i, _ in sorted(enumerate(lama_np_ds.features), key=lambda x: x[1])]
 
-    assert np.allclose(
-        np.sort(lama_data[:, features], axis=0), np.sort(spark_data[:, features], axis=0),
-        equal_nan=True
-    ), \
-        f"Results of the LAMA's transformer and the Spark based transformer are not equal: " \
-        f"\n\nLAMA: \n{lama_data}" \
-        f"\n\nSpark: \n{spark_data}"
+    # assert np.allclose(
+    #     np.sort(lama_data[:, features], axis=0), np.sort(spark_data[:, features], axis=0),
+    #     equal_nan=True
+    # ), \
+    #     f"Results of the LAMA's transformer and the Spark based transformer are not equal: " \
+    #     f"\n\nLAMA: \n{lama_data}" \
+    #     f"\n\nSpark: \n{spark_data}"
+
+    lama_feature_column_ids = {feature: i for i, feature in sorted(enumerate(lama_np_ds.features), key=lambda x: x[1]) }
+    spark_feature_column_ids = {feature: i for i, feature in sorted(enumerate(spark_np_ds.features), key=lambda x: x[1]) }
+    for feature in lama_feature_column_ids.keys():
+        lama_column_id = [lama_feature_column_ids[feature]]
+        spark_column_id = [spark_feature_column_ids[feature]]
+        result = np.allclose(
+            np.sort(lama_data[:, lama_column_id], axis=0), np.sort(spark_data[:, spark_column_id], axis=0),
+            equal_nan=True
+        )
+        # print(f"feature: {feature}, result: {result}")
+        assert result, \
+            f"Results of the LAMA's transformer column '{feature}' and the Spark based transformer column '{feature}' are not equal: " \
+            f"\n\nLAMA: \n{lama_data[:, lama_column_id]}" \
+            f"\n\nSpark: \n{spark_data[:, spark_column_id]}"
