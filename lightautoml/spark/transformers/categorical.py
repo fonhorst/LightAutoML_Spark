@@ -1,5 +1,7 @@
 import logging
+import os
 import pickle
+import time
 from collections import defaultdict
 from itertools import chain, combinations
 from typing import Optional, Sequence, List, Tuple, Dict, Union, cast, Iterator
@@ -31,6 +33,35 @@ logger = logging.getLogger(__name__)
 # "if murmurhash3_32 can be applied to a whole pandas Series, it would be better to make it via pandas_udf"
 # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749534669
 murmurhash3_32_udf = F.udf(lambda value: murmurhash3_32(value.replace("NaN", "nan"), seed=42) if value is not None else None, SparkTypes.IntegerType())
+
+from lightautoml.transformers.numeric import save_data
+
+def save_dataset(dataset: SparkDataset, class_type, prefix, operation_type,  dataset_type="dataset"):
+    class_name = str(class_type).split('.')[-1].replace('>', '').replace("'", "").strip()
+    dir_name = f"{time.time()}__{class_name}__spark_{prefix}_{operation_type}__{dataset_type}"
+    path = f"dumps/{dir_name}"
+    os.makedirs(f"{path}", exist_ok=True)
+    data = dataset.data.toPandas()
+    try:
+        target = dataset.target.toPandas()
+    except AttributeError:
+        target = None
+
+    try:
+        folds = dataset.folds.toPandas()
+    except AttributeError:
+        folds = None
+
+    with open(f"{path}/data.pkl", "wb") as f:
+        pickle.dump(data, f)
+
+    if target is not None:
+        with open(f"{path}/target.pkl", "wb") as f:
+            pickle.dump(data, f)
+
+    if folds is not None:
+        with open(f"{path}/folds.pkl", "wb") as f:
+            pickle.dump(data, f)
 
 
 def pandas_dict_udf(broadcasted_dict):
@@ -94,6 +125,14 @@ class LabelEncoder(SparkTransformer):
 
         logger.info(f"[{type(self)} (LE)] fit is started")
 
+        save_dataset(
+            dataset=dataset,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            dataset_type="dataset"
+        )
+
         roles = dataset.roles
 
         dataset.cache()
@@ -130,11 +169,27 @@ class LabelEncoder(SparkTransformer):
 
         logger.info(f"[{type(self)} (LE)] fit is finished")
 
+        save_data(
+            data=self.dicts,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="encodings"
+        )
+
         return self
 
     def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         logger.info(f"[{type(self)} (LE)] transform is started")
+
+        save_dataset(
+            dataset=dataset,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="transform",
+            dataset_type="src_dataset"
+        )
 
         df = dataset.data
         sc = df.sql_ctx.sparkSession.sparkContext
@@ -211,6 +266,14 @@ class LabelEncoder(SparkTransformer):
 
         logger.info(f"[{type(self)} (LE)] Transform is finished")
 
+        save_dataset(
+            dataset=output,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="transform",
+            dataset_type="result_dataset"
+        )
+
         return output
 
 
@@ -229,6 +292,14 @@ class FreqEncoder(LabelEncoder):
     def _fit(self, dataset: SparkDataset) -> "FreqEncoder":
 
         logger.info(f"[{type(self)} (FE)] fit is started")
+
+        save_dataset(
+            dataset=dataset,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            dataset_type="dataset"
+        )
 
         dataset.cache()
 
@@ -255,6 +326,14 @@ class FreqEncoder(LabelEncoder):
 
         logger.info(f"[{type(self)} (FE)] fit is finished")
 
+        save_data(
+            data=self.dicts,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="encodings"
+        )
+
         return self
 
 
@@ -273,6 +352,14 @@ class OrdinalEncoder(LabelEncoder):
     def _fit(self, dataset: SparkDataset) -> "OrdinalEncoder":
 
         logger.info(f"[{type(self)} (ORD)] fit is started")
+
+        save_dataset(
+            dataset=dataset,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            dataset_type="dataset"
+        )
 
         roles = dataset.roles
 
@@ -312,6 +399,14 @@ class OrdinalEncoder(LabelEncoder):
         dataset.uncache()
 
         logger.info(f"[{type(self)} (ORD)] fit is finished")
+
+        save_data(
+            data=self.dicts,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="encodings"
+        )
 
         return self
 
@@ -530,6 +625,14 @@ class TargetEncoder(SparkTransformer):
     def _fit_transform(self, dataset: SparkDataset) -> SparkDataset:
         LAMLTransformer.fit(self, dataset)
 
+        save_dataset(
+            dataset=dataset,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit_transform",
+            dataset_type="src_dataset"
+        )
+
         logger.info(f"[{type(self)} (TE)] fit_transform is started")
 
         self.encodings = []
@@ -674,12 +777,36 @@ class TargetEncoder(SparkTransformer):
 
         logger.info(f"[{type(self)} (TE)] fit_transform is finished")
 
+        save_dataset(
+            dataset=output,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit_transform",
+            dataset_type="result_dataset"
+        )
+
+        save_data(
+            data=self.encodings,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit_transform",
+            data_type="encodings"
+        )
+
         return output
 
     def _transform(self, dataset: SparkDataset) -> SparkDataset:
 
         cols_to_select = []
         logger.info(f"[{type(self)} (TE)] transform is started")
+
+        save_dataset(
+            dataset=dataset,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="transform",
+            dataset_type="src_dataset"
+        )
 
         sc = dataset.data.sql_ctx.sparkSession.sparkContext
 
@@ -707,6 +834,14 @@ class TargetEncoder(SparkTransformer):
         )
 
         logger.info(f"[{type(self)} (TE)] transform is finished")
+
+        save_dataset(
+            dataset=output,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="transform",
+            dataset_type="result_dataset"
+        )
 
         return output
 

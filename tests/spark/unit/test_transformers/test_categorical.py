@@ -50,6 +50,57 @@ DATASETS = [
 ]
 
 
+def test_le2(spark: SparkSession):
+    df = pd.read_csv("../../examples/data/sampled_app_train.csv")
+    #
+    # import pickle
+    # with open("roles.pkl", "rb") as f:
+    #     roles = pickle.load(f)
+    #
+    # # SK_ID_CURR
+    # ds = PandasDataset(
+    #     df[[col for col in df.columns if col not in ["_id", "folds", "TARGET", "SK_ID_CURR"]]]
+    # )
+    #
+    # lama_le = LabelEncoder()
+    #
+    # lama_le.fit(ds)
+    # labeled_ds = lama_le.transform(ds)
+    #
+    # df.insert(0, "_id", range(1, len(df)))
+    # # data = spark.
+
+    preader = PandasToPandasReader(task=Task("binary"), cv=5)
+    pds = preader.fit_read(df, roles={"target": "TARGET", "drop": ["SK_ID_CURR"]})
+
+    cat_roles = {name: role for name, role in pds.roles.items() if name == "Category"}
+    cat_df = pds.data[cat_roles.keys()]
+
+    cat_pds = PandasDataset(
+        cat_df,
+        roles=cat_roles,
+        target=pds.target,
+        folds=pds.folds,
+        task=pds.task
+    )
+
+    lama_le = OrdinalEncoder()
+
+    lama_le.fit(cat_pds)
+    lama_labeled = lama_le.transform(cat_pds)
+
+
+    SparkToSparkReader(task=Task("binary"), cv=5)
+    sds = from_pandas_to_spark(cat_pds, spark)
+
+
+    spark_le = SparkOrdinalEncoder()
+    spark_le.fit(sds)
+    spark_labeled = spark_le.transform(sds)
+
+    compare_obtained_datasets(lama_labeled.to_numpy(), spark_labeled)
+
+
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_label_encoder(spark: SparkSession, dataset: DatasetForTest):
 

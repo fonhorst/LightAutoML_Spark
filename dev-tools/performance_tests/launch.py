@@ -40,7 +40,7 @@ def datasets() -> Dict[str, Any]:
         },
 
         "lama_test_dataset": {
-            "path": "./examples/data/sampled_app_train.csv",
+            "path": "../../examples/data/sampled_app_train.csv",
             "task_type": "binary",
             "metric_name": "areaUnderROC",
             "target_col": "TARGET",
@@ -123,7 +123,7 @@ def datasets() -> Dict[str, Any]:
     return all_datastes
 
 
-logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
+logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='./lama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,8 @@ logger = logging.getLogger(__name__)
 def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
     # dataset_name = "used_cars_dataset"
-    dataset_name = "buzz_dataset"
+    # dataset_name = "buzz_dataset"
+    dataset_name = "lama_test_dataset"
 
     config = copy(datasets()[dataset_name])
     config["use_algos"] = [["lgb"]]

@@ -37,7 +37,7 @@ def datasets(setting: str = "all") -> List[Dict[str, Any]]:
     }
 
     lama_test_dataset = {
-        "path": "./examples/data/sampled_app_train.csv",
+        "path": "../../examples/data/sampled_app_train.csv",
         "task_type": "binary",
         "metric_name": "areaUnderROC",
         "target_col": "TARGET",
@@ -115,7 +115,6 @@ def datasets(setting: str = "all") -> List[Dict[str, Any]]:
         "target_col": "movedin",
         "roles": {"target": "movedin"},
     }
-
     if setting == "fast":
         return [used_cars_dataset]
     elif setting == "multiclass":
@@ -130,7 +129,7 @@ def datasets(setting: str = "all") -> List[Dict[str, Any]]:
         raise ValueError(f"Unsupported setting {setting}")
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in datasets(setting="fast")])
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in [datasets(setting="all")[1]]])
 def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
@@ -173,6 +172,25 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     pdf = pd.read_csv(path, dtype=dtype)
     preader = PandasToPandasReader(task=Task(task_type), cv=cv)
     pdataset = preader.fit_read(pdf, roles=roles)
+
+    import pickle
+    with open("roles.pkl", "wb") as f:
+        pickle.dump(pdataset.roles, f)
+
+    with open("data.pkl", "wb") as f:
+        pickle.dump(pdataset.data, f)
+
+    with open("target.pkl", "wb") as f:
+        pickle.dump(pdataset.target, f)
+
+    with open("folds.pkl", "wb") as f:
+        pickle.dump(pdataset.folds, f)
+
+    for srole_name, srole in sdataset.roles.items():
+        prole = preader.roles[srole_name]
+        assert type(srole) == type(prole)
+        if type(srole) == "<class 'lightautoml.dataset.roles.CategoryRole'>":
+            pass
 
     sdiff = set(sdataset.features).symmetric_difference(pdataset.features)
     assert len(sdiff) == 0, f"Features sets are different: {sdiff}"

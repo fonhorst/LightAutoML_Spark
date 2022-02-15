@@ -1,5 +1,6 @@
 """Categorical features transformerrs."""
 import pickle
+import time
 from itertools import combinations
 from typing import List
 from typing import Optional
@@ -26,6 +27,8 @@ from .base import LAMLTransformer
 # type - something that can be convered to pandas dataset
 NumpyOrPandas = Union[NumpyDataset, PandasDataset]
 NumpyOrSparse = Union[NumpyDataset, CSRSparseDataset]
+
+from .numeric import save_data
 
 
 def categorical_check(dataset: LAMLDataset):
@@ -135,6 +138,26 @@ class LabelEncoder(LAMLTransformer):
         return subs
 
     def fit(self, dataset: NumpyOrPandas):
+
+        save_data(
+            data=dataset.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="dataset"
+        )
+        # with open("le_roles.pkl", "wb") as f:
+        #     pickle.dump(dataset.roles, f)
+        #
+        # with open("le_data.pkl", "wb") as f:
+        #     pickle.dump(dataset.data, f)
+        #
+        # with open("le_target.pkl", "wb") as f:
+        #     pickle.dump(dataset.target, f)
+        #
+        # with open("le_folds.pkl", "wb") as f:
+        #     pickle.dump(dataset.folds, f)
+
         """Estimate label frequencies and create encoding dicts.
 
         Args:
@@ -168,6 +191,14 @@ class LabelEncoder(LAMLTransformer):
             vals = cnts[cnts[i] > co].index.values
             self.dicts[i] = Series(np.arange(vals.shape[0], dtype=np.int32) + 1, index=vals)
 
+        save_data(
+            data=self.dicts,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="encodings"
+        )
+
         return self
 
     def transform(self, dataset: NumpyOrPandas) -> NumpyDataset:
@@ -180,6 +211,15 @@ class LabelEncoder(LAMLTransformer):
             Numpy dataset with encoded labels.
 
         """
+
+        save_data(
+            data=dataset.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="transform",
+            data_type="src_dataset"
+        )
+
         # checks here
         super().transform(dataset)
         # convert to accepted dtype and get attributes
@@ -199,6 +239,14 @@ class LabelEncoder(LAMLTransformer):
         # create resulted
         output = dataset.empty().to_numpy()
         output.set_data(new_arr, self.features, self._output_role)
+
+        save_data(
+            data=output.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="transform",
+            data_type="result_dataset"
+        )
 
         return output
 
@@ -344,6 +392,14 @@ class FreqEncoder(LabelEncoder):
             self.
 
         """
+        save_data(
+            data=dataset.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="dataset"
+        )
+
         # set transformer names and add checks
         LAMLTransformer.fit(self, dataset)
         # set transformer features
@@ -358,6 +414,15 @@ class FreqEncoder(LabelEncoder):
             # TODO: think what to do with this warning
             cnts = df[i].value_counts(dropna=False)
             self.dicts[i] = cnts[cnts > 1]
+
+
+        save_data(
+            data=self.dicts,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="encodings"
+        )
 
         return self
 
@@ -436,6 +501,15 @@ class TargetEncoder(LAMLTransformer):
             NumpyDataset - target encoded features.
 
         """
+
+        save_data(
+            data=dataset.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit_transform",
+            data_type="src_dataset"
+        )
+
         # set transformer names and add checks
         super().fit(dataset)
         # set transformer features
@@ -499,6 +573,22 @@ class TargetEncoder(LAMLTransformer):
         self.output_role = NumericRole(np.float32, prob=output.task.name == "binary")
         output.set_data(oof_feats, self.features, self.output_role)
 
+        save_data(
+            data=self.encodings,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit_transform",
+            data_type="encodings"
+        )
+
+        save_data(
+            data=output.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit_transform",
+            data_type="result_dataset"
+        )
+
         return output
 
     def transform(self, dataset: NumpyOrPandas) -> NumpyOrSparse:
@@ -511,6 +601,15 @@ class TargetEncoder(LAMLTransformer):
             Numpy dataset with encoded labels.
 
         """
+
+        save_data(
+            data=dataset.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="transform",
+            data_type="src_dataset"
+        )
+
         # checks here
         super().transform(dataset)
         # convert to accepted dtype and get attributes
@@ -525,6 +624,14 @@ class TargetEncoder(LAMLTransformer):
         # create resulted
         output = dataset.empty()
         output.set_data(out, self.features, self.output_role)
+
+        save_data(
+            data=output.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="transform",
+            data_type="result_dataset"
+        )
 
         return output
 
@@ -586,6 +693,10 @@ class MultiClassTargetEncoder(LAMLTransformer):
         # set transformer features
 
         # convert to accepted dtype and get attributes
+
+        with open(f"dumps/{time.time()}__{type(self)}__lama_multioof_fit_transform__src_dataset.pkl", "wb") as f:
+            pickle.dump(dataset.to_pandas(), f)
+
         dataset = dataset.to_numpy()
         data = dataset.data
         target = dataset.target.astype(np.int32)
@@ -659,6 +770,12 @@ class MultiClassTargetEncoder(LAMLTransformer):
             NumericRole(np.float32, prob=True),
         )
 
+        with open(f"dumps/{time.time()}__{type(self)}__lama_multioof_fit_transform__result_dataset.pkl", "wb") as f:
+            pickle.dump(output.to_pandas(), f)
+
+        with open(f"dumps/{time.time()}__{type(self)}__lama_multioof_fit_encodings.pkl", "wb") as f:
+            pickle.dump(self.encodings, f)
+
         return output
 
     def transform(self, dataset: NumpyOrPandas) -> NumpyOrSparse:
@@ -673,6 +790,11 @@ class MultiClassTargetEncoder(LAMLTransformer):
         """
         # checks here
         super().transform(dataset)
+
+
+        with open(f"dumps/{time.time()}__{type(self)}__lama_multioof_transform__src_dataset.pkl", "wb") as f:
+            pickle.dump(dataset.to_pandas(), f)
+
         # convert to accepted dtype and get attributes
         dataset = dataset.to_numpy()
         data = dataset.data
@@ -687,6 +809,9 @@ class MultiClassTargetEncoder(LAMLTransformer):
         # create resulted
         output = dataset.empty()
         output.set_data(out, self.features, NumericRole(np.float32, prob=True))
+
+        with open(f"dumps/{time.time()}__{type(self)}__lama_multioof_transform__result_dataset.pkl", "wb") as f:
+            pickle.dump(output.to_pandas(), f)
 
         return output
 
@@ -828,6 +953,13 @@ class OrdinalEncoder(LabelEncoder):
         # set transformer names and add checks
         LAMLTransformer.fit(self, dataset)
         # set transformer features
+        save_data(
+            data=dataset.to_pandas(),
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="dataset"
+        )
 
         # convert to accepted dtype and get attributes
         roles = dataset.roles
@@ -848,5 +980,13 @@ class OrdinalEncoder(LabelEncoder):
                 cnts = Series(cnts["index"].astype(str).rank().values, index=cnts["index"].values)
                 cnts = cnts.append(Series([cnts.shape[0] + 1], index=[np.nan]))
                 self.dicts[i] = cnts
+
+        save_data(
+            data=self.dicts,
+            class_type=type(self),
+            prefix=self._fname_prefix,
+            operation_type="fit",
+            data_type="encodings"
+        )
 
         return self
