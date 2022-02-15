@@ -1,5 +1,6 @@
 """Base classes for MLPipeline."""
 import functools
+import uuid
 from copy import copy
 from typing import List, cast, Sequence, Union, Tuple, Optional
 
@@ -30,6 +31,7 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
         pre_selection: Optional[SelectionPipeline] = None,
         features_pipeline: Optional[SparkFeaturesPipeline] = None,
         post_selection: Optional[SelectionPipeline] = None,
+        name: Optional[str] = None
     ):
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
@@ -38,7 +40,12 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
         self._output_features = None
         self._output_roles = None
         self._transformer: Optional[Transformer] = None
+        self._name = name if name else str(uuid.uuid4())[:5]
         self.ml_algos: List[SparkTabularMLAlgo] = []
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     @property
     def transformer(self):

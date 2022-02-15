@@ -8,6 +8,9 @@ from lightautoml.spark.tasks.losses.base import SparkLoss
 from lightautoml.tasks import Task as LAMATask
 from lightautoml.tasks.base import LAMLMetric, _default_losses, _default_metrics, _valid_task_names
 
+DEFAULT_PREDICTION_COL_NAME = "prediction"
+DEFAULT_TARGET_COL_NAME = "target"
+
 
 class SparkMetric(LAMLMetric):
     def __init__(
@@ -55,11 +58,11 @@ class SparkMetric(LAMLMetric):
             )
         elif isinstance(dataset, SparkDataFrame):
             sdf = cast(SparkDataFrame, dataset)
-            assert "prediction" in sdf.columns and "target" in sdf.columns
+            assert DEFAULT_PREDICTION_COL_NAME in sdf.columns and DEFAULT_TARGET_COL_NAME in sdf.columns
             sdf = (
                 sdf
-                .withColumnRenamed("target", self._target_col)
-                .withColumnRenamed("prediction", self._prediction_col)
+                .withColumnRenamed(DEFAULT_TARGET_COL_NAME, self._target_col)
+                .withColumnRenamed(DEFAULT_PREDICTION_COL_NAME, self._prediction_col)
             )
         else:
             raise ValueError(f"Unsupported type {type(dataset)}")
