@@ -111,8 +111,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         # spark
         outp_dim = 1
         if self.task.name == "multiclass":
-            tdf: SparkDataFrame = valid_ds.target
-            outp_dim = tdf.select(F.max(valid_ds.target_column).alias("max")).first()
+            outp_dim = valid_ds.data.select(F.max(valid_ds.target_column).alias("max")).first()
             outp_dim = outp_dim["max"] + 1
 
         self.n_classes = outp_dim
@@ -241,15 +240,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         output.set_data(preds, [self._predict_feature_name()], role)
 
         return output
-
-    @staticmethod
-    def _make_sdf_with_target(train: SparkDataset) -> SparkDataFrame:
-        """ Adds target column to the train data frame"""
-        sdf = train.data
-        t_sdf = train.target.select(SparkDataset.ID_COLUMN, train.target_column)
-        if train.target_column not in train.data.columns:
-            sdf = sdf.join(t_sdf, SparkDataset.ID_COLUMN)#.drop(t_sdf[SparkDataset.ID_COLUMN])
-        return sdf
 
     def _build_transformer(self) -> Transformer:
         raise NotImplementedError()

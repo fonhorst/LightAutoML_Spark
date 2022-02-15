@@ -158,11 +158,7 @@ if True:
         predict_col = preds.features[0]
         preds = preds.data
 
-        pred_target_df = (
-            preds
-                .join(test_sds.target, on=SparkDataset.ID_COLUMN, how='inner')
-                .select(SparkDataset.ID_COLUMN, test_sds.target_column, predict_col)
-        )
+        pred_target_df = preds.select(SparkDataset.ID_COLUMN, test_sds.target_column, predict_col)
 
         pt_df = pred_target_df.toPandas()
         test_metric_value2 = evaluator(

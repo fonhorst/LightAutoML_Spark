@@ -137,20 +137,14 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
         # 2. it should have target
         # 3. it should have roles for all columns
         if check_target_and_folds:
-            assert sds.target_column not in sds.data.columns
-            assert isinstance(sds.target, SparkDataFrame) \
-                   and sds.target_column in sds.target.columns \
-                   and SparkDataset.ID_COLUMN in sds.target.columns
+            assert sds.target_column in sds.data.columns
+
         assert SparkDataset.ID_COLUMN in sds.data.columns
         assert set(sds.features).issubset(sds.roles.keys())
         assert all(f in sds.data.columns for f in sds.features)
 
         if check_target_and_folds:
-            assert "folds" in sds.__dict__ and sds.folds
-            assert isinstance(sds.folds, SparkDataFrame)
-            folds_sdf = cast(SparkDataFrame, sds.folds)
-            assert len(folds_sdf.columns) == 2
-            assert SparkDataset.ID_COLUMN in folds_sdf.columns and sds.folds_column in folds_sdf.columns
+            assert not sds.folds_column or sds.folds_column in sds.data.columns
 
     # path = "../../examples/data/sampled_app_train.csv"
     # task_type = "binary"

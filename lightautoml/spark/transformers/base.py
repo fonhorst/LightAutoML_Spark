@@ -288,12 +288,13 @@ class ObsoleteSparkTransformer(LAMLTransformer):
         return new_roles
 
 
-class ColumnsSelectorTransformer(Transformer, HasInputCols):
+class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols):
 
     def __init__(self,
                  input_cols: Optional[List[str]] = None):
         super().__init__()
         self.set(self.inputCols, input_cols)
+        self.set(self.outputCols, input_cols)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset.select(self.getInputCols())

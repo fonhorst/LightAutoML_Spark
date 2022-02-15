@@ -515,8 +515,7 @@ class SparkTabularDataFeatures:
             if train.task.name in ["binary", "reg"]:
                 target_encoder = SparkTargetEncoderEstimator
             else:
-                tds = cast(SparkDataFrame, train.target)
-                result = tds.select(F.max(train.target_column).alias("max")).first()
+                result = train.data.select(F.max(train.target_column).alias("max")).first()
                 n_classes = result['max'] + 1
 
                 # TODO: SPARK-LAMA add warning here
