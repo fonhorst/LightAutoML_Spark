@@ -341,4 +341,23 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                                    remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns)
         return avr
 
+    def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
+        """Fit and then predict accordig the strategy that uses train_valid_iterator.
 
+        If item uses more then one time it will
+        predict mean value of predictions.
+        If the element is not used in training then
+        the prediction will be ``numpy.nan`` for this item
+
+        Args:
+            train_valid_iterator: Classic cv-iterator.
+
+        Returns:
+            Dataset with predicted values.
+
+        """
+        self.timer.start()
+
+        self.input_roles = train_valid_iterator.input_roles
+        
+        return super().fit_predict(train_valid_iterator)

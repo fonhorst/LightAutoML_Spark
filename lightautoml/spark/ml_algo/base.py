@@ -85,10 +85,8 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
             Dataset with predicted values.
 
         """
-        self.timer.start()
 
         prob = train_valid_iterator.train.task.name in ["binary", "multiclass"]
-        self.input_roles = train_valid_iterator.input_roles
         self._prediction_role = NumericRole(np.float32, force_input=True, prob=prob)
 
         # log_data(f"spark_fit_predict_{type(self).__name__}", {"train": train_valid_iterator.train.to_pandas()})

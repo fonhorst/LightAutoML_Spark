@@ -10,7 +10,7 @@ import numpy as np
 import toposort
 from pandas import DataFrame
 from pandas import Series
-from pyspark.ml import Transformer, Estimator, Pipeline
+from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
 from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as F
 
@@ -171,7 +171,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
         pipeline, last_cacher = self._merge(train)
         self._transformer = cast(Transformer, pipeline.fit(train.data))
-        self._infer_output_features_and_roles(pipeline)
+        self._infer_output_features_and_roles(self._transformer)
         sdf = last_cacher.dataset
 
         features = train.features + self.output_features
@@ -224,8 +224,8 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
     def _infer_output_features_and_roles(self, pipeline: Estimator):
         # TODO: infer output features here
-        if isinstance(pipeline, Pipeline):
-            estimators = pipeline.getStages()
+        if isinstance(pipeline, PipelineModel):
+            estimators = pipeline.stages
         else:
             estimators = [pipeline]
 
@@ -236,14 +236,14 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         features = copy(fp_input_features)
         roles = copy(self.input_roles)
         for est in estimators:
-            if isinstance(est, Cacher):
+            if isinstance(est, Cacher) or isinstance(est, NoOpTransformer):
                 continue
 
             assert isinstance(est, SparkColumnsAndRoles)
 
             input_features = est.getInputCols()
 
-            assert not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features), \
+            assert isinstance(est, ChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features), \
                 "Cannot replace input features of the feature pipeline itself"
 
             if est.getDoReplaceColumns():

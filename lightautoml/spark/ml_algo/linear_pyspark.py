@@ -5,14 +5,15 @@ from copy import copy
 from typing import Tuple, Optional, List
 from typing import Union
 
-from pyspark.ml import Pipeline, Transformer
+from pyspark.ml import Pipeline, Transformer, PipelineModel
 from pyspark.ml.classification import LogisticRegression, LogisticRegressionModel
 from pyspark.ml.feature import VectorAssembler, OneHotEncoder
 from pyspark.ml.regression import LinearRegression, LinearRegressionModel
 
 from pyspark.sql import functions as F
 
-from .base import SparkTabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
+from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ...utils.timer import TaskTimer
 from ...utils.tmp_utils import log_data
@@ -26,7 +27,7 @@ LinearEstimator = Union[LogisticRegression, LinearRegression]
 LinearEstimatorModel = Union[LogisticRegressionModel, LinearRegressionModel]
 
 
-class LinearLBFGS(SparkTabularMLAlgo):
+class SparkLinearLBFGS(SparkTabularMLAlgo):
 
     _name: str = "LinearL2"
 
@@ -70,20 +71,15 @@ class LinearLBFGS(SparkTabularMLAlgo):
         self._prediction_col = f"prediction_{self._name}"
         self.task = None
         self._timer = timer
+        self._ohe = None
+        self._assembler = None
 
-    def _infer_params(self, train: SparkDataset) -> Tuple[List[Tuple[float, Pipeline]], int]:
+    def _infer_params(self,
+                      train: SparkDataset,
+                      fold_prediction_column: str) -> Tuple[List[Tuple[float, Pipeline]], int]:
         logger.debug("Building pipeline in linear lGBFS")
         params = copy(self.params)
 
-        # categorical features
-        cat_feats = [feat for feat in train.features if train.roles[feat].name == "Category"]
-        non_cat_feats = [feat for feat in train.features if train.roles[feat].name != "Category"]
-
-        ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_{self._name}_ohe" for f in cat_feats])
-        assembler = VectorAssembler(
-            inputCols=non_cat_feats + ohe.getOutputCols(),
-            outputCol=f"{self._name}_vassembler_features"
-        )
 
         if "regParam" in params:
             reg_params = params["regParam"]
@@ -102,29 +98,29 @@ class LinearLBFGS(SparkTabularMLAlgo):
             instance_params["regParam"] = reg_param
             # TODO: SPARK-LAMA add params processing later
             if self.task.name in ["binary", "multiclass"]:
-                model = LogisticRegression(featuresCol=assembler.getOutputCol(),
+                model = LogisticRegression(featuresCol=self._assembler.getOutputCol(),
                                            labelCol=train.target_column,
-                                           predictionCol=self._prediction_col,
+                                           predictionCol=fold_prediction_column if train.task.name != "multiclass" else "prediction",
                                            **instance_params)
             elif self.task.name == "reg":
-                model = LinearRegression(featuresCol=assembler.getOutputCol(),
+                model = LinearRegression(featuresCol=self._assembler.getOutputCol(),
                                          labelCol=train.target_column,
-                                         predictionCol=self._prediction_col,
+                                         predictionCol=fold_prediction_column,
                                          **instance_params)
                 model.setSolver("l-bfgs")
             else:
                 raise ValueError("Task not supported")
 
-            pipeline = Pipeline(stages=[ohe, assembler, model])
-
-            return pipeline
+            return model
 
         estimators = [(rp, build_pipeline(rp)) for rp in reg_params]
 
         return estimators, es
 
-    def fit_predict_single_fold(
-        self, train: SparkDataset, valid: SparkDataset
+    def fit_predict_single_fold(self,
+                                fold_prediction_column: str,
+                                train: SparkDataset,
+                                valid: SparkDataset
     ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
@@ -136,7 +132,7 @@ class LinearLBFGS(SparkTabularMLAlgo):
             Target predictions for valid dataset.
 
         """
-        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(train.features)} ")
+        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(self.input_features)} ")
 
         if self.task is None:
             self.task = train.task
@@ -145,7 +141,7 @@ class LinearLBFGS(SparkTabularMLAlgo):
         train_sdf = self._make_sdf_with_target(train)
         val_sdf = self._make_sdf_with_target(valid)
 
-        estimators, early_stopping = self._infer_params(train)
+        estimators, early_stopping = self._infer_params(train, fold_prediction_column)
 
         assert len(estimators) > 0
 
@@ -154,18 +150,19 @@ class LinearLBFGS(SparkTabularMLAlgo):
 
         best_model: Optional[SparkMLModel] = None
         best_val_pred: Optional[SparkDataFrame] = None
-        for rp, pipeline in estimators:
+        for rp, model in estimators:
             logger.debug(f"Fitting estimators with regParam {rp}")
+            pipeline = Pipeline(stages=[self._ohe, self._assembler, model])
             ml_model = pipeline.fit(train_sdf)
             val_pred = ml_model.transform(val_sdf)
             preds_to_score = val_pred.select(
-                F.col(self._prediction_col).alias("prediction"),
+                F.col(fold_prediction_column).alias("prediction"),
                 F.col(valid.target_column).alias("target")
             )
             current_score = self.score(preds_to_score)
             if current_score > best_score:
                 best_score = current_score
-                best_model = ml_model
+                best_model = ml_model.stages[-1]
                 best_val_pred = val_pred
                 es = 0
             else:
@@ -174,9 +171,11 @@ class LinearLBFGS(SparkTabularMLAlgo):
             if es >= early_stopping:
                 break
 
-        return best_model, best_val_pred, self._prediction_col
+        return best_model, best_val_pred, fold_prediction_column
 
-    def predict_single_fold(self, dataset: SparkDataset, model: SparkMLModel) -> SparkDataFrame:
+    def predict_single_fold(self,
+                            dataset: SparkDataset,
+                            model: SparkMLModel) -> SparkDataFrame:
         """Implements prediction on single fold.
 
         Args:
@@ -191,32 +190,43 @@ class LinearLBFGS(SparkTabularMLAlgo):
         return pred
 
     def _build_transformer(self) -> Transformer:
-        return LinearLBFGSTransformer(models=self.models,
-                                      predict_feature_name=self._predict_feature_name(),
-                                      task_name=self.task.name,
-                                      n_classes=self.n_classes)
+        avr = self._build_averaging_transformer()
+        averaging_model = PipelineModel(stages=[self._ohe] + [self._assembler] + self.models + [avr])
+        return averaging_model
 
+    def _build_averaging_transformer(self) -> Transformer:
+        avr = AveragingTransformer(self.task.name,
+                                   input_cols=self._models_prediction_columns,
+                                   output_col=self.prediction_feature,
+                                   remove_cols=self._ohe.getOutputCols() + [self._assembler.getOutputCol()] + self._models_prediction_columns)
+        return avr
 
-class LinearLBFGSTransformer(TabularMLAlgoTransformer):
-    """LinearLBFGS Spark MLlib Transformer"""
+    def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
+        """Fit and then predict accordig the strategy that uses train_valid_iterator.
 
-    def __init__(self, models, predict_feature_name, task_name, n_classes):
-        super().__init__()
-        self._models = models
-        self._predict_feature_name = predict_feature_name
-        self._task_name = task_name
-        self._n_classes = n_classes
-
-    def predict_single_fold(self, dataset: SparkDataFrame, model: SparkMLModel) -> SparkDataFrame:
-        """Implements prediction on single fold.
+        If item uses more then one time it will
+        predict mean value of predictions.
+        If the element is not used in training then
+        the prediction will be ``numpy.nan`` for this item
 
         Args:
-            model: Model uses to predict.
-            dataset: ``SparkDataFrame`` used for prediction.
+            train_valid_iterator: Classic cv-iterator.
 
         Returns:
-            Predictions for input dataframe.
+            Dataset with predicted values.
 
         """
-        pred = model.transform(dataset)
-        return pred
+        self.timer.start()
+
+        self.input_roles = train_valid_iterator.input_roles
+        cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name == "Category"]
+        self._ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_{self._name}_ohe" for f in cat_feats])
+        self._ohe = self._ohe.fit(train_valid_iterator.train.data)
+
+        non_cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name != "Category"]
+        self._assembler = VectorAssembler(
+            inputCols=non_cat_feats + self._ohe.getOutputCols(),
+            outputCol=f"{self._name}_vassembler_features"
+        )
+
+        return super().fit_predict(train_valid_iterator)
