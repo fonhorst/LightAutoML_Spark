@@ -1,30 +1,14 @@
-import pickle
-
 import numpy as np
-import pandas as pd
 import pytest
-from pyspark.sql import SparkSession, Window
+from pyspark.sql import SparkSession
 
-from pyspark.sql import functions as F
-
-from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
+from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
-from lightautoml.pipelines.utils import get_columns_by_role
-from lightautoml.reader.base import PandasToPandasReader
-from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.transformers.base import ColumnsSelector as SparkColumnsSelector
-from lightautoml.spark.transformers.categorical import LabelEncoder as SparkLabelEncoder, \
-    FreqEncoder as SparkFreqEncoder, OrdinalEncoder as SparkOrdinalEncoder, \
-    CatIntersectstions as SparkCatIntersectstions, OHEEncoder as SparkOHEEncoder, \
-    TargetEncoder as SparkTargetEncoder, SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
+from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
     SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator
-from lightautoml.spark.utils import log_exec_time
 from lightautoml.tasks import Task
-from lightautoml.transformers.base import ColumnsSelector
-from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
-    OHEEncoder, TargetEncoder
-from .. import DatasetForTest, from_pandas_to_spark, spark, compare_obtained_datasets, compare_by_metadata, \
-    compare_by_content, compare_sparkml_by_content
+from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions
+from .. import DatasetForTest, compare_sparkml_by_content
 
 DATASETS = [
 

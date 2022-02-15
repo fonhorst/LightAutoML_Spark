@@ -27,7 +27,7 @@ from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEsti
     SparkLabelEncoderEstimator, SparkOrdinalEncoderEstimator
 from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
-from lightautoml.spark.transformers.numeric import QuantileBinning
+from lightautoml.spark.transformers.numeric import SparkQuantileBinningEstimator
 
 
 def build_graph(begin: SparkEstOrTrans):
@@ -548,7 +548,11 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        binned_processing = QuantileBinning(nbins=self.max_bin_count)
+        binned_processing = SparkQuantileBinningEstimator(
+            input_cols=feats_to_select,
+            input_roles=roles,
+            nbins=self.max_bin_count
+        )
 
         return binned_processing
 

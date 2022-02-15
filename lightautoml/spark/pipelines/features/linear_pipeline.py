@@ -1,21 +1,17 @@
-from typing import List, Optional, Set, Union, cast
+from typing import Optional, Set, Union
+
 import numpy as np
 
-from lightautoml.dataset.base import LAMLDataset, RolesDict
-from lightautoml.pipelines.features.linear_pipeline import LinearFeatures as LAMALinearFeatures
+from lightautoml.dataset.roles import CategoryRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline, SparkTabularDataFeatures
-
-from lightautoml.pipelines.utils import get_columns_by_role
-from lightautoml.dataset.roles import CategoryRole
-
+from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkUnionTransformer, \
+    SparkSequentialTransformer, SparkEstOrTrans
 # Same comments as for spark.pipelines.features.base
 from lightautoml.spark.transformers.categorical import SparkOHEEncoderEstimator, SparkLabelEncoderEstimator
-from lightautoml.spark.transformers.numeric import FillInf, SparkFillInfTransformer, FillnaMedian, SparkFillnaMedianEstimator, \
-    LogOdds, SparkLogOddsTransformer, SparkNaNFlagsEstimator, StandardScaler, NaNFlags, SparkStandardScalerEstimator
-
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkUnionTransformer, SparkSequentialTransformer, SparkEstOrTrans
+from lightautoml.spark.transformers.numeric import SparkFillInfTransformer, SparkFillnaMedianEstimator, \
+    SparkLogOddsTransformer, SparkNaNFlagsEstimator, SparkStandardScalerEstimator
 
 
 class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
@@ -30,6 +26,7 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         auto_unique_co: int = 50,
         output_categories: bool = True,
         multiclass_te_co: int = 3,
+        cacher_key: str = 'default_cacher',
         **_
     ):
         """
@@ -50,6 +47,7 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
 
         """
         super().__init__(
+            cacher_key=cacher_key,
             multiclass_te_co=multiclass_te_co,
             top_intersections=top_intersections,
             max_intersection_depth=max_intersection_depth,
