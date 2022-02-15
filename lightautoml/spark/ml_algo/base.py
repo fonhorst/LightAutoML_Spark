@@ -9,6 +9,7 @@ from pyspark.ml.param import Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
 from pyspark.ml.util import MLWritable
 from pyspark.sql import functions as F, Column
+from pyspark.sql.functions import isnan
 
 from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo
@@ -270,15 +271,20 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         pred_cols = self.getInputCols()
-        if self.taskName in ["multiclass"]:
+        if self.getOrDefault(self.taskName) in ["multiclass"]:
             def sum_arrays(x):
-                return sum(x[c] for c in pred_cols) / len(pred_cols)
-            # TODO: SPARK-LAMA make processing of None
+                is_all_nth_elements_nan = sum(F.when(isnan(x[c]), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
+                # sum of non nan elements divided by number of non nan elements
+                mean_nth_elements = sum(F.when(isnan(x[c]), 0).otherwise(x[c]) for c in pred_cols) / \
+                                    sum( F.when(isnan(x[c]), 0).otherwise(1) for c in pred_cols )
+                return F.when(is_all_nth_elements_nan, float('nan')) \
+                        .otherwise(mean_nth_elements)
             out_col = F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol())
         else:
-            out_col = (sum(
-                F.col(c) for c in pred_cols
-            ) / F.lit(len(pred_cols))).alias(self.getOutputCol())
+            is_all_columns_nan = sum(F.when(isnan(F.col(c)), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
+            mean_all_columns = sum(F.when(isnan(F.col(c)), 0).otherwise(F.col(c)) for c in pred_cols) / \
+                               sum( F.when(isnan(F.col(c)), 0).otherwise(1) for c in pred_cols )
+            out_col = F.when(is_all_columns_nan, float('nan')).otherwise(mean_all_columns).alias(self.getOutputCol())
 
         cols_to_remove = set(self.getRemoveCols())
         cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
