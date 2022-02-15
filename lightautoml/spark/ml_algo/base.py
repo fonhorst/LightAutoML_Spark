@@ -169,12 +169,13 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
 
         # TODO: SPARK-LAMA repair it later
-        # if iterator_len > 1:
-        #     logger.info(
-        #         f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(pred_ds)}\x1b[0m")
-        #
-        # if iterator_len > 1 or "Tuned" not in self._name:
-        #     logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
+        if iterator_len > 1:
+            single_pred_ds = self._make_single_prediction_dataset(pred_ds)
+            logger.info(
+                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(single_pred_ds)}\x1b[0m")
+
+        if iterator_len > 1 or "Tuned" not in self._name:
+            logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
 
         return pred_ds
 
@@ -252,6 +253,15 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
     def _build_averaging_transformer(self) -> Transformer:
         raise NotImplementedError()
+
+    def _make_single_prediction_dataset(self, dataset: SparkDataset) -> SparkDataset:
+        preds = dataset.data.select(SparkDataset.ID_COLUMN, dataset.target_column, self.prediction_feature)
+        roles = {self.prediction_feature: dataset.roles[self.prediction_feature]}
+
+        output: SparkDataset = dataset.empty()
+        output.set_data(preds, preds.columns, roles)
+
+        return output
 
 
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
