@@ -157,11 +157,11 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
 
 
 class SparkUnionTransformer:
-    def __init__(self, transformer_list: List[Union[SparkBaseEstimator, SparkBaseTransformer]]):
+    def __init__(self, transformer_list: List[SparkEstOrTrans]):
         self._transformer_list = copy(transformer_list)
 
     @property
-    def transformers(self) -> List[Union[SparkBaseEstimator, SparkBaseTransformer]]:
+    def transformers(self) -> List[SparkEstOrTrans]:
         return self._transformer_list
 
     def _find_last_stage(self, stage):
@@ -197,15 +197,14 @@ class SparkUnionTransformer:
 
 
 class SparkSequentialTransformer:
-    def __init__(self, transformer_list: List[Union[SparkBaseEstimator, SparkBaseTransformer]]):
+    def __init__(self, transformer_list: List[SparkEstOrTrans]):
         self._transformer_list = copy(transformer_list)
 
     @property
-    def transformers(self) -> List[Union[SparkBaseEstimator, SparkBaseTransformer]]:
+    def transformers(self) -> List[SparkEstOrTrans]:
         return self._transformer_list
 
 
-# TODO: SPARK-LAMA make it ABC?
 class ObsoleteSparkTransformer(LAMLTransformer):
 
     _features = []

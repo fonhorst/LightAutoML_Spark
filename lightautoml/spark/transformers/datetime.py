@@ -61,7 +61,7 @@ is_holiday_udf = F.udf(lambda *args, **kwargs: is_holiday(*args, **kwargs), Spar
 get_timestamp_attr_udf = F.udf(lambda *args, **kwargs: get_timestamp_attr(*args, **kwargs), SparkTypes.IntegerType())
 
 
-class SparkDatetimeHelper(ObsoleteSparkTransformer):
+class SparkDatetimeHelper:
     basic_interval = "D"
 
     _interval_mapping = {
