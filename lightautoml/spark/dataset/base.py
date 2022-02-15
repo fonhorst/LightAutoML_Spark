@@ -186,7 +186,7 @@ class SparkDataset(LAMLDataset):
 
     @property
     def service_columns(self) -> List[str]:
-        return list(self._service_columns)
+        return [sc for sc in self._service_columns if sc in self.data.columns]
 
     def __repr__(self):
         return f"SparkDataset ({self.data})"
@@ -202,7 +202,7 @@ class SparkDataset(LAMLDataset):
             f"Presented: {self.features}\n" \
             f"Asked for: {clice}"
 
-        present_svc_cols = [c for c in self.data.columns if c in self.service_columns]
+        present_svc_cols = [c for c in self.service_columns]
         sdf = cast(SparkDataFrame, self.data.select(*present_svc_cols, *clice))
         roles = {c: self.roles[c] for c in clice}
 

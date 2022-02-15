@@ -8,7 +8,7 @@ from lightautoml.spark.pipelines.features.base import FeaturesPipeline
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 
 
-class NestedTabularMLPipeline(SparkMLPipeline, LAMANestedTabularMLPipeline):
+class SparkNestedTabularMLPipeline(SparkMLPipeline, LAMANestedTabularMLPipeline):
     """
         Same as NestedTabularMLPipeline of LAMA, but redefines a couple of methods via SparkMLPipelineMixin
     """

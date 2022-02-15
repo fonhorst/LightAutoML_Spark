@@ -10,7 +10,7 @@ from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures, LGBAdvancedPipeline
 from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures
-from lightautoml.spark.pipelines.ml.nested_ml_pipe import NestedTabularMLPipeline as SparkNestedTabularMLPipeline
+from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline as SparkNestedTabularMLPipeline
 from lightautoml.spark.tasks.base import Task
 
 import pandas as pd
