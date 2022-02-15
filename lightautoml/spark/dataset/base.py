@@ -315,14 +315,17 @@ class SparkDataset(LAMLDataset):
         all_cols_and_roles = {c: role for c_arr, role in arr_cols for c in c_arr}
         all_cols = [scol for scol, _ in all_cols_and_roles.items()]
 
+        if self.target_column is not None:
+            all_cols.append(self.target_column)
+
         sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(*all_cols)
-        all_roles = {c: all_cols_and_roles[c] for c in sdf.columns}
+        all_roles = {c: all_cols_and_roles[c] for c in sdf.columns if c not in self.service_columns}
 
         data = sdf.toPandas()
 
         df = pd.DataFrame(data=data.to_dict())
 
-        if 'target' in self.__dict__ and self.target is not None:
+        if self.target_column is not None:
             target_series = df[self.target_column]
             df = df.drop(self.target_column, 1)
         else:

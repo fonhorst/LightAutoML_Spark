@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
         _ = ml_pipe.fit_predict(iterator)
 
-        final_result = ml_pipe.transformer.transform(sdataset_tmp.data)
+        final_result = ml_pipe.transformer.transform(sdataset.data)
         final_result.write.mode('overwrite').format('noop').save()
 
         logger.info("Finished")

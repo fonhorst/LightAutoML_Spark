@@ -40,7 +40,7 @@ if __name__ == "__main__":
         }
 
         # # Spark ML pipeline
-        simple_pipline_builder = SparkLinearFeatures(sdataset.features, sdataset.roles, **ml_alg_kwargs)
+        simple_pipline_builder = SparkLinearFeatures(**ml_alg_kwargs)
         sdataset_feats = simple_pipline_builder.fit_transform(sdataset)
         sdataset_feats.data.toPandas().to_csv("/tmp/after_linear_features.csv")
 
