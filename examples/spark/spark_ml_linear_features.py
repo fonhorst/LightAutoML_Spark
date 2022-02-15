@@ -29,18 +29,7 @@ if __name__ == "__main__":
         df = spark.read.csv("examples/data/tiny_used_cars_data.csv", header=True, escape="\"")
         task = SparkTask("reg")
         sreader = SparkToSparkReader(task=task, cv=3)
-        sdataset_tmp = sreader.fit_read(df, roles=roles)
-        
-        sdataset = sdataset_tmp.empty()
-        new_roles = deepcopy(sdataset_tmp.roles)
-
-        sdataset.set_data(
-            sdataset_tmp.data \
-                .join(sdataset_tmp.target, SparkDataset.ID_COLUMN) \
-                .join(sdataset_tmp.folds, SparkDataset.ID_COLUMN),
-            sdataset_tmp.features,
-            new_roles
-        )
+        sdataset = sreader.fit_read(df, roles=roles)
 
         ml_alg_kwargs = {
             'auto_unique_co': 10,

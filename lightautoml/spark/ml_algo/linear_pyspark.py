@@ -136,9 +136,8 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         if self.task is None:
             self.task = train.task
 
-        # TODO: SPARK-LAMA target column?
-        train_sdf = self._make_sdf_with_target(train)
-        val_sdf = self._make_sdf_with_target(valid)
+        train_sdf = train.data
+        val_sdf = valid.data
 
         estimators, early_stopping = self._infer_params(train, fold_prediction_column)
 

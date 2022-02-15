@@ -81,39 +81,13 @@ class SparkDataset(LAMLDataset):
                  **kwargs: Any):
 
         if "target" in kwargs:
-            # assert "target" in kwargs, "Arguments should contain 'target'"
-            assert isinstance(kwargs["target"], pyspark.sql.DataFrame), "Target should be a spark dataframe"
-
-            target_sdf = cast(pyspark.sql.DataFrame, kwargs["target"])
-
-            assert len(target_sdf.columns) == 2, "Only 2 columns should be in the target spark dataframe"
-            assert SparkDataset.ID_COLUMN in target_sdf.columns, \
-                f"id column {SparkDataset.ID_COLUMN} should be presented in the target spark dataframe"
-
-            self._target_column: str = next(c for c in target_sdf.columns if c != SparkDataset.ID_COLUMN)
+            assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
+            self._target_column: str = kwargs["target"]
 
         self._folds_column = None
         if "folds" in kwargs and kwargs["folds"] is not None:
-            # folds = kwargs["folds"]
-            # assert isinstance(folds, list)
-            # correct_folds = (
-            #     (self.ID_COLUMN in train.columns) and (self.ID_COLUMN in val.columns)
-            #     for train, val in folds
-            # )
-            # assert all(correct_folds), "ID_COLUMN should be presented everywhere"
-
-            assert isinstance(kwargs["folds"], pyspark.sql.DataFrame), "Folds should be a spark dataframe"
-
-            folds_sdf = cast(SparkDataFrame, kwargs["folds"])
-
-            assert len(folds_sdf.columns) == 2, "Only 2 columns should be in the folds spark dataframe"
-            assert SparkDataset.ID_COLUMN in folds_sdf.columns, \
-                f"id column {SparkDataset.ID_COLUMN} should be presented in the folds spark dataframe"
-            self._folds_column: str = next(c for c in folds_sdf.columns if c != SparkDataset.ID_COLUMN)
-
-        # TODO: SPARK-LAMA there is a clear problem with this target
-        #       we either need to bring this column through all datasets(e.g. duplication)
-        #       or really save it as a separate dataframe
+            assert isinstance(kwargs["folds"], str), "Folds should be a str representing column name"
+            self._folds_column: str = kwargs["folds"]
 
         self._validate_dataframe(data)
 
@@ -216,7 +190,6 @@ class SparkDataset(LAMLDataset):
 
     @property
     def folds_column(self) -> str:
-        # raise NotImplementedError("It is unsupported now")
         return self._folds_column
 
     @property
@@ -342,14 +315,8 @@ class SparkDataset(LAMLDataset):
         all_cols_and_roles = {c: role for c_arr, role in arr_cols for c in c_arr}
         all_cols = [scol for scol, _ in all_cols_and_roles.items()]
 
-        if 'target' in self.__dict__ and self.target is not None:
-            sdf = sdf.join(self.target, on=SparkDataset.ID_COLUMN, how='inner')
-            sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(self.target_column, *all_cols)
-            # we do it this way, because scol doesn't have a method to retrive name as a str
-            all_roles = {c: all_cols_and_roles[c] for c in sdf.columns if c != self.target_column}
-        else:
-            sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(*all_cols)
-            all_roles = {c: all_cols_and_roles[c] for c in sdf.columns}
+        sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(*all_cols)
+        all_roles = {c: all_cols_and_roles[c] for c in sdf.columns}
 
         data = sdf.toPandas()
 

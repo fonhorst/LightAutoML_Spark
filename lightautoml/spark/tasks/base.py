@@ -44,17 +44,16 @@ class SparkMetric(LAMLMetric):
     def __call__(self, dataset: Union[SparkDataset, SparkDataFrame], dropna: bool = False):
 
         if isinstance(dataset, SparkDataset):
-
             assert len(dataset.features) == 1, \
-                f"Dataset should contain only one feature that would be interpretated as a prediction"
+                f"Dataset should contain only one feature that would be interpretated as predictions"
 
             prediction_column = dataset.features[0]
 
             sdf = dataset.data.dropna() if dropna else dataset.data
             sdf = (
-                sdf.join(dataset.target, SparkDataset.ID_COLUMN)
-                    .withColumnRenamed(dataset.target_column, self._target_col)
-                    .withColumnRenamed(prediction_column, self._prediction_col)
+                sdf
+                .withColumnRenamed(dataset.target_column, self._target_col)
+                .withColumnRenamed(prediction_column, self._prediction_col)
             )
         elif isinstance(dataset, SparkDataFrame):
             sdf = cast(SparkDataFrame, dataset)
