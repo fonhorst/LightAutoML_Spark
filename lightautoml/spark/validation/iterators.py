@@ -25,7 +25,7 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def __len__(self) -> Optional[int]:
         return 1
 
-    def __next__(self) -> Tuple[None, SparkDataset, SparkDataset]:
+    def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         """Define how to get next object.
 
         Returns:
@@ -38,7 +38,7 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
         self._curr_idx += 1
 
-        return None, full_ds, valid_part_ds
+        return full_ds, train_part_ds, valid_part_ds
 
     def get_validation_data(self) -> SparkDataset:
         full_ds, train_part_ds, valid_part_ds = self._split_by_fold(fold=0)
@@ -110,7 +110,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
 
         return self
 
-    def __next__(self) -> Tuple[None, SparkDataset, SparkDataset]:
+    def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         """Define how to get next object.
 
         Returns:
@@ -126,7 +126,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
         self._curr_idx += 1
 
-        return None, full_ds, valid_part_ds
+        return full_ds, train_part_ds, valid_part_ds
 
     def get_validation_data(self) -> SparkDataset:
         """Just return train dataset.

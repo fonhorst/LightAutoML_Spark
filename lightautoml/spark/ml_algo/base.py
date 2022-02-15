@@ -121,7 +121,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         pred_col_prefix = self._predict_feature_name()
 
         self._models_prediction_columns = []
-        for n, (idx, train, valid) in enumerate(train_valid_iterator):
+        for n, (full, train, valid) in enumerate(train_valid_iterator):
             if iterator_len > 1:
                 logger.info2(
                     "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m =====".format(n, self._name)
@@ -129,7 +129,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
             self.timer.set_control_point()
 
             model_prediction_col = f"{pred_col_prefix}_{n}"
-            model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
+            model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, full, train, valid)
 
             self._models_prediction_columns.append(model_prediction_col)
             self.models.append(model)
@@ -178,10 +178,16 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         return pred_ds
 
-    def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+    def fit_predict_single_fold(self,
+                                fold_prediction_column: str,
+                                full: SparkDataset,
+                                train: SparkDataset,
+                                valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
         Args:
+            fold_prediction_column: column name for predictions made for this fold
+            full: Full dataset that include train and valid parts and a bool column that delimits records
             train: Train Dataset.
             valid: Validation Dataset.
 
