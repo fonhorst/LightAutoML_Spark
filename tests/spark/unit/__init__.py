@@ -12,7 +12,7 @@ from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import ColumnRole, CategoryRole
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.transformers.base import ObsoleteSparkTransformer, SparkBaseEstimator, SparkBaseTransformer, \
     SparkColumnsAndRoles
 from lightautoml.transformers.base import LAMLTransformer

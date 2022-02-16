@@ -9,7 +9,7 @@ from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.tasks import Task
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from . import spark
 import pandas as pd
 

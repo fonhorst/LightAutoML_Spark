@@ -8,7 +8,7 @@ from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session, log_exec_time
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
 

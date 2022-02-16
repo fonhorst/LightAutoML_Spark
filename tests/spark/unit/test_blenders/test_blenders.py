@@ -12,7 +12,7 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM as SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS as SparkLinearLBFGS
 from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline as SparkNestedTabularMLPipeline
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.tasks import Task
 from .. import from_pandas_to_spark, spark, compare_obtained_datasets
 

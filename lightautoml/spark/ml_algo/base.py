@@ -16,7 +16,7 @@ from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
-from lightautoml.spark.tasks.base import Task
+from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.utils.tmp_utils import log_data

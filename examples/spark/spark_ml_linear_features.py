@@ -5,7 +5,7 @@ from copy import deepcopy
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))

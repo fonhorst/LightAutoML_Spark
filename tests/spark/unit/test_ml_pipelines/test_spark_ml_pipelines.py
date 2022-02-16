@@ -5,7 +5,7 @@ from pyspark.sql import SparkSession
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from .. import from_pandas_to_spark, spark_with_deps
 
 spark = spark_with_deps

@@ -10,7 +10,7 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPi
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
 

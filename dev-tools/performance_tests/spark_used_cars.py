@@ -7,13 +7,11 @@ import logging
 from typing import Dict, Any, Optional
 
 import sklearn
-from pyspark.ml.evaluation import RegressionEvaluator, BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 from pyspark.sql import functions as F
-from pyspark.sql.types import DoubleType
 
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.utils import log_exec_time, spark_session
 from lightautoml.utils.tmp_utils import log_data
 

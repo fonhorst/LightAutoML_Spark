@@ -13,7 +13,7 @@ from sklearn.metrics import mean_squared_error
 
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.utils import log_exec_time, logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
