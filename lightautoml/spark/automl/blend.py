@@ -4,6 +4,7 @@ from typing import List, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from pyspark.sql import functions as F
+from pyspark.sql.functions import isnan
 
 from lightautoml.automl.blend import Blender, \
     BestModelSelector as LAMABestModelSelector, \
@@ -15,7 +16,9 @@ from lightautoml.spark.ml_algo.base import AveragingTransformer
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 
 from pyspark.ml import Transformer, Estimator
-from pyspark.ml.param.shared import HasInputCols, HasOutputCols
+from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
+from pyspark.ml.param import Params
+from pyspark.ml.util import MLWritable
 
 from lightautoml.spark.tasks.base import DEFAULT_PREDICTION_COL_NAME
 from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
@@ -266,6 +269,106 @@ class WeightedBlender(BlenderMixin, LAMAWeightedBlender):
         output.set_data(weighted_sdf, [wfeat_name], wfeat_role)
 
         return output
+
+
+class SparkWeightedBlender(SparkBlender):
+    def _fit_predict(self,
+                     predictions: SparkDataset,
+                     pipes: Sequence[SparkMLPipeline]
+                     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
+
+        pred_cols = [pred_col for pred_col, _, _ in self.split_models(predictions, pipes)]
+
+        self._transformer = WeightedBlenderTransformer(
+            task_name=predictions.task.name,
+            input_cols=pred_cols,
+            output_col=self._single_prediction_col_name,
+            remove_cols=pred_cols
+        )
+
+        df = self._transformer.transform(predictions.data)
+
+        if predictions.task.name in ["binary", "multiclass"]:
+            assert isinstance(self._pred_role, NumericVectorOrArrayRole)
+            output_role = NumericVectorOrArrayRole(
+                self._pred_role.size,
+                f"WeightedBlend_{{}}",
+                dtype=np.float32,
+                prob=self._outp_prob,
+                is_vector=self._pred_role.is_vector
+            )
+        else:
+            output_role = NumericRole(np.float32, prob=self._outp_prob)
+
+        roles = {f: predictions.roles[f] for f in predictions.features if f not in pred_cols}
+        roles[self._single_prediction_col_name] = output_role
+        pred_ds = predictions.empty()
+        pred_ds.set_data(df, df.columns, roles)
+
+        return pred_ds, pipes  
+
+
+class WeightedBlenderTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
+    taskName = Param(Params._dummy(), "taskName", "task name")
+    removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
+    wts = Param(Params._dummy(), "wts", "weights")
+
+    def __init__(self,
+                 task_name: str,
+                 input_cols: List[str],
+                 output_col: str,
+                 wts: Optional[np.ndarray] = None,
+                 remove_cols: Optional[List[str]] = None):
+        super().__init__()
+        self.set(self.taskName, task_name)
+        self.set(self.inputCols, input_cols)
+        self.set(self.outputCol, output_col)
+        if not remove_cols:
+            remove_cols = []
+        self.set(self.removeCols, remove_cols)
+
+        length = len(input_cols)
+        if wts is None:
+            wts = {col: 1.0 / length for col in input_cols}
+        else:
+            assert len(wts) == length, 'Number of prediction cols and number of col weights must be equal'
+            wts = {col: float(w) for col, w in zip(input_cols, wts)}
+        self.set(self.wts, wts)
+
+    def getRemoveCols(self) -> List[str]:
+        return self.getOrDefault(self.removeCols)
+
+    def getWts(self) -> List[str]:
+        return self.getOrDefault(self.wts)
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        wts = self.getWts()
+        pred_cols = self.getInputCols()
+        if self.getOrDefault(self.taskName) in ["multiclass"]:
+            def sum_arrays(x):
+                is_all_nth_elements_nan = sum(F.when(isnan(x[c]), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
+                sum_weights_where_nan = sum(F.when(isnan(x[c]), wts[c]).otherwise(0.0) for c in pred_cols)
+                sum_weights_where_nonnan = sum(F.when(isnan(x[c]), 0.0).otherwise(wts[c]) for c in pred_cols)
+                # sum of non-nan nth elements multiplied by normalized weights
+                weighted_sum = sum(F.when(isnan(x[c]), 0).otherwise(x[c]*(wts[c]+wts[c]*sum_weights_where_nan/sum_weights_where_nonnan)) for c in pred_cols)
+                return F.when(is_all_nth_elements_nan, float('nan')) \
+                        .otherwise(weighted_sum)
+            out_col = F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol())
+        else:
+            is_all_columns_nan = sum(F.when(isnan(F.col(c)), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
+            sum_weights_where_nan = sum(F.when(isnan(F.col(c)), wts[c]).otherwise(0.0) for c in pred_cols)
+            sum_weights_where_nonnan = sum(F.when(isnan(F.col(c)), 0.0).otherwise(wts[c]) for c in pred_cols)
+            # sum of non-nan predictions multiplied by normalized weights
+            weighted_sum = sum(F.when(isnan(F.col(c)), 0).otherwise(F.col(c)*(wts[c]+wts[c]*sum_weights_where_nan/sum_weights_where_nonnan)) for c in pred_cols)
+            out_col = F.when(is_all_columns_nan, float('nan')).otherwise(weighted_sum).alias(self.getOutputCol())
+
+        cols_to_remove = set(self.getRemoveCols())
+        cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
+        out_df = dataset.select(*cols_to_select, out_col)
+        return out_df
+
+    def write(self):
+        pass
 
 
 class SparkMeanBlender(SparkBlender):
