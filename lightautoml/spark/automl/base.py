@@ -9,11 +9,11 @@ from typing import List
 from typing import Optional
 from typing import Sequence
 
-from pyspark.ml import PipelineModel, Transformer, Estimator
+from pyspark.ml import PipelineModel, Transformer
 from pyspark.sql import functions as F
 
 from .blend import SparkBlender, SparkBestModelSelector
-from ..dataset.base import SparkDataset
+from ..dataset.base import SparkDataset, SparkDataFrame
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..validation.base import SparkBaseTrainValidIterator
@@ -55,16 +55,20 @@ class SparkAutoML:
     Example:
         Common usecase - create custom pipelines or presets.
 
-        >>> reader = SomeReader()
-        >>> pipe = MLPipeline([SomeAlgo()])
+        >>> reader = SparkToSparkReader()
+        >>> pipe = SparkMLPipeline([SparkMLAlgo()])
         >>> levels = [[pipe]]
-        >>> automl = AutoML(reader, levels, )
+        >>> automl = SparkAutoML(reader, levels, )
         >>> automl.fit_predict(data, roles={'target': 'TARGET'})
 
     """
 
-    def __init__(self, reader: SparkToSparkReader, levels: Sequence[Sequence[SparkMLPipeline]],
-                 timer: Optional[PipelineTimer] = None, blender: Optional[SparkBlender] = None, skip_conn: bool = False,
+    def __init__(self,
+                 reader: SparkToSparkReader,
+                 levels: Sequence[Sequence[SparkMLPipeline]],
+                 timer: Optional[PipelineTimer] = None,
+                 blender: Optional[SparkBlender] = None,
+                 skip_conn: bool = False,
                  return_all_predictions: bool = False):
         """
 
@@ -96,9 +100,16 @@ class SparkAutoML:
         self._transformer = None
         self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
-    def get_transformer(self, return_all_predictions: bool = False) -> Transformer:
-        assert self._transformer, "AutoML has not been fitted yet"
-        return self._build_transformer(return_all_predictions)
+    def make_transformer(self, return_all_predictions: bool = False) -> Transformer:
+        stages = [self.reader.make_transformer()] \
+                 + [ml_pipe.transformer for level in self.levels for ml_pipe in level]
+
+        if not return_all_predictions:
+            stages.append(self.blender.transformer)
+
+        automl_transformer = PipelineModel(stages=stages)
+
+        return automl_transformer
 
     def _initialize(
         self,
@@ -126,12 +137,6 @@ class SparkAutoML:
               input features to next levels.
             return_all_predictions: True if we should return all predictions from last
               level models.
-            verbose: Controls the verbosity: the higher, the more messages.
-                <1  : messages are not displayed;
-                >=1 : the computation process for layers is displayed;
-                >=2 : the information about folds processing is also displayed;
-                >=3 : the hyperparameters optimization process is also displayed;
-                >=4 : the training process for every algorithm is displayed;
 
         """
         assert len(levels) > 0, "At least 1 level should be defined"
@@ -177,6 +182,7 @@ class SparkAutoML:
             valid_data: Optional validation dataset.
             valid_features: Optional validation dataset
               features if can't be inferred from `valid_data`.
+            verbose: controls verbosity
 
         Returns:
             Predicted values.
@@ -261,25 +267,28 @@ class SparkAutoML:
         oof_pred = level_predictions if self.return_all_predictions else blended_prediction
         return oof_pred
 
-    # def predict(
-    #     self,
-    #     data: Any,
-    #     features_names: Optional[Sequence[str]] = None,
-    #     return_all_predictions: Optional[bool] = None,
-    # ) -> SparkDataset:
-    #     """Predict with automl on new dataset.
-    #
-    #     Args:
-    #         data: Dataset to perform inference.
-    #         features_names: Optional features names,
-    #           if cannot be inferred from `train_data`.
-    #         return_all_predictions: if True,
-    #           returns all model predictions from last level
-    #     Returns:
-    #         Dataset with predictions.
-    #
-    #     """
-    #     self.get_transformer(return_all_predictions).transform(data)
+    def predict(
+        self,
+        data: SparkDataFrame,
+        features_names: Optional[Sequence[str]] = None,
+        return_all_predictions: Optional[bool] = None,
+    ) -> SparkDataset:
+        """Predict with automl on new dataset.
+
+        Args:
+            data: Dataset to perform inference.
+            features_names: Optional features names,
+              if cannot be inferred from `train_data`.
+            return_all_predictions: if True,
+              returns all model predictions from last level
+        Returns:
+            Dataset with predictions.
+
+        """
+        predictions = self.make_transformer(return_all_predictions).transform(data)
+        # TODO: SPARK-LAMA infer roles and task
+        sds = SparkDataset(predictions, None, self.task)
+        return sds
 
     def collect_used_feats(self) -> List[str]:
         """Get feats that automl uses on inference.
@@ -355,15 +364,3 @@ class SparkAutoML:
         dataset.set_data(sdf, sdf.columns, train.roles)
 
         return dataset
-
-    def _build_transformer(self, return_all_predictions: bool = False) -> Transformer:
-        # TODO: build transformer
-        stages = [self.reader.transformer] \
-                 + [ml_pipe.transformer for level in self.levels for ml_pipe in level]
-
-        if not return_all_predictions:
-            stages.append(self.blender.transformer)
-
-        automl_transformer = PipelineModel(stages=stages)
-
-        return automl_transformer

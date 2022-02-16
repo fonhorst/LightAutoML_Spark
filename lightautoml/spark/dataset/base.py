@@ -31,7 +31,6 @@ class SparkDataset(LAMLDataset):
     def empty(self) -> "SparkDataset":
 
         dataset = cast(SparkDataset, super().empty())
-        dataset._dependencies = []
 
         return dataset
 
@@ -70,7 +69,6 @@ class SparkDataset(LAMLDataset):
                  data: SparkDataFrame,
                  roles: Optional[RolesDict],
                  task: Optional[Task] = None,
-                 dependencies: Optional[List['SparkDataset']] = None,
                  **kwargs: Any):
 
         if "target" in kwargs:
@@ -89,8 +87,6 @@ class SparkDataset(LAMLDataset):
         self._validate_dataframe(data)
 
         self._data = None
-        self._is_frozen_in_cache: bool = False
-        self._dependencies = [] if dependencies is None else dependencies
         self._service_columns: Set[str] = {
             self.ID_COLUMN,
             self.target_column,
@@ -270,8 +266,7 @@ class SparkDataset(LAMLDataset):
     def set_data(self,
                  data: SparkDataFrame,
                  features: List[str],
-                 roles: NpRoles = None,
-                 dependencies: Optional[List['SparkDataset']] = None):
+                 roles: NpRoles = None):
         """Inplace set data, features, roles for empty dataset.
 
         Args:
@@ -282,9 +277,6 @@ class SparkDataset(LAMLDataset):
         """
         self._validate_dataframe(data)
         super().set_data(data, None, roles)
-
-        if dependencies is not None:
-            self._dependencies = dependencies
 
     def to_pandas(self) -> PandasDataset:
         data, target_data, roles = self._materialize_to_pandas()
