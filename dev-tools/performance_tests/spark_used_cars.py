@@ -97,14 +97,19 @@ def calculate_automl(path: str,
         else:
             raise ValueError(f"Metric {metric_name} is not supported")
 
-        oof_preds_for_eval_pdf = oof_preds_for_eval.toPandas()
-        metric_value = evaluator(oof_preds_for_eval_pdf[target_col].values, oof_preds_for_eval_pdf[predict_col].values)
-        logger.info(f"{metric_name} score for out-of-fold predictions: {metric_value}")
+        # oof_preds_for_eval_pdf = oof_preds_for_eval.toPandas()
+        # metric_value = evaluator(oof_preds_for_eval_pdf[target_col].values, oof_preds_for_eval_pdf[predict_col].values)
+
+        # pred = oof_predictions.empty()
+        # pred.set_data(oof_preds_for_eval, oof_preds_for_eval.columns, {predict_col: oof_predictions.roles[predict_col]})
+        metric_value = task.get_dataset_metric()(oof_predictions)
+
+        logger.warning(f"{metric_name} score for out-of-fold predictions: {metric_value}")
 
         with log_exec_time("spark-lama predicting on test"):
             te_pred = automl.predict(test_data_dropped)
 
-            te_pred = (
+            te_pred_sdf = (
                 te_pred.data
                 .join(test_data, on=SparkDataset.ID_COLUMN)
                 .select(SparkDataset.ID_COLUMN, target_col, te_pred.features[0])
@@ -113,9 +118,15 @@ def calculate_automl(path: str,
             # test_metric_value = evaluator.evaluate(te_pred)
             # logger.info(f"{evaluator.getMetricName()} score for test predictions: {test_metric_value}")
 
-            te_pred_pdf = te_pred.toPandas()
-            test_metric_value = evaluator(te_pred_pdf[target_col].values, te_pred_pdf[predict_col].values)
-            logger.info(f"{metric_name} score for test predictions: {test_metric_value}")
+            # te_pred_pdf = te_pred.toPandas()
+            # test_metric_value = evaluator(te_pred_pdf[target_col].values, te_pred_pdf[predict_col].values)
+
+            # pred = te_pred.empty()
+            # pred.set_data(te_pred_sdf, te_pred_sdf.columns,
+            #               {te_pred.features[0]: te_pred.roles[te_pred.features[0]]})
+            test_metric_value = task.get_dataset_metric()(te_pred)
+
+            logger.warning(f"{metric_name} score for test predictions: {test_metric_value}")
 
         logger.info("Predicting is finished")
 

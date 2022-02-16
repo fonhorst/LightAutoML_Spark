@@ -265,6 +265,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         temp_sdf = self._assembler.transform(dataset.data)
 
         pred = model.transform(temp_sdf)
+        # pred = self.task.losses["lgb"].bw_func(model.predict(dataset.data))
 
         return pred
 

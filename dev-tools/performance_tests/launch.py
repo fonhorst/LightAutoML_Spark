@@ -131,10 +131,10 @@ logger = logging.getLogger(__name__)
 def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
     # dataset_name = "used_cars_dataset"
-    dataset_name = "buzz_dataset"
+    dataset_name = "lama_test_dataset"
 
     config = copy(datasets()[dataset_name])
-    config["use_algos"] = [["lgb"]]
+    config["use_algos"] = [["linear_l2"]]
 
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
     #              200000, 300000, 1_000_000, 2_000_000, 5_000_000, 74909, 54179, 68572, 25425]
@@ -167,5 +167,8 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
 
 if __name__ == "__main__":
-    calculate_quality(lama_automl)
+    # calculate_quality(lama_automl)
     calculate_quality(spark_automl, delete_dir=False)
+
+# test_lama lama 0.75 (test), 0.73 (train) linear l2
+# test_lama spark 0.48 (test), 0.48 (train) linear l2

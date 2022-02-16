@@ -40,7 +40,7 @@ def spark_session(master: str = "local[1]", wait_secs_after_the_end: Optional[in
         .master(master)
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-        .config("spark.sql.shuffle.partitions", "4")
+        .config("spark.sql.shuffle.partitions", "1")
         # .config("spark.driver.extraJavaOptions", "-Ddev.ludovic.netlib.blas.nativeLibPath=/usr/lib64/libopenblaso-r0.3.17.so")
         # .config("spark.executor.extraJavaOptions", "-Ddev.ludovic.netlib.blas.nativeLibPath=/usr/lib64/libopenblaso-r0.3.17.so")
         .config("spark.driver.cores", "4")

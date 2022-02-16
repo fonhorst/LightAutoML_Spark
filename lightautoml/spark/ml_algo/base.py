@@ -13,6 +13,9 @@ from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.utils.tmp_utils import log_data, log_metric, is_datalog_enabled
 from lightautoml.validation.base import TrainValidIterator
+from pyspark.ml.functions import vector_to_array
+from pyspark.sql.functions import udf
+from pyspark.sql.types import FloatType, DoubleType
 
 # from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
 
@@ -87,7 +90,7 @@ class TabularMLAlgo(MLAlgo):
 
         # spark
         outp_dim = 1
-        if self.task.name == "multiclass":
+        if self.task.name in ["multiclass", "binary"]:
             # TODO: SPARK-LAMA working with target should be reflected in SparkDataset
             tdf: SparkDataFrame = valid_ds.target
             outp_dim = tdf.select(F.max(valid_ds.target_column).alias("max")).first()
@@ -119,17 +122,29 @@ class TabularMLAlgo(MLAlgo):
 
             model, pred, prediction_column = self.fit_predict_single_fold(train, valid)
 
-            pred = pred.select(
-                SparkDataset.ID_COLUMN,
-                F.col(prediction_column).alias(f"{pred_col_prefix}_{n}")
-            )
+            # logger.info(pred.printSchema())
 
-            if is_datalog_enabled():
-                tmp_ds = valid.empty()
-                tmp_ds.set_data(pred, f"{pred_col_prefix}_{n}", NumericRole(np.float32, force_input=True,
-                                                                prob=self.task.name in ["binary", "multiclass"]))
-                val_score = self.score(tmp_ds)
-                log_metric("spark", f"fit_predict_{type(self).__name__}_{n}", "valid_score", str(val_score))
+            # firstelement = udf(lambda v: float(v[0]), DoubleType())
+
+            if self.task.name in ["binary"]:
+                pred = pred.select(
+                    SparkDataset.ID_COLUMN,
+                    F.col(prediction_column).alias(f"{pred_col_prefix}_{n}"), #prediction_column
+                )
+
+            elif self.task.name in ["reg", "multiclass"]:
+                pred = pred.select(
+                    SparkDataset.ID_COLUMN,
+                    F.col(prediction_column).alias(f"{pred_col_prefix}_{n}")
+                )
+                # pred = pred.withColumn(f"{pred_col_prefix}_{n}", vector_to_array(f"{pred_col_prefix}_{n}"))
+
+            # if is_datalog_enabled():
+            #     # tmp_ds = valid.empty()
+            #     # tmp_ds.set_data(pred, f"{pred_col_prefix}_{n}") # NumericRole(np.float32, force_input=True,
+            #                                                     # prob=self.task.name in ["binary", "multiclass"])
+            #     val_score = self.score(pred)
+            #     log_metric("spark", f"fit_predict_{type(self).__name__}_{n}", "valid_score", str(val_score))
 
             self.models.append(model)
             preds_dfs.append(pred)
@@ -148,6 +163,10 @@ class TabularMLAlgo(MLAlgo):
         # TODO: send the "parent" dataset of the train_valid_iterator for unwinding later
         #       e.g. from the train_valid_iterator
         pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
+
+        logger.info(pred_ds.data.printSchema())
+
+        # pred_ds = pred_ds.withColumn(prediction_column, array_to_vector(prediction_column))
 
         if iterator_len > 1:
             logger.info(
@@ -231,7 +250,7 @@ class TabularMLAlgo(MLAlgo):
         # 5. we also convert output from vector to an array to combine them
         counter_col_name = "counter"
 
-        if self.task.name == "multiclass":
+        if self.task.name in ["multiclass", "binary"]:
             empty_pred = F.array(*[F.lit(0.0) for _ in range(self.n_classes)])
 
             def convert_col(prediction_column: str) -> Column:
