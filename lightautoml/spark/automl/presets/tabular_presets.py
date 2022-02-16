@@ -4,6 +4,7 @@ from copy import deepcopy, copy
 from typing import Optional, Sequence, Iterable, cast, Union, Tuple, Callable, List
 
 import pandas as pd
+from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
 from lightautoml.automl.presets.base import AutoMLPreset, upd_params
@@ -12,19 +13,17 @@ from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.pipelines.selection.base import SelectionPipeline, ComposedSelector
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
 from lightautoml.pipelines.selection.permutation_importance_based import NpIterativeFeatureSelector
-from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
-from lightautoml.spark.pipelines.selection.permutation_importance_based import NpPermutationImportanceEstimator
 from lightautoml.reader.tabular_batch_generator import ReadableToDf, read_data
 from lightautoml.spark.automl.blend import WeightedBlender
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
-from lightautoml.spark.ml_algo.linear_pyspark import LinearLBFGS
-from lightautoml.spark.pipelines.features.lgb_pipeline import LGBSimpleFeatures, LGBAdvancedPipeline
-from lightautoml.spark.pipelines.features.linear_pipeline import LinearFeatures
-from lightautoml.spark.pipelines.ml.nested_ml_pipe import NestedTabularMLPipeline
+from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
+from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
+from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
+from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
+from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline
+from lightautoml.spark.pipelines.selection.permutation_importance_based import NpPermutationImportanceEstimator
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.validation.folds_iterator import SparkFoldsIterator
-
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.tasks import Task
 from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
@@ -183,7 +182,7 @@ class SparkTabularAutoML(AutoMLPreset):
             time_score = self.get_time_score(n_level, "lgb", False)
 
             sel_timer_0 = self.timer.get_task_timer("lgb", time_score)
-            selection_feats = LGBSimpleFeatures()
+            selection_feats = SparkLGBSimpleFeatures()
 
             selection_gbm = SparkBoostLGBM(timer=sel_timer_0, **lgb_params)
             selection_gbm.set_prefix("Selector")
@@ -204,7 +203,7 @@ class SparkTabularAutoML(AutoMLPreset):
                 time_score = self.get_time_score(n_level, "lgb", False)
 
                 sel_timer_1 = self.timer.get_task_timer("lgb", time_score)
-                selection_feats = LGBSimpleFeatures()
+                selection_feats = SparkLGBSimpleFeatures()
                 selection_gbm = SparkBoostLGBM(timer=sel_timer_1, **lgb_params)
                 selection_gbm.set_prefix("Selector")
 
@@ -224,15 +223,15 @@ class SparkTabularAutoML(AutoMLPreset):
         return pre_selector
 
     # TODO: SPARK-LAMA rewrite in the descdent
-    def get_linear(self, n_level: int = 1, pre_selector: Optional[SelectionPipeline] = None) -> NestedTabularMLPipeline:
+    def get_linear(self, n_level: int = 1, pre_selector: Optional[SelectionPipeline] = None) -> SparkNestedTabularMLPipeline:
 
         # linear model with l2
         time_score = self.get_time_score(n_level, "linear_l2")
         linear_l2_timer = self.timer.get_task_timer("reg_l2", time_score)
-        linear_l2_model = LinearLBFGS(timer=linear_l2_timer, **self.linear_l2_params)
-        linear_l2_feats = LinearFeatures(output_categories=True, **self.linear_pipeline_params)
+        linear_l2_model = SparkLinearLBFGS(timer=linear_l2_timer, **self.linear_l2_params)
+        linear_l2_feats = SparkLinearFeatures(output_categories=True, **self.linear_pipeline_params)
 
-        linear_l2_pipe = NestedTabularMLPipeline(
+        linear_l2_pipe = SparkNestedTabularMLPipeline(
             [linear_l2_model],
             force_calc=True,
             pre_selection=pre_selector,
@@ -249,7 +248,7 @@ class SparkTabularAutoML(AutoMLPreset):
             pre_selector: Optional[SelectionPipeline] = None,
     ):
 
-        gbm_feats = LGBAdvancedPipeline(**self.gbm_pipeline_params)
+        gbm_feats = SparkLGBAdvancedPipeline(**self.gbm_pipeline_params)
 
         ml_algos = []
         force_calc = []
@@ -278,13 +277,12 @@ class SparkTabularAutoML(AutoMLPreset):
             ml_algos.append(gbm_model)
             force_calc.append(force)
 
-        gbm_pipe = NestedTabularMLPipeline(
+        gbm_pipe = SparkNestedTabularMLPipeline(
             ml_algos, force_calc, pre_selection=pre_selector, features_pipeline=gbm_feats, **self.nested_cv_params
         )
 
         return gbm_pipe
 
-    # TODO: SPARK-LAMA correct it to rewrite only some submethods in the descendant
     def create_automl(self, **fit_args):
         """Create basic automl instance.
 
@@ -552,7 +550,7 @@ class SparkTabularAutoML(AutoMLPreset):
 
 
         # for pycharm)
-        level_predictions = None
+        level_predictions: SparkDataset = None
         pipes = None
 
         self.levels = []
@@ -609,7 +607,7 @@ class SparkTabularAutoML(AutoMLPreset):
                 sds = cast(SparkDataset, train_valid.train)
                 sdf = sds.data.select(*sds.service_columns, *list(roles.keys()))
                 level_predictions = sds.empty()
-                level_predictions.set_data(sdf, None, roles)
+                level_predictions.set_data(sdf, sdf.columns, roles)
                 
             train_valid = self._create_validation_iterator(level_predictions, None, n_folds=None, cv_iter=None)
 
@@ -620,18 +618,18 @@ class SparkTabularAutoML(AutoMLPreset):
 
         del self._levels
 
-        # TODO: SPARK-LAMA where is the blended prediction?
-        # TODO: SPARK-LAMA build transformer
-        # TODO: blender and reader also should give us transformers
-        if self.return_all_predictions:
-            oof_pred = self._concatenate_datasets(level_predictions)
-        else:
-            oof_pred = blended_prediction
+        # TODO: build transformer
+        stages = [self.reader.transformer]\
+                       + [ml_pipe.transformer for level in self.levels for ml_pipe in level] \
+                       + [self.blender.transformer]
+        automl_transformer = PipelineModel(stages=stages)
+
+        oof_pred = level_predictions if self.return_all_predictions else blended_prediction
 
         logger.info("\x1b[1mAutoml preset training completed in {:.2f} seconds\x1b[0m\n".format(self.timer.time_spent))
         logger.info(f"Model description:\n{self.create_model_str_desc()}\n")
 
-        return cast(SparkDataset, oof_pred)
+        return oof_pred
 
     # TODO: SPARK-LAMA rewrite in the descdent
     def predict(

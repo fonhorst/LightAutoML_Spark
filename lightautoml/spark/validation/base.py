@@ -25,6 +25,18 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
             input_roles = train.roles
         self._input_roles = input_roles
 
+    def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
+        """Define how to get next object.
+
+        Returns:
+            a tuple with:
+            - full dataset (both train and valid parts with column containing the bool feature),
+            - train part of the dataset
+            - validation part of the dataset.
+
+        """
+        ...
+
     @property
     def features(self) -> List[str]:
         return self.input_features

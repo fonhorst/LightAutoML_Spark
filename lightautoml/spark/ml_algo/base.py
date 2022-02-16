@@ -122,7 +122,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         pred_col_prefix = self._predict_feature_name()
 
         self._models_prediction_columns = []
-        for n, (idx, train, valid) in enumerate(train_valid_iterator):
+        for n, (full, train, valid) in enumerate(train_valid_iterator):
             if iterator_len > 1:
                 logger.info2(
                     "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m =====".format(n, self._name)
@@ -130,7 +130,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
             self.timer.set_control_point()
 
             model_prediction_col = f"{pred_col_prefix}_{n}"
-            model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
+            model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, full, train, valid)
 
             self._models_prediction_columns.append(model_prediction_col)
             self.models.append(model)
@@ -170,19 +170,26 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
 
         # TODO: SPARK-LAMA repair it later
-        # if iterator_len > 1:
-        #     logger.info(
-        #         f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(pred_ds)}\x1b[0m")
-        #
-        # if iterator_len > 1 or "Tuned" not in self._name:
-        #     logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
+        if iterator_len > 1:
+            single_pred_ds = self._make_single_prediction_dataset(pred_ds)
+            logger.info(
+                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(single_pred_ds)}\x1b[0m")
+
+        if iterator_len > 1 or "Tuned" not in self._name:
+            logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
 
         return pred_ds
 
-    def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+    def fit_predict_single_fold(self,
+                                fold_prediction_column: str,
+                                full: SparkDataset,
+                                train: SparkDataset,
+                                valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
         Args:
+            fold_prediction_column: column name for predictions made for this fold
+            full: Full dataset that include train and valid parts and a bool column that delimits records
             train: Train Dataset.
             valid: Validation Dataset.
 
@@ -247,6 +254,15 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
     def _build_averaging_transformer(self) -> Transformer:
         raise NotImplementedError()
+
+    def _make_single_prediction_dataset(self, dataset: SparkDataset) -> SparkDataset:
+        preds = dataset.data.select(SparkDataset.ID_COLUMN, dataset.target_column, self.prediction_feature)
+        roles = {self.prediction_feature: dataset.roles[self.prediction_feature]}
+
+        output: SparkDataset = dataset.empty()
+        output.set_data(preds, preds.columns, roles)
+
+        return output
 
 
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):

@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
         final = PipelineModel(stages=[linear_features.transformer, spark_ml_algo.transformer])
 
-        final_result = final.transform(sdataset_tmp.data)
+        final_result = final.transform(sdataset.data)
         final_result.write.mode('overwrite').format('noop').save()
 
         logger.info("Finished")

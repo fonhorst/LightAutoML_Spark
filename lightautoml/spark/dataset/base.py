@@ -35,13 +35,6 @@ class SparkDataset(LAMLDataset):
 
         return dataset
 
-    @staticmethod
-    def uncache_dataframes():
-        spark = SparkSession.getActiveSession()
-        tables = spark.catalog.listTables()
-        for table in tables:
-            spark.catalog.uncacheTable(table.name)
-
     @classmethod
     def concatenate(cls, datasets: Sequence["SparkDataset"]) -> "SparkDataset":
         """
@@ -69,7 +62,7 @@ class SparkDataset(LAMLDataset):
         curr_sdf = cast(SparkDataFrame, curr_sdf.select(datasets[0].data[cls.ID_COLUMN], *features))
 
         output = datasets[0].empty()
-        output.set_data(curr_sdf, features, roles, dependencies=[d for ds in datasets for d in ds.dependencies])
+        output.set_data(curr_sdf, features, roles)
 
         return output
 
@@ -179,10 +172,9 @@ class SparkDataset(LAMLDataset):
 
     @property
     def shape(self) -> Tuple[Optional[int], Optional[int]]:
-        return -1, len(self.features)
-        # TODO: we may call count here but it may lead to a huge calculation
+        # TODO: SPARK-LAMA raise warning
         # assert self.data.is_cached, "Shape should not be calculated if data is not cached"
-        # return self.data.count(), len(self.data.columns)
+        return self.data.count(), len(self.features)
 
     @property
     def target_column(self) -> str:
@@ -193,76 +185,14 @@ class SparkDataset(LAMLDataset):
         return self._folds_column
 
     @property
-    def dependencies(self) -> Optional[List['SparkDataset']]:
-        return self._dependencies
-
-    @dependencies.setter
-    def dependencies(self, val: List['SparkDataset']) -> None:
-        assert not self._dependencies
-        self._dependencies = val
-
-    @property
-    def is_frozen_in_cache(self) -> bool:
-        return self._is_frozen_in_cache
-
-    @is_frozen_in_cache.setter
-    def is_frozen_in_cache(self, val: bool) -> None:
-        self._is_frozen_in_cache = val
-
-    @property
     def service_columns(self) -> List[str]:
-        return list(self._service_columns)
-
-    def cache_and_materialize(self) -> None:
-        """
-        This method caches Spark DataFrame and calls count() to materialize the data in Spark cache
-        Be aware it is a blocking operation
-        """
-        if not self.data.is_cached:
-            self.data = self.data.cache()
-        self.data.count()
-
-    def cache(self) -> None:
-        if not self.data.is_cached:
-            self.data = self.data.cache()
-
-    def uncache(self) -> None:
-        if not self.is_frozen_in_cache:
-            self.data.unpersist()
-
-    def unwind_dependencies(self) -> None:
-        """
-            Uncache all dependencies, e.g. the parent (or parents) of this spark dataframe.
-            Use this method when it is assured that the current dataset has been already materialized.
-            (for instance, after a fit method is applied).
-        """
-        for sds in self._dependencies:
-            sds.uncache()
-
-    @contextmanager
-    def applying_temporary_caching(self):
-        """Performs cache and uncache before and after a code block"""
-        if not self.data.is_cached:
-            self.data = self.data.cache()
-
-        is_already_frozen = self.is_frozen_in_cache
-
-        if not is_already_frozen:
-            self.is_frozen_in_cache = True
-
-        yield self
-
-        if not is_already_frozen:
-            self.is_frozen_in_cache = False
-            self.data = self.data.unpersist()
+        return [sc for sc in self._service_columns if sc in self.data.columns]
 
     def __repr__(self):
         return f"SparkDataset ({self.data})"
 
     def __getitem__(self, k: Tuple[RowSlice, ColSlice]) -> Union["LAMLDataset", LAMLColumn]:
         rslice, clice = k
-
-        # TODO: make handling of rslice
 
         if isinstance(clice, str):
             clice = [clice]
@@ -272,7 +202,7 @@ class SparkDataset(LAMLDataset):
             f"Presented: {self.features}\n" \
             f"Asked for: {clice}"
 
-        present_svc_cols = [c for c in self.data.columns if c in self.service_columns]
+        present_svc_cols = [c for c in self.service_columns]
         sdf = cast(SparkDataFrame, self.data.select(*present_svc_cols, *clice))
         roles = {c: self.roles[c] for c in clice}
 
@@ -315,14 +245,17 @@ class SparkDataset(LAMLDataset):
         all_cols_and_roles = {c: role for c_arr, role in arr_cols for c in c_arr}
         all_cols = [scol for scol, _ in all_cols_and_roles.items()]
 
+        if self.target_column is not None:
+            all_cols.append(self.target_column)
+
         sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(*all_cols)
-        all_roles = {c: all_cols_and_roles[c] for c in sdf.columns}
+        all_roles = {c: all_cols_and_roles[c] for c in sdf.columns if c not in self.service_columns}
 
         data = sdf.toPandas()
 
         df = pd.DataFrame(data=data.to_dict())
 
-        if 'target' in self.__dict__ and self.target is not None:
+        if self.target_column is not None:
             target_series = df[self.target_column]
             df = df.drop(self.target_column, 1)
         else:
@@ -389,45 +322,11 @@ class SparkDataset(LAMLDataset):
 
     @staticmethod
     def _hstack(datasets: Sequence[Any]) -> Any:
-        # TODO: we need to use join to implement this operation
-        # TODO: to perform join correctly we need to have unique id for each row
-        # TODO: and optionally have bucketed tables (bucketed by the same way)
-        raise NotImplementedError("It is not yet ready")
+        raise NotImplementedError("Unsupported operation for this dataset type")
 
     @staticmethod
     def _get_cols(data, k: IntIdx) -> Any:
-        raise NotImplementedError("It is not yet ready")
-
-    @staticmethod
-    def from_lama(dataset: Union[NumpyDataset, PandasDataset], spark: SparkSession) -> "SparkDataset":
-        dataset: PandasDataset = dataset.to_pandas()
-        pdf = cast(pd.DataFrame, dataset.data)
-        pdf = pdf.copy()
-        pdf[SparkDataset.ID_COLUMN] = pdf.index
-        sdf = spark.createDataFrame(data=pdf)
-
-        try:
-            target = dataset.target
-            if isinstance(target, pd.Series):
-                target = target.to_numpy()
-        except AttributeError:
-            target = None
-
-        try:
-            folds = dataset.folds
-            if isinstance(folds, pd.Series):
-                folds = folds.to_numpy()
-        except AttributeError:
-            folds = None
-
-        return SparkDataset(
-            data=sdf,
-            roles=dataset.roles,
-            task=dataset.task,
-            dependencies=[],
-            target=target,
-            folds=folds
-        )
+        raise NotImplementedError("Unsupported operation for this dataset type")
 
     @staticmethod
     def from_dataset(dataset: "LAMLDataset") -> "LAMLDataset":

@@ -5,21 +5,17 @@ from copy import copy
 from typing import Tuple, Optional, List
 from typing import Union
 
-from pyspark.ml import Pipeline, Transformer, PipelineModel
+import numpy as np
+from pyspark.ml import Pipeline, Transformer, PipelineModel, Estimator
 from pyspark.ml.classification import LogisticRegression, LogisticRegressionModel
 from pyspark.ml.feature import VectorAssembler, OneHotEncoder
 from pyspark.ml.regression import LinearRegression, LinearRegressionModel
-
 from pyspark.sql import functions as F
 
-from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, TabularMLAlgoTransformer, AveragingTransformer
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ...utils.timer import TaskTimer
-from ...utils.tmp_utils import log_data
-
-
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +72,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
     def _infer_params(self,
                       train: SparkDataset,
-                      fold_prediction_column: str) -> Tuple[List[Tuple[float, Pipeline]], int]:
+                      fold_prediction_column: str) -> Tuple[List[Tuple[float, Estimator]], int]:
         logger.debug("Building pipeline in linear lGBFS")
         params = copy(self.params)
 
@@ -99,7 +95,8 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             if self.task.name in ["binary", "multiclass"]:
                 model = LogisticRegression(featuresCol=self._assembler.getOutputCol(),
                                            labelCol=train.target_column,
-                                           predictionCol=fold_prediction_column if train.task.name != "multiclass" else "prediction",
+                                           predictionCol=fold_prediction_column
+                                           if train.task.name != "multiclass" else "prediction",
                                            **instance_params)
             elif self.task.name == "reg":
                 model = LinearRegression(featuresCol=self._assembler.getOutputCol(),
@@ -118,12 +115,15 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
     def fit_predict_single_fold(self,
                                 fold_prediction_column: str,
+                                full: SparkDataset,
                                 train: SparkDataset,
                                 valid: SparkDataset
     ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
         Args:
+            fold_prediction_column: column name for predictions made for this fold
+            full: Full dataset that include train and valid parts and a bool column that delimits records
             train: Train Dataset.
             valid: Validation Dataset.
 

@@ -137,10 +137,6 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
 
         dataset = cast(SparkDataset, dataset)
 
-        # TODO: SPARK-LAMA same problem with caching - we don't know when to uncache
-        # we should uncache only after the whole AutoML workflow is materialized
-        dataset.cache()
-
         for model in self.ml_algos:
             pred = cast(SparkDataset, model.predict(dataset))
             predictions.append(pred)

@@ -264,20 +264,13 @@ class ObsoleteSparkTransformer(LAMLTransformer):
         #  e.g fit_transform returns a cached and materialized dataset
         logger.info(f"fit_transform in {self._fname_prefix}: {type(self)}")
 
-        dataset.cache()
         self.fit(dataset)
 
         # when True, it means that during fit operation we conducted some action that
         # materialized our current dataset and thus we can unpersist all its dependencies
         # because we have data to propagate in the cache already
-        if self._can_unwind_parents:
-            dataset.unwind_dependencies()
-            deps = [dataset]
-        else:
-            deps = dataset.dependencies
 
         result = self.transform(dataset)
-        result.dependencies = deps
 
         return result
 

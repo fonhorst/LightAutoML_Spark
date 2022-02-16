@@ -188,15 +188,16 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return suggested_params
 
     def _get_default_search_spaces(self, suggested_params: Dict, estimated_n_trials: int) -> Dict:
-        """Sample hyperparameters from suggested.
+        """Train on train dataset and predict on holdout dataset.
 
         Args:
-            trial: Optuna trial object.
-            suggested_params: Dict with parameters.
-            estimated_n_trials: Maximum number of hyperparameter estimations.
+            fold_prediction_column: column name for predictions made for this fold
+            full: Full dataset that include train and valid parts and a bool column that delimits records
+            train: Train Dataset.
+            valid: Validation Dataset.
 
         Returns:
-            dict with sampled hyperparameters.
+            Target predictions for valid dataset.
 
         """
         assert self.task is not None
@@ -263,11 +264,15 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         return pred
 
-    def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
-        assert self.validation_column in train.data.columns, 'Train should contain validation column'
+    def fit_predict_single_fold(self,
+                                fold_prediction_column: str,
+                                full: SparkDataset,
+                                train: SparkDataset,
+                                valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+        assert self.validation_column in full.data.columns, 'Train should contain validation column'
 
         if self.task is None:
-            self.task = train.task
+            self.task = full.task
 
         (
             params,
@@ -276,7 +281,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             feval,
         ) = self._infer_params()
 
-        logger.info(f"Input cols for the vector assembler: {train.features}")
+        logger.info(f"Input cols for the vector assembler: {full.features}")
         logger.info(f"Running lgb with the following params: {params}")
 
         # TODO: reconsider using of 'keep' as a handleInvalid value
@@ -287,16 +292,16 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                 handleInvalid="keep"
             )
 
-        LGBMBooster = LightGBMRegressor if train.task.name == "reg" else LightGBMClassifier
+        LGBMBooster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
 
-        if train.task.name == "multiclass":
+        if full.task.name == "multiclass":
             params["probabilityCol"] = fold_prediction_column
 
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
-            labelCol=train.target_column,
-            predictionCol=fold_prediction_column if train.task.name != "multiclass" else "prediction",
+            labelCol=full.target_column,
+            predictionCol=fold_prediction_column if full.task.name != "multiclass" else "prediction",
             validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
             isProvideTrainingMetric=True
@@ -304,15 +309,14 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         logger.info(f"In GBM with params: {lgbm.params}")
 
-        if train.task.name == "reg":
+        if full.task.name == "reg":
             lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
 
-        temp_sdf = self._assembler.transform(train.data)
+        temp_sdf = self._assembler.transform(full.data)
 
         ml_model = lgbm.fit(temp_sdf)
 
         val_pred = ml_model.transform(self._assembler.transform(valid.data))
-        # val_pred = val_pred.select('*', fold_prediction_column)
 
         return ml_model, val_pred, fold_prediction_column
 
