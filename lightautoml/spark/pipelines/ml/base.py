@@ -10,6 +10,7 @@ from pyspark.ml import Transformer, PipelineModel
 from lightautoml.validation.base import TrainValidIterator
 from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
 from ..features.base import SparkFeaturesPipeline, SelectTransformer
+from ...transformers.base import ColumnsSelectorTransformer
 from ...utils import Cacher
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
@@ -99,10 +100,10 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         out_roles = copy(self._output_roles)
         out_roles.update(input_roles)
 
-        select_transformer = SelectTransformer([
-            SparkDataset.ID_COLUMN,
-            *list(out_roles.keys())
-        ])
+        select_transformer = ColumnsSelectorTransformer(
+            input_cols=[SparkDataset.ID_COLUMN, *list(out_roles.keys())],
+            optional_cols=[train_valid.train.target_column] if train_valid.train.target_column else []
+        )
         ml_algo_transformers = PipelineModel(stages=[ml_algo.transformer for ml_algo in self.ml_algos])
         self._transformer = PipelineModel(stages=[fp.transformer, ml_algo_transformers, select_transformer])
 

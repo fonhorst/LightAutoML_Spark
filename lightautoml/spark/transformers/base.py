@@ -155,6 +155,10 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
         cols_to_leave = [f for f in input_df.columns if f not in input_cols]
         return input_df.select(*cols_to_leave, *cols_to_add)
 
+    def transform(self, dataset, params=None):
+        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+        return super().transform(dataset, params)
+
 
 class SparkUnionTransformer:
     def __init__(self, transformer_list: List[SparkEstOrTrans]):
@@ -282,15 +286,28 @@ class ObsoleteSparkTransformer(LAMLTransformer):
 
 
 class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols):
+    optionalCols = Param(Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString)
 
     def __init__(self,
-                 input_cols: Optional[List[str]] = None):
+                 input_cols: Optional[List[str]] = None,
+                 optional_cols: Optional[List[str]] = None):
         super().__init__()
+        optional_cols = optional_cols if optional_cols else []
+        assert len(set(input_cols).intersection(set(optional_cols))) == 0, \
+            "Input columns and optional columns cannot intersect"
+
         self.set(self.inputCols, input_cols)
+        self.set(self.optionalCols, optional_cols)
         self.set(self.outputCols, input_cols)
 
+    def getOptionalCols(self) -> List[str]:
+        return self.getOrDefault(self.optionalCols)
+
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        return dataset.select(self.getInputCols())
+        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+        ds_cols = set(dataset.columns)
+        present_opt_cols = [c for c in self.getOptionalCols() if c in ds_cols]
+        return dataset.select(*self.getInputCols(), *present_opt_cols)
 
 
 class ChangeRolesTransformer(SparkBaseTransformer):

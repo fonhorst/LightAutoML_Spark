@@ -16,6 +16,7 @@ from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
+from ..transformers.base import ColumnsSelectorTransformer
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 from ...reader.base import RolesDict
@@ -255,8 +256,9 @@ class SparkAutoML:
 
         blended_prediction, last_pipes = self.blender.fit_predict(level_predictions, pipes)
         self.levels.append(last_pipes)
-        self.reader.upd_used_features(remove=list(set(self.reader.used_features) - set(self.collect_used_feats())))
-        # self._transformer = self._build_transformer()
+
+        # TODO: SPARK-LAMA fix it later
+        # self.reader.upd_used_features(remove=list(set(self.reader.used_features) - set(self.collect_used_feats())))
 
         del self._levels
 
@@ -283,6 +285,7 @@ class SparkAutoML:
 
         """
         dataset = self.reader.read(data, features_names, add_array_attrs=add_reader_attrs)
+        logger.info(f"After Reader in {type(self)}. Columns: {sorted(dataset.data.columns)}")
         automl_transformer, roles = self._build_transformer(no_reader=True, return_all_predictions=return_all_predictions)
         predictions = automl_transformer.transform(dataset.data)
 
@@ -359,6 +362,11 @@ class SparkAutoML:
             output_roles = dict()
             for ml_pipe in self.levels[-1]:
                 output_roles.update(ml_pipe.output_roles)
+            sel_tr = ColumnsSelectorTransformer(
+                input_cols=[SparkDataset.ID_COLUMN] + list(output_roles.keys()),
+                optional_cols=[self.reader.target_col] if self.reader.target_col else []
+            )
+            stages.append(sel_tr)
 
         automl_transformer = PipelineModel(stages=stages)
 

@@ -425,9 +425,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             self,
             data: ReadableIntoSparkDf,
             features_names: Optional[Sequence[str]] = None,
-            batch_size: Optional[int] = None,
-            n_jobs: Optional[int] = 1,
             return_all_predictions: Optional[bool] = None,
+            add_reader_attrs: bool = False
     ) -> SparkDataset:
         """Get dataset with predictions.
 
@@ -465,7 +464,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         read_csv_params = self._get_read_csv_params()
 
         data, _ = self._read_data(data, features_names, read_csv_params)
-        pred = super().predict(data, features_names, return_all_predictions)
+        pred = super().predict(data, features_names, return_all_predictions, add_reader_attrs)
         return pred
 
     def _read_data(self,

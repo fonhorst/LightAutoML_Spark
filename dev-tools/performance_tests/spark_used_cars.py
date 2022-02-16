@@ -86,7 +86,7 @@ def calculate_automl(path: str,
         logger.info(f"{metric_name} score for out-of-fold predictions: {metric_value}")
 
         with log_exec_time("spark-lama predicting on test"):
-            te_pred = automl.predict(test_data_dropped)
+            te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
 
             # te_pred = (
             #     te_pred.data

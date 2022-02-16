@@ -286,6 +286,8 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
         return self.getOrDefault(self.removeCols)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+
         pred_cols = self.getInputCols()
         if self.getOrDefault(self.taskName) in ["multiclass"]:
             def sum_arrays(x):
@@ -305,6 +307,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
         cols_to_remove = set(self.getRemoveCols())
         cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
         out_df = dataset.select(*cols_to_select, out_col)
+        logger.info(f"In the end of transformer {type(self)}. Columns: {sorted(dataset.columns)}")
         return out_df
 
     def write(self):

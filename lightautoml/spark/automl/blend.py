@@ -58,8 +58,10 @@ class SparkBlender(ABC):
     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
 
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
-            self._bypass = True
-            self._transformer = NoOpTransformer()
+            self._transformer = ColumnsSelectorTransformer(
+                input_cols=[SparkDataset.ID_COLUMN] + list(pipes[0].output_roles.keys()),
+                optional_cols=[predictions.target_column] if predictions.target_column else []
+            )
             self._output_roles = copy(predictions.roles)
             return predictions, pipes
 
