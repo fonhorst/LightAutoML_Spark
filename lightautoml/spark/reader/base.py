@@ -1,9 +1,10 @@
 import logging
+from copy import copy
 from typing import Optional, Any, List, Dict, Tuple
 
 import numpy as np
 from pyspark.sql import functions as F
-from pyspark.sql.types import IntegerType, NumericType, DoubleType, FloatType
+from pyspark.sql.types import IntegerType, NumericType, DoubleType, FloatType, StringType
 
 from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
@@ -140,6 +141,7 @@ class SparkToSparkReader(Reader):
         }
 
         self.params = kwargs
+        self._target_need_conversion = False
 
     def fit_read(
         self, train_data: SparkDataFrame, features_names: Any = None, roles: UserDefinedRolesDict = None, **kwargs: Any
@@ -320,7 +322,7 @@ class SparkToSparkReader(Reader):
 
         """
         kwargs = {}
-        target_col = "target"
+        service_columns = []
         if add_array_attrs:
             for array_attr in self.used_array_attrs:
                 col_name = self.used_array_attrs[array_attr]
@@ -328,19 +330,17 @@ class SparkToSparkReader(Reader):
                 if col_name not in data.columns:
                     continue
 
-                if array_attr == "target" and self.class_mapping is not None:
-                    data = data.na.replace(self.class_mapping, subset=[target_col])
+                if array_attr == "target":
+                    data = self._process_target_column(data, col_name)
 
-                kwargs[array_attr] = target_col
-
-        kwargs["target"] = self.target_col
+                kwargs[array_attr] = col_name
+                service_columns.append(col_name)
 
         data = self._create_unique_ids(data)
-        data = self._create_target(data, target_col=self.target_col)
 
         data = data.select(
             SparkDataset.ID_COLUMN,
-            self.target_col,
+            *service_columns,
             *[self._convert_column(feat) for feat in self.used_features]
         )
 
@@ -422,8 +422,6 @@ class SparkToSparkReader(Reader):
         nan_count = sdf.where(F.isnan(target_col)).count()
         assert nan_count == 0, "Nan in target detected"
 
-        rest_cols = [c for c in sdf.columns if c != target_col]
-
         if self.task.name != "reg":
             uniques = sdf.select(target_col).distinct().collect()
             uniques = [r[target_col] for r in uniques]
@@ -432,16 +430,23 @@ class SparkToSparkReader(Reader):
             # TODO: make it pretty
             # 1. check the column type if it is numeric or not
             # 2. if it is string can i convert it to num?
-            if isinstance(sdf.schema[target_col], NumericType):
-                srtd = np.ndarray(sorted(uniques))
+            if isinstance(sdf.schema[target_col].dataType, NumericType):
+                uniques = sorted(uniques)
+                self.class_mapping = {x: i for i, x in enumerate(uniques)}
+                srtd = np.ndarray(uniques)
             # elif isinstance(sdf.schema[target_col], StringType):
             #     try:
             #         srtd = np.ndarray(sorted([int(el) for el in uniques]))
             #         sdf = sdf
             #     except ValueError:
             #         srtd = None
-            else:
+            elif isinstance(sdf.schema[target_col].dataType, StringType):
+                self.class_mapping = {x: f"{i}" for i, x in enumerate(uniques)}
+                self._target_need_conversion = True
                 srtd = None
+            else:
+                raise ValueError(f"Unsupported type of target column {sdf.schema[target_col]}. "
+                                 f"Only numeric and string are supported.")
 
             if srtd and (np.arange(srtd.shape[0]) == srtd).all():
 
@@ -450,19 +455,9 @@ class SparkToSparkReader(Reader):
                     assert srtd.shape[0] == 2, "Binary task and more than 2 values in target"
                 return sdf
 
-            mapping = {x: i for i, x in enumerate(uniques)}
+        sdf_with_proc_target = self._process_target_column(sdf, target_col)
 
-            remap = F.udf(lambda x: mapping[x], returnType=IntegerType())
-
-            sdf_with_proc_target = sdf.select(*rest_cols, remap(target_col).alias(target_col))
-
-            self.class_mapping = mapping
-
-            return sdf_with_proc_target
-        else:
-            sdf = sdf.select(*rest_cols, F.col(target_col).astype(DoubleType()).alias(target_col))
-
-        return sdf
+        return sdf_with_proc_target
 
     def _get_default_role_from_str(self, name) -> RoleType:
         """Get default role for string name according to automl's defaults and user settings.
@@ -620,6 +615,21 @@ class SparkToSparkReader(Reader):
             result_column = F.col(feat)
 
         return result_column
+
+    def _process_target_column(self, sdf: SparkDataFrame, target_col: str) -> SparkDataFrame:
+        if self.class_mapping is not None:
+            sdf = sdf.replace(self.class_mapping, subset=[target_col])
+
+        to_type = FloatType() if self.task.name == "reg" else IntegerType()
+
+        cols = copy(sdf.columns)
+        cols.remove(target_col)
+        sdf = sdf.select(
+            *cols,
+            F.col(target_col).astype(to_type).alias(target_col)
+        )
+
+        return sdf
 
     # TODO: SPARK-LAMA will be implemented later
     # def advanced_roles_guess(self, dataset: SparkDataset, manual_roles: Optional[RolesDict] = None) -> RolesDict:

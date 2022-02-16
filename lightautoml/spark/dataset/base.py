@@ -76,11 +76,15 @@ class SparkDataset(LAMLDataset):
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
             self._target_column: str = kwargs["target"]
+        else:
+            self._target_column = None
 
         self._folds_column = None
         if "folds" in kwargs and kwargs["folds"] is not None:
             assert isinstance(kwargs["folds"], str), "Folds should be a str representing column name"
             self._folds_column: str = kwargs["folds"]
+        else:
+            self._folds_column = None
 
         self._validate_dataframe(data)
 
@@ -177,11 +181,11 @@ class SparkDataset(LAMLDataset):
         return self.data.count(), len(self.features)
 
     @property
-    def target_column(self) -> str:
+    def target_column(self) -> Optional[str]:
         return self._target_column
 
     @property
-    def folds_column(self) -> str:
+    def folds_column(self) -> Optional[str]:
         return self._folds_column
 
     @property
