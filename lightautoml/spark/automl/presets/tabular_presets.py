@@ -11,8 +11,8 @@ from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.pipelines.selection.base import SelectionPipeline, ComposedSelector
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
 from lightautoml.pipelines.selection.permutation_importance_based import NpIterativeFeatureSelector
-from lightautoml.reader.tabular_batch_generator import ReadableToDf, read_data
-from lightautoml.spark.automl.blend import WeightedBlender
+from lightautoml.reader.tabular_batch_generator import ReadableToDf
+from lightautoml.spark.automl.blend import SparkWeightedBlender
 from lightautoml.spark.automl.presets.base import SparkAutoMLPreset
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
@@ -20,7 +20,7 @@ from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline
-from lightautoml.spark.pipelines.selection.permutation_importance_based import NpPermutationImportanceEstimator
+from lightautoml.spark.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask
 
@@ -183,7 +183,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             selection_gbm.set_prefix("Selector")
 
             if selection_params["importance_type"] == "permutation":
-                importance = NpPermutationImportanceEstimator()
+                importance = SparkNpPermutationImportanceEstimator()
             else:
                 importance = ModelBasedImportanceEstimator()
 
@@ -202,9 +202,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 selection_gbm = SparkBoostLGBM(timer=sel_timer_1, **lgb_params)
                 selection_gbm.set_prefix("Selector")
 
-                # # TODO: Check about reusing permutation importance
-                importance = NpPermutationImportanceEstimator()
+                importance = SparkNpPermutationImportanceEstimator()
 
+                # TODO: SPARK-LAMA would it work here with SparkNpPermutationImportanceEstimator?
                 extra_selector = NpIterativeFeatureSelector(
                     selection_feats,
                     selection_gbm,
@@ -212,12 +212,12 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                     feature_group_size=selection_params["feature_group_size"],
                     max_features_cnt_in_result=selection_params["max_features_cnt_in_result"],
                 )
-                
+
+                # TODO: SPARK-LAMA would it work here with SparkNpPermutationImportanceEstimator?
                 pre_selector = ComposedSelector([pre_selector, extra_selector])
 
         return pre_selector
 
-    # TODO: SPARK-LAMA rewrite in the descdent
     def get_linear(self, n_level: int = 1, pre_selector: Optional[SelectionPipeline] = None) -> SparkNestedTabularMLPipeline:
 
         # linear model with l2
@@ -320,7 +320,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             levels.append(lvl)
 
         # blend everything
-        blender = WeightedBlender(max_nonzero_coef=self.general_params["weighted_blender_max_nonzero_coef"])
+        blender = SparkWeightedBlender(max_nonzero_coef=self.general_params["weighted_blender_max_nonzero_coef"])
 
         # initialize
         self._initialize(
@@ -408,11 +408,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         if roles is None:
             roles = {}
         read_csv_params = self._get_read_csv_params()
-        train, upd_roles = read_data(train_data, train_features, self.cpu_limit, read_csv_params)
+        train, upd_roles = self._read_data(train_data, train_features, self.cpu_limit, read_csv_params)
         if upd_roles:
             roles = {**roles, **upd_roles}
         if valid_data is not None:
-            data, _ = read_data(valid_data, valid_features, self.cpu_limit, self.read_csv_params)
+            data, _ = self._read_data(valid_data, valid_features, self.cpu_limit, self.read_csv_params)
 
         oof_pred = super().fit_predict(train, roles=roles, cv_iter=cv_iter, valid_data=valid_data, verbose=verbose)
 
@@ -462,33 +462,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
         read_csv_params = self._get_read_csv_params()
 
-        if batch_size is None and n_jobs == 1:
-            data, _ = read_data(data, features_names, self.cpu_limit, read_csv_params)
-            pred = super().predict(data, features_names, return_all_predictions)
-            return pred
-
-        data_generator = read_batch(
-            data,
-            features_names,
-            n_jobs=n_jobs,
-            batch_size=batch_size,
-            read_csv_params=read_csv_params,
-        )
-
-        if n_jobs == 1:
-            res = [self.predict(df, features_names, return_all_predictions) for df in data_generator]
-        else:
-            # TODO: Check here for pre_dispatch param
-            with Parallel(n_jobs, pre_dispatch=len(data_generator) + 1) as p:
-                res = p(delayed(self.predict)(df, features_names, return_all_predictions) for df in data_generator)
-
-        res = NumpyDataset(
-            np.concatenate([x.data for x in res], axis=0),
-            features=res[0].features,
-            roles=res[0].roles,
-        )
-
-        return res
+        data, _ = self._read_data(data, features_names, self.cpu_limit, read_csv_params)
+        pred = super().predict(data, features_names, return_all_predictions)
+        return pred
 
     def _read_data(self,
                    data: ReadableIntoSparkDf,
