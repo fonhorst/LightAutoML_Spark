@@ -150,9 +150,9 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         # 3. holdout - nothing
         # 4. custom - union + groupby
         neutral_element = (
-            F.array(*[F.lit(0.0) for _ in range(self.n_classes)])
+            F.array(*[F.lit(float('nan')) for _ in range(self.n_classes)])
             if self.task.name in ["binary", "multiclass"]
-            else F.lit(0.0)
+            else F.lit(float('nan'))
         )
         preds_dfs = [
             df.select(
