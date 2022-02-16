@@ -12,7 +12,7 @@ from lightautoml.pipelines.selection.base import SelectionPipeline, ComposedSele
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
 from lightautoml.pipelines.selection.permutation_importance_based import NpIterativeFeatureSelector
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
-from lightautoml.spark.automl.blend import SparkWeightedBlender
+from lightautoml.spark.automl.blend import SparkWeightedBlender, SparkBestModelSelector
 from lightautoml.spark.automl.presets.base import SparkAutoMLPreset
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
@@ -70,7 +70,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             config_path = os.path.join(base_dir, self._default_config_path)
         super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path)
 
-        logger.info("I'm here")
+        self._cacher_key = 'main_cache'
 
         self._spark = spark
         # upd manual params
@@ -227,6 +227,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         linear_l2_feats = SparkLinearFeatures(output_categories=True, **self.linear_pipeline_params)
 
         linear_l2_pipe = SparkNestedTabularMLPipeline(
+            self._cacher_key,
             [linear_l2_model],
             force_calc=True,
             pre_selection=pre_selector,
@@ -273,7 +274,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             force_calc.append(force)
 
         gbm_pipe = SparkNestedTabularMLPipeline(
-            ml_algos, force_calc, pre_selection=pre_selector, features_pipeline=gbm_feats, **self.nested_cv_params
+            self._cacher_key, ml_algos, force_calc, pre_selection=pre_selector, features_pipeline=gbm_feats, **self.nested_cv_params
         )
 
         return gbm_pipe
@@ -319,6 +320,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
             levels.append(lvl)
 
+        # TODO: SPARK-LAMA replace with the weighthed blender
         # blend everything
         blender = SparkWeightedBlender(max_nonzero_coef=self.general_params["weighted_blender_max_nonzero_coef"])
 
@@ -408,11 +410,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         if roles is None:
             roles = {}
         read_csv_params = self._get_read_csv_params()
-        train, upd_roles = self._read_data(train_data, train_features, self.cpu_limit, read_csv_params)
+        train, upd_roles = self._read_data(train_data, train_features, read_csv_params)
         if upd_roles:
             roles = {**roles, **upd_roles}
         if valid_data is not None:
-            data, _ = self._read_data(valid_data, valid_features, self.cpu_limit, self.read_csv_params)
+            data, _ = self._read_data(valid_data, valid_features, self.read_csv_params)
 
         oof_pred = super().fit_predict(train, roles=roles, cv_iter=cv_iter, valid_data=valid_data, verbose=verbose)
 

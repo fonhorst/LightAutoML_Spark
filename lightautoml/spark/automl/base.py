@@ -376,7 +376,10 @@ class SparkAutoML:
         return automl_transformer, output_roles
 
     @staticmethod
-    def _merge_train_and_valid_datasets(train: SparkDataset, valid: SparkDataset) -> SparkDataset:
+    def _merge_train_and_valid_datasets(train: SparkDataset, valid: Optional[SparkDataset]) -> SparkDataset:
+        if not valid:
+            return train
+
         assert len(set(train.features).symmetric_difference(set(valid.features))) == 0
 
         tcols = copy(train.data.columns)

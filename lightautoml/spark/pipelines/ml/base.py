@@ -22,11 +22,10 @@ from ....pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from ....pipelines.selection.base import SelectionPipeline
 
 
-class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRoles):
+class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
     def __init__(
         self,
         cacher_key: str,
-        input_roles: RolesDict,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
         pre_selection: Optional[SelectionPipeline] = None,
@@ -36,7 +35,6 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
     ):
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
-        self.input_roles = input_roles
         self._cacher_key = cacher_key
         self._output_features = None
         self._output_roles = None
@@ -66,6 +64,8 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
         """
 
         # train and apply pre selection
+        input_roles = copy(train_valid.input_roles)
+
         train_valid = train_valid.apply_selector(self.pre_selection)
 
         # apply features pipeline
@@ -97,7 +97,7 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
 
         # all out roles for the output dataset
         out_roles = copy(self._output_roles)
-        out_roles.update(self.input_roles)
+        out_roles.update(input_roles)
 
         select_transformer = SelectTransformer([
             SparkDataset.ID_COLUMN,

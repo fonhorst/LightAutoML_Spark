@@ -58,7 +58,6 @@ if __name__ == "__main__":
 
             ml_pipe = SparkMLPipeline(
                 cacher_key=cacher_key,
-                input_roles=sdataset.roles,
                 ml_algos=[spark_ml_algo],
                 pre_selection=spark_selector,
                 features_pipeline=spark_features_pipeline,
