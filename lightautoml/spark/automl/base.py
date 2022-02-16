@@ -1,8 +1,8 @@
 """Base AutoML class."""
-
+import collections
 import logging
 from copy import copy
-from typing import Any, Callable
+from typing import Any, Callable, Tuple
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -18,6 +18,7 @@ from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
+from ...reader.base import RolesDict
 from ...utils.logging import set_stdout_level, verbosity_to_loglevel
 from ...utils.timer import PipelineTimer
 
@@ -96,7 +97,7 @@ class SparkAutoML:
 
         """
         super().__init__()
-        self.levels = None
+        self.levels: Optional[Sequence[Sequence[SparkMLPipeline]]] = None
         self._transformer = None
         self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
@@ -352,6 +353,27 @@ class SparkAutoML:
         logger.info(f"Using train valid iterator of type: {type(iterator)}")
 
         return iterator
+
+    def _build_transformer(self, no_reader: bool = False,  return_all_predictions: bool = False) \
+            -> Tuple[Transformer, RolesDict]:
+        stages = []
+        if not no_reader:
+            stages.append(self.reader.make_transformer())
+
+        ml_pipes = [ml_pipe.transformer for level in self.levels for ml_pipe in level]
+        stages.extend(ml_pipes)
+
+        if not return_all_predictions:
+            stages.append(self.blender.transformer)
+            output_roles = self.blender.output_roles
+        else:
+            output_roles = dict()
+            for ml_pipe in self.levels[-1]:
+                output_roles.update(ml_pipe.output_roles)
+
+        automl_transformer = PipelineModel(stages=stages)
+
+        return automl_transformer, output_roles
 
     @staticmethod
     def _merge_train_and_valid_datasets(train: SparkDataset, valid: SparkDataset) -> SparkDataset:

@@ -1,25 +1,23 @@
 from abc import ABC
-from copy import deepcopy
+from copy import copy
 from typing import List, Optional, Sequence, Tuple, cast
 
 import numpy as np
+from pyspark.ml import Transformer
+from pyspark.ml.param import Params
+from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
+from pyspark.ml.util import MLWritable
 from pyspark.sql import functions as F
 from pyspark.sql.functions import isnan
 
 from lightautoml.automl.blend import Blender, \
-    BestModelSelector as LAMABestModelSelector, \
     WeightedBlender as LAMAWeightedBlender
 from lightautoml.dataset.roles import ColumnRole, NumericRole
+from lightautoml.reader.base import RolesDict
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.ml_algo.base import AveragingTransformer
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
-
-from pyspark.ml import Transformer, Estimator
-from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
-from pyspark.ml.param import Params
-from pyspark.ml.util import MLWritable
-
 from lightautoml.spark.tasks.base import DEFAULT_PREDICTION_COL_NAME
 from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
 
@@ -38,6 +36,12 @@ class SparkBlender(ABC):
         self._transformer = None
         self._single_prediction_col_name = DEFAULT_PREDICTION_COL_NAME
         self._pred_role: Optional[ColumnRole] = None
+        self._output_roles: Optional[RolesDict] = None
+
+    @property
+    def output_roles(self) -> RolesDict:
+        assert self._output_roles is not None, "Blender has not been fitted yet"
+        return self._output_roles
 
     @property
     def transformer(self) -> Transformer:
@@ -155,6 +159,8 @@ class SparkBestModelSelector(SparkBlender):
         self._transformer = ColumnsSelectorTransformer(
             input_cols=[SparkDataset.ID_COLUMN, self._single_prediction_col_name]
         )
+
+        self._output_roles = copy(best_pred.roles)
 
         return best_pred, [best_pipe]
 
@@ -305,7 +311,9 @@ class SparkWeightedBlender(SparkBlender):
         pred_ds = predictions.empty()
         pred_ds.set_data(df, df.columns, roles)
 
-        return pred_ds, pipes  
+        self._output_roles = copy(roles)
+
+        return pred_ds, pipes
 
 
 class WeightedBlenderTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
@@ -404,6 +412,8 @@ class SparkMeanBlender(SparkBlender):
         roles[self._single_prediction_col_name] = output_role
         pred_ds = predictions.empty()
         pred_ds.set_data(df, df.columns, roles)
+
+        self._output_roles = copy(roles)
 
         return pred_ds, pipes
 
