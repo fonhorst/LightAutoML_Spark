@@ -2,10 +2,11 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 
 from decorator import contextmanager
 from pyspark import RDD
+from pyspark.ml import Transformer, Estimator
 from pyspark.sql import SparkSession
 
 from lightautoml.spark.dataset.base import SparkDataFrame
@@ -137,3 +138,38 @@ def cache(df: SparkDataFrame) -> SparkDataFrame:
     if not df.is_cached:
         df = df.cache()
     return df
+
+
+class NoOpTransformer(Transformer):
+    def _transform(self, dataset):
+        return dataset
+
+
+class Cacher(Estimator):
+    _cacher_dict: Dict[str, SparkDataFrame] = dict()
+
+    @classmethod
+    def get_dataset_by_key(cls, key: str) -> Optional[SparkDataFrame]:
+        return cls._cacher_dict.get(key, None)
+
+    @property
+    def dataset(self) -> SparkDataFrame:
+        """Returns chached dataframe"""
+        return self._cacher_dict[self._key]
+
+    def __init__(self, key: str):
+        super().__init__()
+        self._key = key
+        self._dataset: Optional[SparkDataFrame] = None
+
+    def _fit(self, dataset):
+        ds = dataset.cache()
+        ds.write.mode('overwrite').format('noop').save()
+
+        previous_ds = self._cacher_dict.get(self._key, None)
+        if previous_ds:
+            previous_ds.unpersist()
+
+        self._cacher_dict[self._key] = ds
+
+        return NoOpTransformer()

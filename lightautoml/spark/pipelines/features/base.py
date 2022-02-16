@@ -1,7 +1,7 @@
 """Basic classes for features generation."""
 import itertools
 from copy import copy
-from typing import Any, Callable, cast, Dict, Set
+from typing import Any, Callable, cast, Set
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -17,7 +17,7 @@ from pyspark.sql import functions as F
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
-from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
 from lightautoml.spark.transformers.base import ChangeRolesTransformer
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
@@ -28,6 +28,7 @@ from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEsti
 from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.numeric import SparkQuantileBinningEstimator
+from lightautoml.spark.utils import NoOpTransformer, Cacher
 
 
 def build_graph(begin: SparkEstOrTrans):
@@ -81,41 +82,6 @@ class SelectTransformer(Transformer):
 
     def _transform(self, dataset):
         return dataset.select(self.getColsToSelect())
-
-
-class NoOpTransformer(Transformer):
-    def _transform(self, dataset):
-        return dataset
-
-
-class Cacher(Estimator):
-    _cacher_dict: Dict[str, SparkDataFrame] = dict()
-
-    @classmethod
-    def get_dataset_by_key(cls, key: str) -> Optional[SparkDataFrame]:
-        return cls._cacher_dict.get(key, None)
-
-    @property
-    def dataset(self) -> SparkDataFrame:
-        """Returns chached dataframe"""
-        return self._cacher_dict[self._key]
-
-    def __init__(self, key: str):
-        super().__init__()
-        self._key = key
-        self._dataset: Optional[SparkDataFrame] = None
-
-    def _fit(self, dataset):
-        ds = dataset.cache()
-        ds.write.mode('overwrite').format('noop').save()
-
-        previous_ds = self._cacher_dict.get(self._key, None)
-        if previous_ds:
-            previous_ds.unpersist()
-
-        self._cacher_dict[self._key] = ds
-
-        return NoOpTransformer()
 
 
 class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, FeaturesPipeline):
