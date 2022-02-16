@@ -32,7 +32,7 @@ if __name__ == "__main__":
             task_name="multiclass",
             input_cols=pred_cols,
             output_col="blended_prediction",
-            # wts=np.array([0.5, 0.25, 0.25]),
+            wts=np.array([0.5, 0.25, 0.25]),
             remove_cols=pred_cols
         )
 
@@ -51,7 +51,7 @@ if __name__ == "__main__":
             task_name="reg",
             input_cols=pred_cols,
             output_col="blended_prediction",
-            # wts=np.array([0.5, 0.25, 0.25]),
+            wts=np.array([0.5, 0.25, 0.25]),
             remove_cols=pred_cols
         )
         df = transformer.transform(df)
