@@ -100,9 +100,13 @@ class SparkAutoML:
         self._transformer = None
         self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
-    def make_transformer(self, return_all_predictions: bool = False) -> Transformer:
-        stages = [self.reader.make_transformer()] \
-                 + [ml_pipe.transformer for level in self.levels for ml_pipe in level]
+    def make_transformer(self, no_reader: bool = False,  return_all_predictions: bool = False) -> Transformer:
+        stages = []
+        if not no_reader:
+            stages.append(self.reader.make_transformer())
+
+        ml_pipes = [ml_pipe.transformer for level in self.levels for ml_pipe in level]
+        stages.extend(ml_pipes)
 
         if not return_all_predictions:
             stages.append(self.blender.transformer)
@@ -269,9 +273,10 @@ class SparkAutoML:
 
     def predict(
         self,
-        data: SparkDataFrame,
+        data: Any,
         features_names: Optional[Sequence[str]] = None,
         return_all_predictions: Optional[bool] = None,
+        add_reader_attrs: bool = False
     ) -> SparkDataset:
         """Predict with automl on new dataset.
 
@@ -285,9 +290,15 @@ class SparkAutoML:
             Dataset with predictions.
 
         """
-        predictions = self.make_transformer(return_all_predictions).transform(data)
-        # TODO: SPARK-LAMA infer roles and task
-        sds = SparkDataset(predictions, None, self.task)
+        dataset = self.reader.read(data, features_names, add_array_attrs=add_reader_attrs)
+        transformer = self.make_transformer(no_reader=True, return_all_predictions=return_all_predictions)
+        predictions = transformer.transform(data)
+
+        # TODO: SPARK-LAMA need to infer roles
+        roles = dict()
+        sds = dataset.empty()
+        sds.set_data(predictions, predictions.columns, roles)
+
         return sds
 
     def collect_used_feats(self) -> List[str]:
