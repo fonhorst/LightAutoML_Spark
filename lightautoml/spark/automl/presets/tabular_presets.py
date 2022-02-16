@@ -464,7 +464,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
         read_csv_params = self._get_read_csv_params()
 
-        data, _ = self._read_data(data, features_names, self.cpu_limit, read_csv_params)
+        data, _ = self._read_data(data, features_names, read_csv_params)
         pred = super().predict(data, features_names, return_all_predictions)
         return pred
 

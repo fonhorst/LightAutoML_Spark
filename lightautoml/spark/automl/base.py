@@ -102,17 +102,8 @@ class SparkAutoML:
         self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
     def make_transformer(self, no_reader: bool = False,  return_all_predictions: bool = False) -> Transformer:
-        stages = []
-        if not no_reader:
-            stages.append(self.reader.make_transformer())
 
-        ml_pipes = [ml_pipe.transformer for level in self.levels for ml_pipe in level]
-        stages.extend(ml_pipes)
-
-        if not return_all_predictions:
-            stages.append(self.blender.transformer)
-
-        automl_transformer = PipelineModel(stages=stages)
+        automl_transformer, _ = self._build_transformer(no_reader, return_all_predictions)
 
         return automl_transformer
 
@@ -292,11 +283,9 @@ class SparkAutoML:
 
         """
         dataset = self.reader.read(data, features_names, add_array_attrs=add_reader_attrs)
-        transformer = self.make_transformer(no_reader=True, return_all_predictions=return_all_predictions)
-        predictions = transformer.transform(data)
+        automl_transformer, roles = self._build_transformer(no_reader=True, return_all_predictions=return_all_predictions)
+        predictions = automl_transformer.transform(dataset.data)
 
-        # TODO: SPARK-LAMA need to infer roles
-        roles = dict()
         sds = dataset.empty()
         sds.set_data(predictions, predictions.columns, roles)
 

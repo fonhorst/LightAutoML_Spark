@@ -20,6 +20,7 @@ from lightautoml.spark.ml_algo.base import AveragingTransformer
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.tasks.base import DEFAULT_PREDICTION_COL_NAME
 from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
+from lightautoml.spark.utils import NoOpTransformer
 
 
 class SparkBlender(ABC):
@@ -58,6 +59,8 @@ class SparkBlender(ABC):
 
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
             self._bypass = True
+            self._transformer = NoOpTransformer()
+            self._output_roles = copy(predictions.roles)
             return predictions, pipes
 
         self._set_metadata(predictions, pipes)
@@ -278,6 +281,11 @@ class WeightedBlender(BlenderMixin, LAMAWeightedBlender):
 
 
 class SparkWeightedBlender(SparkBlender):
+    def __init__(self, max_nonzero_coef: float = 0.05):
+        super().__init__()
+        self.wts = None
+        self._max_nonzero_coef = max_nonzero_coef
+
     def _fit_predict(self,
                      predictions: SparkDataset,
                      pipes: Sequence[SparkMLPipeline]
@@ -289,7 +297,8 @@ class SparkWeightedBlender(SparkBlender):
             task_name=predictions.task.name,
             input_cols=pred_cols,
             output_col=self._single_prediction_col_name,
-            remove_cols=pred_cols
+            remove_cols=pred_cols,
+            wts=self.wts
         )
 
         df = self._transformer.transform(predictions.data)
@@ -315,6 +324,21 @@ class SparkWeightedBlender(SparkBlender):
 
         return pred_ds, pipes
 
+    def fit_predict(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) -> Tuple[
+        SparkDataset, Sequence[SparkMLPipeline]]:
+
+        pred_cols = [pred_col for pred_col, _, _ in self.split_models(predictions, pipes)]
+
+        length = len(pred_cols)
+
+        if self.wts is None:
+            self.wts = np.array([1.0 / length for col in pred_cols])
+        else:
+            assert len(self.wts) == length, 'Number of prediction cols and number of col weights must be equal'
+            self.wts = np.array([w for col, w in zip(pred_cols, self.wts)])
+
+        return super().fit_predict(predictions, pipes)
+
 
 class WeightedBlenderTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     taskName = Param(Params._dummy(), "taskName", "task name")
@@ -334,13 +358,6 @@ class WeightedBlenderTransformer(Transformer, HasInputCols, HasOutputCol, MLWrit
         if not remove_cols:
             remove_cols = []
         self.set(self.removeCols, remove_cols)
-
-        length = len(input_cols)
-        if wts is None:
-            wts = {col: 1.0 / length for col in input_cols}
-        else:
-            assert len(wts) == length, 'Number of prediction cols and number of col weights must be equal'
-            wts = {col: float(w) for col, w in zip(input_cols, wts)}
         self.set(self.wts, wts)
 
     def getRemoveCols(self) -> List[str]:
