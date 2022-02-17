@@ -130,9 +130,9 @@ logger = logging.getLogger(__name__)
 
 def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
-    dataset_name = "used_cars_dataset"
+    # dataset_name = "used_cars_dataset"
     # dataset_name = "lama_test_dataset"
-    # dataset_name = "ailerons_dataset"
+    dataset_name = "ailerons_dataset"
     # dataset_name = "buzz_dataset"
 
     config = copy(datasets()[dataset_name])

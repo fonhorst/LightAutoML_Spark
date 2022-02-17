@@ -204,7 +204,7 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
         #         )
         #         ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
         #     else:
-        #         change_roles_stage = ChangeRolesTransformer(
+        #         change_roles_stage = SparkChangeRolesTransformer(
         #             input_cols=intersections.getOutputCols(),
         #             input_roles=intersections.getOutputRoles(),
         #             role=output_category_role
