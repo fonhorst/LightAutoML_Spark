@@ -10,6 +10,7 @@ from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
 from pyspark.ml.util import MLWritable
 from pyspark.sql import functions as F, Column
 from pyspark.sql.functions import isnan
+from pyspark.sql.types import IntegerType
 
 from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo
@@ -152,7 +153,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         # 3. holdout - nothing
         # 4. custom - union + groupby
         neutral_element = (
-            F.array(*[F.lit(float('nan')) for _ in range(self.n_classes)])
+            array_to_vector(F.array(*[F.lit(float('nan')) for _ in range(self.n_classes)]))
             if self.task.name in ["binary", "multiclass"]
             else F.lit(float('nan'))
         )
@@ -270,12 +271,16 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     taskName = Param(Params._dummy(), "taskName", "task name")
     removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
+    convertToArrayFirst = Param(Params._dummy(), "convertToArrayFirst", "convert to array first")
+    weights = Param(Params._dummy(), "weights", "weights")
 
     def __init__(self,
                  task_name: str,
                  input_cols: List[str],
                  output_col: str,
-                 remove_cols: Optional[List[str]] = None):
+                 remove_cols: Optional[List[str]] = None,
+                 convert_to_array_first: bool = False,
+                 weights: Optional[List[int]] = None):
         super().__init__()
         self.set(self.taskName, task_name)
         self.set(self.inputCols, input_cols)
@@ -283,33 +288,63 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
         if not remove_cols:
             remove_cols = []
         self.set(self.removeCols, remove_cols)
+        self.set(self.convertToArrayFirst, convert_to_array_first)
+        if weights is None:
+            weights = [1.0 for _ in input_cols]
+
+        assert len(input_cols) == len(weights)
+
+        self.set(self.weights, weights)
+
+    def getTaskName(self) -> str:
+        return self.getOrDefault(self.taskName)
 
     def getRemoveCols(self) -> List[str]:
         return self.getOrDefault(self.removeCols)
+
+    def getConvertToArrayFirst(self) -> bool:
+        return self.getOrDefault(self.convertToArrayFirst)
+
+    def getWeights(self) -> List[int]:
+        return self.getOrDefault(self.weights)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
 
         pred_cols = self.getInputCols()
-        if self.getOrDefault(self.taskName) in ["binary", "multiclass"]:
-            def sum_arrays(x):
-                is_all_nth_elements_nan = sum(F.when(isnan(x[c]), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
-                # sum of non nan elements divided by number of non nan elements
-                mean_nth_elements = sum(F.when(isnan(x[c]), 0).otherwise(x[c]) for c in pred_cols) / \
-                                    sum( F.when(isnan(x[c]), 0).otherwise(1) for c in pred_cols )
-                return F.when(is_all_nth_elements_nan, float('nan')) \
-                        .otherwise(mean_nth_elements)
-            out_col = F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol())
+        weights = {c: w for w, c in zip(self.getWeights(), pred_cols)}
+        non_null_count_col = (F.lit(len(pred_cols)) - sum(F.isnull(c).astype(IntegerType()) for c in pred_cols))
+
+        if self.getTaskName() in ["binary", "multiclass"]:
+            arr_pred_cols = [vector_to_array(c).alias(c) for c in pred_cols] \
+                if self.getConvertToArrayFirst() else pred_cols
+
+            normalized_cols = [
+                F.when(F.isnull(c), F.array(*[F.lit(0.0), F.lit(0.0)])).otherwise(c).alias(c)
+                for c in arr_pred_cols
+            ]
+            arr_fields_summ = F.transform(F.arrays_zip(*normalized_cols), lambda x: F.aggregate(
+                F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]),
+                F.lit(0.0),
+                lambda acc, x: acc + x
+            ) / non_null_count_col)
+
+            out_col = array_to_vector(arr_fields_summ) if self.getConvertToArrayFirst() else arr_fields_summ
         else:
-            is_all_columns_nan = sum(F.when(isnan(F.col(c)), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
-            mean_all_columns = sum(F.when(isnan(F.col(c)), 0).otherwise(F.col(c)) for c in pred_cols) / \
-                               sum( F.when(isnan(F.col(c)), 0).otherwise(1) for c in pred_cols )
-            out_col = F.when(is_all_columns_nan, float('nan')).otherwise(mean_all_columns).alias(self.getOutputCol())
+            scalar_fields_summ = F.aggregate(
+                F.array(*[F.col(c) * F.lit(weights[c]) for c in pred_cols]),
+                F.lit(0.0),
+                lambda acc, x: acc + F.when(F.isnull(x), F.lit(0.0)).otherwise(x)
+            ) / non_null_count_col
+
+            out_col = scalar_fields_summ
 
         cols_to_remove = set(self.getRemoveCols())
         cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
-        out_df = dataset.select(*cols_to_select, out_col)
+        out_df = dataset.select(*cols_to_select, out_col.alias(self.getOutputCol()))
+
         logger.info(f"In the end of transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+
         return out_df
 
     def write(self):

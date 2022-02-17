@@ -296,8 +296,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         if full.task.name in ['binary', 'multiclass']:
             params['rawPredictionCol'] = fold_prediction_column
-            params['probabilityCol'] = f'probability_{fold_prediction_column}'
-            params['predictionCol'] = f'prediction_value_{fold_prediction_column}'
+            params['probabilityCol'] = None#f'probability_{fold_prediction_column}'
+            params['predictionCol'] = None#f'prediction_value_{fold_prediction_column}'
         else:
             params['predictionCol'] = fold_prediction_column
 
@@ -345,7 +345,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         avr = AveragingTransformer(self.task.name,
                                    input_cols=self._models_prediction_columns,
                                    output_col=self.prediction_feature,
-                                   remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns)
+                                   remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns,
+                                   convert_to_array_first=True
+                                   )
         return avr
 
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
