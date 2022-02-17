@@ -152,11 +152,14 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         # 2. dummy - nothing
         # 3. holdout - nothing
         # 4. custom - union + groupby
-        neutral_element = (
-            array_to_vector(F.array(*[F.lit(float('nan')) for _ in range(self.n_classes)]))
-            if self.task.name in ["binary", "multiclass"]
-            else F.lit(float('nan'))
-        )
+        # neutral_element = (
+        #     array_to_vector(F.array(*[F.lit(float('nan')) for _ in range(self.n_classes)]))
+        #     if self.task.name in ["binary", "multiclass"]
+        #     else F.lit(float('nan'))
+        # )
+
+        neutral_element = None
+
         preds_dfs = [
             df.select(
                 '*',
@@ -172,7 +175,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
 
-        # TODO: SPARK-LAMA repair it later
         if iterator_len > 1:
             single_pred_ds = self._make_single_prediction_dataset(pred_ds)
             logger.info(
@@ -273,6 +275,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
     convertToArrayFirst = Param(Params._dummy(), "convertToArrayFirst", "convert to array first")
     weights = Param(Params._dummy(), "weights", "weights")
+    dimNum = Param(Params._dummy(), "dimNum", "dim num")
 
     def __init__(self,
                  task_name: str,
@@ -280,7 +283,8 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
                  output_col: str,
                  remove_cols: Optional[List[str]] = None,
                  convert_to_array_first: bool = False,
-                 weights: Optional[List[int]] = None):
+                 weights: Optional[List[int]] = None,
+                 dim_num: int = 1):
         super().__init__()
         self.set(self.taskName, task_name)
         self.set(self.inputCols, input_cols)
@@ -295,6 +299,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
         assert len(input_cols) == len(weights)
 
         self.set(self.weights, weights)
+        self.set(self.dimNum, dim_num)
 
     def getTaskName(self) -> str:
         return self.getOrDefault(self.taskName)
@@ -308,20 +313,25 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     def getWeights(self) -> List[int]:
         return self.getOrDefault(self.weights)
 
+    def getDimNum(self) -> int:
+        return self.getOrDefault(self.dimNum)
+
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
 
         pred_cols = self.getInputCols()
+        dim_size = self.getInputCols()
         weights = {c: w for w, c in zip(self.getWeights(), pred_cols)}
         non_null_count_col = (F.lit(len(pred_cols)) - sum(F.isnull(c).astype(IntegerType()) for c in pred_cols))
 
         if self.getTaskName() in ["binary", "multiclass"]:
-            arr_pred_cols = [vector_to_array(c).alias(c) for c in pred_cols] \
-                if self.getConvertToArrayFirst() else pred_cols
+            def convert_column(c):
+                return vector_to_array(c).alias(c) if self.getConvertToArrayFirst() else F.col(c)
 
             normalized_cols = [
-                F.when(F.isnull(c), F.array(*[F.lit(0.0), F.lit(0.0)])).otherwise(c).alias(c)
-                for c in arr_pred_cols
+                F.when(F.isnull(c), F.array(*[F.lit(0.0) for _ in range(self.getDimNum())]))
+                    .otherwise(convert_column(c)).alias(c)
+                for c in pred_cols
             ]
             arr_fields_summ = F.transform(F.arrays_zip(*normalized_cols), lambda x: F.aggregate(
                 F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]),

@@ -323,6 +323,33 @@ class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols):
         return dataset.select(*self.getInputCols(), *present_opt_cols)
 
 
+class DropColumnsTransformer(Transformer):
+    colsToRemove = Param(Params._dummy(), "colsToRemove", "columns to be removed",
+                         typeConverter=TypeConverters.toListString)
+
+    optionalColsToRemove = Param(Params._dummy(), "optionalColsToRemove",
+                                 "optional columns to be removed (if they appear in the dataset)",
+                                 typeConverter=TypeConverters.toListString)
+
+    def __init__(self, remove_cols: List[str], optional_remove_cols: Optional[List[str]] = None):
+        super().__init__()
+        self.set(self.colsToRemove, remove_cols)
+        self.set(self.optionalColsToRemove, optional_remove_cols if optional_remove_cols else [])
+
+    def getColsToRemove(self) -> List[str]:
+        return self.getOrDefault(self.colsToRemove)
+
+    def getOptionalColsToRemove(self) -> List[str]:
+        return self.getOrDefault(self.optionalColsToRemove)
+
+    def _transform(self, dataset):
+        ds_cols = set(dataset.columns)
+        optional_to_remove = [c for c in self.getOptionalColsToRemove() if c in ds_cols]
+        dataset = dataset.drop(*self.getColsToRemove(), *optional_to_remove)
+
+        return dataset
+
+
 class SparkChangeRolesTransformer(SparkBaseTransformer):
     # Note: this trasnformer cannot be applied directly to input columns of a feature pipeline
     def __init__(self, 

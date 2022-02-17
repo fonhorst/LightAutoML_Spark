@@ -12,6 +12,8 @@ from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
+from lightautoml.spark.pipelines.features.base import SelectTransformer
+from lightautoml.spark.transformers.base import ColumnsSelectorTransformer, DropColumnsTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.validation.base import TrainValidIterator
@@ -50,7 +52,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {}):
         SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
+        self._probability_col_name = "probability"
+        self._prediction_col_name = "prediction"
         self._assembler = None
+        self._drop_cols_transformer = None
 
     def _infer_params(self) -> Tuple[dict, int, Optional[Callable], Optional[Callable]]:
         """Infer all parameters in lightgbm format.
@@ -296,8 +301,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         if full.task.name in ['binary', 'multiclass']:
             params['rawPredictionCol'] = fold_prediction_column
-            params['probabilityCol'] = None#f'probability_{fold_prediction_column}'
-            params['predictionCol'] = None#f'prediction_value_{fold_prediction_column}'
+            params['probabilityCol'] = self._probability_col_name
+            params['predictionCol'] = self._prediction_col_name
         else:
             params['predictionCol'] = fold_prediction_column
 
@@ -320,6 +325,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         ml_model = lgbm.fit(temp_sdf)
 
         val_pred = ml_model.transform(self._assembler.transform(valid.data))
+        val_pred = DropColumnsTransformer(
+            remove_cols=[],
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+        ).transform(val_pred)
 
         return ml_model, val_pred, fold_prediction_column
 
@@ -338,16 +347,22 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        averaging_model = PipelineModel(stages=[self._assembler] + self.models + [avr])
+        models = [el for m in self.models for el in [m, DropColumnsTransformer(
+            remove_cols=[],
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+        )]]
+        averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
         return averaging_model
 
     def _build_averaging_transformer(self) -> Transformer:
-        avr = AveragingTransformer(self.task.name,
-                                   input_cols=self._models_prediction_columns,
-                                   output_col=self.prediction_feature,
-                                   remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns,
-                                   convert_to_array_first=True
-                                   )
+        avr = AveragingTransformer(
+            self.task.name,
+            input_cols=self._models_prediction_columns,
+            output_col=self.prediction_feature,
+            remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns,
+            convert_to_array_first=not (self.task.name == "reg"),
+            dim_num=self.n_classes
+        )
         return avr
 
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:

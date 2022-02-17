@@ -299,7 +299,8 @@ class SparkMeanBlender(SparkBlender):
             input_cols=pred_cols,
             output_col=self._single_prediction_col_name,
             remove_cols=pred_cols,
-            convert_to_array_first=True
+            convert_to_array_first=not (predictions.task.name == "reg"),
+            dim_num=self._outp_dim
         )
 
         df = self._transformer.transform(predictions.data)

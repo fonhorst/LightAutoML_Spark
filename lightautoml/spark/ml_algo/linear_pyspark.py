@@ -194,11 +194,14 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         return averaging_model
 
     def _build_averaging_transformer(self) -> Transformer:
-        avr = AveragingTransformer(self.task.name,
-                                   input_cols=self._models_prediction_columns,
-                                   output_col=self.prediction_feature,
-                                   remove_cols=self._ohe.getOutputCols() + [self._assembler.getOutputCol()] + self._models_prediction_columns,
-                                   convert_to_array_first=True)
+        avr = AveragingTransformer(
+            self.task.name,
+            input_cols=self._models_prediction_columns,
+            output_col=self.prediction_feature,
+            remove_cols=self._ohe.getOutputCols() + [self._assembler.getOutputCol()] + self._models_prediction_columns,
+            convert_to_array_first=not (self.task.name == "reg"),
+            dim_num=self.n_classes
+        )
         return avr
 
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
