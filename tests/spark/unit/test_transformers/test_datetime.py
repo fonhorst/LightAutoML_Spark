@@ -11,7 +11,9 @@ from lightautoml.spark.transformers.datetime import SparkBaseDiffTransformer, Sp
     SparkTimeToNumTransformer
 from lightautoml.tasks import Task
 from lightautoml.transformers.datetime import TimeToNum, BaseDiff, DateSeasons
-from .. import DatasetForTest, compare_sparkml_by_content
+from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess
+
+spark = spark_sess
 
 DATASETS = [
 

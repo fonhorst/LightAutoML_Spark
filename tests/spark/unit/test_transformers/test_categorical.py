@@ -8,7 +8,9 @@ from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimato
     SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions
-from .. import DatasetForTest, compare_sparkml_by_content
+from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess
+
+spark = spark_sess
 
 DATASETS = [
 

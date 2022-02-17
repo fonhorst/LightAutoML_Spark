@@ -329,29 +329,35 @@ def from_pandas_to_spark(p: PandasDataset,
 
     roles = copy(p.roles)
 
+    kwargs = dict()
+
     if target is not None:
-        # TODO: you may have an array in the input cols, so probably it should be transformed into the vector
-        tpdf = target.to_frame("target")
-        tpdf[SparkDataset.ID_COLUMN] = pdf.index
-    else:
-        try:
-            tpdf = p.target.to_frame("target")
-            tpdf[SparkDataset.ID_COLUMN] = pdf.index
-        except AttributeError:
-            tpdf = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "target": np.zeros(pdf.shape[0])})
+        pdf['target'] = target
+        kwargs['target'] = 'target'
+    #     # TODO: you may have an array in the input cols, so probably it should be transformed into the vector
+    #     tpdf = target.to_frame("target")
+    #     tpdf[SparkDataset.ID_COLUMN] = pdf.index
+    # else:
+    #     try:
+    #         tpdf = p.target.to_frame("target")
+    #         tpdf[SparkDataset.ID_COLUMN] = pdf.index
+    #     except AttributeError:
+    #         tpdf = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "target": np.zeros(pdf.shape[0])})
 
     if folds is not None:
-        fpdf = folds.to_frame("folds")
-        fpdf[SparkDataset.ID_COLUMN] = pdf.index
-    else:
-        try:
-            fpdf = p.folds.to_frame("folds")
-            fpdf[SparkDataset.ID_COLUMN] = pdf.index
-        except AttributeError:
-            fpdf = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "folds": np.zeros(pdf.shape[0])}) \
-                if fill_folds_with_zeros_if_not_present else None
+        pdf['folds'] = folds
+        kwargs['folds'] = 'folds'
+    #     fpdf = folds.to_frame("folds")
+    #     fpdf[SparkDataset.ID_COLUMN] = pdf.index
+    # else:
+    #     try:
+    #         fpdf = p.folds.to_frame("folds")
+    #         fpdf[SparkDataset.ID_COLUMN] = pdf.index
+    #     except AttributeError:
+    #         fpdf = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "folds": np.zeros(pdf.shape[0])}) \
+    #             if fill_folds_with_zeros_if_not_present else None
 
-    target_sdf = spark.createDataFrame(data=tpdf)
+    target_sdf = spark.createDataFrame(data=pdf)
     # target_sdf = target_sdf.fillna(0.0)
 
     obj_columns = list(pdf.select_dtypes(include=['object']))
@@ -366,12 +372,14 @@ def from_pandas_to_spark(p: PandasDataset,
         sdf = sdf.select(SparkDataset.ID_COLUMN, F.array(*cols).alias(general_feat))
         roles = {general_feat: NumericVectorOrArrayRole(len(cols), f"{general_feat}_{{}}", dtype=roles[cols[0]].dtype)}
 
-    kwargs = dict()
-    if fpdf is not None:
-        folds_sdf = spark.createDataFrame(data=fpdf)
-        kwargs["folds"] = folds_sdf
+    # kwargs = dict()
+    # if fpdf is not None:
+    #     folds_sdf = spark.createDataFrame(data=fpdf)
+    #     kwargs["folds"] = folds_sdf
 
-    return SparkDataset(sdf, roles=roles, target=target_sdf, task=task if task else p.task, **kwargs)
+    spark_task = task if task else SparkTask(p.task.name)
+
+    return SparkDataset(sdf, roles=roles, task=spark_task, **kwargs)
 
 
 def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):
