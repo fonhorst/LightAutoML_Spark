@@ -323,20 +323,20 @@ class SparkToSparkReader(Reader):
         )
 
         # TODO: SPARK-LAMA will be implemented later
-        # if self.advanced_roles:
-        #     new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
-        #
-        #     droplist = [x for x in new_roles if new_roles[x].name == "Drop" and not self._roles[x].force_input]
-        #     self.upd_used_features(remove=droplist)
-        #     self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
-        #
-        #     # TODO: SPARK-LAMA send parent for unwinding
-        #     dataset = SparkDataset(
-        #         train_data.select(SparkDataset.ID_COLUMN, self.used_features),
-        #         self.roles,
-        #         task=self.task,
-        #         **kwargs
-        #     )
+        if self.advanced_roles:
+            new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
+        
+            droplist = [x for x in new_roles if new_roles[x].name == "Drop" and not self._roles[x].force_input]
+            self.upd_used_features(remove=droplist)
+            self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
+        
+            # TODO: SPARK-LAMA send parent for unwinding
+            dataset = SparkDataset(
+                train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
+                self.roles,
+                task=self.task,
+                **kwargs
+            )
 
         # ds = dataset.to_pandas()
         # ds.task = None
@@ -735,7 +735,7 @@ class SparkToSparkReader(Reader):
             )
             top_scores = pd.concat([null_scores, top_scores], axis=1).max(axis=1)
             rejected = list(top_scores[top_scores < drop_co].index)
-            logger.info3("Feats was rejected during automatic roles guess: {0}".format(rejected))
+            logger.info("Feats was rejected during automatic roles guess: {0}".format(rejected))
             new_roles_dict = {**new_roles_dict, **{x: DropRole() for x in rejected}}
 
         return new_roles_dict

@@ -21,11 +21,11 @@ def get_gini_func(target_col: str):
     def gini_func(iterator):
         for pdf in iterator:
             target = pdf[target_col].to_numpy()
-            data = pdf.drop(target_col)
+            data = pdf.drop(target_col, axis=1)
             cols = data.columns
             data = data.to_numpy()
             scores = calc_ginis(data, target, None)
-            yield pd.DataFrame(data=scores,
+            yield pd.DataFrame(data=[scores],
                                columns=cols)
 
     return gini_func
@@ -60,9 +60,9 @@ def get_score_from_pipe(
 
     mean_scores = (
         sdf
-        .mapInPandas(gini_func, sdf.schema)
+        .mapInPandas(gini_func, train.data.schema)
         .select([F.mean(c).alias(c) for c in train.features])
-    ).toPandas().to_numpy()
+    ).toPandas().values.flatten()
 
     return mean_scores
 
@@ -121,11 +121,16 @@ def get_numeric_roles_stat(
     if len(roles_to_identify) == 0:
         return res
 
-    train = train.empty()
+    # train = train.empty()
     sdf = train.data.select(SparkDataset.ID_COLUMN, *roles_to_identify)
 
     if subsample is not None:
-        sdf = sdf.sample(fraction=subsample, seed=random_state)
+        total_number = sdf.count()
+        if subsample > total_number:
+            fraction = 1.0
+        else:
+            fraction = subsample/total_number
+        sdf = sdf.sample(fraction=fraction, seed=random_state)
 
     train.set_data(sdf, roles_to_identify, roles)
 
@@ -280,11 +285,16 @@ def get_null_scores(
 
     """
     roles = train.roles
-    train = train.empty()
+    # train = train.empty()
     sdf = train.data.select(SparkDataset.ID_COLUMN, *feats)
 
     if subsample is not None:
-        sdf = sdf.sample(fraction=subsample, seed=random_state)
+        total_number = sdf.count()
+        if subsample > total_number:
+            fraction = 1.0
+        else:
+            fraction = subsample/total_number
+        sdf = sdf.sample(fraction=fraction, seed=random_state)
 
     train.set_data(sdf, feats, [roles[f] for f in feats])
 
@@ -306,11 +316,14 @@ def get_null_scores(
         .select(SparkDataset.ID_COLUMN, *notnan_cols)
         .join(train.target, on=SparkDataset.ID_COLUMN)
     )
-    mean_scores = (
-        sdf
-        .mapInPandas(gini_func, sdf.schema)
-        .select([F.mean(c).alias(c) for c in notnan_cols])
-    ).first().asDict()
+    if notnan_cols:
+        mean_scores = (
+            sdf
+            .mapInPandas(gini_func, train.data.schema)
+            .select([F.mean(c).alias(c) for c in notnan_cols])
+        ).first().asDict()
+    else:
+        mean_scores = {}
 
     scores = [
         mean_scores[feat] if feat in mean_scores else 0.0
