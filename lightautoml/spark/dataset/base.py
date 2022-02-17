@@ -281,7 +281,7 @@ class SparkDataset(LAMLDataset):
     def to_pandas(self) -> PandasDataset:
         data, target_data, roles = self._materialize_to_pandas()
 
-        task = Task(self.task.name)
+        task = Task(self.task.name) if self.task else None
         kwargs = dict()
         if target_data:
             kwargs['target'] =target_data

@@ -170,6 +170,22 @@ def compare_sparkml_by_content(spark: SparkSession,
     return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark, compare_metadata_only=False)
 
 
+def compare_sparkml_by_metadata(spark: SparkSession,
+                       ds: PandasDataset,
+                       t_lama: LAMLTransformer,
+                       t_spark: Union[SparkBaseEstimator, SparkBaseTransformer]) -> Tuple[NumpyDataset, NumpyDataset]:
+    """
+        Args:
+            spark: session to be used for calculating the example
+            ds: a dataset to be transformered by LAMA and Spark transformers
+            t_lama: LAMA's version of the transformer
+            t_spark: spark's version of the transformer
+
+        Returns:
+            A tuple of (LAMA transformed dataset, Spark transformed dataset)
+        """
+    return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark, compare_metadata_only=True)
+
 def compare_transformers_results(spark: SparkSession,
                                  ds: PandasDataset,
                                  t_lama: LAMLTransformer,
@@ -322,7 +338,7 @@ def from_pandas_to_spark(p: PandasDataset,
                          folds: Optional[pd.Series] = None,
                          task: Optional[SparkTask] = None,
                          to_vector: bool = False,
-                         fill_folds_with_zeros_if_not_present: bool= False) -> SparkDataset:
+                         fill_folds_with_zeros_if_not_present: bool = False) -> SparkDataset:
     pdf = cast(pd.DataFrame, p.data)
     pdf = pdf.copy()
     pdf[SparkDataset.ID_COLUMN] = pdf.index
@@ -334,36 +350,14 @@ def from_pandas_to_spark(p: PandasDataset,
     if target is not None:
         pdf['target'] = target
         kwargs['target'] = 'target'
-    #     # TODO: you may have an array in the input cols, so probably it should be transformed into the vector
-    #     tpdf = target.to_frame("target")
-    #     tpdf[SparkDataset.ID_COLUMN] = pdf.index
-    # else:
-    #     try:
-    #         tpdf = p.target.to_frame("target")
-    #         tpdf[SparkDataset.ID_COLUMN] = pdf.index
-    #     except AttributeError:
-    #         tpdf = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "target": np.zeros(pdf.shape[0])})
 
     if folds is not None:
         pdf['folds'] = folds
         kwargs['folds'] = 'folds'
-    #     fpdf = folds.to_frame("folds")
-    #     fpdf[SparkDataset.ID_COLUMN] = pdf.index
-    # else:
-    #     try:
-    #         fpdf = p.folds.to_frame("folds")
-    #         fpdf[SparkDataset.ID_COLUMN] = pdf.index
-    #     except AttributeError:
-    #         fpdf = pd.DataFrame({SparkDataset.ID_COLUMN: pdf.index, "folds": np.zeros(pdf.shape[0])}) \
-    #             if fill_folds_with_zeros_if_not_present else None
-
-    target_sdf = spark.createDataFrame(data=pdf)
-    # target_sdf = target_sdf.fillna(0.0)
 
     obj_columns = list(pdf.select_dtypes(include=['object']))
     pdf[obj_columns] = pdf[obj_columns].astype(str)
     sdf = spark.createDataFrame(data=pdf)
-    # sdf = sdf.fillna(0.0)
 
     if to_vector:
         cols = [c for c in pdf.columns if c != SparkDataset.ID_COLUMN]
@@ -372,12 +366,12 @@ def from_pandas_to_spark(p: PandasDataset,
         sdf = sdf.select(SparkDataset.ID_COLUMN, F.array(*cols).alias(general_feat))
         roles = {general_feat: NumericVectorOrArrayRole(len(cols), f"{general_feat}_{{}}", dtype=roles[cols[0]].dtype)}
 
-    # kwargs = dict()
-    # if fpdf is not None:
-    #     folds_sdf = spark.createDataFrame(data=fpdf)
-    #     kwargs["folds"] = folds_sdf
-
-    spark_task = task if task else SparkTask(p.task.name)
+    if task:
+        spark_task = task
+    elif p.task:
+        spark_task = SparkTask(p.task.name)
+    else:
+        spark_task = None
 
     return SparkDataset(sdf, roles=roles, task=spark_task, **kwargs)
 

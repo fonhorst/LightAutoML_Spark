@@ -219,10 +219,11 @@ class SparkLogOddsTransformer(SparkBaseTransformer):
                  input_cols: List[str],
                  input_roles: RolesDict,
                  do_replace_columns=False):
+        out_cols = [f"{self._fname_prefix}__{feat}" for feat in input_cols]
         super().__init__(input_cols=input_cols,
-                         output_cols=[f"{self._fname_prefix}__{feat}" for feat in input_cols],
+                         output_cols=out_cols,
                          input_roles=input_roles,
-                         output_roles={f: NumericRole(np.float32) for f in input_cols},
+                         output_roles={f: NumericRole(np.float32) for f in out_cols},
                          do_replace_columns=do_replace_columns)
 
     def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
@@ -354,7 +355,7 @@ class SparkQuantileBinningEstimator(SparkBaseEstimator):
         self._bucketizer = None
 
     def _fit(self, sdf: SparkDataFrame) -> Transformer:
-        qdisc = QuantileDiscretizer(numBucketsArray=[self.nbins for _ in self.getInputCols()],
+        qdisc = QuantileDiscretizer(numBucketsArray=[self._nbins for _ in self.getInputCols()],
                                     handleInvalid="keep",
                                     inputCols=self.getInputCols(),
                                     outputCols=self.getOutputCols())
@@ -399,16 +400,10 @@ class SparkQuantileBinningTransformer(SparkBaseTransformer):
             for c in self._bucketizer.getOutputCols()
         ]
 
-        if self.getDoReplaceColumns():
-            input_cols = set(self.getInputCols())
-            cols_to_leave = [f for f in sdf.columns if f not in input_cols]
-        else:
-            cols_to_leave = self.getInputCols()
+        rest_cols = [c for c in sdf.columns if c not in self._bucketizer.getOutputCols()]
 
-        out_sdf = (
-            self._bucketizer
-            .transform(sdf)
-            .select(*cols_to_leave, *new_cols)
-        )
+        intermediate_sdf = self._bucketizer.transform(sdf).select(*rest_cols, *new_cols)
 
-        return out_sdf
+        output_sdf = self._make_output_df(intermediate_sdf, cols_to_add=[])
+
+        return output_sdf
