@@ -19,7 +19,7 @@ from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, ColumnsSelectorTransformer
+from lightautoml.spark.transformers.base import SparkChangeRolesTransformer, ColumnsSelectorTransformer
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
     SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
 from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEstimator, \
@@ -28,7 +28,7 @@ from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEsti
 from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.numeric import SparkQuantileBinningEstimator
-from lightautoml.spark.utils import NoOpTransformer, Cacher
+from lightautoml.spark.utils import NoOpTransformer, Cacher, EmptyCacher
 
 
 def build_graph(begin: SparkEstOrTrans):
@@ -186,12 +186,16 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         stages = [tr for layer in tr_layers
                   for tr in itertools.chain(layer, [Cacher(self._cacher_key)])]
 
+        if len(stages) == 0:
+            # TODO: SPARK-LAMA add warning here
+            stages = [EmptyCacher(key='---')]
+
         last_cacher = stages[-1]
         assert isinstance(last_cacher, Cacher)
 
         return stages, last_cacher
 
-    def _infer_output_features_and_roles(self, pipeline: Estimator):
+    def _infer_output_features_and_roles(self, pipeline: Transformer):
         # TODO: infer output features here
         if isinstance(pipeline, PipelineModel):
             estimators = pipeline.stages
@@ -204,6 +208,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
         features = copy(fp_input_features)
         roles = copy(self.input_roles)
+        include_input_features: Set[str] = set()
         for est in estimators:
             if isinstance(est, Cacher) or isinstance(est, NoOpTransformer):
                 continue
@@ -212,7 +217,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
             replacable_columns = est.getColumnsToReplace()
 
-            assert isinstance(est, ChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in replacable_columns), \
+            assert isinstance(est, SparkChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in replacable_columns), \
                 "Cannot replace input features of the feature pipeline itself"
 
             if est.getDoReplaceColumns():
@@ -225,6 +230,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
             features.update(est.getOutputCols())
             roles.update(est.getOutputRoles())
+            include_input_features.update(set(est.getOutputCols()).intersection(fp_input_features))
 
         assert all((f in features) for f in fp_input_features), \
             "All input features should be present in the output features"
@@ -233,9 +239,11 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
             "All input features should be present in the output roles"
 
         # we want to have only newly added features in out output features, not input features
+        # but we need to keep input features that are required by some transformers
         for col in fp_input_features:
-            features.remove(col)
-            del roles[col]
+            if col not in include_input_features:
+                features.remove(col)
+                del roles[col]
 
         self._output_roles = roles
 
@@ -380,9 +388,9 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        num_processing = ChangeRolesTransformer(input_cols=feats_to_select,
-                                                input_roles=roles,
-                                                role=NumericRole(np.float32))
+        num_processing = SparkChangeRolesTransformer(input_cols=feats_to_select,
+                                                     input_roles=roles,
+                                                     role=NumericRole(np.float32))
 
         return num_processing
 

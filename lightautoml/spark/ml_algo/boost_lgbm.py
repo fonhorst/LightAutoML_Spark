@@ -294,14 +294,17 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         LGBMBooster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
 
-        if full.task.name == "multiclass":
-            params["probabilityCol"] = fold_prediction_column
+        if full.task.name in ['binary', 'multiclass']:
+            params['rawPredictionCol'] = fold_prediction_column
+            params['probabilityCol'] = f'probability_{fold_prediction_column}'
+            params['predictionCol'] = f'prediction_value_{fold_prediction_column}'
+        else:
+            params['predictionCol'] = fold_prediction_column
 
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
-            predictionCol=fold_prediction_column if full.task.name != "multiclass" else "prediction",
             validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
             isProvideTrainingMetric=True

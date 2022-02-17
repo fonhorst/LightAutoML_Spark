@@ -176,3 +176,17 @@ class Cacher(Estimator):
         self._cacher_dict[self._key] = ds
 
         return NoOpTransformer(name=f"cacher_{self._key}")
+
+
+class EmptyCacher(Cacher):
+    def __init__(self, key: str):
+        super().__init__(key)
+        self._dataset: Optional[SparkDataFrame] = None
+
+    @property
+    def dataset(self) -> SparkDataFrame:
+        return self._dataset
+
+    def _fit(self, dataset):
+        self._dataset = dataset
+        return NoOpTransformer(name=f"empty_cacher_{self._key}")

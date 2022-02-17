@@ -323,7 +323,7 @@ class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols):
         return dataset.select(*self.getInputCols(), *present_opt_cols)
 
 
-class ChangeRolesTransformer(SparkBaseTransformer):
+class SparkChangeRolesTransformer(SparkBaseTransformer):
     # Note: this trasnformer cannot be applied directly to input columns of a feature pipeline
     def __init__(self, 
                  input_cols: List[str],

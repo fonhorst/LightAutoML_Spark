@@ -6,7 +6,7 @@ from lightautoml.dataset.roles import CategoryRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline, SparkTabularDataFeatures
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkUnionTransformer, \
+from lightautoml.spark.transformers.base import SparkChangeRolesTransformer, SparkUnionTransformer, \
     SparkSequentialTransformer, SparkEstOrTrans, ColumnsSelectorTransformer
 # Same comments as for spark.pipelines.features.base
 from lightautoml.spark.transformers.categorical import SparkOHEEncoderEstimator, SparkLabelEncoderEstimator
@@ -202,9 +202,9 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         if len(sparse_list) > 0:
             sparse_pipe = SparkUnionTransformer(sparse_list)
             if self.output_categories:
-                final = ChangeRolesTransformer(input_cols=sparse_pipe.get_output_cols(),
-                                               input_roles=sparse_pipe.get_output_roles(),
-                                               role=CategoryRole(np.float32))
+                final = SparkChangeRolesTransformer(input_cols=sparse_pipe.get_output_cols(),
+                                                    input_roles=sparse_pipe.get_output_roles(),
+                                                    role=CategoryRole(np.float32))
             else:
                 if self.sparse_ohe == "auto":
                     final = SparkOHEEncoderEstimator(input_cols=sparse_pipe.get_output_cols(),
