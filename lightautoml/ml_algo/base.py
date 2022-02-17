@@ -236,7 +236,8 @@ class TabularMLAlgo(MLAlgo):
         """
         self.timer.start()
 
-        log_data(f"lama_fit_predict_{type(self).__name__}", {"train": train_valid_iterator.train})
+        logger.info(f"Input columns for MLALgo: {sorted(train_valid_iterator.train.features)}")
+        # log_data(f"lama_fit_predict_{type(self).__name__}", {"train": train_valid_iterator.train})
 
         assert self.is_fitted is False, "Algo is already fitted"
         # init params on input if no params was set before

@@ -88,6 +88,9 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         """
 
+        logger.info(f"Input columns for MLALgo: {sorted(train_valid_iterator.input_features)}")
+        logger.info(f"Train size for MLAlgo: {train_valid_iterator.train.data.count()}")
+
         prob = train_valid_iterator.train.task.name in ["binary", "multiclass"]
         self._prediction_role = NumericRole(np.float32, force_input=True, prob=prob)
 
