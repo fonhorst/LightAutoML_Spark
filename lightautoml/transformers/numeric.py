@@ -33,12 +33,6 @@ def numeric_check(dataset: LAMLDataset):
         assert roles[f].name == "Numeric", "Only numbers accepted in this transformer"
 
 
-def save_data(data, class_type, prefix, operation_type,  data_type="dataset"):
-    class_name = str(class_type).split('.')[-1].replace('>', '').replace("'", "").strip()
-    with open(f"dumps/{time.time()}__{class_name}__lama_{prefix}_{operation_type}__{data_type}.pkl", "wb") as f:
-        pickle.dump(data, f)
-
-
 class NaNFlags(LAMLTransformer):
     """Create NaN flags."""
 
@@ -66,14 +60,6 @@ class NaNFlags(LAMLTransformer):
 
         """
 
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="fit",
-            data_type="dataset"
-        )
-
         super().fit(dataset)
         # set transformer names and add checks
         for check_func in self._fit_checks:
@@ -87,14 +73,6 @@ class NaNFlags(LAMLTransformer):
         ds_nan_rate = np.isnan(data).mean(axis=0)
         self.nan_cols = [name for (name, nan_rate) in zip(dataset.features, ds_nan_rate) if nan_rate > self.nan_rate]
         self._features = list(self.nan_cols)
-
-        save_data(
-            data=self.nan_cols,
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="fit",
-            data_type="nancols"
-        )
 
         return self
 
@@ -111,14 +89,6 @@ class NaNFlags(LAMLTransformer):
         # checks here
         super().transform(dataset)
 
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="src_dataset"
-        )
-
         # convert to accepted dtype and get attributes
         dataset = dataset.to_numpy()
         nans = dataset[:, self.nan_cols].data
@@ -129,15 +99,6 @@ class NaNFlags(LAMLTransformer):
         # create resulted
         output = dataset.empty().to_numpy()
         output.set_data(new_arr, self.features, NumericRole(np.float32))
-
-
-        save_data(
-            data=output.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="result_dataset"
-        )
 
         return output
 
@@ -160,14 +121,6 @@ class FillnaMedian(LAMLTransformer):
 
         """
 
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="fit",
-            data_type="dataset"
-        )
-
         # set transformer names and add checks
         super().fit(dataset)
         # set transformer features
@@ -178,14 +131,6 @@ class FillnaMedian(LAMLTransformer):
 
         self.meds = np.nanmedian(data, axis=0)
         self.meds[np.isnan(self.meds)] = 0
-
-        save_data(
-            data=self.meds,
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="fit",
-            data_type="meds"
-        )
 
         return self
 
@@ -199,13 +144,6 @@ class FillnaMedian(LAMLTransformer):
             Numpy dataset with encoded labels.
 
         """
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="src_dataset"
-        )
 
         # checks here
         super().transform(dataset)
@@ -218,14 +156,6 @@ class FillnaMedian(LAMLTransformer):
         # create resulted
         output = dataset.empty().to_numpy()
         output.set_data(data, self.features, NumericRole(np.float32))
-
-        save_data(
-            data=output.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="result_dataset"
-        )
 
         return output
 
@@ -250,14 +180,6 @@ class FillInf(LAMLTransformer):
         # checks here
         super().transform(dataset)
 
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="src_dataset"
-        )
-
         # convert to accepted dtype and get attributes
         dataset = dataset.to_numpy()
         data = dataset.data
@@ -268,14 +190,6 @@ class FillInf(LAMLTransformer):
         # create resulted
         output = dataset.empty().to_numpy()
         output.set_data(data, self.features, NumericRole(np.float32))
-
-        save_data(
-            data=output.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="result_dataset"
-        )
 
         return output
 
@@ -298,15 +212,6 @@ class LogOdds(LAMLTransformer):
 
         """
         # checks here
-
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="src_dataset"
-        )
-
         super().transform(dataset)
         # convert to accepted dtype and get attributes
         dataset = dataset.to_numpy()
@@ -319,15 +224,6 @@ class LogOdds(LAMLTransformer):
         # create resulted
         output = dataset.empty().to_numpy()
         output.set_data(data, self.features, NumericRole(np.float32))
-
-
-        save_data(
-            data=output.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="result_dataset"
-        )
 
         return output
 
@@ -351,14 +247,6 @@ class StandardScaler(LAMLTransformer):
         """
         # set transformer names and add checks
 
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="fit",
-            data_type="dataset"
-        )
-
         super().fit(dataset)
         # set transformer features
 
@@ -370,14 +258,6 @@ class StandardScaler(LAMLTransformer):
         self.stds = np.nanstd(data, axis=0)
         # Fix zero stds to 1
         self.stds[(self.stds == 0) | np.isnan(self.stds)] = 1
-
-        save_data(
-            data=self.stds,
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="fit",
-            data_type="stds"
-        )
 
         return self
 
@@ -393,14 +273,6 @@ class StandardScaler(LAMLTransformer):
         """
         # checks here
 
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="src_dataset"
-        )
-
         super().transform(dataset)
         # convert to accepted dtype and get attributes
         dataset = dataset.to_numpy()
@@ -412,14 +284,6 @@ class StandardScaler(LAMLTransformer):
         # create resulted
         output = dataset.empty().to_numpy()
         output.set_data(data, self.features, NumericRole(np.float32))
-
-        save_data(
-            data=output.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="result_dataset"
-        )
 
         return output
 
@@ -451,14 +315,6 @@ class QuantileBinning(LAMLTransformer):
 
         """
 
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="fit",
-            data_type="dataset"
-        )
-
         # set transformer names and add checks
         super().fit(dataset)
         # set transformer features
@@ -477,14 +333,6 @@ class QuantileBinning(LAMLTransformer):
             q = np.unique(q)
             self.bins.append(q)
 
-        save_data(
-            data=self.bins,
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="fit",
-            data_type="bins"
-        )
-
         return self
 
     def transform(self, dataset: NumpyTransformable) -> NumpyDataset:
@@ -498,13 +346,6 @@ class QuantileBinning(LAMLTransformer):
 
         """
         # checks here
-        save_data(
-            data=dataset.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="src_dataset"
-        )
         super().transform(dataset)
         # convert to accepted dtype and get attributes
         dataset = dataset.to_numpy()
@@ -523,11 +364,4 @@ class QuantileBinning(LAMLTransformer):
         # create resulted
         output = dataset.empty().to_numpy()
         output.set_data(new_data, self.features, CategoryRole(np.int32, label_encoded=True))
-        save_data(
-            data=output.to_pandas(),
-            class_type=type(self),
-            prefix=self._fname_prefix,
-            operation_type="transform",
-            data_type="result_dataset"
-        )
         return output
