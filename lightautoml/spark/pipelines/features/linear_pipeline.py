@@ -7,7 +7,7 @@ from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline, SparkTabularDataFeatures
 from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkUnionTransformer, \
-    SparkSequentialTransformer, SparkEstOrTrans
+    SparkSequentialTransformer, SparkEstOrTrans, ColumnsSelectorTransformer
 # Same comments as for spark.pipelines.features.base
 from lightautoml.spark.transformers.categorical import SparkOHEEncoderEstimator, SparkLabelEncoderEstimator
 from lightautoml.spark.transformers.numeric import SparkFillInfTransformer, SparkFillnaMedianEstimator, \
@@ -167,7 +167,8 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         if len(probs_list) > 0:
             probs_pipe = SparkUnionTransformer(probs_list)
             probs_pipe = SparkSequentialTransformer([probs_pipe, SparkLogOddsTransformer(input_cols=probs_pipe.get_output_cols(),
-                                                                                         input_roles=probs_pipe.get_output_roles())])
+                                                                                         input_roles=probs_pipe.get_output_roles(),
+                                                                                         )])
             dense_list.append(probs_pipe)
 
         # handle dense
@@ -177,22 +178,22 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
 
             dense_pipe1 = SparkUnionTransformer(dense_list)
             fill_inf_stage = SparkFillInfTransformer(input_cols=dense_pipe1.get_output_cols(),
-                                                     input_roles=dense_pipe1.get_output_roles())
+                                                     input_roles=dense_pipe1.get_output_roles(),
+                                                     do_replace_columns=[c for c in dense_pipe1.get_output_cols()
+                                                                         if c not in self.input_features])
             fill_na_median_stage = SparkFillnaMedianEstimator(input_cols=fill_inf_stage.getOutputCols(),
-                                                              input_roles=fill_inf_stage.getOutputCols())
+                                                              input_roles=fill_inf_stage.getOutputCols(),
+                                                              do_replace_columns=True)
             standerd_scaler_stage = SparkStandardScalerEstimator(input_cols=fill_na_median_stage.getOutputCols(),
-                                                                 input_roles=fill_na_median_stage.getOutputRoles())
+                                                                 input_roles=fill_na_median_stage.getOutputRoles(),
+                                                                 do_replace_columns=True)
 
             dense_pipe = SparkSequentialTransformer(
                 [
                     dense_pipe1,
-                    SparkUnionTransformer(
-                        [
-                            SparkSequentialTransformer([fill_inf_stage, fill_na_median_stage, standerd_scaler_stage]),
-                            SparkNaNFlagsEstimator(input_cols=dense_pipe1.get_output_cols(),
-                                                   input_roles=dense_pipe1.get_output_roles()),
-                        ]
-                    ),
+                    SparkNaNFlagsEstimator(input_cols=dense_pipe1.get_output_cols(),
+                                           input_roles=dense_pipe1.get_output_roles()),
+                    SparkSequentialTransformer([fill_inf_stage, fill_na_median_stage, standerd_scaler_stage])
                 ]
             )
             transformers_list.append(dense_pipe)

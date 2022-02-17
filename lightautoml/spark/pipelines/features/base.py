@@ -1,7 +1,7 @@
 """Basic classes for features generation."""
 import itertools
 from copy import copy
-from typing import Any, Callable, cast, Set
+from typing import Any, Callable, cast, Set, Union, Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -19,7 +19,7 @@ from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from lightautoml.spark.transformers.base import ChangeRolesTransformer
+from lightautoml.spark.transformers.base import ChangeRolesTransformer, ColumnsSelectorTransformer
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
     SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
 from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEstimator, \
@@ -60,7 +60,7 @@ def build_graph(begin: SparkEstOrTrans):
         else:
             return [tr], [tr]
 
-    init_starts, _ = find_start_end(begin)
+    init_starts, final_ends = find_start_end(begin)
 
     for st in init_starts:
         if st not in graph:
@@ -135,7 +135,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         assert self.input_features is not None, "Input features should be provided before the fit_transform"
         assert self.input_roles is not None, "Input roles should be provided before the fit_transform"
 
-        pipeline, last_cacher = self._merge(train)
+        pipeline, last_cacher = self._merge_estimators(train)
         self._transformer = cast(Transformer, pipeline.fit(train.data))
         self._infer_output_features_and_roles(self._transformer)
         sdf = last_cacher.dataset
@@ -170,14 +170,17 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         if len(self.pipes) > 1:
             return self.pipes.pop(i)
 
-    def _merge(self, data: SparkDataset) -> Tuple[Estimator, Cacher]:
-        est_cachers = [self._optimize_for_caching(pipe(data)) for pipe in self.pipes]
+    def _merge_estimators(self, data: SparkDataset) -> Tuple[Estimator, Cacher]:
+        est_cachers = [
+            self._optimize_for_caching(pipe(data), data.target_column, data.folds_column)
+            for pipe in self.pipes
+        ]
         ests = [e for est, _ in est_cachers for e in est]
         _, last_cacher = est_cachers[-1]
         pipeline = Pipeline(stages=ests)
         return pipeline, last_cacher
 
-    def _optimize_for_caching(self, pipeline: SparkEstOrTrans) -> Tuple[List[Estimator], Cacher]:
+    def _optimize_for_caching(self, pipeline: SparkEstOrTrans, target_col: str, folds_col: str) -> Tuple[List[Estimator], Cacher]:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
         stages = [tr for layer in tr_layers
@@ -207,13 +210,13 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
             assert isinstance(est, SparkColumnsAndRoles)
 
-            input_features = est.getInputCols()
+            replacable_columns = est.getColumnsToReplace()
 
-            assert isinstance(est, ChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features), \
+            assert isinstance(est, ChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in replacable_columns), \
                 "Cannot replace input features of the feature pipeline itself"
 
             if est.getDoReplaceColumns():
-                for col in est.getInputCols():
+                for col in est.getColumnsToReplace():
                     features.remove(col)
                     del roles[col]
 

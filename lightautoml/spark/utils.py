@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from datetime import datetime
 from typing import Optional, Tuple, Dict
@@ -141,6 +140,10 @@ def cache(df: SparkDataFrame) -> SparkDataFrame:
 
 
 class NoOpTransformer(Transformer):
+    def __init__(self, name: Optional[str] = None):
+        super().__init__()
+        self._name = name
+
     def _transform(self, dataset):
         return dataset
 
@@ -172,4 +175,4 @@ class Cacher(Estimator):
 
         self._cacher_dict[self._key] = ds
 
-        return NoOpTransformer()
+        return NoOpTransformer(name=f"cacher_{self._key}")

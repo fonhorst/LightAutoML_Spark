@@ -69,9 +69,13 @@ class HasOutputRoles(Params):
 
 class SparkColumnsAndRoles(HasInputCols, HasOutputCols, HasInputRoles, HasOutputRoles):
     doReplaceColumns = Param(Params._dummy(), "doReplaceColumns", "whatever it replaces columns or not")
+    columnsToReplace = Param(Params._dummy(), "columnsToReplace", "which columns to replace")
 
-    def getDoReplaceColumns(self):
+    def getDoReplaceColumns(self) -> bool:
         return self.getOrDefault(self.doReplaceColumns)
+
+    def getColumnsToReplace(self) -> List[str]:
+        return self.getOrDefault(self.columnsToReplace)
 
     @staticmethod
     def make_dataset(transformer: 'SparkColumnsAndRoles', base_dataset: SparkDataset, data: SparkDataFrame) -> SparkDataset:
@@ -127,7 +131,7 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
                  output_cols: List[str],
                  input_roles: RolesDict,
                  output_roles: RolesDict,
-                 do_replace_columns: bool = False):
+                 do_replace_columns: Union[bool, List[str]] = False):
         super().__init__()
 
         # assert len(input_cols) == len(output_cols)
@@ -139,7 +143,16 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
         self.set(self.outputCols, output_cols)
         self.set(self.inputRoles, input_roles)
         self.set(self.outputRoles, output_roles)
-        self.set(self.doReplaceColumns, do_replace_columns)
+
+        if isinstance(do_replace_columns, List):
+            cols_to_replace = cast(List[str], do_replace_columns)
+            assert len(set(cols_to_replace).difference(set(self.getInputCols()))) == 0, \
+                "All columns to replace, should be in input columns"
+            self.set(self.doReplaceColumns, True)
+            self.set(self.columnsToReplace, cols_to_replace)
+        else:
+            self.set(self.doReplaceColumns, do_replace_columns)
+            self.set(self.columnsToReplace, self.getInputCols() if do_replace_columns else [])
 
     _transform_checks = ()
 
@@ -151,8 +164,8 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
         if not self.getDoReplaceColumns():
             return input_df.select('*', *cols_to_add)
 
-        input_cols = set(self.getInputCols())
-        cols_to_leave = [f for f in input_df.columns if f not in input_cols]
+        replaced_columns = set(self.getColumnsToReplace())
+        cols_to_leave = [f for f in input_df.columns if f not in replaced_columns]
         return input_df.select(*cols_to_leave, *cols_to_add)
 
     def transform(self, dataset, params=None):
