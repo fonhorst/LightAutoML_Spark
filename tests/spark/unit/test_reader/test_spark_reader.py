@@ -173,25 +173,6 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     preader = PandasToPandasReader(task=Task(task_type), cv=cv)
     pdataset = preader.fit_read(pdf, roles=roles)
 
-    import pickle
-    with open("roles.pkl", "wb") as f:
-        pickle.dump(pdataset.roles, f)
-
-    with open("data.pkl", "wb") as f:
-        pickle.dump(pdataset.data, f)
-
-    with open("target.pkl", "wb") as f:
-        pickle.dump(pdataset.target, f)
-
-    with open("folds.pkl", "wb") as f:
-        pickle.dump(pdataset.folds, f)
-
-    for srole_name, srole in sdataset.roles.items():
-        prole = preader.roles[srole_name]
-        assert type(srole) == type(prole)
-        if type(srole) == "<class 'lightautoml.dataset.roles.CategoryRole'>":
-            pass
-
     sdiff = set(sdataset.features).symmetric_difference(pdataset.features)
     assert len(sdiff) == 0, f"Features sets are different: {sdiff}"
 
