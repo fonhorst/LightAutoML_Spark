@@ -110,7 +110,6 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         # get label encoded categories
         sparse_list.append(self.get_categorical_raw(train, le))
 
-        # TODO: fix the performance and uncomment
         # get target encoded categories
         te_part = self.get_categorical_raw(train, te)
         if te_part is not None:

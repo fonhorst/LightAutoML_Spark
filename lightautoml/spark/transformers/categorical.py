@@ -106,19 +106,19 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
         if not output_role:
             output_role = CategoryRole(np.int32, label_encoded=True)
         super().__init__(input_cols, input_roles, do_replace_columns=do_replace_columns, output_role=output_role)
-        self._input_columns = self.getInputCols()
-        self._input_roles = self.getInputRoles()
+        self._input_intermediate_columns = self.getInputCols()
+        self._input_internediate_roles = self.getInputRoles()
 
     def _fit(self, dataset: SparkDataFrame) -> "SparkLabelEncoderTransformer":
         logger.info(f"[{type(self)} (LE)] fit is started")
 
-        roles = self._input_roles#self.getOrDefault(self.inputRoles)
+        roles = self._input_internediate_roles#self.getOrDefault(self.inputRoles)
 
         df = dataset
 
         self.dicts = dict()
 
-        for i in self._input_columns:
+        for i in self._input_intermediate_columns:
 
             logger.debug(f"[{type(self)} (LE)] fit column {i}")
 

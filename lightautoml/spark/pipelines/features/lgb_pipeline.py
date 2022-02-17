@@ -188,7 +188,7 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
             te_part = SparkSequentialTransformer([te_part, target_encoder_stage])
             transformer_list.append(te_part)
 
-        # get intersection of top categories
+        # # get intersection of top categories
         intersections = self.get_categorical_intersections(train)
         if intersections is not None:
             if target_encoder is not None:
@@ -211,8 +211,6 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
 
             transformer_list.append(ints_part)
 
-        # add numeric pipeline
-        # TODO: SPARK-LAMA return get_numeric_data later
         transformer_list.append(self.get_numeric_data(train))
         transformer_list.append(self.get_ordinal_encoding(train, ordinal))
         transformer_list.append(self.get_datetime_diffs(train))

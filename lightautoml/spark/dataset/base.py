@@ -283,8 +283,8 @@ class SparkDataset(LAMLDataset):
 
         task = Task(self.task.name) if self.task else None
         kwargs = dict()
-        if target_data:
-            kwargs['target'] =target_data
+        if target_data is not None:
+            kwargs['target'] = target_data
         pds = PandasDataset(data=data, roles=roles, task=task, **kwargs)
 
         return pds
