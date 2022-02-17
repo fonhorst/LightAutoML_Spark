@@ -213,7 +213,7 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
 
         # add numeric pipeline
         # TODO: SPARK-LAMA return get_numeric_data later
-        # transformer_list.append(self.get_numeric_data(train))
+        transformer_list.append(self.get_numeric_data(train))
         transformer_list.append(self.get_ordinal_encoding(train, ordinal))
         transformer_list.append(self.get_datetime_diffs(train))
         transformer_list.append(self.get_datetime_seasons(train, NumericRole(np.float32)))
