@@ -123,11 +123,12 @@ def get_numeric_roles_stat(
 
     sdf = train.data.select(SparkDataset.ID_COLUMN, *roles_to_identify)
 
+    total_number = sdf.count()
     if subsample is not None:
-        total_number = sdf.count()
         if subsample > total_number:
             fraction = 1.0
         else:
+            total_number = subsample
             fraction = subsample/total_number
         sdf = sdf.sample(fraction=fraction, seed=random_state)
 
@@ -167,7 +168,7 @@ def get_numeric_roles_stat(
     res["top_freq_values"] = np.array([unique_values_stat[f'{f}_max_count_values'] for f in train.features])
     # how many unique values in every column
     res["unique"] = np.array([unique_values_stat[f'{f}_count_distinct'] for f in train.features])
-    res["unique_rate"] = res["unique"] / train.shape[0]
+    res["unique_rate"] = res["unique"] / total_number
 
     # check binned categorical score
     trf = SequentialTransformer([QuantileBinning(), encoder()])
@@ -323,16 +324,21 @@ def get_null_scores(
         if cnt != size and cnt != 0
     ]
 
-    gini_func = get_gini_func(train.target_column)
-    sdf = (
-        train.data
-        .select(SparkDataset.ID_COLUMN, *notnan_cols)
-        .join(train.target, on=SparkDataset.ID_COLUMN)
-    )
     if notnan_cols:
+        empty_slice_cols = [F.when(F.isnull(F.col(feat)), 1.0).otherwise(0.0).alias(feat) for feat in notnan_cols]
+
+        gini_func = get_gini_func(train.target_column)
+        sdf = (
+            train.data
+            .select(SparkDataset.ID_COLUMN, *empty_slice_cols)
+            .join(train.target, on=SparkDataset.ID_COLUMN)
+        )
+
+        output_schema = sdf.select(SparkDataset.ID_COLUMN, *notnan_cols).schema
+
         mean_scores = (
             sdf
-            .mapInPandas(gini_func, train.data.schema)
+            .mapInPandas(gini_func, output_schema)
             .select([F.mean(c).alias(c) for c in notnan_cols])
         ).first().asDict()
     else:
