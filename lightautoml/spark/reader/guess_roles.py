@@ -1,4 +1,4 @@
-from typing import Optional, Union, List
+from typing import Dict, Optional, Union, List
 
 from pyspark.sql.types import IntegerType
 
@@ -7,7 +7,7 @@ from lightautoml.reader.guess_roles import calc_ginis, RolesDict
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.transformers.base import SparkTransformer, SequentialTransformer, ChangeRoles
 
-from pyspark.sql import functions as F
+from pyspark.sql import functions as F, Window
 
 import pandas as pd
 import numpy as np
@@ -121,7 +121,6 @@ def get_numeric_roles_stat(
     if len(roles_to_identify) == 0:
         return res
 
-    # train = train.empty()
     sdf = train.data.select(SparkDataset.ID_COLUMN, *roles_to_identify)
 
     if subsample is not None:
@@ -132,6 +131,7 @@ def get_numeric_roles_stat(
             fraction = subsample/total_number
         sdf = sdf.sample(fraction=fraction, seed=random_state)
 
+    train = train.empty()
     train.set_data(sdf, roles_to_identify, roles)
 
     assert train.folds is not None
@@ -154,12 +154,20 @@ def get_numeric_roles_stat(
     res["raw_scores"] = get_score_from_pipe(train)
 
     # check unique values
-    # unique_values = [np.unique(data[:, x][~np.isnan(data[:, x])], return_counts=True) for x in range(data.shape[1])]
-    # top_freq_values = np.array([max(x[1]) for x in unique_values])
-    # unique_values = np.array([len(x[0]) for x in unique_values])
-    # res["unique"] = unique_values
-    # res["top_freq_values"] = top_freq_values
-    # res["unique_rate"] = res["unique"] / train.shape[0]
+    sub_select_columns = []
+    top_select_columns = []
+    for f in train.features:
+        sub_select_columns.append(F.count(F.when(~F.isnan(F.col(f)), F.col(f))).over(Window.partitionBy(F.col(f))).alias(f'{f}_count_values'))
+        top_select_columns.append(F.max(F.col(f'{f}_count_values')).alias(f'{f}_max_count_values'))
+        top_select_columns.append(F.count_distinct(F.when(~F.isnan(F.col(f)), F.col(f))).alias(f'{f}_count_distinct'))
+    df = train.data.select(*train.features, *sub_select_columns)
+    unique_values_stat: Dict = df.select(*top_select_columns).first().asDict()
+
+    # max of frequency of unique values in every column
+    res["top_freq_values"] = np.array([unique_values_stat[f'{f}_max_count_values'] for f in train.features])
+    # how many unique values in every column
+    res["unique"] = np.array([unique_values_stat[f'{f}_count_distinct'] for f in train.features])
+    res["unique_rate"] = res["unique"] / train.shape[0]
 
     # check binned categorical score
     trf = SequentialTransformer([QuantileBinning(), encoder()])
@@ -228,12 +236,17 @@ def get_category_roles_stat(
     if len(roles_to_identify) == 0:
         return res
 
-    train = train.empty()
     sdf = train.data.select(SparkDataset.ID_COLUMN, *roles_to_identify)
 
     if subsample is not None:
-        sdf = sdf.sample(fraction=subsample, seed=random_state)
+        total_number = sdf.count()
+        if subsample > total_number:
+            fraction = 1.0
+        else:
+            fraction = subsample/total_number
+        sdf = sdf.sample(fraction=fraction, seed=random_state)
 
+    train = train.empty()
     train.set_data(sdf, roles_to_identify, roles)
 
     assert train.folds is not None
@@ -285,7 +298,6 @@ def get_null_scores(
 
     """
     roles = train.roles
-    # train = train.empty()
     sdf = train.data.select(SparkDataset.ID_COLUMN, *feats)
 
     if subsample is not None:
@@ -296,6 +308,7 @@ def get_null_scores(
             fraction = subsample/total_number
         sdf = sdf.sample(fraction=fraction, seed=random_state)
 
+    train = train.empty()
     train.set_data(sdf, feats, [roles[f] for f in feats])
 
     train.cache()
