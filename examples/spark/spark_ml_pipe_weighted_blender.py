@@ -1,7 +1,9 @@
 import logging.config
+from typing import cast
 
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from lightautoml.spark.automl.blend import SparkWeightedBlender
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
@@ -56,20 +58,49 @@ if __name__ == "__main__":
         )
 
         spark_ml_algo2 = SparkBoostLGBM(freeze_defaults=False)
+        spark_features_pipeline2 = SparkLinearFeatures(cacher_key=cacher_key, **ml_alg_kwargs)
+        spark_selector2 = ImportanceCutoffSelector(
+            cutoff=0.0,
+            feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),
+            ml_algo=SparkBoostLGBM(freeze_defaults=False),
+            imp_estimator=ModelBasedImportanceEstimator()
+        )
 
         ml_pipe1 = SparkMLPipeline(
             cacher_key=cacher_key,
             input_roles=sdataset.roles,
-            ml_algos=[spark_ml_algo1, spark_ml_algo2],
+            ml_algos=[spark_ml_algo1],
             pre_selection=spark_selector,
             features_pipeline=spark_features_pipeline,
             post_selection=None
         )
+        ml_pipe2 = SparkMLPipeline(
+            cacher_key=cacher_key,
+            input_roles=sdataset.roles,
+            ml_algos=[spark_ml_algo2],
+            pre_selection=spark_selector2,
+            features_pipeline=spark_features_pipeline2,
+            post_selection=None
+        )
 
         predictions = ml_pipe1.fit_predict(iterator)
+        sds = cast(SparkDataset, predictions)
+        iterator = SparkFoldsIterator(sds, n_folds=3)
+        ml_pipe2.input_roles = predictions.roles
+        predictions = ml_pipe2.fit_predict(iterator)
+        sds = cast(SparkDataset, predictions)
+        iterator = SparkFoldsIterator(sds, n_folds=3)
+
+        roles = dict()
+        roles.update(ml_pipe1.output_roles)
+        roles.update(ml_pipe2.output_roles)
+        sds = cast(SparkDataset, iterator.train)
+        sdf = sds.data.select(*sds.service_columns, *list(roles.keys()))
+        level_predictions = sds.empty()
+        level_predictions.set_data(sdf, sdf.columns, roles)
 
         blender = SparkWeightedBlender()
-        blender.fit_predict(predictions, [ml_pipe1])
+        blender.fit_predict(level_predictions, [ml_pipe1, ml_pipe2])
 
 
         logger.info("Finished")
