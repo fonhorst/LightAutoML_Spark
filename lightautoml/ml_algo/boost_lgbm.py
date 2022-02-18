@@ -258,18 +258,19 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         lgb_train = lgb.Dataset(train.data, label=train_target, weight=train_weight)
         lgb_valid = lgb.Dataset(valid.data, label=valid_target, weight=valid_weight)
 
-        with redirect_stdout(LoggerStream(logger, verbose_eval=100)):
-            model = lgb.train(
-                params,
-                lgb_train,
-                num_boost_round=num_trees,
-                valid_sets=[lgb_valid],
-                valid_names=["valid"],
-                fobj=fobj,
-                feval=feval,
-                early_stopping_rounds=early_stopping_rounds,
-                verbose_eval=verbose_eval,
-            )
+        # TODO: SPARK-LAMA remove later
+        # with redirect_stdout(LoggerStream(logger, verbose_eval=100)):
+        model = lgb.train(
+            params,
+            lgb_train,
+            num_boost_round=num_trees,
+            valid_sets=[lgb_valid],
+            valid_names=["valid"],
+            fobj=fobj,
+            feval=feval,
+            early_stopping_rounds=early_stopping_rounds,
+            verbose_eval=verbose_eval,
+        )
 
         val_pred = model.predict(valid.data)
         val_pred = self.task.losses["lgb"].bw_func(val_pred)

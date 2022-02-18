@@ -18,6 +18,7 @@ from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
 from lightautoml.spark.tasks.base import SparkTask
+from lightautoml.spark.utils import Cacher
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.utils.tmp_utils import log_data
@@ -172,6 +173,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         ]
         full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs, include_train=False)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
+        full_preds_df = Cacher(key='main_cache').fit(full_preds_df).transform(full_preds_df)
 
         # create Spark MLlib Transformer and save to property var
         self._transformer = self._build_transformer()

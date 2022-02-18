@@ -26,6 +26,75 @@ def datasets() -> Dict[str, Any]:
             }
         },
 
+        "used_cars_dataset_025x": {
+            "path": "/opt/spark_data/derivative_datasets/025x_cleaned.csv",
+            "task_type": "reg",
+            "metric_name": "mse",
+            "target_col": "price",
+            "roles": {
+                "target": "price",
+                "drop": ["dealer_zip", "description", "listed_date",
+                         "year", 'Unnamed: 0', '_c0',
+                         'sp_id', 'sp_name', 'trimId',
+                         'trim_name', 'major_options', 'main_picture_url',
+                         'interior_color', 'exterior_color'],
+                # "numeric": ['latitude', 'longitude', 'mileage']
+                "numeric": ['longitude', 'mileage']
+            },
+            "dtype": {
+                'fleet': 'str', 'frame_damaged': 'str',
+                'has_accidents': 'str', 'isCab': 'str',
+                'is_cpo': 'str', 'is_new': 'str',
+                'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+            }
+        },
+
+        "used_cars_dataset_1x": {
+            "path": "/opt/spark_data/derivative_datasets/1x_cleaned.csv",
+            "task_type": "reg",
+            "metric_name": "mse",
+            "target_col": "price",
+            "roles": {
+                "target": "price",
+                "drop": ["dealer_zip", "description", "listed_date",
+                         "year", 'Unnamed: 0', '_c0',
+                         'sp_id', 'sp_name', 'trimId',
+                         'trim_name', 'major_options', 'main_picture_url',
+                         'interior_color', 'exterior_color'],
+                # "numeric": ['latitude', 'longitude', 'mileage']
+                "numeric": ['longitude', 'mileage']
+            },
+            "dtype": {
+                'fleet': 'str', 'frame_damaged': 'str',
+                'has_accidents': 'str', 'isCab': 'str',
+                'is_cpo': 'str', 'is_new': 'str',
+                'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+            }
+        },
+
+        "used_cars_dataset_2x": {
+            "path": "/opt/spark_data/derivative_datasets/2x_cleaned.csv",
+            "task_type": "reg",
+            "metric_name": "mse",
+            "target_col": "price",
+            "roles": {
+                "target": "price",
+                "drop": ["dealer_zip", "description", "listed_date",
+                         "year", 'Unnamed: 0', '_c0',
+                         'sp_id', 'sp_name', 'trimId',
+                         'trim_name', 'major_options', 'main_picture_url',
+                         'interior_color', 'exterior_color'],
+                # "numeric": ['latitude', 'longitude', 'mileage']
+                "numeric": ['longitude', 'mileage']
+            },
+            "dtype": {
+                'fleet': 'str', 'frame_damaged': 'str',
+                'has_accidents': 'str', 'isCab': 'str',
+                'is_cpo': 'str', 'is_new': 'str',
+                'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+            }
+        },
+
         "lama_test_dataset": {
             "path": "/opt/spark_data/sampled_app_train.csv",
             "task_type": "binary",
