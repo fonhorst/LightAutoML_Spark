@@ -3,18 +3,19 @@
 """
 Simple example for binary classification on tabular data.
 """
-import logging
+import logging.config
+import os
 from typing import Dict, Any, Optional
 
-import sklearn
+import yaml
 from pyspark.sql import functions as F
-from pyspark.sql.types import FloatType
 
+from dataset_utils import datasets
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
-from lightautoml.spark.utils import log_exec_time, spark_session
-from lightautoml.utils.tmp_utils import log_data
+from lightautoml.spark.utils import spark_session, log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
+from lightautoml.utils.tmp_utils import log_data, LAMA_LIBRARY
 
 logger = logging.getLogger(__name__)
 
@@ -27,22 +28,26 @@ def calculate_automl(path: str,
                      cv: int = 5,
                      use_algos = ("lgb", "linear_l2"),
                      roles: Optional[Dict] = None,
-                     dtype: Optional[None] = None) -> Dict[str, Any]:
+                     dtype: Optional[None] = None,
+                     spark_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-    with spark_session(master="local[4]") as spark:
-        with log_exec_time("spark-lama training"):
+    os.environ[LAMA_LIBRARY] = "spark"
+    if not spark_config:
+        spark_args = {"master": "local[4]"}
+    else:
+        spark_args = {'session_args': spark_config}
+
+    with spark_session(**spark_args) as spark:
+        with log_exec_timer("spark-lama training") as train_timer:
             task = SparkTask(task_type)
             data = spark.read.csv(path, header=True, escape="\"").repartition(4)
 
-            data = (
-                data
-                # .withColumnRenamed(target_col, f"{target_col}_old")
-                # .select('*', F.col(f"{target_col}_old").astype(DoubleType()).alias(target_col)).drop(f"{target_col}_old")
-                .withColumn(SparkDataset.ID_COLUMN, F.monotonically_increasing_id())
-                .withColumn('is_test', F.rand(seed))
-                .cache()
-            )
+            data = data.select(
+                '*',
+                F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN),
+                F.rand(seed).alias('is_test')
+            ).cache()
             data.write.mode('overwrite').format('noop').save()
             # train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
 
@@ -60,7 +65,8 @@ def calculate_automl(path: str,
                 spark=spark,
                 task=task,
                 general_params={"use_algos": use_algos},
-                reader_params={"cv": cv}
+                reader_params={"cv": cv},
+                tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
             )
 
             oof_predictions = automl.fit_predict(
@@ -94,7 +100,7 @@ def calculate_automl(path: str,
 
         logger.info(f"{metric_name} score for out-of-fold predictions: {metric_value}")
 
-        with log_exec_time("spark-lama predicting on test"):
+        with log_exec_timer("spark-lama predicting on test") as predict_timer:
             te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
 
             # te_pred = (
@@ -124,4 +130,23 @@ def calculate_automl(path: str,
 
         logger.info("Predicting is finished")
 
-        return {"metric_value": metric_value, "test_metric_value": test_metric_value}
+        return {"metric_value": metric_value, "test_metric_value": test_metric_value,
+                "train_duration_secs": train_timer.duration,
+                "predict_duration_secs": predict_timer.duration}
+
+
+if __name__ == "__main__":
+    logging.config.dictConfig(logging_config(level=logging.INFO, log_filename="/tmp/lama.log"))
+    logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
+    logger = logging.getLogger(__name__)
+
+    # Read values from config file
+    with open("/scripts/config.yaml", "r") as stream:
+        config_data = yaml.safe_load(stream)
+
+    ds_cfg = datasets()[config_data['dataset']]
+    del config_data['dataset']
+    ds_cfg.update(config_data)
+
+    result = calculate_automl(**ds_cfg)
+    print(f"EXP-RESULT: {result}")
