@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 
 import sklearn
 from pyspark.sql import functions as F
+from pyspark.sql.types import FloatType
 
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset
@@ -39,13 +40,21 @@ def calculate_automl(path: str,
                 # .withColumnRenamed(target_col, f"{target_col}_old")
                 # .select('*', F.col(f"{target_col}_old").astype(DoubleType()).alias(target_col)).drop(f"{target_col}_old")
                 .withColumn(SparkDataset.ID_COLUMN, F.monotonically_increasing_id())
+                .withColumn('is_test', F.rand(seed))
                 .cache()
             )
-            train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
+            data.write.mode('overwrite').format('noop').save()
+            # train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
+
+            train_data = data.where(F.col('is_test') < 0.8).drop('is_test').cache()
+            test_data = data.where(F.col('is_test') >= 0.8).drop('is_test').cache()
+
+            train_data.write.mode('overwrite').format('noop').save()
+            test_data.write.mode('overwrite').format('noop').save()
 
             # test_data_dropped = test_data \
-            #     .drop(F.col(target_col)).cache()
-            test_data_dropped = test_data.cache()
+            #     .drop(F.col(target_col))
+            test_data_dropped = test_data
 
             automl = SparkTabularAutoML(
                 spark=spark,
@@ -102,6 +111,14 @@ def calculate_automl(path: str,
 
             score = task.get_dataset_metric()
             test_metric_value = score(te_pred)
+
+            # alternative way of measuring (gives the same results)
+            # te_pred_df = te_pred.data.join(
+            #     test_data.select(SparkDataset.ID_COLUMN, F.col(target_col).astype(FloatType()).alias(target_col)),
+            #     on=SparkDataset.ID_COLUMN
+            # )
+            # ds = SparkDataset(te_pred_df, te_pred.roles, te_pred.task, target=target_col)
+            # test_metric_value = score(ds)
 
             logger.info(f"{metric_name} score for test predictions: {test_metric_value}")
 
