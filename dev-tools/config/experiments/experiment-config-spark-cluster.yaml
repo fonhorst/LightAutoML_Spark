@@ -13,7 +13,7 @@ experiments:
     library: ["spark"]
     repeat_rate: 1
     params:
-      dataset: ["buzz_dataset"]
+      dataset: ["used_cars_dataset"]
       seed: [42, 100]
       cv: [5]
       use_algos:

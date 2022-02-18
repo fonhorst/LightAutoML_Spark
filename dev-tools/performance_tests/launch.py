@@ -41,9 +41,9 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
         cfg['seed'] = seed
         cfg['cv'] = cv
 
-        os.environ[LOG_DATA_DIR] = f"./dumps/datalogs_{dataset_name}_{seed}"
-        if os.path.exists(os.environ[LOG_DATA_DIR]) and delete_dir:
-            shutil.rmtree(os.environ[LOG_DATA_DIR])
+        # os.environ[LOG_DATA_DIR] = f"./dumps/datalogs_{dataset_name}_{seed}"
+        # if os.path.exists(os.environ[LOG_DATA_DIR]) and delete_dir:
+        #     shutil.rmtree(os.environ[LOG_DATA_DIR])
 
         log_config("general", cfg)
 
@@ -61,5 +61,5 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
 
 if __name__ == "__main__":
-    calculate_quality(lama_automl)
-    # calculate_quality(spark_automl, delete_dir=False)
+    # calculate_quality(lama_automl)
+    calculate_quality(spark_automl, delete_dir=False)
