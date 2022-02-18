@@ -41,7 +41,7 @@ def calculate_automl(path: str,
     with spark_session(**spark_args) as spark:
         with log_exec_timer("spark-lama training") as train_timer:
             task = SparkTask(task_type)
-            data = spark.read.csv(path, header=True, escape="\"").repartition(4)
+            data = spark.read.csv(path, header=True, escape="\"")#.repartition(4)
 
             data = data.select(
                 '*',

@@ -194,6 +194,17 @@ class NoOpTransformer(Transformer):
         return dataset
 
 
+class DebugTransformer(Transformer):
+    def __init__(self, name: Optional[str] = None):
+        super().__init__()
+        self._name = name
+
+    def _transform(self, dataset):
+        dataset = dataset.cache()
+        dataset.write.mode('overwrite').format('noop').save()
+        return dataset
+
+
 class Cacher(Estimator):
     _cacher_dict: Dict[str, SparkDataFrame] = dict()
 
