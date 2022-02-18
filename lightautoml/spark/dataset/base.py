@@ -31,7 +31,6 @@ class SparkDataset(LAMLDataset):
     def empty(self) -> "SparkDataset":
 
         dataset = cast(SparkDataset, super().empty())
-        dataset._dependencies = []
 
         return dataset
 
@@ -70,23 +69,24 @@ class SparkDataset(LAMLDataset):
                  data: SparkDataFrame,
                  roles: Optional[RolesDict],
                  task: Optional[Task] = None,
-                 dependencies: Optional[List['SparkDataset']] = None,
                  **kwargs: Any):
 
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
             self._target_column: str = kwargs["target"]
+        else:
+            self._target_column = None
 
         self._folds_column = None
         if "folds" in kwargs and kwargs["folds"] is not None:
             assert isinstance(kwargs["folds"], str), "Folds should be a str representing column name"
             self._folds_column: str = kwargs["folds"]
+        else:
+            self._folds_column = None
 
         self._validate_dataframe(data)
 
         self._data = None
-        self._is_frozen_in_cache: bool = False
-        self._dependencies = [] if dependencies is None else dependencies
         self._service_columns: Set[str] = {
             self.ID_COLUMN,
             self.target_column,
@@ -177,11 +177,11 @@ class SparkDataset(LAMLDataset):
         return self.data.count(), len(self.features)
 
     @property
-    def target_column(self) -> str:
+    def target_column(self) -> Optional[str]:
         return self._target_column
 
     @property
-    def folds_column(self) -> str:
+    def folds_column(self) -> Optional[str]:
         return self._folds_column
 
     @property
@@ -266,8 +266,7 @@ class SparkDataset(LAMLDataset):
     def set_data(self,
                  data: SparkDataFrame,
                  features: List[str],
-                 roles: NpRoles = None,
-                 dependencies: Optional[List['SparkDataset']] = None):
+                 roles: NpRoles = None):
         """Inplace set data, features, roles for empty dataset.
 
         Args:
@@ -279,14 +278,14 @@ class SparkDataset(LAMLDataset):
         self._validate_dataframe(data)
         super().set_data(data, None, roles)
 
-        if dependencies is not None:
-            self._dependencies = dependencies
-
     def to_pandas(self) -> PandasDataset:
         data, target_data, roles = self._materialize_to_pandas()
 
-        task = Task(self.task.name)
-        pds = PandasDataset(data=data, roles=roles, task=task, target=target_data)
+        task = Task(self.task.name) if self.task else None
+        kwargs = dict()
+        if target_data is not None:
+            kwargs['target'] = target_data
+        pds = PandasDataset(data=data, roles=roles, task=task, **kwargs)
 
         return pds
 

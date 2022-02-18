@@ -10,13 +10,14 @@ from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
 from pyspark.ml.util import MLWritable
 from pyspark.sql import functions as F, Column
 from pyspark.sql.functions import isnan
+from pyspark.sql.types import IntegerType
 
 from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
-from lightautoml.spark.tasks.base import Task
+from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.utils.tmp_utils import log_data
@@ -114,6 +115,8 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         if self.task.name == "multiclass":
             outp_dim = valid_ds.data.select(F.max(valid_ds.target_column).alias("max")).first()
             outp_dim = outp_dim["max"] + 1
+        elif self.task.name == "binary":
+            outp_dim = 2
 
         self.n_classes = outp_dim
 
@@ -149,11 +152,14 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         # 2. dummy - nothing
         # 3. holdout - nothing
         # 4. custom - union + groupby
-        neutral_element = (
-            F.array(*[F.lit(0.0) for _ in range(self.n_classes)])
-            if self.task.name in ["binary", "multiclass"]
-            else F.lit(0.0)
-        )
+        # neutral_element = (
+        #     array_to_vector(F.array(*[F.lit(float('nan')) for _ in range(self.n_classes)]))
+        #     if self.task.name in ["binary", "multiclass"]
+        #     else F.lit(float('nan'))
+        # )
+
+        neutral_element = None
+
         preds_dfs = [
             df.select(
                 '*',
@@ -169,7 +175,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
 
-        # TODO: SPARK-LAMA repair it later
         if iterator_len > 1:
             single_pred_ds = self._make_single_prediction_dataset(pred_ds)
             logger.info(
@@ -235,7 +240,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         prob = self.task.name in ["binary", "multiclass"]
 
-        if self.task.name == "multiclass":
+        if self.task.name in ["binary", "multiclass"]:
             role = NumericVectorOrArrayRole(size=self.n_classes,
                                             element_col_name_template=self._predict_feature_name() + "_{}",
                                             dtype=np.float32,
@@ -268,12 +273,18 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     taskName = Param(Params._dummy(), "taskName", "task name")
     removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
+    convertToArrayFirst = Param(Params._dummy(), "convertToArrayFirst", "convert to array first")
+    weights = Param(Params._dummy(), "weights", "weights")
+    dimNum = Param(Params._dummy(), "dimNum", "dim num")
 
     def __init__(self,
                  task_name: str,
                  input_cols: List[str],
                  output_col: str,
-                 remove_cols: Optional[List[str]] = None):
+                 remove_cols: Optional[List[str]] = None,
+                 convert_to_array_first: bool = False,
+                 weights: Optional[List[int]] = None,
+                 dim_num: int = 1):
         super().__init__()
         self.set(self.taskName, task_name)
         self.set(self.inputCols, input_cols)
@@ -281,138 +292,70 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
         if not remove_cols:
             remove_cols = []
         self.set(self.removeCols, remove_cols)
+        self.set(self.convertToArrayFirst, convert_to_array_first)
+        if weights is None:
+            weights = [1.0 for _ in input_cols]
+
+        assert len(input_cols) == len(weights)
+
+        self.set(self.weights, weights)
+        self.set(self.dimNum, dim_num)
+
+    def getTaskName(self) -> str:
+        return self.getOrDefault(self.taskName)
 
     def getRemoveCols(self) -> List[str]:
         return self.getOrDefault(self.removeCols)
 
+    def getConvertToArrayFirst(self) -> bool:
+        return self.getOrDefault(self.convertToArrayFirst)
+
+    def getWeights(self) -> List[int]:
+        return self.getOrDefault(self.weights)
+
+    def getDimNum(self) -> int:
+        return self.getOrDefault(self.dimNum)
+
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+
         pred_cols = self.getInputCols()
-        if self.getOrDefault(self.taskName) in ["multiclass"]:
-            def sum_arrays(x):
-                is_all_nth_elements_nan = sum(F.when(isnan(x[c]), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
-                # sum of non nan elements divided by number of non nan elements
-                mean_nth_elements = sum(F.when(isnan(x[c]), 0).otherwise(x[c]) for c in pred_cols) / \
-                                    sum( F.when(isnan(x[c]), 0).otherwise(1) for c in pred_cols )
-                return F.when(is_all_nth_elements_nan, float('nan')) \
-                        .otherwise(mean_nth_elements)
-            out_col = F.transform(F.arrays_zip(*pred_cols), sum_arrays).alias(self.getOutputCol())
+        dim_size = self.getInputCols()
+        weights = {c: w for w, c in zip(self.getWeights(), pred_cols)}
+        non_null_count_col = (F.lit(len(pred_cols)) - sum(F.isnull(c).astype(IntegerType()) for c in pred_cols))
+
+        if self.getTaskName() in ["binary", "multiclass"]:
+            def convert_column(c):
+                return vector_to_array(c).alias(c) if self.getConvertToArrayFirst() else F.col(c)
+
+            normalized_cols = [
+                F.when(F.isnull(c), F.array(*[F.lit(0.0) for _ in range(self.getDimNum())]))
+                    .otherwise(convert_column(c)).alias(c)
+                for c in pred_cols
+            ]
+            arr_fields_summ = F.transform(F.arrays_zip(*normalized_cols), lambda x: F.aggregate(
+                F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]),
+                F.lit(0.0),
+                lambda acc, x: acc + x
+            ) / non_null_count_col)
+
+            out_col = array_to_vector(arr_fields_summ) if self.getConvertToArrayFirst() else arr_fields_summ
         else:
-            is_all_columns_nan = sum(F.when(isnan(F.col(c)), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
-            mean_all_columns = sum(F.when(isnan(F.col(c)), 0).otherwise(F.col(c)) for c in pred_cols) / \
-                               sum( F.when(isnan(F.col(c)), 0).otherwise(1) for c in pred_cols )
-            out_col = F.when(is_all_columns_nan, float('nan')).otherwise(mean_all_columns).alias(self.getOutputCol())
+            scalar_fields_summ = F.aggregate(
+                F.array(*[F.col(c) * F.lit(weights[c]) for c in pred_cols]),
+                F.lit(0.0),
+                lambda acc, x: acc + F.when(F.isnull(x), F.lit(0.0)).otherwise(x)
+            ) / non_null_count_col
+
+            out_col = scalar_fields_summ
 
         cols_to_remove = set(self.getRemoveCols())
         cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
-        out_df = dataset.select(*cols_to_select, out_col)
+        out_df = dataset.select(*cols_to_select, out_col.alias(self.getOutputCol()))
+
+        logger.info(f"In the end of transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+
         return out_df
 
     def write(self):
         pass
-
-
-class TabularMLAlgoTransformer(Transformer):
-
-    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        """Mean prediction for all fitted models.
-
-        Args:
-            dataset: Dataset used for prediction.
-
-        Returns:
-            Dataset with predicted values.
-
-        """
-        assert self._models != [], "Must have at least one fitted model."
-
-        preds_dfs = [
-            self.predict_single_fold(dataset=dataset, model=model).select(
-                SparkDataset.ID_COLUMN,
-                F.col(SparkTabularMLAlgo._get_predict_column(model)).alias(f"{self._predict_feature_name}_{i}")
-            ) for i, model in enumerate(self._models)
-        ]
-
-        predict_sdf = self._average_predictions(dataset, preds_dfs, self._predict_feature_name)
-
-        return predict_sdf
-
-    def _average_predictions(self, 
-                            preds_ds: SparkDataFrame,
-                            preds_dfs: List[SparkDataFrame], 
-                            pred_col_prefix: str) -> SparkDataFrame:
-        # TODO: SPARK-LAMA probably one may write a scala udf function to join multiple arrays/vectors into the one
-        # TODO: reg and binary cases probably should be treated without arrays summation
-        # we need counter here for EACH row, because for some models there may be no predictions
-        # for some rows that means:
-        # 1. we need to do left_outer instead of inner join (because the right frame may not contain all rows)
-        # 2. we would like to find a mean prediction for each row, but the number of predictiosn may be variable,
-        #    that is why we need a counter for each row
-        # 3. this counter should depend on if there is None for the right row or not
-        # 4. we also need to substitute None's of the right dataframe with empty arrays
-        #    to provide uniformity for summing operations
-        # 5. we also convert output from vector to an array to combine them
-        counter_col_name = "counter"
-
-        if self._task_name == "multiclass":
-            empty_pred = F.array(*[F.lit(0) for _ in range(self._n_classes)])
-
-            def convert_col(prediction_column: str) -> Column:
-                return vector_to_array(F.col(prediction_column))
-
-            # full_preds_df
-            def sum_predictions_col() -> Column:
-                # curr_df[pred_col_prefix]
-                return F.transform(
-                    F.arrays_zip(pred_col_prefix, f"{pred_col_prefix}_{i}"),
-                    lambda x, y: x + y
-                ).alias(pred_col_prefix)
-
-            def avg_preds_sum_col() -> Column:
-                return array_to_vector(
-                    F.transform(pred_col_prefix, lambda x: x / F.col("counter"))
-                ).alias(pred_col_prefix)
-        else:
-            empty_pred = F.lit(0)
-
-            # trivial operator in this case
-            def convert_col(prediction_column: str) -> Column:
-                return F.col(prediction_column)
-
-            def sum_predictions_col() -> Column:
-                # curr_df[pred_col_prefix]
-                return (F.col(pred_col_prefix) + F.col(f"{pred_col_prefix}_{i}")).alias(pred_col_prefix)
-
-            def avg_preds_sum_col() -> Column:
-                return (F.col(pred_col_prefix) / F.col("counter")).alias(pred_col_prefix)
-
-        full_preds_df = preds_ds.select(
-            SparkDataset.ID_COLUMN,
-            F.lit(0).alias(counter_col_name),
-            empty_pred.alias(pred_col_prefix)
-        )
-        for i, pred_df in enumerate(preds_dfs):
-            pred_col = f"{pred_col_prefix}_{i}"
-            full_preds_df = (
-                full_preds_df
-                .join(pred_df, on=SparkDataset.ID_COLUMN, how="left_outer")
-                .select(
-                    full_preds_df[SparkDataset.ID_COLUMN],
-                    pred_col_prefix,
-                    F.when(F.col(pred_col).isNull(), empty_pred)
-                        .otherwise(convert_col(pred_col)).alias(pred_col),
-                    F.when(F.col(pred_col).isNull(), F.col(counter_col_name))
-                        .otherwise(F.col(counter_col_name) + 1).alias(counter_col_name)
-                )
-                .select(
-                    full_preds_df[SparkDataset.ID_COLUMN],
-                    counter_col_name,
-                    sum_predictions_col()
-                )
-            )
-
-        full_preds_df = full_preds_df.select(
-            SparkDataset.ID_COLUMN,
-            avg_preds_sum_col()
-        )
-
-        return full_preds_df

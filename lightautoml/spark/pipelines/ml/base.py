@@ -9,7 +9,9 @@ from pyspark.ml import Transformer, PipelineModel
 
 from lightautoml.validation.base import TrainValidIterator
 from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from ..features.base import SparkFeaturesPipeline, SelectTransformer, Cacher
+from ..features.base import SparkFeaturesPipeline, SelectTransformer
+from ...transformers.base import ColumnsSelectorTransformer
+from ...utils import Cacher
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
@@ -21,11 +23,10 @@ from ....pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from ....pipelines.selection.base import SelectionPipeline
 
 
-class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRoles):
+class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
     def __init__(
         self,
         cacher_key: str,
-        input_roles: RolesDict,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
         pre_selection: Optional[SelectionPipeline] = None,
@@ -35,7 +36,6 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
     ):
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
-        self.input_roles = input_roles
         self._cacher_key = cacher_key
         self._output_features = None
         self._output_roles = None
@@ -65,6 +65,8 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
         """
 
         # train and apply pre selection
+        input_roles = copy(train_valid.input_roles)
+
         train_valid = train_valid.apply_selector(self.pre_selection)
 
         # apply features pipeline
@@ -96,12 +98,12 @@ class SparkMLPipeline(LAMAMLPipeline, InputFeaturesAndRoles, OutputFeaturesAndRo
 
         # all out roles for the output dataset
         out_roles = copy(self._output_roles)
-        out_roles.update(self.input_roles)
+        out_roles.update(input_roles)
 
-        select_transformer = SelectTransformer([
-            SparkDataset.ID_COLUMN,
-            *list(out_roles.keys())
-        ])
+        select_transformer = ColumnsSelectorTransformer(
+            input_cols=[SparkDataset.ID_COLUMN, *list(out_roles.keys())],
+            optional_cols=[train_valid.train.target_column] if train_valid.train.target_column else []
+        )
         ml_algo_transformers = PipelineModel(stages=[ml_algo.transformer for ml_algo in self.ml_algos])
         self._transformer = PipelineModel(stages=[fp.transformer, ml_algo_transformers, select_transformer])
 

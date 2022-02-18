@@ -2,13 +2,14 @@ from typing import cast, Dict, Any, List
 
 import pytest
 from pyspark.sql import SparkSession
+from pyspark.sql.types import NumericType
 
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.tasks import Task
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from . import spark
 import pandas as pd
 
@@ -130,7 +131,7 @@ def datasets(setting: str = "all") -> List[Dict[str, Any]]:
         raise ValueError(f"Unsupported setting {setting}")
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in datasets(setting="all")])
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in datasets(setting="fast")])
 def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
@@ -138,6 +139,7 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
         # 3. it should have roles for all columns
         if check_target_and_folds:
             assert sds.target_column in sds.data.columns
+            assert isinstance(sds.data.schema[sds.target_column].dataType, NumericType)
 
         assert SparkDataset.ID_COLUMN in sds.data.columns
         assert set(sds.features).issubset(sds.roles.keys())
@@ -160,8 +162,13 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     sdataset = sreader.fit_read(df, roles=roles)
     checks(sdataset)
 
-    sdataset = sreader.read(df)
-    checks(sdataset, check_target_and_folds=False)
+    sdataset = sreader.read(df, add_array_attrs=False)
+    assert sdataset.target_column is None
+    assert sdataset.folds_column is None
+    assert roles['target'] not in sdataset.data.columns
+
+    sdataset = sreader.read(df, add_array_attrs=True)
+    checks(sdataset, check_target_and_folds=True)
 
     # comparing with Pandas
     pdf = pd.read_csv(path, dtype=dtype)

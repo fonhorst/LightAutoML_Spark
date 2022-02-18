@@ -8,7 +8,9 @@ from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimato
     SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions
-from .. import DatasetForTest, compare_sparkml_by_content
+from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata
+
+spark = spark_sess
 
 DATASETS = [
 
@@ -80,7 +82,7 @@ def test_catintersections_encoder(spark: SparkSession, dataset: DatasetForTest):
         input_cols=ds.features,
         input_roles=ds.roles
     )
-    compare_sparkml_by_content(spark, ds, CatIntersectstions(), transformer)
+    compare_sparkml_by_metadata(spark, ds, CatIntersectstions(), transformer)
 
 
 # @pytest.mark.parametrize("dataset", DATASETS)

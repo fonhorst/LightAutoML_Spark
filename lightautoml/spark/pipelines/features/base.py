@@ -1,7 +1,7 @@
 """Basic classes for features generation."""
 import itertools
 from copy import copy
-from typing import Any, Callable, cast, Dict, Set
+from typing import Any, Callable, cast, Set, Union, Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -17,9 +17,9 @@ from pyspark.sql import functions as F
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
-from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from lightautoml.spark.transformers.base import ChangeRolesTransformer
+from lightautoml.spark.transformers.base import SparkChangeRolesTransformer, ColumnsSelectorTransformer
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
     SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
 from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEstimator, \
@@ -28,6 +28,7 @@ from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEsti
 from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.numeric import SparkQuantileBinningEstimator
+from lightautoml.spark.utils import NoOpTransformer, Cacher, EmptyCacher
 
 
 def build_graph(begin: SparkEstOrTrans):
@@ -59,7 +60,7 @@ def build_graph(begin: SparkEstOrTrans):
         else:
             return [tr], [tr]
 
-    init_starts, _ = find_start_end(begin)
+    init_starts, final_ends = find_start_end(begin)
 
     for st in init_starts:
         if st not in graph:
@@ -81,41 +82,6 @@ class SelectTransformer(Transformer):
 
     def _transform(self, dataset):
         return dataset.select(self.getColsToSelect())
-
-
-class NoOpTransformer(Transformer):
-    def _transform(self, dataset):
-        return dataset
-
-
-class Cacher(Estimator):
-    _cacher_dict: Dict[str, SparkDataFrame] = dict()
-
-    @classmethod
-    def get_dataset_by_key(cls, key: str) -> Optional[SparkDataFrame]:
-        return cls._cacher_dict.get(key, None)
-
-    @property
-    def dataset(self) -> SparkDataFrame:
-        """Returns chached dataframe"""
-        return self._cacher_dict[self._key]
-
-    def __init__(self, key: str):
-        super().__init__()
-        self._key = key
-        self._dataset: Optional[SparkDataFrame] = None
-
-    def _fit(self, dataset):
-        ds = dataset.cache()
-        ds.write.mode('overwrite').format('noop').save()
-
-        previous_ds = self._cacher_dict.get(self._key, None)
-        if previous_ds:
-            previous_ds.unpersist()
-
-        self._cacher_dict[self._key] = ds
-
-        return NoOpTransformer()
 
 
 class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, FeaturesPipeline):
@@ -169,7 +135,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         assert self.input_features is not None, "Input features should be provided before the fit_transform"
         assert self.input_roles is not None, "Input roles should be provided before the fit_transform"
 
-        pipeline, last_cacher = self._merge(train)
+        pipeline, last_cacher = self._merge_estimators(train)
         self._transformer = cast(Transformer, pipeline.fit(train.data))
         self._infer_output_features_and_roles(self._transformer)
         sdf = last_cacher.dataset
@@ -204,25 +170,32 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         if len(self.pipes) > 1:
             return self.pipes.pop(i)
 
-    def _merge(self, data: SparkDataset) -> Tuple[Estimator, Cacher]:
-        est_cachers = [self._optimize_for_caching(pipe(data)) for pipe in self.pipes]
+    def _merge_estimators(self, data: SparkDataset) -> Tuple[Estimator, Cacher]:
+        est_cachers = [
+            self._optimize_for_caching(pipe(data), data.target_column, data.folds_column)
+            for pipe in self.pipes
+        ]
         ests = [e for est, _ in est_cachers for e in est]
         _, last_cacher = est_cachers[-1]
         pipeline = Pipeline(stages=ests)
         return pipeline, last_cacher
 
-    def _optimize_for_caching(self, pipeline: SparkEstOrTrans) -> Tuple[List[Estimator], Cacher]:
+    def _optimize_for_caching(self, pipeline: SparkEstOrTrans, target_col: str, folds_col: str) -> Tuple[List[Estimator], Cacher]:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
         stages = [tr for layer in tr_layers
                   for tr in itertools.chain(layer, [Cacher(self._cacher_key)])]
+
+        if len(stages) == 0:
+            # TODO: SPARK-LAMA add warning here
+            stages = [EmptyCacher(key='---')]
 
         last_cacher = stages[-1]
         assert isinstance(last_cacher, Cacher)
 
         return stages, last_cacher
 
-    def _infer_output_features_and_roles(self, pipeline: Estimator):
+    def _infer_output_features_and_roles(self, pipeline: Transformer):
         # TODO: infer output features here
         if isinstance(pipeline, PipelineModel):
             estimators = pipeline.stages
@@ -235,19 +208,20 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
         features = copy(fp_input_features)
         roles = copy(self.input_roles)
+        include_input_features: Set[str] = set()
         for est in estimators:
             if isinstance(est, Cacher) or isinstance(est, NoOpTransformer):
                 continue
 
             assert isinstance(est, SparkColumnsAndRoles)
 
-            input_features = est.getInputCols()
+            replacable_columns = est.getColumnsToReplace()
 
-            assert isinstance(est, ChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in input_features), \
+            assert isinstance(est, SparkChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in replacable_columns), \
                 "Cannot replace input features of the feature pipeline itself"
 
             if est.getDoReplaceColumns():
-                for col in est.getInputCols():
+                for col in est.getColumnsToReplace():
                     features.remove(col)
                     del roles[col]
 
@@ -256,6 +230,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
             features.update(est.getOutputCols())
             roles.update(est.getOutputRoles())
+            include_input_features.update(set(est.getOutputCols()).intersection(fp_input_features))
 
         assert all((f in features) for f in fp_input_features), \
             "All input features should be present in the output features"
@@ -264,9 +239,11 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
             "All input features should be present in the output roles"
 
         # we want to have only newly added features in out output features, not input features
+        # but we need to keep input features that are required by some transformers
         for col in fp_input_features:
-            features.remove(col)
-            del roles[col]
+            if col not in include_input_features:
+                features.remove(col)
+                del roles[col]
 
         self._output_roles = roles
 
@@ -411,9 +388,9 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        num_processing = ChangeRolesTransformer(input_cols=feats_to_select,
-                                                input_roles=roles,
-                                                role=NumericRole(np.float32))
+        num_processing = SparkChangeRolesTransformer(input_cols=feats_to_select,
+                                                     input_roles=roles,
+                                                     role=NumericRole(np.float32))
 
         return num_processing
 

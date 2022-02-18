@@ -106,17 +106,19 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
         if not output_role:
             output_role = CategoryRole(np.int32, label_encoded=True)
         super().__init__(input_cols, input_roles, do_replace_columns=do_replace_columns, output_role=output_role)
+        self._input_intermediate_columns = self.getInputCols()
+        self._input_internediate_roles = self.getInputRoles()
 
     def _fit(self, dataset: SparkDataFrame) -> "SparkLabelEncoderTransformer":
         logger.info(f"[{type(self)} (LE)] fit is started")
 
-        roles = self.getOrDefault(self.inputRoles)
+        roles = self._input_internediate_roles#self.getOrDefault(self.inputRoles)
 
         df = dataset
 
         self.dicts = dict()
 
-        for i in self.getInputCols():
+        for i in self._input_intermediate_columns:
 
             logger.debug(f"[{type(self)} (LE)] fit column {i}")
 
@@ -257,6 +259,7 @@ class SparkOrdinalEncoderEstimator(SparkLabelEncoderEstimator):
                  random_state: Optional[int] = 42):
         super().__init__(input_cols, input_roles, subs, random_state, output_role=NumericRole(np.float32))
         self.dicts = None
+        self._use_cols = self.getInputCols()
 
     def _fit(self, dataset: SparkDataFrame) -> "Transformer":
 
@@ -266,7 +269,7 @@ class SparkOrdinalEncoderEstimator(SparkLabelEncoderEstimator):
         roles = self.getOrDefault(self.inputRoles)
 
         self.dicts = {}
-        for i in self.getInputCols():
+        for i in self._use_cols:
 
             logger.debug(f"[{type(self)} (ORD)] fit column {i}")
 
@@ -385,14 +388,14 @@ class SparkFreqEncoderTransformer(SparkLabelEncoderTransformer):
 
 
 class SparkCatIntersectionsHelper:
-    @staticmethod
-    def _make_col_name(cols: Sequence[str]) -> str:
+    _fname_prefix = "inter"
+
+    def _make_col_name(self, cols: Sequence[str]) -> str:
         return f"({'__'.join(cols)})"
 
-    @staticmethod
-    def _make_category(cols: Sequence[str]) -> Column:
+    def _make_category(self, cols: Sequence[str]) -> Column:
         lit = F.lit("_")
-        col_name = SparkCatIntersectionsHelper._make_col_name(cols)
+        col_name = self._make_col_name(cols)
         columns_for_concat = []
         for col in cols:
             columns_for_concat.append(F.col(col))
@@ -401,19 +404,19 @@ class SparkCatIntersectionsHelper:
 
         return murmurhash3_32_udf(F.concat(*columns_for_concat)).alias(col_name)
 
-    @staticmethod
-    def _build_df(df: SparkDataFrame,
+    def _build_df(self, df: SparkDataFrame,
                   intersections: Optional[Sequence[Sequence[str]]]) -> SparkDataFrame:
-        columns_to_select = [SparkCatIntersectionsHelper._make_category(comb) for comb in intersections]
+        columns_to_select = [
+            self._make_category(comb)
+                .alias(f"{self._make_col_name(comb)}") for comb in intersections]
         df = df.select('*', *columns_to_select)
         return df
 
 
-class SparkCatIntersectionsEstimator(SparkLabelEncoderEstimator, SparkCatIntersectionsHelper):
+class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEncoderEstimator):
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
-    _fname_prefix = "inter"
 
     def __init__(self,
                  input_cols: List[str],
@@ -434,21 +437,25 @@ class SparkCatIntersectionsEstimator(SparkLabelEncoderEstimator, SparkCatInterse
             for i in range(2, min(self.max_depth, len(self.getInputCols())) + 1):
                 self.intersections.extend(list(combinations(self.getInputCols(), i)))
 
-        out_roles = {
-            f"{self._fname_prefix}__{self._make_col_name(comb)}": CategoryRole(
+        self._input_roles = {
+            f"{self._make_col_name(comb)}": CategoryRole(
                 np.int32,
                 unknown=max((self.getInputRoles()[x].unknown for x in comb)),
                 label_encoded=True,
             ) for comb in self.intersections
         }
+        self._input_columns = list(self._input_roles.keys())
+
+        out_roles = {f"{self._fname_prefix}__{f}": role
+                     for f, role in self._input_roles.items()}
 
         self.set(self.outputCols, list(out_roles.keys()))
         self.set(self.outputRoles, out_roles)
 
     def _fit(self, df: SparkDataFrame) -> Transformer:
         logger.info(f"[{type(self)} (CI)] fit is started")
-
         inter_df = self._build_df(df, self.intersections)
+
         super()._fit(inter_df)
 
         logger.info(f"[{type(self)} (CI)] fit is finished")
@@ -464,11 +471,10 @@ class SparkCatIntersectionsEstimator(SparkLabelEncoderEstimator, SparkCatInterse
         )
 
 
-class SparkCatIntersectionsTransformer(SparkLabelEncoderTransformer, SparkCatIntersectionsHelper):
+class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEncoderTransformer):
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
-    _fname_prefix = "inter"
 
     _fillna_val = 0
 

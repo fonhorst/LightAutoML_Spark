@@ -25,7 +25,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-class NpPermutationImportanceEstimator(SparkImportanceEstimator):
+class SparkNpPermutationImportanceEstimator(SparkImportanceEstimator):
     """Permutation importance based estimator.
 
     Importance calculate, using random permutation

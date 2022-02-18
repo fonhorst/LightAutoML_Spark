@@ -75,7 +75,7 @@ class SparkMetric(LAMLMetric):
         return self._name
 
 
-class Task(LAMATask):
+class SparkTask(LAMATask):
 
     _default_metrics = {"binary": "areaUnderROC", "reg": "mse", "multiclass": "logLoss"}
     _greater_is_better_mapping = {"areaUnderROC": True, "mse": False, "logLoss": False}

@@ -7,7 +7,7 @@ from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.base import SparkFeaturesPipeline, SparkTabularDataFeatures
-from lightautoml.spark.transformers.base import ChangeRolesTransformer, SparkUnionTransformer, \
+from lightautoml.spark.transformers.base import SparkChangeRolesTransformer, SparkUnionTransformer, \
     SparkSequentialTransformer, SparkEstOrTrans
 from lightautoml.spark.transformers.categorical import SparkOrdinalEncoderEstimator
 from lightautoml.spark.transformers.datetime import SparkTimeToNumTransformer
@@ -58,6 +58,8 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             dt_processing = SparkTimeToNumTransformer(input_cols=datetimes,
                                                       input_roles=roles)
             transformers_list.append(dt_processing)
+
+        transformers_list.append(self.get_numeric_data(train))
 
         union_all = SparkUnionTransformer(transformers_list)
 
@@ -167,9 +169,9 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
         le_part = self.get_categorical_raw(train, le)
         if le_part is not None:
             # le_part = SequentialTransformer([le_part, ChangeRoles(output_category_role)])
-            change_roles_stage = ChangeRolesTransformer(input_cols=le_part.getOutputCols(),
-                                                        input_roles=le_part.getOutputRoles(),
-                                                        role=output_category_role)
+            change_roles_stage = SparkChangeRolesTransformer(input_cols=le_part.getOutputCols(),
+                                                             input_roles=le_part.getOutputRoles(),
+                                                             role=output_category_role)
             le_part = SparkSequentialTransformer([le_part, change_roles_stage])
             transformer_list.append(le_part)
 
@@ -188,32 +190,30 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
             te_part = SparkSequentialTransformer([te_part, target_encoder_stage])
             transformer_list.append(te_part)
 
-        # get intersection of top categories
-        intersections = self.get_categorical_intersections(train)
-        if intersections is not None:
-            if target_encoder is not None:
-                target_encoder_stage = target_encoder(
-                    input_cols=intersections.getOutputCols(),
-                    input_roles=intersections.getOutputRoles(),
-                    task_name=train.task.name,
-                    folds_column=train.folds_column,
-                    target_column=train.target_column,
-                    do_replace_columns=True
-                )
-                ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
-            else:
-                change_roles_stage = ChangeRolesTransformer(
-                    input_cols=intersections.getOutputCols(),
-                    input_roles=intersections.getOutputRoles(),
-                    role=output_category_role
-                )
-                ints_part = SparkSequentialTransformer([intersections, change_roles_stage])
+        # # get intersection of top categories
+        # intersections = self.get_categorical_intersections(train)
+        # if intersections is not None:
+        #     if target_encoder is not None:
+        #         target_encoder_stage = target_encoder(
+        #             input_cols=intersections.getOutputCols(),
+        #             input_roles=intersections.getOutputRoles(),
+        #             task_name=train.task.name,
+        #             folds_column=train.folds_column,
+        #             target_column=train.target_column,
+        #             do_replace_columns=True
+        #         )
+        #         ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
+        #     else:
+        #         change_roles_stage = SparkChangeRolesTransformer(
+        #             input_cols=intersections.getOutputCols(),
+        #             input_roles=intersections.getOutputRoles(),
+        #             role=output_category_role
+        #         )
+        #         ints_part = SparkSequentialTransformer([intersections, change_roles_stage])
+        #
+        #     transformer_list.append(ints_part)
 
-            transformer_list.append(ints_part)
-
-        # add numeric pipeline
-        # TODO: SPARK-LAMA return get_numeric_data later
-        # transformer_list.append(self.get_numeric_data(train))
+        transformer_list.append(self.get_numeric_data(train))
         transformer_list.append(self.get_ordinal_encoding(train, ordinal))
         transformer_list.append(self.get_datetime_diffs(train))
         transformer_list.append(self.get_datetime_seasons(train, NumericRole(np.float32)))

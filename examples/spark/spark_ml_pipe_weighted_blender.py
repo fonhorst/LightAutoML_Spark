@@ -10,7 +10,7 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeat
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
 
@@ -68,7 +68,6 @@ if __name__ == "__main__":
 
         ml_pipe1 = SparkMLPipeline(
             cacher_key=cacher_key,
-            input_roles=sdataset.roles,
             ml_algos=[spark_ml_algo1],
             pre_selection=spark_selector,
             features_pipeline=spark_features_pipeline,
@@ -76,7 +75,6 @@ if __name__ == "__main__":
         )
         ml_pipe2 = SparkMLPipeline(
             cacher_key=cacher_key,
-            input_roles=sdataset.roles,
             ml_algos=[spark_ml_algo2],
             pre_selection=spark_selector2,
             features_pipeline=spark_features_pipeline2,

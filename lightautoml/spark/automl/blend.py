@@ -1,29 +1,28 @@
 from abc import ABC
-from copy import deepcopy
+from copy import copy
 import logging
 from typing import Callable, List, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from scipy.optimize import minimize_scalar
+from pyspark.ml import Transformer
+from pyspark.ml.param import Params
+from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
+from pyspark.ml.util import MLWritable
 from pyspark.sql import functions as F
 from pyspark.sql.functions import isnan
 
 from lightautoml.automl.blend import Blender, \
-    BestModelSelector as LAMABestModelSelector, \
     WeightedBlender as LAMAWeightedBlender
 from lightautoml.dataset.roles import ColumnRole, NumericRole
+from lightautoml.reader.base import RolesDict
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.ml_algo.base import AveragingTransformer
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
-
-from pyspark.ml import Transformer, Estimator
-from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
-from pyspark.ml.param import Params
-from pyspark.ml.util import MLWritable
-
 from lightautoml.spark.tasks.base import DEFAULT_PREDICTION_COL_NAME
 from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
+from lightautoml.spark.utils import NoOpTransformer
 
 
 logger = logging.getLogger(__name__)
@@ -42,6 +41,12 @@ class SparkBlender(ABC):
         self._transformer = None
         self._single_prediction_col_name = DEFAULT_PREDICTION_COL_NAME
         self._pred_role: Optional[ColumnRole] = None
+        self._output_roles: Optional[RolesDict] = None
+
+    @property
+    def output_roles(self) -> RolesDict:
+        assert self._output_roles is not None, "Blender has not been fitted yet"
+        return self._output_roles
 
     @property
     def transformer(self) -> Transformer:
@@ -57,7 +62,11 @@ class SparkBlender(ABC):
     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
 
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
-            self._bypass = True
+            self._transformer = ColumnsSelectorTransformer(
+                input_cols=[SparkDataset.ID_COLUMN] + list(pipes[0].output_roles.keys()),
+                optional_cols=[predictions.target_column] if predictions.target_column else []
+            )
+            self._output_roles = copy(predictions.roles)
             return predictions, pipes
 
         self._set_metadata(predictions, pipes)
@@ -160,119 +169,9 @@ class SparkBestModelSelector(SparkBlender):
             input_cols=[SparkDataset.ID_COLUMN, self._single_prediction_col_name]
         )
 
+        self._output_roles = copy(best_pred.roles)
+
         return best_pred, [best_pipe]
-
-
-class BlenderMixin(Blender, ABC):
-    pass
-    # def score(self, dataset: LAMLDataset) -> float:
-    #     # TODO: SPARK-LAMA convert self._score to a required metric
-    #
-    #     raise NotImplementedError()
-
-
-class WeightedBlender(BlenderMixin, LAMAWeightedBlender):
-    def _get_weighted_pred(self, splitted_preds: Sequence[SparkDataset], wts: Optional[np.ndarray]) -> SparkDataset:
-
-        assert len(splitted_preds[0].features) == 1, \
-            f"There should be only one feature containing predictions in the form of array, " \
-            f"but: {splitted_preds[0].features}"
-
-        feat = splitted_preds[0].features[0]
-        role = splitted_preds[0].roles[feat]
-        task = splitted_preds[0].task
-        nan_feat = f"{feat}_nan_conf"
-        # we put 0 here, because there cannot be more than output
-        # even if works with vectors
-        wfeat_name = "WeightedBlend_0"
-        length = len(splitted_preds)
-        if wts is None:
-            # wts = np.ones(length, dtype=np.float32) / length
-            wts = [1.0 / length for _ in range(length)]
-        else:
-            wts = [float(el) for el in wts]
-
-        if task.name == "multiclass":
-            assert isinstance(role, NumericVectorOrArrayRole), \
-                f"The prediction should be an array or vector, but {type(role)}"
-
-            vec_role = cast(NumericVectorOrArrayRole, role)
-            wfeat_role = NumericVectorOrArrayRole(
-                vec_role.size,
-                f"WeightedBlend_{{}}",
-                dtype=np.float32,
-                prob=self._outp_prob,
-                is_vector=vec_role.is_vector
-            )
-
-            def treat_nans(w: float):
-                return [
-                    F.transform(feat, lambda x: F.when(F.isnan(x), 0.0).otherwise(x * w)).alias(feat),
-                    F.when(F.array_contains(feat, float('nan')), 0.0).otherwise(w).alias(nan_feat)
-                ]
-
-            def sum_predictions(summ_sdf: SparkDataFrame, curr_sdf: SparkDataFrame):
-                return F.transform(F.arrays_zip(summ_sdf[feat], curr_sdf[feat]), lambda x, y: x + y).alias(feat)
-
-            normalize_weighted_sum_col = (
-                F.when(F.col(nan_feat) == 0.0, None)
-                .otherwise(F.transform(feat, lambda x: x / F.col(nan_feat)))
-                .alias(wfeat_name)
-            )
-        else:
-            assert isinstance(role, NumericRole) and not isinstance(role, NumericVectorOrArrayRole), \
-                f"The prediction should be numeric, but {type(role)}"
-
-            wfeat_role = NumericRole(np.float32, prob=self._outp_prob)
-
-            def treat_nans(w):
-                return [
-                    (F.col(feat) * w).alias(feat),
-                    F.when(F.isnan(feat), 0.0).otherwise(w).alias(nan_feat)
-                ]
-
-            def sum_predictions(summ_sdf: SparkDataFrame, curr_sdf: SparkDataFrame):
-                return (summ_sdf[feat] + curr_sdf[feat]).alias(feat)
-
-            normalize_weighted_sum_col = (
-                F.when(F.col(nan_feat) == 0.0, float('nan'))
-                .otherwise(F.col(feat) / F.col(nan_feat))
-                .alias(wfeat_name)
-            )
-
-        sum_with_nans_sdf = [
-            x.data.select(
-                SparkDataset.ID_COLUMN,
-                *treat_nans(w)
-            )
-            for (x, w) in zip(splitted_preds, wts)
-        ]
-
-        sum_sdf = sum_with_nans_sdf[0]
-        for sdf in sum_with_nans_sdf[1:]:
-            sum_sdf = (
-                sum_sdf
-                .join(sdf, on=SparkDataset.ID_COLUMN)
-                .select(
-                    sum_sdf[SparkDataset.ID_COLUMN],
-                    sum_predictions(sum_sdf, sdf),
-                    (sum_sdf[nan_feat] + sdf[nan_feat]).alias(nan_feat)
-                )
-            )
-
-        # TODO: SPARK-LAMA potentially this is a bad place check it later:
-        #  1. equality condition double types
-        #  2. None instead of nan (in the origin)
-        #  due to Spark doesn't allow to mix types in the same column
-        weighted_sdf = sum_sdf.select(
-            SparkDataset.ID_COLUMN,
-            normalize_weighted_sum_col
-        )
-
-        output = splitted_preds[0].empty()
-        output.set_data(weighted_sdf, [wfeat_name], wfeat_role)
-
-        return output
 
 
 class SparkWeightedBlender(SparkBlender):
@@ -484,36 +383,36 @@ class SparkWeightedBlender(SparkBlender):
         pred_cols = [x for (x, w) in zip(pred_cols, wts) if w > 0]
         pipes, self.wts = self._prune_pipe(pipes, wts, pipe_idx)
 
-        # self._transformer = WeightedBlenderTransformer(
-        #     task_name=predictions.task.name,
-        #     input_cols=pred_cols,
-        #     output_col=self._single_prediction_col_name,
-        #     wts=wts,
-        #     remove_cols=pred_cols
-        # )
+        self._transformer = WeightedBlenderTransformer(
+            task_name=predictions.task.name,
+            input_cols=pred_cols,
+            output_col=self._single_prediction_col_name,
+            wts=wts,
+            remove_cols=pred_cols
+        )
 
-        # df = self._transformer.transform(predictions.data)
+        df = self._transformer.transform(predictions.data)
 
-        # if predictions.task.name in ["binary", "multiclass"]:
-        #     assert isinstance(self._pred_role, NumericVectorOrArrayRole)
-        #     output_role = NumericVectorOrArrayRole(
-        #         self._pred_role.size,
-        #         f"WeightedBlend_{{}}",
-        #         dtype=np.float32,
-        #         prob=self._outp_prob,
-        #         is_vector=self._pred_role.is_vector
-        #     )
-        # else:
-        #     output_role = NumericRole(np.float32, prob=self._outp_prob)
+        if predictions.task.name in ["binary", "multiclass"]:
+            assert isinstance(self._pred_role, NumericVectorOrArrayRole)
+            output_role = NumericVectorOrArrayRole(
+                self._pred_role.size,
+                f"WeightedBlend_{{}}",
+                dtype=np.float32,
+                prob=self._outp_prob,
+                is_vector=self._pred_role.is_vector
+            )
+        else:
+            output_role = NumericRole(np.float32, prob=self._outp_prob)
 
-        # roles = {f: predictions.roles[f] for f in predictions.features if f not in pred_cols}
-        # roles[self._single_prediction_col_name] = output_role
-        # pred_ds = predictions.empty()
-        # pred_ds.set_data(df, df.columns, roles)
+        roles = {f: predictions.roles[f] for f in predictions.features if f not in pred_cols}
+        roles[self._single_prediction_col_name] = output_role
+        pred_ds = predictions.empty()
+        pred_ds.set_data(df, df.columns, roles)
 
-        pred_ds = self._get_weighted_pred(predictions, pred_cols, self.wts)
+        self._output_roles = copy(roles)
 
-        return pred_ds, pipes  
+        return pred_ds, pipes
 
 
 class WeightedBlenderTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
@@ -547,7 +446,7 @@ class WeightedBlenderTransformer(Transformer, HasInputCols, HasOutputCol, MLWrit
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         wts = self.getWts()
         pred_cols = self.getInputCols()
-        if self.getOrDefault(self.taskName) in ["multiclass"]:
+        if self.getOrDefault(self.taskName) in ["binary", "multiclass"]:
             def sum_arrays(x):
                 is_all_nth_elements_nan = sum(F.when(isnan(x[c]), 1).otherwise(0) for c in pred_cols) == len(pred_cols)
                 sum_weights_where_nan = sum(F.when(isnan(x[c]), wts[c]).otherwise(0.0) for c in pred_cols)
@@ -586,7 +485,9 @@ class SparkMeanBlender(SparkBlender):
             task_name=predictions.task.name,
             input_cols=pred_cols,
             output_col=self._single_prediction_col_name,
-            remove_cols=pred_cols
+            remove_cols=pred_cols,
+            convert_to_array_first=not (predictions.task.name == "reg"),
+            dim_num=self._outp_dim
         )
 
         df = self._transformer.transform(predictions.data)
@@ -607,6 +508,8 @@ class SparkMeanBlender(SparkBlender):
         roles[self._single_prediction_col_name] = output_role
         pred_ds = predictions.empty()
         pred_ds.set_data(df, df.columns, roles)
+
+        self._output_roles = copy(roles)
 
         return pred_ds, pipes
 

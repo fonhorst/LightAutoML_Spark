@@ -1,15 +1,19 @@
 import logging
-from typing import Optional, Any, List, Dict, Tuple
+from copy import copy
+from typing import Optional, Any, List, Dict, Tuple, cast
 
 import numpy as np
+from pyspark.ml import Transformer
+from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as F
-from pyspark.sql.types import IntegerType, NumericType, DoubleType, FloatType
+from pyspark.sql.types import IntegerType, NumericType, DoubleType, FloatType, StringType
 
-from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
+from lightautoml.dataset.base import array_attr_roles, valid_array_attributes, RolesDict
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
 from lightautoml.dataset.utils import roles_parser
 from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
+from lightautoml.spark.utils import Cacher
 from lightautoml.tasks import Task
 from lightautoml.utils.tmp_utils import log_data
 
@@ -53,7 +57,54 @@ stype2dtype = {
 }
 
 
-class SparkToSparkReader(Reader):
+class SparkReaderHelper:
+    @staticmethod
+    def _create_unique_ids(train_data: SparkDataFrame, cacher_key: Optional[str] = None) -> SparkDataFrame:
+        if SparkDataset.ID_COLUMN not in train_data.columns:
+            train_data = train_data.select(
+                '*',
+                F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN)
+            )
+
+        if cacher_key is not None:
+            train_data = Cacher(key=cacher_key).fit(train_data).transform(train_data)
+
+        return train_data
+
+    @staticmethod
+    def _convert_column(feat: str,  role: ColumnRole):
+        if isinstance(role, DatetimeRole):
+            result_column = F.to_timestamp(feat, role.format).alias(feat)
+        elif isinstance(role, NumericRole):
+            typ = dtype2Stype[role.dtype.__name__]
+            result_column = (
+                F.when(F.isnull(feat), float('nan'))
+                    .otherwise(F.col(feat).astype(typ))
+                    .alias(feat)
+            )
+        else:
+            result_column = F.col(feat)
+
+        return result_column
+
+    @staticmethod
+    def _process_target_column(task_name: str, class_mapping: Dict, sdf: SparkDataFrame, target_col: str) -> SparkDataFrame:
+        if class_mapping is not None:
+            sdf = sdf.replace(class_mapping, subset=[target_col])
+
+        to_type = FloatType() if task_name == "reg" else IntegerType()
+
+        cols = copy(sdf.columns)
+        cols.remove(target_col)
+        sdf = sdf.select(
+            *cols,
+            F.col(target_col).astype(to_type).alias(target_col)
+        )
+
+        return sdf
+
+
+class SparkToSparkReader(Reader, SparkReaderHelper):
     DEFAULT_READER_FOLD_COL = "reader_fold_num"
 
     """
@@ -88,6 +139,7 @@ class SparkToSparkReader(Reader):
         max_score_rate: float = 0.2,
         abs_score_val: float = 0.04,
         drop_score_co: float = 0.01,
+        cacher_key: str = 'default_cacher',
         **kwargs: Any
     ):
         """
@@ -139,6 +191,8 @@ class SparkToSparkReader(Reader):
             "drop_score_co": drop_score_co,
         }
 
+        self._cacher_key = cacher_key
+
         self.params = kwargs
 
     def fit_read(
@@ -159,7 +213,7 @@ class SparkToSparkReader(Reader):
         """
         logger.info(f"\x1b[1mTrain data columns: {train_data.columns}\x1b[0m\n")
 
-        train_data = self._create_unique_ids(train_data)
+        train_data = self._create_unique_ids(train_data, cacher_key=self._cacher_key)
 
         if roles is None:
             roles = {}
@@ -319,30 +373,40 @@ class SparkToSparkReader(Reader):
             Dataset with new columns.
 
         """
+        # kwargs = {}
+        # service_columns = []
+        # if add_array_attrs:
+        #     for array_attr in self.used_array_attrs:
+        #         col_name = self.used_array_attrs[array_attr]
+        #
+        #         if col_name not in data.columns:
+        #             continue
+        #
+        #         if array_attr == "target":
+        #             data = self._process_target_column(self.task.name, self.class_mapping, data, col_name)
+        #
+        #         kwargs[array_attr] = col_name
+        #         service_columns.append(col_name)
+        #
+        # data = self._create_unique_ids(data)
+        #
+        # data = data.select(
+        #     SparkDataset.ID_COLUMN,
+        #     *service_columns,
+        #     *[self._convert_column(feat, self.roles[feat]) for feat in self.used_features]
+        # )
+
         kwargs = {}
-        target_col = "target"
         if add_array_attrs:
             for array_attr in self.used_array_attrs:
                 col_name = self.used_array_attrs[array_attr]
-
                 if col_name not in data.columns:
                     continue
+                kwargs[array_attr] = col_name
 
-                if array_attr == "target" and self.class_mapping is not None:
-                    data = data.na.replace(self.class_mapping, subset=[target_col])
-
-                kwargs[array_attr] = target_col
-
-        kwargs["target"] = self.target_col
-
-        data = self._create_unique_ids(data)
-        data = self._create_target(data, target_col=self.target_col)
-
-        data = data.select(
-            SparkDataset.ID_COLUMN,
-            self.target_col,
-            *[self._convert_column(feat) for feat in self.used_features]
-        )
+        transformer = self.make_transformer()
+        transformer.setAddArrayAttrs(add_array_attrs)
+        data = transformer.transform(data)
 
         dataset = SparkDataset(data, roles=self.roles, task=self.task, **kwargs)
 
@@ -350,16 +414,15 @@ class SparkToSparkReader(Reader):
 
         return dataset
 
-    def _create_unique_ids(self, train_data: SparkDataFrame) -> SparkDataFrame:
-        if SparkDataset.ID_COLUMN not in train_data.columns:
-            train_data = train_data.select(
-                '*',
-                F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN)
-            )
-
-        train_data = train_data.cache()
-
-        return train_data
+    def make_transformer(self):
+        roles = {f: self.roles[f] for f in self.used_features}
+        transformer = SparkToSparkReaderTransformer(
+            self.task.name,
+            self.class_mapping,
+            copy(self.used_array_attrs),
+            roles
+        )
+        return transformer
 
     def _create_folds(self, sdf: SparkDataFrame, kwargs: dict) -> Tuple[SparkDataFrame, str]:
         """
@@ -422,8 +485,6 @@ class SparkToSparkReader(Reader):
         nan_count = sdf.where(F.isnan(target_col)).count()
         assert nan_count == 0, "Nan in target detected"
 
-        rest_cols = [c for c in sdf.columns if c != target_col]
-
         if self.task.name != "reg":
             uniques = sdf.select(target_col).distinct().collect()
             uniques = [r[target_col] for r in uniques]
@@ -432,16 +493,22 @@ class SparkToSparkReader(Reader):
             # TODO: make it pretty
             # 1. check the column type if it is numeric or not
             # 2. if it is string can i convert it to num?
-            if isinstance(sdf.schema[target_col], NumericType):
-                srtd = np.ndarray(sorted(uniques))
+            if isinstance(sdf.schema[target_col].dataType, NumericType):
+                uniques = sorted(uniques)
+                self.class_mapping = {x: i for i, x in enumerate(uniques)}
+                srtd = np.ndarray(uniques)
             # elif isinstance(sdf.schema[target_col], StringType):
             #     try:
             #         srtd = np.ndarray(sorted([int(el) for el in uniques]))
             #         sdf = sdf
             #     except ValueError:
             #         srtd = None
-            else:
+            elif isinstance(sdf.schema[target_col].dataType, StringType):
+                self.class_mapping = {x: f"{i}" for i, x in enumerate(uniques)}
                 srtd = None
+            else:
+                raise ValueError(f"Unsupported type of target column {sdf.schema[target_col]}. "
+                                 f"Only numeric and string are supported.")
 
             if srtd and (np.arange(srtd.shape[0]) == srtd).all():
 
@@ -450,19 +517,9 @@ class SparkToSparkReader(Reader):
                     assert srtd.shape[0] == 2, "Binary task and more than 2 values in target"
                 return sdf
 
-            mapping = {x: i for i, x in enumerate(uniques)}
+        sdf_with_proc_target = self._process_target_column(self.task.name, self.class_mapping, sdf, target_col)
 
-            remap = F.udf(lambda x: mapping[x], returnType=IntegerType())
-
-            sdf_with_proc_target = sdf.select(*rest_cols, remap(target_col).alias(target_col))
-
-            self.class_mapping = mapping
-
-            return sdf_with_proc_target
-        else:
-            sdf = sdf.select(*rest_cols, F.col(target_col).astype(DoubleType()).alias(target_col))
-
-        return sdf
+        return sdf_with_proc_target
 
     def _get_default_role_from_str(self, name) -> RoleType:
         """Get default role for string name according to automl's defaults and user settings.
@@ -605,22 +662,6 @@ class SparkToSparkReader(Reader):
         #     for feature in features
         # ]
 
-    def _convert_column(self, feat: str):
-        role: ColumnRole = self.roles[feat]
-        if isinstance(role, DatetimeRole):
-            result_column = F.to_timestamp(feat, self.roles[feat].format).alias(feat)
-        elif isinstance(role, NumericRole):
-            typ = dtype2Stype[role.dtype.__name__]
-            result_column = (
-                F.when(F.isnull(feat), float('nan'))
-                    .otherwise(F.col(feat).astype(typ))
-                    .alias(feat)
-            )
-        else:
-            result_column = F.col(feat)
-
-        return result_column
-
     # TODO: SPARK-LAMA will be implemented later
     # def advanced_roles_guess(self, dataset: SparkDataset, manual_roles: Optional[RolesDict] = None) -> RolesDict:
     #     """Advanced roles guess over user's definition and reader's simple guessing.
@@ -694,3 +735,71 @@ class SparkToSparkReader(Reader):
     #         new_roles_dict = {**new_roles_dict, **{x: DropRole() for x in rejected}}
     #
     #     return new_roles_dict
+
+
+class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper):
+    usedArrayAttrs = Param(Params._dummy(), "usedArrayAttrs", "usedArrayAttrs")
+    addArrayAttrs = Param(Params._dummy(), "addArrayAttrs", "addArrayAttrs")
+    roles = Param(Params._dummy(), "roles", "roles")
+    taskName = Param(Params._dummy(), "taskName", "task name")
+    classMapping = Param(Params._dummy(), "classMapping", "class mapping")
+
+    def __init__(self,
+                 task_name: str,
+                 class_mapping: Optional[Dict],
+                 used_array_attrs: Dict[str, str],
+                 roles: Dict[str, ColumnRole]):
+        super().__init__()
+        self.set(self.taskName, task_name)
+        self.set(self.classMapping, class_mapping)
+        self.set(self.usedArrayAttrs, used_array_attrs)
+        self.set(self.roles, roles)
+
+    def getTaskName(self) -> str:
+        return self.getOrDefault(self.taskName)
+
+    def getClassMapping(self) -> Optional[Dict]:
+        return self.getOrDefault(self.classMapping)
+
+    def getRoles(self) -> Dict[str, ColumnRole]:
+        return self.getOrDefault(self.roles)
+
+    def getUsedArrayAttrs(self) -> Dict[str, str]:
+        return self.getOrDefault(self.usedArrayAttrs)
+
+    def getAddArrayAttrs(self) -> bool:
+        return self.getOrDefault(self.addArrayAttrs)
+
+    def setAddArrayAttrs(self, value: bool):
+        return self.set(self.addArrayAttrs, value)
+
+    def _transform(self, data: SparkDataFrame) -> SparkDataFrame:
+        service_columns = []
+
+        used_array_attrs = self.getUsedArrayAttrs()
+        roles = self.getRoles()
+
+        if self.getAddArrayAttrs():
+            for array_attr in used_array_attrs:
+                col_name = used_array_attrs[array_attr]
+
+                if col_name not in data.columns:
+                    continue
+
+                if array_attr == "target":
+                    data = self._process_target_column(self.getTaskName(),
+                                                       self.getClassMapping(),
+                                                       data,
+                                                       col_name)
+
+                service_columns.append(col_name)
+
+        data = self._create_unique_ids(data)
+
+        data = data.select(
+            SparkDataset.ID_COLUMN,
+            *service_columns,
+            *[self._convert_column(feat, role) for feat, role in roles.items()]
+        )
+
+        return data
