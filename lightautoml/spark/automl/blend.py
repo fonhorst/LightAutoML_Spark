@@ -237,10 +237,7 @@ class SparkWeightedBlender(SparkBlender):
         else:
             output_role = NumericRole(np.float32, prob=self._outp_prob)
 
-        # roles = {f: predictions.roles[f] for f in predictions.features if f not in prediction_cols}
-        # roles[self._single_prediction_col_name] = output_role
         pred_ds = predictions.empty()
-        # pred_ds.set_data(df, df.columns, roles)
         pred_ds.set_data(df.select(SparkDataset.ID_COLUMN,
                                    predictions.target_column,
                                    self._single_prediction_col_name),
@@ -248,28 +245,6 @@ class SparkWeightedBlender(SparkBlender):
                          output_role)
 
         return pred_ds
-
-
-        # weighted_pred = np.nansum([x.data * w for (x, w) in zip(splitted_preds, wts)], axis=0).astype(np.float32)
-
-        # not_nulls = np.sum(
-        #     [np.logical_not(np.isnan(x.data).any(axis=1)) * w for (x, w) in zip(splitted_preds, wts)],
-        #     axis=0,
-        # ).astype(np.float32)
-
-        # not_nulls = not_nulls[:, np.newaxis]
-
-        # weighted_pred /= not_nulls
-        # weighted_pred = np.where(not_nulls == 0, np.nan, weighted_pred)
-
-        # outp = splitted_preds[0].empty()
-        # outp.set_data(
-        #     weighted_pred,
-        #     ["WeightedBlend_{0}".format(x) for x in range(weighted_pred.shape[1])],
-        #     NumericRole(np.float32, prob=self._outp_prob),
-        # )
-
-        return outp
 
     def _get_candidate(self, wts: np.ndarray, idx: int, value: float):
 
@@ -377,7 +352,6 @@ class SparkWeightedBlender(SparkBlender):
         for pred_col, _, pipe_id in self.split_models(predictions, pipes):
             pred_cols.append(pred_col)
             pipe_idx.append(pipe_id)
-        # pred_cols = [pred_col for pred_col, _, pipe_idx in self.split_models(predictions, pipes)]
 
         wts = self._optimize(predictions, pred_cols)
         pred_cols = [x for (x, w) in zip(pred_cols, wts) if w > 0]
