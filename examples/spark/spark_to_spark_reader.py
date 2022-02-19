@@ -1,7 +1,7 @@
 import logging.config
 
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, spark_session, log_exec_time
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
