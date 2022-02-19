@@ -8,6 +8,9 @@ from lightautoml.spark.tasks.losses.base import SparkLoss
 from lightautoml.tasks import Task as LAMATask
 from lightautoml.tasks.base import LAMLMetric, _default_losses, _default_metrics, _valid_task_names
 
+DEFAULT_PREDICTION_COL_NAME = "prediction"
+DEFAULT_TARGET_COL_NAME = "target"
+
 
 class SparkMetric(LAMLMetric):
     def __init__(
@@ -41,25 +44,24 @@ class SparkMetric(LAMLMetric):
     def __call__(self, dataset: Union[SparkDataset, SparkDataFrame], dropna: bool = False):
 
         if isinstance(dataset, SparkDataset):
-
             assert len(dataset.features) == 1, \
-                f"Dataset should contain only one feature that would be interpretated as a prediction"
+                f"Dataset should contain only one feature that would be interpretated as predictions"
 
             prediction_column = dataset.features[0]
 
             sdf = dataset.data.dropna() if dropna else dataset.data
             sdf = (
-                sdf.join(dataset.target, SparkDataset.ID_COLUMN)
-                    .withColumnRenamed(dataset.target_column, self._target_col)
-                    .withColumnRenamed(prediction_column, self._prediction_col)
+                sdf
+                .withColumnRenamed(dataset.target_column, self._target_col)
+                .withColumnRenamed(prediction_column, self._prediction_col)
             )
         elif isinstance(dataset, SparkDataFrame):
             sdf = cast(SparkDataFrame, dataset)
-            assert "prediction" in sdf.columns and "target" in sdf.columns
+            assert DEFAULT_PREDICTION_COL_NAME in sdf.columns and DEFAULT_TARGET_COL_NAME in sdf.columns
             sdf = (
                 sdf
-                .withColumnRenamed("target", self._target_col)
-                .withColumnRenamed("prediction", self._prediction_col)
+                .withColumnRenamed(DEFAULT_TARGET_COL_NAME, self._target_col)
+                .withColumnRenamed(DEFAULT_PREDICTION_COL_NAME, self._prediction_col)
             )
         else:
             raise ValueError(f"Unsupported type {type(dataset)}")
@@ -73,7 +75,7 @@ class SparkMetric(LAMLMetric):
         return self._name
 
 
-class Task(LAMATask):
+class SparkTask(LAMATask):
 
     _default_metrics = {"binary": "areaUnderROC", "reg": "mse", "multiclass": "logLoss"}
     _greater_is_better_mapping = {"areaUnderROC": True, "mse": False, "logLoss": False}

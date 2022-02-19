@@ -4,26 +4,24 @@ from typing import Callable, Dict, Optional, Tuple, Union, cast
 
 import pandas as pd
 from pandas import Series
+from pyspark.ml import Transformer, PipelineModel
 from pyspark.ml.feature import VectorAssembler
 from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
 
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
-from lightautoml.spark.ml_algo.base import TabularMLAlgo, SparkMLModel
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
+from lightautoml.spark.pipelines.features.base import SelectTransformer
+from lightautoml.spark.transformers.base import ColumnsSelectorTransformer, DropColumnsTransformer
+from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
-from lightautoml.utils.tmp_utils import log_data
 from lightautoml.validation.base import TrainValidIterator
-
-from pyspark.sql import functions as F
 
 logger = logging.getLogger(__name__)
 
 
-# LightGBM = Union[LightGBMClassifier, LightGBMRegressor]
-
-
-class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
+class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     _name: str = "LightGBM"
 
@@ -49,13 +47,15 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
     }
 
     def __init__(self,
-            default_params: Optional[dict] = None,
-            freeze_defaults: bool = True,
-            timer: Optional[TaskTimer] = None,
-            optimization_search_space: Optional[dict] = {}):
-        TabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
-        self._prediction_col = f"prediction_{self._name}"
+                 default_params: Optional[dict] = None,
+                 freeze_defaults: bool = True,
+                 timer: Optional[TaskTimer] = None,
+                 optimization_search_space: Optional[dict] = {}):
+        SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
+        self._probability_col_name = "probability"
+        self._prediction_col_name = "prediction"
         self._assembler = None
+        self._drop_cols_transformer = None
 
     def _infer_params(self) -> Tuple[dict, int, Optional[Callable], Optional[Callable]]:
         """Infer all parameters in lightgbm format.
@@ -193,15 +193,16 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         return suggested_params
 
     def _get_default_search_spaces(self, suggested_params: Dict, estimated_n_trials: int) -> Dict:
-        """Sample hyperparameters from suggested.
+        """Train on train dataset and predict on holdout dataset.
 
         Args:
-            trial: Optuna trial object.
-            suggested_params: Dict with parameters.
-            estimated_n_trials: Maximum number of hyperparameter estimations.
+            fold_prediction_column: column name for predictions made for this fold
+            full: Full dataset that include train and valid parts and a bool column that delimits records
+            train: Train Dataset.
+            valid: Validation Dataset.
 
         Returns:
-            dict with sampled hyperparameters.
+            Target predictions for valid dataset.
 
         """
         assert self.task is not None
@@ -216,7 +217,7 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         optimization_search_space["numLeaves"] = SearchSpace(
             Distribution.INTUNIFORM,
-            low=16,
+            low=4,
             high=255,
         )
 
@@ -235,12 +236,11 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
                 high=1.0,
             )
 
-            # # TODO: SPARK-LAMA is there an alternative in synapse ml ?
-            # optimization_search_space["min_sum_hessian_in_leaf"] = SearchSpace(
-            #     Distribution.LOGUNIFORM,
-            #     low=1e-3,
-            #     high=10.0,
-            # )
+            optimization_search_space["minSumHessianInLeaf"] = SearchSpace(
+                Distribution.LOGUNIFORM,
+                low=1e-3,
+                high=10.0,
+            )
 
         if estimated_n_trials > 100:
             if self.task.name == "reg":
@@ -268,9 +268,15 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         return pred
 
-    def fit_predict_single_fold(self, train: SparkDataset, valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+    def fit_predict_single_fold(self,
+                                fold_prediction_column: str,
+                                full: SparkDataset,
+                                train: SparkDataset,
+                                valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+        assert self.validation_column in full.data.columns, 'Train should contain validation column'
+
         if self.task is None:
-            self.task = train.task
+            self.task = full.task
 
         (
             params,
@@ -279,52 +285,53 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
             feval,
         ) = self._infer_params()
 
-        is_val_col = 'is_val'
-        train_sdf = self._make_sdf_with_target(train).withColumn(is_val_col, F.lit(0))
-        valid_sdf = self._make_sdf_with_target(valid).withColumn(is_val_col, F.lit(1))
-
-        train_valid_sdf = train_sdf.union(valid_sdf)
-
-        logger.info(f"Input cols for the vector assembler: {train.features}")
+        logger.info(f"Input cols for the vector assembler: {full.features}")
         logger.info(f"Running lgb with the following params: {params}")
 
         # TODO: reconsider using of 'keep' as a handleInvalid value
         if self._assembler is None:
             self._assembler = VectorAssembler(
-                inputCols=train.features,
+                inputCols=self.input_features,
                 outputCol=f"{self._name}_vassembler_features",
                 handleInvalid="keep"
             )
 
-        LGBMBooster = LightGBMRegressor if train.task.name == "reg" else LightGBMClassifier
+        LGBMBooster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
 
-        if train.task.name == "multiclass":
-            params["probabilityCol"] = self._prediction_col
+        if full.task.name in ['binary', 'multiclass']:
+            params['rawPredictionCol'] = fold_prediction_column
+            params['probabilityCol'] = self._probability_col_name
+            params['predictionCol'] = self._prediction_col_name
+        else:
+            params['predictionCol'] = fold_prediction_column
 
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
-            labelCol=train.target_column,
-            predictionCol=self._prediction_col if train.task.name != "multiclass" else "prediction",
-            validationIndicatorCol=is_val_col,
-            verbosity=verbose_eval
+            labelCol=full.target_column,
+            validationIndicatorCol=self.validation_column,
+            verbosity=verbose_eval,
+            isProvideTrainingMetric=True
         )
 
         logger.info(f"In GBM with params: {lgbm.params}")
 
-        if train.task.name == "reg":
+        if full.task.name == "reg":
             lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
 
-        temp_sdf = self._assembler.transform(train_valid_sdf)
+        temp_sdf = self._assembler.transform(full.data)
 
         ml_model = lgbm.fit(temp_sdf)
 
-        val_pred = ml_model.transform(self._assembler.transform(valid_sdf))
-        val_pred = val_pred.select(*valid_sdf.columns, self._prediction_col)
+        val_pred = ml_model.transform(self._assembler.transform(valid.data))
+        val_pred = DropColumnsTransformer(
+            remove_cols=[],
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+        ).transform(val_pred)
 
-        return ml_model, val_pred, self._prediction_col
+        return ml_model, val_pred, fold_prediction_column
 
-    def fit(self, train_valid: TrainValidIterator):
+    def fit(self, train_valid: SparkBaseTrainValidIterator):
         self.fit_predict(train_valid)
 
     def get_features_score(self) -> Series:
@@ -336,3 +343,44 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
 
         result = Series(list(imp), index=self.features).sort_values(ascending=False)
         return result
+
+    def _build_transformer(self) -> Transformer:
+        avr = self._build_averaging_transformer()
+        models = [el for m in self.models for el in [m, DropColumnsTransformer(
+            remove_cols=[],
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+        )]]
+        averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
+        return averaging_model
+
+    def _build_averaging_transformer(self) -> Transformer:
+        avr = AveragingTransformer(
+            self.task.name,
+            input_cols=self._models_prediction_columns,
+            output_col=self.prediction_feature,
+            remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns,
+            convert_to_array_first=not (self.task.name == "reg"),
+            dim_num=self.n_classes
+        )
+        return avr
+
+    def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
+        """Fit and then predict accordig the strategy that uses train_valid_iterator.
+
+        If item uses more then one time it will
+        predict mean value of predictions.
+        If the element is not used in training then
+        the prediction will be ``numpy.nan`` for this item
+
+        Args:
+            train_valid_iterator: Classic cv-iterator.
+
+        Returns:
+            Dataset with predicted values.
+
+        """
+        self.timer.start()
+
+        self.input_roles = train_valid_iterator.input_roles
+        
+        return super().fit_predict(train_valid_iterator)

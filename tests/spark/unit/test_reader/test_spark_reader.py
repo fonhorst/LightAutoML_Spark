@@ -2,13 +2,14 @@ from typing import cast, Dict, Any, List
 
 import pytest
 from pyspark.sql import SparkSession
+from pyspark.sql.types import NumericType
 
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.tasks import Task
-from lightautoml.spark.tasks.base import Task as SparkTask
+from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from . import spark
 import pandas as pd
 
@@ -137,20 +138,15 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
         # 2. it should have target
         # 3. it should have roles for all columns
         if check_target_and_folds:
-            assert sds.target_column not in sds.data.columns
-            assert isinstance(sds.target, SparkDataFrame) \
-                   and sds.target_column in sds.target.columns \
-                   and SparkDataset.ID_COLUMN in sds.target.columns
+            assert sds.target_column in sds.data.columns
+            assert isinstance(sds.data.schema[sds.target_column].dataType, NumericType)
+
         assert SparkDataset.ID_COLUMN in sds.data.columns
         assert set(sds.features).issubset(sds.roles.keys())
         assert all(f in sds.data.columns for f in sds.features)
 
         if check_target_and_folds:
-            assert "folds" in sds.__dict__ and sds.folds
-            assert isinstance(sds.folds, SparkDataFrame)
-            folds_sdf = cast(SparkDataFrame, sds.folds)
-            assert len(folds_sdf.columns) == 2
-            assert SparkDataset.ID_COLUMN in folds_sdf.columns and sds.folds_column in folds_sdf.columns
+            assert not sds.folds_column or sds.folds_column in sds.data.columns
 
     # path = "../../examples/data/sampled_app_train.csv"
     # task_type = "binary"
@@ -166,8 +162,13 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     sdataset = sreader.fit_read(df, roles=roles)
     checks(sdataset)
 
-    sdataset = sreader.read(df)
-    checks(sdataset, check_target_and_folds=False)
+    sdataset = sreader.read(df, add_array_attrs=False)
+    assert sdataset.target_column is None
+    assert sdataset.folds_column is None
+    assert roles['target'] not in sdataset.data.columns
+
+    sdataset = sreader.read(df, add_array_attrs=True)
+    checks(sdataset, check_target_and_folds=True)
 
     # comparing with Pandas
     pdf = pd.read_csv(path, dtype=dtype)
