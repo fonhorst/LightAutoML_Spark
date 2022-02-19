@@ -1106,6 +1106,6 @@ class SparkMultiTargetEncoderTransformer(SparkBaseTransformer):
 
         output = self._make_output_df(dataset, cols_to_select)
 
-        logger.info(f"[{type(self)} (TE)] transform is finished")
+        logger.info(f"[{type(self)} (MCTE)] transform is finished")
 
         return output
