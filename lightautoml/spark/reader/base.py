@@ -253,9 +253,9 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         # get subsample if it needed
         subsample = train_data
-        # TODO: LAMA-SPARK replace seed here with a variable
-        if self.samples:
-            subsample = subsample.sample(fraction=0.1, seed=42).limit(self.samples).cache()
+        # # TODO: LAMA-SPARK replace seed here with a variable
+        # if self.samples:
+        #     subsample = subsample.sample(fraction=0.1, seed=42).limit(self.samples).cache()
 
         # infer roles
         feats_to_guess: List[str] = []
@@ -356,7 +356,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         #         **kwargs
         #     )
 
-        log_data("spark_reader_fit_read", {"train": dataset.to_pandas()})
+        # log_data("spark_reader_fit_read", {"train": dataset.to_pandas()})
 
         return dataset
 
