@@ -12,12 +12,11 @@ experiments:
     library: ["spark"]
     repeat_rate: 1
     params:
-      func: ["calculate_automl"]
+      func: ["calculate_lgbadv_boostlgb"]
       dataset: ["used_cars_dataset_025x"]
+      checkpoint_path: ["/opt/spark_chkp_data/advlgb_boostlgb_used_cars_dataset_025x.chkp"]
       seed: [42]
       cv: [5]
-      use_algos:
-        - [["linear_l2"]]
     spark_config:
       spark.executor.instances: ['1']
       spark.executor.cores: ['16']
@@ -56,6 +55,16 @@ default_spark_config: {
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass: local-hdd,
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.path: /opt/spark_data/,
   spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly: 'true',
+
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-chkp-data.options.claimName: spark-lama-data,
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-chkp-data.options.storageClass: local-hdd,
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-chkp-data.mount.path: /opt/spark_chkp_data/,
+  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-chkp-data.mount.readOnly: 'false',
+
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-chkp-data.options.claimName: spark-lama-data,
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-chkp-data.options.storageClass: local-hdd,
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-chkp-data.mount.path: /opt/spark_chkp_data/,
+  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-chkp-data.mount.readOnly: 'false',
 
 #  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.options.claimName: spark-lama-ivy2-cache,
 #  spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-ivy2-cache.options.storageClass: local-hdd,
