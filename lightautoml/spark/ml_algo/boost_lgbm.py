@@ -162,7 +162,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # ntrees = 2000
             # es = 100
 
-            # TODO: SPARK-LAMA temporary changes for debug
+            # # TODO: SPARK-LAMA temporary changes for debug
             init_lr = 0.05
             ntrees = 300
             es = 1000
@@ -314,12 +314,14 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
-            validationIndicatorCol=self.validation_column,
+            # validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
+            useSingleDatasetMode=True,
+            numThreads=4,
             isProvideTrainingMetric=True
         )
 
-        logger.info(f"In GBM with params: {lgbm.params}")
+        logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}")
 
         if full.task.name == "reg":
             lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)

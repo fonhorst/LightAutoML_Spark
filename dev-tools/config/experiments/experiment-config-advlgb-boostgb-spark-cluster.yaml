@@ -13,13 +13,13 @@ experiments:
     repeat_rate: 1
     params:
       func: ["calculate_lgbadv_boostlgb"]
-      dataset: ["used_cars_dataset_025x"]
+      dataset: ["used_cars_dataset_2x"]
       checkpoint_path: ["/opt/spark_chkp_data/advlgb_boostlgb_used_cars_dataset_025x.chkp"]
       seed: [42]
       cv: [5]
     spark_config:
       spark.executor.instances: ['1']
-      spark.executor.cores: ['16']
+      spark.executor.cores: ['4']
 
 # Static parameters for Spark
 default_spark_config: {

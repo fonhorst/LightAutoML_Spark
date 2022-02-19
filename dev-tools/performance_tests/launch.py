@@ -10,9 +10,7 @@ from dataset_utils import datasets
 from lama_used_cars import calculate_automl as lama_automl
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.utils.tmp_utils import LOG_DATA_DIR, log_config
-from spark_used_cars import calculate_automl as spark_automl
-
-
+from spark_used_cars import calculate_automl as spark_automl, calculate_lgbadv_boostlgb
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -21,11 +19,16 @@ logger = logging.getLogger(__name__)
 
 def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
-    dataset_name = "used_cars_dataset"
+    # dataset_name = "used_cars_dataset"
     # dataset_name = "kdd_internet_usage"
     # dataset_name = "lama_test_dataset"
     # dataset_name = "ailerons_dataset"
     # dataset_name = "buzz_dataset"
+    # dataset_name = "used_cars_dataset_head50k"
+    # dataset_name = "used_cars_dataset_0125x"
+    # dataset_name = "used_cars_dataset_025x"
+    # dataset_name = "used_cars_dataset_05x"
+    dataset_name = "used_cars_dataset_1x"
 
     config = copy(datasets()[dataset_name])
     config["use_algos"] = [["lgb"]]
@@ -41,6 +44,7 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
         cfg['seed'] = seed
         cfg['cv'] = cv
 
+        cfg['checkpoint_path'] = '/opt/checkpoints/tmp_chck'
         # os.environ[LOG_DATA_DIR] = f"./dumps/datalogs_{dataset_name}_{seed}"
         # if os.path.exists(os.environ[LOG_DATA_DIR]) and delete_dir:
         #     shutil.rmtree(os.environ[LOG_DATA_DIR])
@@ -62,4 +66,4 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
 if __name__ == "__main__":
     # calculate_quality(lama_automl)
-    calculate_quality(spark_automl, delete_dir=False)
+    calculate_quality(calculate_lgbadv_boostlgb, delete_dir=False)

@@ -66,7 +66,8 @@ def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDa
     with open(metadata_file, "rb") as f:
         metadata = pickle.load(f)
 
-    df = spark.read.parquet(data_file)
+    df = spark.read.parquet(data_file).repartition(16).cache()
+    df.write.mode('overwrite').format('noop').save()
 
     ds = SparkDataset(
         data=df,
