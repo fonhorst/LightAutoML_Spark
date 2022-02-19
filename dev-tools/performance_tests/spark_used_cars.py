@@ -33,7 +33,7 @@ DUMP_METADATA_NAME = "metadata.pickle"
 DUMP_DATA_NAME = "data.parquet"
 
 
-def dump_data(path: str, ds: SparkDataset):
+def dump_data(path: str, ds: SparkDataset, **meta_kwargs):
     if os.path.exists(path):
         shutil.rmtree(path)
 
@@ -48,6 +48,7 @@ def dump_data(path: str, ds: SparkDataset):
         "folds": ds.folds_column,
         "task_name": ds.task.name if ds.task else None
     }
+    metadata.update(meta_kwargs)
 
     with open(metadata_file, 'wb') as f:
         pickle.dump(metadata, f)
@@ -55,7 +56,7 @@ def dump_data(path: str, ds: SparkDataset):
     ds.data.write.parquet(data_file)
 
 
-def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[SparkDataset]:
+def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDataset, Dict]]:
     if not os.path.exists(path):
         return None
 
@@ -75,7 +76,7 @@ def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[SparkDataset]
         folds=metadata["folds"]
     )
 
-    return ds
+    return ds, metadata
 
 
 def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
@@ -219,8 +220,8 @@ def calculate_lgbadv_boostlgb(
 
     with spark_session(**spark_args) as spark:
         with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
-            chkp_ds = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
-            if not chkp_ds:
+            chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
+            if not chkp:
                 task = SparkTask(task_type)
                 train_data, test_data = prepare_test_and_train(spark, path, seed)
 
@@ -243,9 +244,11 @@ def calculate_lgbadv_boostlgb(
 
                 if checkpoint_path is not None:
                     ds = cast(SparkDataset, iterator.train)
-                    dump_data(checkpoint_path, ds)
+                    dump_data(checkpoint_path, ds, iterator_input_roles=iterator.input_roles)
             else:
+                chkp_ds, metadata = chkp
                 iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
+                iterator.input_roles = metadata['iterator_input_roles']
 
             spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
             spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
