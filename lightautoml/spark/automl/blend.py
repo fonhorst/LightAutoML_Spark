@@ -281,6 +281,15 @@ class SparkWeightedBlender(SparkBlender):
         return scorer
 
     def _optimize(self, predictions: SparkDataset, prediction_cols: List[str]) -> np.ndarray:
+        """This method tries to find optimal weights for blending.
+
+        Args:
+            predictions (SparkDataset): SparkDataset with prediction columns
+            prediction_cols (List[str]): prediction columns of pipelines
+
+        Returns:
+            np.ndarray: optimal weights
+        """
 
         length = len(prediction_cols)
         candidate = np.ones(length, dtype=np.float32) / length
@@ -346,6 +355,7 @@ class SparkWeightedBlender(SparkBlender):
                      predictions: SparkDataset,
                      pipes: Sequence[SparkMLPipeline]
                      ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
+        logger.info(f"[{type(self)} (SWB)] _fit_predict is started")
 
         pred_cols = []
         pipe_idx = []
@@ -386,6 +396,8 @@ class SparkWeightedBlender(SparkBlender):
 
         self._output_roles = copy(roles)
 
+        logger.info(f"[{type(self)} (SWB)] _fit_predict is finished")
+
         return pred_ds, pipes
 
 
@@ -418,6 +430,8 @@ class WeightedBlenderTransformer(Transformer, HasInputCols, HasOutputCol, MLWrit
         return self.getOrDefault(self.wts)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+
         wts = self.getWts()
         pred_cols = self.getInputCols()
         if self.getOrDefault(self.taskName) in ["binary", "multiclass"]:
