@@ -129,7 +129,8 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
             params = copy(params)
             spark_config = copy(spark_config)
 
-            use_algos = '__'.join(['_'.join(layer) for layer in params['use_algos']])
+            use_algos = '__'.join(['_'.join(layer) for layer in params['use_algos']]) \
+                if 'use_algos' in params else 'noalg'
 
             instance_id = f"{name}-{library}-n{repeat_seq_id}-{params['dataset'].replace('_', '-')}" \
                           f"-{use_algos.replace('_', '-')}-" \

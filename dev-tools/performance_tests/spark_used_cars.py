@@ -238,12 +238,12 @@ def calculate_lgbadv_boostlgb(
                 iterator = SparkFoldsIterator(sdataset, n_folds=cv)
                 lgb_features = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
 
+                # # Process features and train the model
+                iterator = iterator.apply_feature_pipeline(lgb_features)
+
                 if checkpoint_path is not None:
                     ds = cast(SparkDataset, iterator.train)
                     dump_data(checkpoint_path, ds)
-
-                # # Process features and train the model
-                iterator = iterator.apply_feature_pipeline(lgb_features)
             else:
                 iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
 
