@@ -217,7 +217,8 @@ def get_numeric_roles_stat(
     trf = Pipeline(stages=[change_roles, freq_encoder])
     res["freq_scores"] = get_score_from_pipe(train, pipe=trf)
 
-    # res["nan_rate"] = empty_slice.mean(axis=0)
+    nan_rate_cols = [F.mean(F.isnan(F.col(feat)).astype(IntegerType())).alias(feat) for feat in train.features]
+    res["nan_rate"] = train.data.select(nan_rate_cols).toPandas().values.flatten()
 
     return res
 
