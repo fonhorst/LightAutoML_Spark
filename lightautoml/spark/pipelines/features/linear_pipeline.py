@@ -176,10 +176,13 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             # standartize, fillna, add null flags
 
             dense_pipe1 = SparkUnionTransformer(dense_list)
+            # fill_inf_stage = SparkFillInfTransformer(input_cols=dense_pipe1.get_output_cols(),
+            #                                          input_roles=dense_pipe1.get_output_roles(),
+            #                                          do_replace_columns=[c for c in dense_pipe1.get_output_cols()
+            #                                                              if c not in self.input_features])
             fill_inf_stage = SparkFillInfTransformer(input_cols=dense_pipe1.get_output_cols(),
                                                      input_roles=dense_pipe1.get_output_roles(),
-                                                     do_replace_columns=[c for c in dense_pipe1.get_output_cols()
-                                                                         if c not in self.input_features])
+                                                     do_replace_columns=True)
             fill_na_median_stage = SparkFillnaMedianEstimator(input_cols=fill_inf_stage.getOutputCols(),
                                                               input_roles=fill_inf_stage.getOutputCols(),
                                                               do_replace_columns=True)
@@ -190,11 +193,12 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             dense_pipe = SparkSequentialTransformer(
                 [
                     dense_pipe1,
-                    SparkNaNFlagsEstimator(input_cols=dense_pipe1.get_output_cols(),
-                                           input_roles=dense_pipe1.get_output_roles(),
-                                           do_replace_columns=False),
-                    SparkSequentialTransformer([fill_inf_stage, fill_na_median_stage, standerd_scaler_stage]),
-
+                    SparkUnionTransformer([
+                        SparkNaNFlagsEstimator(input_cols=dense_pipe1.get_output_cols(),
+                                               input_roles=dense_pipe1.get_output_roles(),
+                                               do_replace_columns=True),
+                        SparkSequentialTransformer([fill_inf_stage, fill_na_median_stage, standerd_scaler_stage])
+                    ])
                 ]
             )
             transformers_list.append(dense_pipe)

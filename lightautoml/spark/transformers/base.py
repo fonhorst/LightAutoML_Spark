@@ -161,12 +161,14 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, MLWritable, ABC):
         return TmpСommonMLWriter(self.uid)
 
     def _make_output_df(self, input_df: SparkDataFrame, cols_to_add: List[Union[str, Column]]):
-        if not self.getDoReplaceColumns():
-            return input_df.select('*', *cols_to_add)
+        return input_df.select('*', *cols_to_add)
 
-        replaced_columns = set(self.getColumnsToReplace())
-        cols_to_leave = [f for f in input_df.columns if f not in replaced_columns]
-        return input_df.select(*cols_to_leave, *cols_to_add)
+        # if not self.getDoReplaceColumns():
+        #     return input_df.select('*', *cols_to_add)
+        #
+        # replaced_columns = set(self.getColumnsToReplace())
+        # cols_to_leave = [f for f in input_df.columns if f not in replaced_columns]
+        # return input_df.select(*cols_to_leave, *cols_to_add)
 
     def transform(self, dataset, params=None):
         logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")

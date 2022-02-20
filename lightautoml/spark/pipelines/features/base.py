@@ -1,6 +1,7 @@
 """Basic classes for features generation."""
 import itertools
 from copy import copy
+from dataclasses import dataclass
 from typing import Any, Callable, cast, Set, Union, Dict
 from typing import List
 from typing import Optional
@@ -14,12 +15,14 @@ from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
 from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as F
 
+from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
-from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from lightautoml.spark.transformers.base import SparkChangeRolesTransformer, ColumnsSelectorTransformer
+from lightautoml.spark.transformers.base import SparkChangeRolesTransformer, ColumnsSelectorTransformer, \
+    DropColumnsTransformer
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
     SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
 from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEstimator, \
@@ -67,6 +70,13 @@ def build_graph(begin: SparkEstOrTrans):
             graph[st] = set()
 
     return graph
+
+
+@dataclass
+class FittedPipe:
+    sdf: SparkDataFrame
+    transformer: Transformer
+    roles: RolesDict
 
 
 class SelectTransformer(Transformer):
@@ -135,16 +145,17 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         assert self.input_features is not None, "Input features should be provided before the fit_transform"
         assert self.input_roles is not None, "Input roles should be provided before the fit_transform"
 
-        pipeline, last_cacher = self._merge_estimators(train)
-        self._transformer = cast(Transformer, pipeline.fit(train.data))
-        self._infer_output_features_and_roles(self._transformer)
-        sdf = last_cacher.dataset
+        fitted_pipe = self._merge_estimators(train)
+        self._transformer = fitted_pipe.transformer
+        self._output_roles = fitted_pipe.roles
+        # self._infer_output_features_and_roles(self._transformer)
+        # sdf = last_cacher.dataset
 
         features = train.features + self.output_features
         roles = copy(train.roles)
         roles.update(self._output_roles)
         transformed_ds = train.empty()
-        transformed_ds.set_data(sdf, features, roles)
+        transformed_ds.set_data(fitted_pipe.sdf, features, roles)
 
         return transformed_ds
 
@@ -170,30 +181,59 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         if len(self.pipes) > 1:
             return self.pipes.pop(i)
 
-    def _merge_estimators(self, data: SparkDataset) -> Tuple[Estimator, Cacher]:
-        est_cachers = [
-            self._optimize_for_caching(pipe(data), data.target_column, data.folds_column)
-            for pipe in self.pipes
-        ]
-        ests = [e for est, _ in est_cachers for e in est]
-        _, last_cacher = est_cachers[-1]
-        pipeline = Pipeline(stages=ests)
-        return pipeline, last_cacher
+    def _merge_estimators(self, data: SparkDataset) -> FittedPipe:
+        fitted_pipes = []
+        current_sdf = data.data
+        for pipe in self.pipes:
+            fp = self._optimize_for_caching(current_sdf, pipe(data))
+            current_sdf = fp.sdf
+            fitted_pipes.append(fp)
 
-    def _optimize_for_caching(self, pipeline: SparkEstOrTrans, target_col: str, folds_col: str) -> Tuple[List[Estimator], Cacher]:
+        pipeline = PipelineModel(stages=[fp.transformer for fp in fitted_pipes])
+        out_roles = dict()
+        for fp in fitted_pipes:
+            out_roles.update(fp.roles)
+
+        return FittedPipe(sdf=current_sdf, transformer=pipeline, roles=out_roles)
+
+    def _optimize_for_caching(self, train: SparkDataFrame, pipeline: SparkEstOrTrans)\
+            -> FittedPipe:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
-        stages = [tr for layer in tr_layers
-                  for tr in itertools.chain(layer, [Cacher(self._cacher_key)])]
 
-        if len(stages) == 0:
-            # TODO: SPARK-LAMA add warning here
-            stages = [EmptyCacher(key='---')]
+        fp_input_features = set(self.input_features)
 
-        last_cacher = stages[-1]
-        assert isinstance(last_cacher, Cacher)
+        current_train: SparkDataFrame = train
+        stages = []
+        fp_output_cols: List[str] = []
+        fp_output_roles: RolesDict = dict()
+        for layer in tr_layers:
+            cols_to_remove = []
+            output_cols = []
+            for tr in layer:
+                tr = cast(SparkColumnsAndRoles, tr)
+                if tr.getDoReplaceColumns():
+                    # ChangeRoles, for instance, may return columns with the same name
+                    # thus we don't want to remove these columns
+                    self_out_cols = set(tr.getOutputCols())
+                    cols_to_remove.extend([f for f in tr.getInputCols() if f not in self_out_cols])
+                output_cols.extend(tr.getOutputCols())
+                fp_output_roles.update(tr.getOutputRoles())
+            fp_output_cols = [c for c in fp_output_cols if c not in cols_to_remove]
+            fp_output_cols.extend(output_cols)
 
-        return stages, last_cacher
+            # we cannot really remove input features thus we leave them in the dataframe
+            # but they won't in features and roles
+            cols_to_remove = set(c for c in cols_to_remove if c not in fp_input_features)
+
+            cacher = Cacher(self._cacher_key)
+            pipe = Pipeline(stages=list(layer) + [DropColumnsTransformer(list(cols_to_remove)), cacher])
+            stages.append(pipe.fit(current_train))
+            current_train = cacher.dataset
+
+        fp_output_roles = {f: fp_output_roles[f] for f in fp_output_cols}
+
+        return FittedPipe(current_train, PipelineModel(stages=stages), roles=fp_output_roles)
 
     def _infer_output_features_and_roles(self, pipeline: Transformer):
         # TODO: infer output features here

@@ -62,10 +62,20 @@ def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
     slama_dataset_feats = slama_linear_features.fit_transform(spark_ds)
     slama_lf_pds = cast(PandasDataset, slama_dataset_feats.to_pandas())
 
-    assert sorted(slama_linear_features.output_features) == sorted(lf_pds.features)
+    # assert sorted(slama_linear_features.output_features) == sorted(lf_pds.features)
+    assert sorted(slama_linear_features.output_features) == sorted([f for f in lf_pds.features if not f.startswith('nanflg_')])
     assert len(set(spark_ds.features).difference(slama_dataset_feats.features)) == 0
     assert len(set(ds.features).difference(slama_dataset_feats.features)) == 0
-    assert slama_linear_features.output_roles == lf_pds.roles
+    assert set(slama_linear_features.output_roles.keys()) == set(f for f in lf_pds.roles.keys() if not f.startswith('nanflg_'))
+    assert all([(f in slama_dataset_feats.roles) for f in lf_pds.roles.keys() if not f.startswith('nanflg_')])
+
+    not_equal_roles = [
+        feat
+        for feat, prole in lf_pds.roles.items()
+        if not feat.startswith('nanflg_') and
+           not (type(prole) == type(slama_linear_features.output_roles[feat]) == type(slama_dataset_feats.roles[feat]))
+    ]
+    assert len(not_equal_roles) == 0, f"Roles are different: {not_equal_roles}"
     pass
 
 
