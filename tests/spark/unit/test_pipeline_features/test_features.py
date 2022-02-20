@@ -9,6 +9,7 @@ from sklearn.model_selection import train_test_split
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
+from lightautoml.ml_algo.boost_lgbm import BoostLGBM
 from lightautoml.ml_algo.linear_sklearn import LinearLBFGS
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
@@ -68,10 +69,10 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
     dumped_train_ds, _ = train_res
     dumped_test_ds, _ = test_res
 
-    test_ds = dumped_test_ds.to_pandas().to_numpy()
+    test_ds = dumped_test_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_test_ds.to_pandas().to_numpy()
 
     # Process spark-based features with LAMA
-    pds = dumped_train_ds.to_pandas().to_numpy()
+    pds = dumped_train_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_train_ds.to_pandas().to_numpy()
     train_valid = FoldsIterator(pds)
     ml_algo = ml_algo_lama_clazz()
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
@@ -91,6 +92,7 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
     lama_pipeline = fp_lama_clazz(**ml_alg_kwargs)
     lama_feats = lama_pipeline.fit_transform(train_ds)
     lama_test_feats = lama_pipeline.transform(test_ds)
+    lama_feats = lama_feats if ml_algo_lama_clazz == BoostLGBM else lama_feats.to_numpy()
     train_valid = FoldsIterator(lama_feats.to_numpy())
     ml_algo = ml_algo_lama_clazz()
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
@@ -114,7 +116,7 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
 
 
 def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str, Any],
-                              lama_clazz, slama_clazz, ml_alg_kwargs: Dict[str, Any]):
+                              lama_clazz, slama_clazz, ml_alg_kwargs: Dict[str, Any], pipeline_name: str):
     checkpoint_fp_dir = '/opt/test_checkpoints/feature_pipelines'
     spark_dss = prepared_datasets(spark, cv, [ds_config], checkpoint_dir='/opt/test_checkpoints/')
     spark_train_ds, spark_test_ds = spark_dss[0]
@@ -159,28 +161,36 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     assert slama_feats.roles == slama_test_feats.roles
 
     # dumping resulting datasets
-    chkp_train_path = os.path.join(checkpoint_fp_dir, f"dump_linear_features_{ds_name}_{cv}_train.dump")
-    chkp_test_path = os.path.join(checkpoint_fp_dir, f"dump_linear_features_{ds_name}_{cv}_test.dump")
+    chkp_train_path = os.path.join(checkpoint_fp_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_train.dump")
+    chkp_test_path = os.path.join(checkpoint_fp_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_test.dump")
     dump_data(chkp_train_path, slama_feats[:, slama_pipeline.output_features], cv=cv)
     dump_data(chkp_test_path, slama_test_feats[:, slama_pipeline.output_features], cv=cv)
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(dataset='used_cars_dataset')])
+@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting='all-tasks')])
 def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
-    compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures, ml_alg_kwargs)
+    compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures,
+                              ml_alg_kwargs, 'linear_features')
 
 
 @pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
-    compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline, ml_alg_kwargs)
+    compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
+                              ml_alg_kwargs, 'lgbadv_features')
 
 
 @pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     ml_alg_kwargs = {}
-    compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures, ml_alg_kwargs)
+    compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures,
+                              ml_alg_kwargs, 'lgbsimple_features')
 
 
 @pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(dataset="used_cars_dataset")])
 def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, ml_alg_kwargs)
+
+
+@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(dataset="used_cars_dataset")])
+def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv: int):
+    compare_feature_pipelines_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM, ml_alg_kwargs)
