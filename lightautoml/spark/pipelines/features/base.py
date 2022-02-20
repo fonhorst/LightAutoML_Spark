@@ -206,18 +206,24 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
         fp_input_features = set(self.input_features)
 
-        features = copy(fp_input_features)
-        roles = copy(self.input_roles)
-        include_input_features: Set[str] = set()
+        features = set() #copy(fp_input_features)
+        # roles = copy(self.input_roles)
+        roles = dict() #copy(self.input_roles)
+        # include_input_features: Set[str] = set()
         for est in estimators:
             if isinstance(est, Cacher) or isinstance(est, NoOpTransformer):
                 continue
 
             assert isinstance(est, SparkColumnsAndRoles)
 
+            if isinstance(est, SparkChangeRolesTransformer):
+                assert est.getInputCols() == est.getOutputCols()
+                roles.update(est.getOutputRoles())
+                continue
+
             replacable_columns = est.getColumnsToReplace()
 
-            assert isinstance(est, SparkChangeRolesTransformer) or not est.getDoReplaceColumns() or all(f not in fp_input_features for f in replacable_columns), \
+            assert not est.getDoReplaceColumns() or all(f not in fp_input_features for f in replacable_columns), \
                 "Cannot replace input features of the feature pipeline itself"
 
             if est.getDoReplaceColumns():
@@ -230,20 +236,22 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
             features.update(est.getOutputCols())
             roles.update(est.getOutputRoles())
-            include_input_features.update(set(est.getOutputCols()).intersection(fp_input_features))
+            # include_input_features.update(set(est.getOutputCols()).intersection(fp_input_features))
 
-        assert all((f in features) for f in fp_input_features), \
-            "All input features should be present in the output features"
-
-        assert all((f in roles) for f in fp_input_features), \
-            "All input features should be present in the output roles"
+        # assert all((f in features) for f in fp_input_features), \
+        #     "All input features should be present in the output features"
+        #
+        # assert all((f in roles) for f in fp_input_features), \
+        #     "All input features should be present in the output roles"
 
         # we want to have only newly added features in out output features, not input features
         # but we need to keep input features that are required by some transformers
-        for col in fp_input_features:
-            if col not in include_input_features:
-                features.remove(col)
-                del roles[col]
+        # for col in fp_input_features:
+        #     if col not in include_input_features:
+        #         features.remove(col)
+        #         del roles[col]
+
+        assert all((f in roles) for f in features)
 
         self._output_roles = roles
 

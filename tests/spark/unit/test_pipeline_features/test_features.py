@@ -49,7 +49,7 @@ def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
 
     # LAMA pipeline
     pdf = pd.read_csv(ds_config['path'],  dtype=ds_config['dtype'])
-    reader = PandasToPandasReader(Task(spark_ds.task.name), cv, advanced_roles=False)
+    reader = PandasToPandasReader(task=Task(spark_ds.task.name), cv=cv, advanced_roles=False)
     ds = reader.fit_read(pdf, roles=ds_config['roles'])
 
     linear_features = LinearFeatures(**ml_alg_kwargs)
@@ -62,8 +62,43 @@ def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
     slama_dataset_feats = slama_linear_features.fit_transform(spark_ds)
     slama_lf_pds = cast(PandasDataset, slama_dataset_feats.to_pandas())
 
-    assert sorted(lf_pds.features) == sorted(slama_lf_pds.features)
+    assert sorted(slama_linear_features.output_features) == sorted(lf_pds.features)
+    assert len(set(spark_ds.features).difference(slama_dataset_feats.features)) == 0
+    assert len(set(ds.features).difference(slama_dataset_feats.features)) == 0
+    assert slama_linear_features.output_roles == lf_pds.roles
     pass
+
+
+# @pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting="fast")])
+# def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
+#     spark_ds = prepared_datasets(spark, cv, [ds_config], checkpoint_dir='/opt/test_checkpoints/')
+#     spark_ds = spark_ds[0]
+#
+#     ml_alg_kwargs = {
+#         'auto_unique_co': 10,
+#         'max_intersection_depth': 3,
+#         'multiclass_te_co': 3,
+#         'output_categories': True,
+#         'top_intersections': 4
+#     }
+#
+#     # LAMA pipeline
+#     pdf = pd.read_csv(ds_config['path'],  dtype=ds_config['dtype'])
+#     reader = PandasToPandasReader(Task(spark_ds.task.name), cv, advanced_roles=False)
+#     ds = reader.fit_read(pdf, roles=ds_config['roles'])
+#
+#     linear_features = LinearFeatures(**ml_alg_kwargs)
+#     dataset_feats = linear_features.fit_transform(ds)
+#     lf_pds = cast(PandasDataset, dataset_feats.to_pandas())
+#
+#     # SLAMA pipeline
+#     slama_linear_features = SparkLinearFeatures(**ml_alg_kwargs)
+#     slama_linear_features.input_roles = spark_ds.roles
+#     slama_dataset_feats = slama_linear_features.fit_transform(spark_ds)
+#     slama_lf_pds = cast(PandasDataset, slama_dataset_feats.to_pandas())
+#
+#     assert sorted(lf_pds.features) == sorted(slama_lf_pds.features)
+#     pass
 
 # @pytest.mark.parametrize("dataset", DATASETS)
 # def test_linear_features(spark: SparkSession, dataset: DatasetForTest):

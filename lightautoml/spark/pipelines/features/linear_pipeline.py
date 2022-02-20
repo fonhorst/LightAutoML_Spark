@@ -191,8 +191,10 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
                 [
                     dense_pipe1,
                     SparkNaNFlagsEstimator(input_cols=dense_pipe1.get_output_cols(),
-                                           input_roles=dense_pipe1.get_output_roles()),
-                    SparkSequentialTransformer([fill_inf_stage, fill_na_median_stage, standerd_scaler_stage])
+                                           input_roles=dense_pipe1.get_output_roles(),
+                                           do_replace_columns=False),
+                    SparkSequentialTransformer([fill_inf_stage, fill_na_median_stage, standerd_scaler_stage]),
+
                 ]
             )
             transformers_list.append(dense_pipe)

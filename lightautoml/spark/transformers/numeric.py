@@ -39,6 +39,8 @@ class SparkNaNFlagsEstimator(SparkBaseEstimator):
                          output_role=NumericRole(np.float32))
         self._nan_rate = nan_rate
         self._nan_cols: Optional[str] = None
+        self.set(self.outputRoles, dict())
+        self.set(self.outputCols, [])
         # self._features: Optional[List[str]] = None
 
     def _fit(self, sdf: SparkDataFrame) -> "Transformer":
@@ -49,13 +51,21 @@ class SparkNaNFlagsEstimator(SparkBaseEstimator):
             .first()
         )
 
-        self._nan_cols = [col for col, col_nan_rate in row.asDict(True).items() if col_nan_rate > self._nan_rate]
+        self._nan_cols = [
+            f"{self._fname_prefix}__{col}"
+            for col, col_nan_rate in row.asDict(True).items()
+            if col_nan_rate > self._nan_rate
+        ]
+
+        self.set(self.outputCols, self._nan_cols)
+        self.set(self.outputRoles, {c: self._output_role for c in self._nan_cols})
 
         return SparkNaNFlagsTransformer(
             input_cols=self.getInputCols(),
             input_roles=self.getInputRoles(),
-            output_cols=self._nan_cols,
-            nan_cols=self._nan_cols
+            output_cols=self.getOutputCols(),
+            output_roles=self.getOutputRoles(),
+            do_replace_columns=self.getDoReplaceColumns()
         )
 
 
@@ -66,24 +76,24 @@ class SparkNaNFlagsTransformer(SparkBaseTransformer):
     # TODO: it is better to be taken from shared module as a string constant
     _fname_prefix = "nanflg"
 
-    def __init__(self, 
-                 input_cols: List[str],
-                 input_roles: RolesDict,
-                 output_cols: List[str],
-                 nan_cols: List[str]):
-        super().__init__(
-            input_cols=input_cols,
-            output_cols=output_cols,
-            input_roles=input_roles,
-            output_roles={f: NumericRole(np.float32) for f in output_cols},
-            do_replace_columns=False)
-        self._nan_cols = nan_cols
+    # def __init__(self,
+    #              input_cols: List[str],
+    #              input_roles: RolesDict,
+    #              output_cols: List[str],
+    #              output_roles: RolesDict,):
+    #     super().__init__(
+    #         input_cols=input_cols,
+    #         output_cols=output_cols,
+    #         input_roles=input_roles,
+    #         output_roles=output_roles,
+    #         do_replace_columns=False)
+    #     self._nan_cols = nan_cols
 
     def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
 
         new_cols = [
-            F.isnan(c).astype(FloatType()).alias(f"{self._fname_prefix}__{c}")
-            for c in self._nan_cols
+            F.isnan(in_c).astype(FloatType()).alias(out_c)
+            for in_c, out_c in zip(self.getInputCols(), self.getOutputCols())
         ]
 
         out_sdf = self._make_output_df(sdf, new_cols)
