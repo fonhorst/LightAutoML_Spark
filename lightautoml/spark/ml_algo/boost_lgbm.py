@@ -158,14 +158,14 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             ntrees = 2000
             es = 100
         else:
-            # init_lr = 0.05
-            # ntrees = 2000
-            # es = 100
-
-            # # TODO: SPARK-LAMA temporary changes for debug
             init_lr = 0.05
-            ntrees = 300
-            es = 1000
+            ntrees = 2000
+            es = 100
+
+            # # # TODO: SPARK-LAMA temporary changes for debug
+            # init_lr = 0.05
+            # ntrees = 300
+            # es = 1000
 
         if rows_num > 300000:
             suggested_params["numLeaves"] = 128 if task == "reg" else 244
@@ -317,7 +317,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
             useSingleDatasetMode=True,
-            numThreads=4,
+            numThreads=31,
             isProvideTrainingMetric=True
         )
 
