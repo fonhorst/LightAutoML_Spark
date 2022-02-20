@@ -314,7 +314,7 @@ def datasets() -> Dict[str, Any]:
 def prepared_datasets(spark: SparkSession,
                       cv: int,
                       ds_configs: List[Dict[str, Any]],
-                      checkpoint_dir: Optional[str] = None) -> List[SparkDataset]:
+                      checkpoint_dir: Optional[str] = None) -> List[Tuple[SparkDataset, SparkDataset]]:
     sds = []
     for config in ds_configs:
         path = config['path']
@@ -323,22 +323,36 @@ def prepared_datasets(spark: SparkSession,
 
         ds_name = os.path.basename(os.path.splitext(path)[0])
 
-        dump_path = os.path.join(checkpoint_dir, f"dump_{ds_name}_{cv}.dump") \
+        train_dump_path = os.path.join(checkpoint_dir, f"dump_{ds_name}_{cv}_train.dump") \
             if checkpoint_dir is not None else None
-        res = load_dump_if_exist(spark, dump_path)
-        if res:
-            dumped_ds, _ = res
-            sds.append(dumped_ds)
+        test_dump_path = os.path.join(checkpoint_dir, f"dump_{ds_name}_{cv}_test.dump") \
+            if checkpoint_dir is not None else None
+
+        res_train = load_dump_if_exist(spark, train_dump_path)
+        res_test = load_dump_if_exist(spark, test_dump_path)
+        if res_train and res_test:
+            dumped_train_ds, _ = res_train
+            dumped_test_ds, _ = res_test
+
+            sds.append((dumped_train_ds, dumped_test_ds))
             continue
 
         df = spark.read.csv(path, header=True, escape="\"")
+        df = df.cache()
+        df.write.mode('overwrite').format('noop').save()
+
+        train_df, test_df = df.randomSplit([0.8, 0.2], seed=42)
+
         sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv)
-        sdataset = sreader.fit_read(df, roles=roles)
+        train_ds = sreader.fit_read(train_df, roles=roles)
+        test_ds = sreader.read(test_df, add_array_attrs=True)
 
-        if dump_path is not None:
-            dump_data(dump_path, sdataset, cv=cv)
+        if train_dump_path is not None:
+            dump_data(train_dump_path, train_ds, cv=cv)
+        if test_dump_path is not None:
+            dump_data(test_dump_path, test_ds, cv=cv)
 
-        sds.append(sdataset)
+        sds.append((train_ds, test_ds))
 
     return sds
 
@@ -367,18 +381,3 @@ def get_test_datasets(dataset:Optional[str] = None,  setting: str = "all") -> Li
         return list(cfg for ds_name, cfg in dss.items() if not ds_name.startswith('used_cars_dataset_'))
     else:
         raise ValueError(f"Unsupported setting {setting}")
-
-
-def get_prepared_test_datasets(spark: Union[SparkSession, Callable[[], SparkSession]],
-                               cv: int,
-                               dss_setting: str = "all",
-                               checkpoint_dir: Optional[str] = None) -> List[SparkDataset]:
-    ds_configs = get_test_datasets(dss_setting)
-
-    if not isinstance(spark, SparkSession):
-        spark = spark()
-
-    sdss = prepared_datasets(spark, cv, ds_configs, checkpoint_dir)
-
-    return sdss
-

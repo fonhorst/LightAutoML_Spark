@@ -15,7 +15,7 @@ from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
 from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as F
 
-from lightautoml.dataset.base import RolesDict
+from lightautoml.dataset.base import RolesDict, LAMLDataset
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
@@ -154,6 +154,17 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         roles.update(self._output_roles)
         transformed_ds = train.empty()
         transformed_ds.set_data(fitted_pipe.sdf, features, roles)
+
+        return transformed_ds
+
+    def transform(self, test: LAMLDataset) -> LAMLDataset:
+        sdf = self._transformer.transform(test.data)
+
+        roles = copy(test.roles)
+        roles.update(self.output_roles)
+
+        transformed_ds = test.empty()
+        transformed_ds.set_data(sdf, self.output_features, roles)
 
         return transformed_ds
 
