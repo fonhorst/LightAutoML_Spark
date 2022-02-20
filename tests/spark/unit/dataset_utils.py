@@ -371,7 +371,7 @@ def get_test_datasets(dataset:Optional[str] = None,  setting: str = "all") -> Li
         return [
             dss['used_cars_dataset'],
             dss["buzz_dataset"],
-            # dss['lama_test_dataset'],
+            dss['lama_test_dataset'],
             dss["ailerons_dataset"],
             dss["internet_usage"],
             dss["gesture_segmentation"]

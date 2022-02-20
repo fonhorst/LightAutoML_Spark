@@ -51,14 +51,14 @@ ml_alg_kwargs = {
 
 def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: Dict[str, Any],
                                          fp_lama_clazz, ml_algo_lama_clazz,
-                                         ml_alg_kwargs: Dict[str, Any]):
+                                         ml_alg_kwargs: Dict[str, Any], pipeline_name: str):
     checkpoint_dir = '/opt/test_checkpoints/feature_pipelines'
     path = config['path']
     ds_name = os.path.basename(os.path.splitext(path)[0])
 
-    dump_train_path = os.path.join(checkpoint_dir, f"dump_linear_features_{ds_name}_{cv}_train.dump") \
+    dump_train_path = os.path.join(checkpoint_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_train.dump") \
         if checkpoint_dir is not None else None
-    dump_test_path = os.path.join(checkpoint_dir, f"dump_linear_features_{ds_name}_{cv}_test.dump") \
+    dump_test_path = os.path.join(checkpoint_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_test.dump") \
         if checkpoint_dir is not None else None
 
     train_res = load_dump_if_exist(spark, dump_train_path)
@@ -106,13 +106,13 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
     print(f"LAMA oof: {lama_oof_metric}. LAMA-on-Spark oof: {spark_based_oof_metric}")
     print(f"LAMA test: {lama_test_metric}. LAMA-on-Spark test: {spark_based_test_metric}")
 
-    rate = 0.05
+    max_diff_in_percents = 0.05
 
-    assert (lama_oof_metric - spark_based_oof_metric) / max(lama_oof_metric, spark_based_oof_metric) < rate
-    assert (lama_oof_metric - spark_based_oof_metric) / min(lama_oof_metric, spark_based_oof_metric) < rate
+    assert spark_based_oof_metric > lama_oof_metric or (lama_oof_metric - spark_based_oof_metric) / max(lama_oof_metric, spark_based_oof_metric) < max_diff_in_percents
+    assert spark_based_oof_metric > lama_oof_metric or (lama_oof_metric - spark_based_oof_metric) / min(lama_oof_metric, spark_based_oof_metric) < max_diff_in_percents
 
-    assert (lama_test_metric - spark_based_test_metric) / max(lama_test_metric, spark_based_test_metric) < rate
-    assert (lama_test_metric - spark_based_test_metric) / min(lama_test_metric, spark_based_test_metric) < rate
+    assert spark_based_test_metric > lama_test_metric or (lama_test_metric - spark_based_test_metric) / max(lama_test_metric, spark_based_test_metric) < max_diff_in_percents
+    assert spark_based_test_metric > lama_test_metric or (lama_test_metric - spark_based_test_metric) / min(lama_test_metric, spark_based_test_metric) < max_diff_in_percents
 
 
 def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str, Any],
@@ -181,16 +181,23 @@ def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
 
 @pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
-    ml_alg_kwargs = {}
     compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures,
-                              ml_alg_kwargs, 'lgbsimple_features')
+                              dict(), 'lgbsimple_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(dataset="used_cars_dataset")])
+@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
 def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv: int):
-    compare_feature_pipelines_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, ml_alg_kwargs)
+    compare_feature_pipelines_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS,
+                                         ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(dataset="used_cars_dataset")])
+@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
 def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv: int):
-    compare_feature_pipelines_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM, ml_alg_kwargs)
+    compare_feature_pipelines_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM,
+                                         ml_alg_kwargs, 'lgbadv_features')
+
+
+@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
+def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
+    compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
+                                         dict(), 'lgbsimple_features')
