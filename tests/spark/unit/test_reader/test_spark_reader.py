@@ -1,137 +1,23 @@
-from typing import cast, Dict, Any, List
+from typing import Dict, Any
 
+import pandas as pd
 import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import NumericType
 
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.reader.base import PandasToPandasReader
-from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.tasks import Task
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
-from . import spark
-import pandas as pd
+from lightautoml.tasks import Task
+from . import spark as spark_sess
+from ..dataset_utils import get_test_datasets
+
+spark = spark_sess
 
 
-def datasets(setting: str = "all") -> List[Dict[str, Any]]:
-    used_cars_dataset = {
-        "path": "examples/data/small_used_cars_data.csv",
-        "task_type": "reg",
-        "metric_name": "mse",
-        "target_col": "price",
-        "roles": {
-            "target": "price",
-            "drop": ["dealer_zip", "description", "listed_date",
-                     "year", 'Unnamed: 0', '_c0',
-                     'sp_id', 'sp_name', 'trimId',
-                     'trim_name', 'major_options', 'main_picture_url',
-                     'interior_color', 'exterior_color'],
-            "numeric": ['latitude', 'longitude', 'mileage']
-        },
-        "dtype": {
-            'fleet': 'str', 'frame_damaged': 'str',
-            'has_accidents': 'str', 'isCab': 'str',
-            'is_cpo': 'str', 'is_new': 'str',
-            'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
-        }
-    }
-
-    lama_test_dataset = {
-        "path": "./examples/data/sampled_app_train.csv",
-        "task_type": "binary",
-        "metric_name": "areaUnderROC",
-        "target_col": "TARGET",
-        "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
-    }
-
-    # https://www.openml.org/d/734
-    ailerons_dataset = {
-        "path": "/opt/ailerons.csv",
-        "task_type": "binary",
-        "metric_name": "areaUnderROC",
-        "target_col": "binaryClass",
-        "roles": {"target": "binaryClass"},
-    }
-
-    # https://www.openml.org/d/4534
-    phishing_websites_dataset = {
-        "path": "/opt/PhishingWebsites.csv",
-        "task_type": "binary",
-        "metric_name": "areaUnderROC",
-        "target_col": "Result",
-        "roles": {"target": "Result"},
-    }
-
-    # https://www.openml.org/d/981
-    kdd_internet_usage = {
-        "path": "/opt/kdd_internet_usage.csv",
-        "task_type": "binary",
-        "metric_name": "areaUnderROC",
-        "target_col": "Who_Pays_for_Access_Work",
-        "roles": {"target": "Who_Pays_for_Access_Work"},
-    }
-
-    # https://www.openml.org/d/42821
-    nasa_dataset = {
-        "path": "/opt/nasa_phm2008.csv",
-        "task_type": "reg",
-        "metric_name": "mse",
-        "target_col": "class",
-        "roles": {"target": "class"},
-    }
-
-    # https://www.openml.org/d/4549
-    buzz_dataset = {
-        "path": "/opt/Buzzinsocialmedia_Twitter_25k.csv",
-        "task_type": "reg",
-        "metric_name": "mse",
-        "target_col": "Annotation",
-        "roles": {"target": "Annotation"},
-    }
-
-    # https://www.openml.org/d/372
-    internet_usage = {
-        "path": "/opt/internet_usage.csv",
-        "task_type": "multiclass",
-        "metric_name": "ova",
-        "target_col": "Actual_Time",
-        "roles": {"target": "Actual_Time"},
-    }
-
-    # https://www.openml.org/d/4538
-    gesture_segmentation = {
-        "path": "/opt/gesture_segmentation.csv",
-        "task_type": "multiclass",
-        "metric_name": "ova",
-        "target_col": "Phase",
-        "roles": {"target": "Phase"},
-    }
-
-    # https://www.openml.org/d/382
-    ipums_97 = {
-        "path": "/opt/ipums_97.csv",
-        "task_type": "multiclass",
-        "metric_name": "ova",
-        "target_col": "movedin",
-        "roles": {"target": "movedin"},
-    }
-
-    if setting == "fast":
-        return [used_cars_dataset]
-    elif setting == "multiclass":
-        return [internet_usage, gesture_segmentation, ipums_97]
-    elif setting == "all":
-        return [
-            used_cars_dataset, lama_test_dataset, ailerons_dataset,
-            phishing_websites_dataset, kdd_internet_usage, nasa_dataset,
-            buzz_dataset, internet_usage, gesture_segmentation, ipums_97
-        ]
-    else:
-        raise ValueError(f"Unsupported setting {setting}")
-
-
-@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in datasets(setting="fast")])
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(setting="fast")])
 def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
