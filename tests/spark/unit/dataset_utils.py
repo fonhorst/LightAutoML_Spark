@@ -325,8 +325,9 @@ def prepared_datasets(spark: SparkSession,
 
         dump_path = os.path.join(checkpoint_dir, f"dump_{ds_name}_{cv}.dump") \
             if checkpoint_dir is not None else None
-        dumped_ds, _ = load_dump_if_exist(spark, dump_path)
-        if dumped_ds:
+        res = load_dump_if_exist(spark, dump_path)
+        if res:
+            dumped_ds, _ = res
             sds.append(dumped_ds)
             continue
 
@@ -348,7 +349,16 @@ def get_test_datasets(setting: str = "all") -> List[Dict[str, Any]]:
     if setting == "fast":
         return [dss['used_cars_dataset']]
     elif setting == "multiclass":
-        return [dss['internet_usage'], dss['gesture_segmentation'], dss['ipums_97']]
+        return [dss['internet_usage'], dss['gesture_segmentation']]
+    elif setting == "all-tasks":
+        return [
+            # dss['used_cars_dataset'],
+            dss["buzz_dataset"],
+            dss['lama_test_dataset'],
+            dss["ailerons_dataset"],
+            dss["internet_usage"],
+            dss["gesture_segmentation"]
+        ]
     elif setting == "all":
         # exccluding all heavy datasets
         return list(cfg for ds_name, cfg in dss.items() if not ds_name.startswith('used_cars_dataset_'))

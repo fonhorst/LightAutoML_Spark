@@ -145,11 +145,9 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         assert self.input_features is not None, "Input features should be provided before the fit_transform"
         assert self.input_roles is not None, "Input roles should be provided before the fit_transform"
 
-        fitted_pipe = self._merge_estimators(train)
+        fitted_pipe = self._merge_pipes(train)
         self._transformer = fitted_pipe.transformer
         self._output_roles = fitted_pipe.roles
-        # self._infer_output_features_and_roles(self._transformer)
-        # sdf = last_cacher.dataset
 
         features = train.features + self.output_features
         roles = copy(train.roles)
@@ -181,11 +179,11 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         if len(self.pipes) > 1:
             return self.pipes.pop(i)
 
-    def _merge_estimators(self, data: SparkDataset) -> FittedPipe:
+    def _merge_pipes(self, data: SparkDataset) -> FittedPipe:
         fitted_pipes = []
         current_sdf = data.data
         for pipe in self.pipes:
-            fp = self._optimize_for_caching(current_sdf, pipe(data))
+            fp = self._optimize_and_fit(current_sdf, pipe(data))
             current_sdf = fp.sdf
             fitted_pipes.append(fp)
 
@@ -196,7 +194,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
         return FittedPipe(sdf=current_sdf, transformer=pipeline, roles=out_roles)
 
-    def _optimize_for_caching(self, train: SparkDataFrame, pipeline: SparkEstOrTrans)\
+    def _optimize_and_fit(self, train: SparkDataFrame, pipeline: SparkEstOrTrans)\
             -> FittedPipe:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
@@ -234,66 +232,6 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         fp_output_roles = {f: fp_output_roles[f] for f in fp_output_cols}
 
         return FittedPipe(current_train, PipelineModel(stages=stages), roles=fp_output_roles)
-
-    def _infer_output_features_and_roles(self, pipeline: Transformer):
-        # TODO: infer output features here
-        if isinstance(pipeline, PipelineModel):
-            estimators = pipeline.stages
-        else:
-            estimators = [pipeline]
-
-        assert len(estimators) > 0, "Pipeline cannot be empty"
-
-        fp_input_features = set(self.input_features)
-
-        features = set() #copy(fp_input_features)
-        # roles = copy(self.input_roles)
-        roles = dict() #copy(self.input_roles)
-        # include_input_features: Set[str] = set()
-        for est in estimators:
-            if isinstance(est, Cacher) or isinstance(est, NoOpTransformer):
-                continue
-
-            assert isinstance(est, SparkColumnsAndRoles)
-
-            if isinstance(est, SparkChangeRolesTransformer):
-                assert est.getInputCols() == est.getOutputCols()
-                roles.update(est.getOutputRoles())
-                continue
-
-            replacable_columns = est.getColumnsToReplace()
-
-            assert not est.getDoReplaceColumns() or all(f not in fp_input_features for f in replacable_columns), \
-                "Cannot replace input features of the feature pipeline itself"
-
-            if est.getDoReplaceColumns():
-                for col in est.getColumnsToReplace():
-                    features.remove(col)
-                    del roles[col]
-
-            assert not any(f in features for f in est.getOutputCols()), \
-                "Cannot add an already existing feature"
-
-            features.update(est.getOutputCols())
-            roles.update(est.getOutputRoles())
-            # include_input_features.update(set(est.getOutputCols()).intersection(fp_input_features))
-
-        # assert all((f in features) for f in fp_input_features), \
-        #     "All input features should be present in the output features"
-        #
-        # assert all((f in roles) for f in fp_input_features), \
-        #     "All input features should be present in the output roles"
-
-        # we want to have only newly added features in out output features, not input features
-        # but we need to keep input features that are required by some transformers
-        # for col in fp_input_features:
-        #     if col not in include_input_features:
-        #         features.remove(col)
-        #         del roles[col]
-
-        assert all((f in roles) for f in features)
-
-        self._output_roles = roles
 
     def release_cache(self):
         sdf = Cacher.get_dataset_by_key(self._cacher_key)
@@ -545,7 +483,7 @@ class SparkTabularDataFeatures:
 
                 # TODO: SPARK-LAMA add warning here
                 target_encoder = None
-                raise NotImplementedError()
+                # raise NotImplementedError()
                 # if n_classes <= self.multiclass_te_co:
                 #     target_encoder = MultiClassTargetEncoder
 
