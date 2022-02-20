@@ -165,9 +165,10 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         probs_list = [x for x in probs_list if x is not None]
         if len(probs_list) > 0:
             probs_pipe = SparkUnionTransformer(probs_list)
-            probs_pipe = SparkSequentialTransformer([probs_pipe, SparkLogOddsTransformer(input_cols=probs_pipe.get_output_cols(),
-                                                                                         input_roles=probs_pipe.get_output_roles(),
-                                                                                         )])
+            probs_pipe = SparkSequentialTransformer([probs_pipe,
+                                                     SparkLogOddsTransformer(input_cols=probs_pipe.get_output_cols(),
+                                                                             input_roles=probs_pipe.get_output_roles(),
+                                                                             do_replace_columns=True)])
             dense_list.append(probs_pipe)
 
         # handle dense
@@ -176,10 +177,6 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             # standartize, fillna, add null flags
 
             dense_pipe1 = SparkUnionTransformer(dense_list)
-            # fill_inf_stage = SparkFillInfTransformer(input_cols=dense_pipe1.get_output_cols(),
-            #                                          input_roles=dense_pipe1.get_output_roles(),
-            #                                          do_replace_columns=[c for c in dense_pipe1.get_output_cols()
-            #                                                              if c not in self.input_features])
             fill_inf_stage = SparkFillInfTransformer(input_cols=dense_pipe1.get_output_cols(),
                                                      input_roles=dense_pipe1.get_output_roles(),
                                                      do_replace_columns=True)

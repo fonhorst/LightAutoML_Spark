@@ -343,8 +343,11 @@ def prepared_datasets(spark: SparkSession,
     return sds
 
 
-def get_test_datasets(setting: str = "all") -> List[Dict[str, Any]]:
+def get_test_datasets(dataset:Optional[str] = None,  setting: str = "all") -> List[Dict[str, Any]]:
     dss = datasets()
+
+    if dataset is not None:
+        return [dss[dataset]]
 
     if setting == "fast":
         return [dss['used_cars_dataset']]
@@ -352,7 +355,7 @@ def get_test_datasets(setting: str = "all") -> List[Dict[str, Any]]:
         return [dss['internet_usage'], dss['gesture_segmentation']]
     elif setting == "all-tasks":
         return [
-            # dss['used_cars_dataset'],
+            dss['used_cars_dataset'],
             dss["buzz_dataset"],
             dss['lama_test_dataset'],
             dss["ailerons_dataset"],

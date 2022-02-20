@@ -1,3 +1,4 @@
+import os
 from typing import Dict, Any, cast
 
 import numpy as np
@@ -6,6 +7,9 @@ from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
+from lightautoml.ml_algo.linear_sklearn import LinearLBFGS
+from lightautoml.ml_algo.tuning.base import DefaultTuner
+from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.features.lgb_pipeline import LGBAdvancedPipeline, LGBSimpleFeatures
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.reader.base import PandasToPandasReader
@@ -13,8 +17,9 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.tasks import Task
+from lightautoml.validation.np_iterators import FoldsIterator
 from .. import DatasetForTest, spark as spark_sess
-from ..dataset_utils import get_test_datasets, prepared_datasets
+from ..dataset_utils import get_test_datasets, prepared_datasets, load_dump_if_exist, dump_data
 
 import pandas as pd
 
@@ -35,11 +40,22 @@ DATASETS = [
                    })
 ]
 
+ml_alg_kwargs = {
+    'auto_unique_co': 10,
+    'max_intersection_depth': 3,
+    'multiclass_te_co': 3,
+    'output_categories': True,
+    'top_intersections': 4
+}
+
 
 def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str, Any],
                               lama_clazz, slama_clazz, ml_alg_kwargs: Dict[str, Any]):
+    checkpoint_fp_dir = '/opt/test_checkpoints/feature_pipelines'
     spark_ds = prepared_datasets(spark, cv, [ds_config], checkpoint_dir='/opt/test_checkpoints/')
     spark_ds = spark_ds[0]
+
+    ds_name = os.path.basename(os.path.splitext(ds_config['path'])[0])
 
     # LAMA pipeline
     read_csv_args = {'dtype':  ds_config['dtype']} if 'dtype' in ds_config else dict()
@@ -72,30 +88,17 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     ]
     assert len(not_equal_roles) == 0, f"Roles are different: {not_equal_roles}"
 
+    chkp_path = os.path.join(checkpoint_fp_dir, f"dump_linear_features_{ds_name}_{cv}.dump")
+    dump_data(chkp_path, slama_feats[:, slama_pipeline.output_features], cv=cv)
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting="multiclass")])
+
+@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(dataset='used_cars_dataset')])
 def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
-    ml_alg_kwargs = {
-        'auto_unique_co': 10,
-        'max_intersection_depth': 3,
-        'multiclass_te_co': 3,
-        'output_categories': True,
-        'top_intersections': 4
-    }
-
     compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures, ml_alg_kwargs)
 
 
 @pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
-    ml_alg_kwargs = {
-        'auto_unique_co': 10,
-        'max_intersection_depth': 3,
-        'multiclass_te_co': 3,
-        'output_categories': True,
-        'top_intersections': 4
-    }
-
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline, ml_alg_kwargs)
 
 
@@ -103,3 +106,48 @@ def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     ml_alg_kwargs = {}
     compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures, ml_alg_kwargs)
+
+
+@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(dataset="used_cars_dataset")])
+def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv: int):
+    checkpoint_dir = '/opt/test_checkpoints/feature_pipelines'
+
+    path = config['path']
+
+    ds_name = os.path.basename(os.path.splitext(path)[0])
+
+    dump_path = os.path.join(checkpoint_dir, f"dump_linear_features_{ds_name}_{cv}.dump") \
+        if checkpoint_dir is not None else None
+    res = load_dump_if_exist(spark, dump_path)
+    if not res:
+        raise ValueError("Dataset should be processed with feature pipeline "
+                         "and the corresponding dump should exist. Please, run corresponding non-quality test first.")
+    dumped_ds, _ = res
+
+    # Process spark-based features with LAMA
+    pds = dumped_ds.to_pandas().to_numpy()
+    train_valid = FoldsIterator(pds)
+    ml_algo = LinearLBFGS()
+    ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
+    assert ml_algo is not None
+    score = train_valid.train.task.get_dataset_metric()
+    spark_based_oof_metric = score(oof_pred)
+
+    # compare with native features of LAMA
+    read_csv_args = {'dtype':  config['dtype']} if 'dtype' in config else dict()
+    pdf = pd.read_csv(config['path'], **read_csv_args)
+    reader = PandasToPandasReader(task=Task(train_valid.train.task.name), cv=cv, advanced_roles=False)
+    ds = reader.fit_read(pdf, roles=config['roles'])
+    lama_pipeline = LinearFeatures(**ml_alg_kwargs)
+    lama_feats = lama_pipeline.fit_transform(ds)
+    train_valid = FoldsIterator(lama_feats.to_numpy())
+    ml_algo = LinearLBFGS()
+    ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
+    assert ml_algo is not None
+    score = train_valid.train.task.get_dataset_metric()
+    lama_oof_metric = score(oof_pred)
+
+    print(f"LAMA: {lama_oof_metric}. LAMA-on-Spark: {spark_based_oof_metric}")
+
+    assert (lama_oof_metric - spark_based_oof_metric) / max(lama_oof_metric, spark_based_oof_metric) < 0.05
+    assert (lama_oof_metric - spark_based_oof_metric) / min(lama_oof_metric, spark_based_oof_metric) < 0.05

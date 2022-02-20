@@ -221,7 +221,7 @@ class SparkDataset(LAMLDataset):
         # assert kwargs["target"] in data.columns, \
         #     f"No target column (the column name: {kwargs['target']}) in the spark dataframe"
 
-    def _materialize_to_pandas(self) -> Tuple[pd.DataFrame, Optional[pd.Series], Dict[str, ColumnRole]]:
+    def _materialize_to_pandas(self) -> Tuple[pd.DataFrame, Optional[pd.Series], Optional[pd.Series], Dict[str, ColumnRole]]:
         sdf = self.data
 
         def expand_if_vec_or_arr(col, role) -> Tuple[List[Column], ColumnRole]:
@@ -248,6 +248,9 @@ class SparkDataset(LAMLDataset):
         if self.target_column is not None:
             all_cols.append(self.target_column)
 
+        if self.folds_column is not None:
+            all_cols.append(self.folds_column)
+
         sdf = sdf.orderBy(SparkDataset.ID_COLUMN).select(*all_cols)
         all_roles = {c: all_cols_and_roles[c] for c in sdf.columns if c not in self.service_columns}
 
@@ -261,7 +264,13 @@ class SparkDataset(LAMLDataset):
         else:
             target_series = None
 
-        return df, target_series, all_roles
+        if self.folds_column is not None:
+            folds_series = df[self.folds_column]
+            df = df.drop(self.folds_column, 1)
+        else:
+            folds_series = None
+
+        return df, target_series, folds_series, all_roles
 
     def set_data(self,
                  data: SparkDataFrame,
@@ -279,18 +288,20 @@ class SparkDataset(LAMLDataset):
         super().set_data(data, None, roles)
 
     def to_pandas(self) -> PandasDataset:
-        data, target_data, roles = self._materialize_to_pandas()
+        data, target_data, folds_data, roles = self._materialize_to_pandas()
 
         task = Task(self.task.name) if self.task else None
         kwargs = dict()
         if target_data is not None:
             kwargs['target'] = target_data
+        if folds_data is not None:
+            kwargs['folds'] = folds_data
         pds = PandasDataset(data=data, roles=roles, task=task, **kwargs)
 
         return pds
 
     def to_numpy(self) -> NumpyDataset:
-        data, target_data, roles = self._materialize_to_pandas()
+        data, target_data, folds_data, roles = self._materialize_to_pandas()
 
         try:
             target = self.target
