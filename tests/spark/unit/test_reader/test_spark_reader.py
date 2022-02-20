@@ -17,7 +17,7 @@ from ..dataset_utils import get_test_datasets
 spark = spark_sess
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(setting="fast")])
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(setting="all")])
 def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id

@@ -350,7 +350,8 @@ def get_test_datasets(setting: str = "all") -> List[Dict[str, Any]]:
     elif setting == "multiclass":
         return [dss['internet_usage'], dss['gesture_segmentation'], dss['ipums_97']]
     elif setting == "all":
-        return list(dss.values())
+        # exccluding all heavy datasets
+        return list(cfg for ds_name, cfg in dss.items() if not ds_name.startswith('used_cars_dataset_'))
     else:
         raise ValueError(f"Unsupported setting {setting}")
 

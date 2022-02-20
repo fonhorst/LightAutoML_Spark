@@ -227,7 +227,7 @@ class Cacher(Estimator):
         ds.write.mode('overwrite').format('noop').save()
 
         previous_ds = self._cacher_dict.get(self._key, None)
-        if previous_ds:
+        if previous_ds is not None:
             previous_ds.unpersist()
 
         self._cacher_dict[self._key] = ds
