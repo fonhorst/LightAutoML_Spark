@@ -40,6 +40,8 @@ DATASETS = [
                    })
 ]
 
+CV = 5
+
 ml_alg_kwargs = {
     'auto_unique_co': 10,
     'max_intersection_depth': 3,
@@ -167,37 +169,37 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     dump_data(chkp_test_path, slama_test_feats[:, slama_pipeline.output_features], cv=cv)
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting='all-tasks')])
+@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures,
                               ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
                               ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, 3) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures,
                               dict(), 'lgbsimple_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS,
                                          ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM,
                                          ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("config,cv", [(ds, 3) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
                                          dict(), 'lgbsimple_features')

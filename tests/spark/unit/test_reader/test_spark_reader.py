@@ -17,7 +17,7 @@ from ..dataset_utils import get_test_datasets
 spark = spark_sess
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(setting="all")])
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
@@ -61,6 +61,7 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     preader = PandasToPandasReader(task=Task(task_type), cv=cv)
     pdataset = preader.fit_read(pdf, roles=roles)
 
+    assert set(sdataset.features) == set(pdataset.features)
     sdiff = set(sdataset.features).symmetric_difference(pdataset.features)
     assert len(sdiff) == 0, f"Features sets are different: {sdiff}"
 

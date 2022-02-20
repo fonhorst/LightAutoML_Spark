@@ -341,7 +341,7 @@ def prepared_datasets(spark: SparkSession,
         df = df.cache()
         df.write.mode('overwrite').format('noop').save()
 
-        train_df, test_df = df.randomSplit([0.8, 0.2], seed=42)
+        train_df, test_df = df.randomSplit([0.8, 0.2], seed=100)
 
         sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv)
         train_ds = sreader.fit_read(train_df, roles=roles)
