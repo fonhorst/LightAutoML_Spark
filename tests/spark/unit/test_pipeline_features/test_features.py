@@ -175,7 +175,7 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
 
 
 def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, Any],
-                                         ml_algo_lama_clazz, ml_algo_spark_clazz, pipeline_name: str):
+                                        fp_lama_clazz, ml_algo_lama_clazz, ml_algo_spark_clazz, pipeline_name: str, ml_alg_kwargs):
     checkpoint_dir = '/opt/test_checkpoints/feature_pipelines'
     path = config['path']
     ds_name = os.path.basename(os.path.splitext(path)[0])
@@ -198,14 +198,37 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     # Process spark-based features with LAMA
     pds = dumped_train_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_train_ds.to_pandas().to_numpy()
 
+    # train_valid = FoldsIterator(pds)
+    # ml_algo = ml_algo_lama_clazz()
+    # ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
+    # assert ml_algo is not None
+    # test_pred = ml_algo.predict(test_ds)
+    # score = train_valid.train.task.get_dataset_metric()
+    # lama_on_spark_oof_metric = score(oof_pred)
+    # lama_on_spark_test_metric = score(test_pred)
+
+    # compare with native features of LAMA
     train_valid = FoldsIterator(pds)
+    read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
+    train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
+    test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
+    # train_pdf, test_pdf = train_test_split(pdf, test_size=0.2, random_state=100)
+    reader = PandasToPandasReader(task=Task(train_valid.train.task.name), cv=cv, advanced_roles=False)
+    train_ds = reader.fit_read(train_pdf, roles=config['roles'])
+    test_ds = reader.read(test_pdf, add_array_attrs=True)
+    lama_pipeline = fp_lama_clazz(**ml_alg_kwargs)
+    lama_feats = lama_pipeline.fit_transform(train_ds)
+    lama_test_feats = lama_pipeline.transform(test_ds)
+    lama_feats = lama_feats if ml_algo_lama_clazz == BoostLGBM else lama_feats.to_numpy()
+    train_valid = FoldsIterator(lama_feats.to_numpy())
     ml_algo = ml_algo_lama_clazz()
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     assert ml_algo is not None
-    test_pred = ml_algo.predict(test_ds)
+    test_pred = ml_algo.predict(lama_test_feats)
+    # test_pred = ml_algo.predict(test_ds)
     score = train_valid.train.task.get_dataset_metric()
-    lama_on_spark_oof_metric = score(oof_pred)
-    lama_on_spark_test_metric = score(test_pred)
+    lama_oof_metric = score(oof_pred)
+    lama_test_metric = score(test_pred)
 
     train_valid = SparkFoldsIterator(dumped_train_ds)
     ml_algo = ml_algo_spark_clazz()
@@ -217,16 +240,16 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     spark_based_oof_metric = score(oof_pred[:, ml_algo.prediction_feature])
     spark_based_test_metric = score(test_pred[:, ml_algo.prediction_feature])
 
-    print(f"LAMA-on-Spark oof: {lama_on_spark_oof_metric}. Spark oof: {spark_based_oof_metric}")
-    print(f"LAMA-on-Spark test: {lama_on_spark_test_metric}. Spark test: {spark_based_test_metric}")
+    print(f"LAMA oof: {lama_oof_metric}. Spark oof: {spark_based_oof_metric}")
+    print(f"LAMA test: {lama_test_metric}. Spark test: {spark_based_test_metric}")
 
     max_diff_in_percents = 0.05
 
-    assert spark_based_test_metric > lama_on_spark_test_metric or abs(
-        (lama_on_spark_test_metric - spark_based_test_metric) / max(lama_on_spark_test_metric,
+    assert spark_based_test_metric > lama_test_metric or abs(
+        (lama_test_metric - spark_based_test_metric) / max(lama_test_metric,
                                                            spark_based_test_metric)) < max_diff_in_percents
-    assert spark_based_test_metric > lama_on_spark_test_metric or abs(
-        (lama_on_spark_test_metric - spark_based_test_metric) / min(lama_on_spark_test_metric,
+    assert spark_based_test_metric > lama_test_metric or abs(
+        (lama_test_metric - spark_based_test_metric) / min(lama_test_metric,
                                                            spark_based_test_metric)) < max_diff_in_percents
 
 
@@ -268,9 +291,17 @@ def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any],
 
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="reg+binary")])
 def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
-    compare_mlalgos_by_quality(spark, cv, config, LinearLBFGS, SparkLinearLBFGS, 'linear_features')
+    compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkLinearLBFGS, 'linear_features',
+                               ml_alg_kwargs)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="reg+binary")])
 def test_quality_mlalgo_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
-    compare_mlalgos_by_quality(spark, cv, config, BoostLGBM, SparkBoostLGBM, 'lgbadv_features')
+    compare_mlalgos_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM, SparkBoostLGBM, 'lgbadv_features',
+                               ml_alg_kwargs)
+
+
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="reg+binary")])
+def test_quality_mlalgo_simple_features_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
+    compare_mlalgos_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM, SparkBoostLGBM, 'lgbsimple_features',
+                               {})
