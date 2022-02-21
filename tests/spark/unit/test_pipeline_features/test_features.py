@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from pyspark.sql import SparkSession
-from sklearn.model_selection import train_test_split
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
@@ -171,37 +170,37 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     dump_data(chkp_test_path, slama_test_feats[:, slama_pipeline.output_features], cv=cv)
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures,
                               ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
                               ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures,
                               dict(), 'lgbsimple_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS,
                                          ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM,
                                          ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="buzz_dataset")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
                                          dict(), 'lgbsimple_features')
