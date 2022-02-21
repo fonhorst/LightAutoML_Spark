@@ -15,7 +15,8 @@ from pyspark.sql import functions as F
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from ..dataset.base import SparkDataset, SparkDataFrame
-from ..utils import NoOpTransformer, DebugTransformer
+from ..transformers.base import DropColumnsTransformer
+from ..utils import DebugTransformer
 from ...utils.timer import TaskTimer
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,9 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         self._ohe = None
         self._assembler = None
 
+        self._probability_col_name = "probability"
+        self._prediction_col_name = "prediction"
+
     def _infer_params(self,
                       train: SparkDataset,
                       fold_prediction_column: str) -> Tuple[List[Tuple[float, Estimator]], int]:
@@ -96,8 +100,9 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             if self.task.name in ["binary", "multiclass"]:
                 model = LogisticRegression(featuresCol=self._assembler.getOutputCol(),
                                            labelCol=train.target_column,
-                                           predictionCol=fold_prediction_column
-                                           if train.task.name != "multiclass" else "prediction",
+                                           probabilityCol=self._probability_col_name,
+                                           rawPredictionCol=fold_prediction_column,
+                                           predictionCol=self._prediction_col_name,
                                            **instance_params)
             elif self.task.name == "reg":
                 model = LinearRegression(featuresCol=self._assembler.getOutputCol(),
@@ -190,7 +195,11 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        averaging_model = PipelineModel(stages=[self._ohe, DebugTransformer(name="debug_linear_l2"), self._assembler] + self.models + [avr])
+        models = [el for m in self.models for el in [m, DropColumnsTransformer(
+            remove_cols=[],
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+        )]]
+        averaging_model = PipelineModel(stages=[self._ohe, self._assembler] + models + [avr])
         return averaging_model
 
     def _build_averaging_transformer(self) -> Transformer:

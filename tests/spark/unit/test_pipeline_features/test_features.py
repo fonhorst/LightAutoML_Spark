@@ -253,7 +253,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
                                                            spark_based_test_metric)) < max_diff_in_percents
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset_05x")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures,
                               ml_alg_kwargs, 'linear_features')

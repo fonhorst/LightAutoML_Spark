@@ -3,8 +3,9 @@ import random
 
 from tests.spark.unit.dataset_utils import datasets
 
+dss = [('tiny_used_cars_dataset', datasets()['tiny_used_cars_dataset'])]
 # dss = [('used_cars_dataset', datasets()['used_cars_dataset'])]
-dss = datasets().items()
+# dss = datasets().items()
 
 for name, ds in dss:
     print(f"Name: {name}")

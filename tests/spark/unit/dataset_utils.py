@@ -91,6 +91,31 @@ def datasets() -> Dict[str, Any]:
             }
         },
 
+        "tiny_used_cars_dataset": {
+            "path": "/opt/spark_data/tiny_used_cars_data_cleaned.csv",
+            "train_path": "/opt/spark_data/tiny_used_cars_data_cleaned_train.csv",
+            "test_path": "/opt/spark_data/tiny_used_cars_data_cleaned_test.csv",
+            "task_type": "reg",
+            "metric_name": "mse",
+            "target_col": "price",
+            "roles": {
+                "target": "price",
+                "drop": ["dealer_zip", "description", "listed_date",
+                         "year", 'Unnamed: 0', '_c0',
+                         'sp_id', 'sp_name', 'trimId',
+                         'trim_name', 'major_options', 'main_picture_url',
+                         'interior_color', 'exterior_color'],
+                # "numeric": ['latitude', 'longitude', 'mileage']
+                "numeric": ['longitude', 'mileage']
+            },
+            "dtype": {
+                'fleet': 'str', 'frame_damaged': 'str',
+                'has_accidents': 'str', 'isCab': 'str',
+                'is_cpo': 'str', 'is_new': 'str',
+                'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+            }
+        },
+
         "used_cars_dataset_head50k": {
             "path": "/opt/spark_data/head50k_0125x_cleaned.csv",
             "train_path": "/opt/spark_data/head50k_0125x_cleaned_train.csv",
