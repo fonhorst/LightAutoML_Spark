@@ -354,7 +354,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         avr = self._build_averaging_transformer()
         models = [el for m in self.models for el in [m, DropColumnsTransformer(
             remove_cols=[],
-            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name, self._raw_prediction_col_name]
         )]]
         averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
         return averaging_model

@@ -32,6 +32,7 @@ def spark() -> SparkSession:
         .builder
         .appName("LAMA-test-app")
         .master("local[4]")
+        .config("spark.driver.memory", "8g")
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
             # .config("spark.sql.autoBroadcastJoinThreshold", "-1")
