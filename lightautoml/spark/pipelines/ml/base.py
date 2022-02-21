@@ -10,9 +10,10 @@ from pyspark.ml import Transformer, PipelineModel
 from lightautoml.validation.base import TrainValidIterator
 from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
 from ..features.base import SparkFeaturesPipeline, SelectTransformer
+from ...dataset.roles import NumericVectorOrArrayRole
 from ...transformers.base import ColumnsSelectorTransformer
-from ...utils import Cacher
-from ...dataset.base import LAMLDataset, SparkDataset
+from ...utils import Cacher, NoOpTransformer
+from ...dataset.base import LAMLDataset, SparkDataset, SparkDataFrame
 from ...ml_algo.base import SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
 from ....dataset.base import RolesDict
