@@ -12,8 +12,7 @@ from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
-from lightautoml.spark.pipelines.features.base import SelectTransformer
-from lightautoml.spark.transformers.base import ColumnsSelectorTransformer, DropColumnsTransformer
+from lightautoml.spark.transformers.base import DropColumnsTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.validation.base import TrainValidIterator
@@ -46,6 +45,23 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         # "baggingSeed": 42
     }
 
+    # mapping between metric name defined via SparkTask
+    # and metric names supported by LightGBM
+    _metric2lgbm = {
+        "binary": {
+            "auc": "auc",
+            "aupr": "areaUnderPR"
+        },
+        "reg": {
+            "r2": "rmse",
+            "mse": "mse",
+            "mae": "mae",
+        },
+        "multiclass": {
+            "crossentropy": "cross_entropy"
+        }
+    }
+
     def __init__(self,
                  default_params: Optional[dict] = None,
                  freeze_defaults: bool = True,
@@ -54,10 +70,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
+        self._raw_prediction_col_name = "raw_prediction"
         self._assembler = None
         self._drop_cols_transformer = None
 
-    def _infer_params(self) -> Tuple[dict, int, Optional[Callable], Optional[Callable]]:
+    def _infer_params(self) -> Tuple[dict, int]:
         """Infer all parameters in lightgbm format.
 
         Returns:
@@ -76,33 +93,19 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         verbose_eval = 1
 
-        # TODO: SPARK-LAMA fix metrics and objectives
-        # TODO: SPARK-LAMA add multiclass processing
         if task == "reg":
             params["objective"] = "regression"
-            params["metric"] = "mse"
+            params["metric"] = self._metric2lgbm[task].get(self.task.metric_name, None)
         elif task == "binary":
             params["objective"] = "binary"
-            params["metric"] = "auc"
+            params["metric"] = self._metric2lgbm[task].get(self.task.metric_name, None)
         elif task == "multiclass":
             params["objective"] = "multiclass"
-            params["metric"] = "multi_logloss"
+            params["metric"] = "multiclass"
         else:
             raise ValueError(f"Unsupported task type: {task}")
 
-        # get objective params
-        # TODO SPARK-LAMA: Only for smoke test
-        loss = None  # self.task.losses["lgb"]
-        # params["objective"] = None  # loss.fobj_name
-        fobj = None  # loss.fobj
 
-        # get metric params
-        # params["metric"] = None  # loss.metric_name
-        feval = None  # loss.feval
-
-        # params["num_class"] = None  # self.n_classes
-        # add loss and tasks params if defined
-        # params = {**params, **loss.fobj_params, **loss.metric_params}
 
         if task != "reg":
             if "alpha" in params:
@@ -114,7 +117,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         params = {**params}
 
-        return params, verbose_eval, fobj, feval
+        return params, verbose_eval
 
     def init_params_on_input(self, train_valid_iterator: TrainValidIterator) -> dict:
         # TODO: SPARK-LAMA doing it to make _get_default_search_spaces working
@@ -161,11 +164,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             init_lr = 0.05
             ntrees = 2000
             es = 100
-
-            # # # TODO: SPARK-LAMA temporary changes for debug
-            # init_lr = 0.05
-            # ntrees = 300
-            # es = 1000
 
         if rows_num > 300000:
             suggested_params["numLeaves"] = 128 if task == "reg" else 244
@@ -286,14 +284,12 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         (
             params,
             verbose_eval,
-            fobj,
-            feval,
         ) = self._infer_params()
 
         logger.info(f"Input cols for the vector assembler: {full.features}")
         logger.info(f"Running lgb with the following params: {params}")
 
-        # TODO: reconsider using of 'keep' as a handleInvalid value
+        # TODO: SPARK-LAMA reconsider using of 'keep' as a handleInvalid value
         if self._assembler is None:
             self._assembler = VectorAssembler(
                 inputCols=self.input_features,
@@ -303,9 +299,13 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         LGBMBooster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
 
-        if full.task.name in ['binary', 'multiclass']:
+        if full.task.name == 'binary':
             params['rawPredictionCol'] = fold_prediction_column
             params['probabilityCol'] = self._probability_col_name
+            params['predictionCol'] = self._prediction_col_name
+        elif full.task.name == 'multiclass':
+            params['rawPredictionCol'] = self._raw_prediction_col_name
+            params['probabilityCol'] = fold_prediction_column
             params['predictionCol'] = self._prediction_col_name
         else:
             params['predictionCol'] = fold_prediction_column
@@ -316,8 +316,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             labelCol=full.target_column,
             validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
-            # useSingleDatasetMode=True,
-            # numThreads=31,
             numThreads=1,
             isProvideTrainingMetric=True
         )

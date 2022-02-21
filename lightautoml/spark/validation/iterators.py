@@ -37,7 +37,13 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
 
         self._curr_idx += 1
 
-        return self.train, self.train, self.train
+        sdf = cast(SparkDataFrame, self.train.data)
+        sdf = sdf.withColumn(self.TRAIN_VAL_COLUMN, F.lit(0))
+
+        train_ds = cast(SparkDataset, self.train.empty())
+        train_ds.set_data(sdf, self.train.features, self.train.roles)
+
+        return train_ds, train_ds, train_ds
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
         assert len(val_preds) == 1
