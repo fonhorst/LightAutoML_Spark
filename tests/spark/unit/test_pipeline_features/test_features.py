@@ -271,7 +271,7 @@ def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: 
                               dict(), 'lgbsimple_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='multiclass')])
 def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS,
                                          ml_alg_kwargs, 'linear_features')
@@ -289,7 +289,7 @@ def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any],
                                          dict(), 'lgbsimple_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="one_reg+one_binary")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="multiclass")])
 def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkLinearLBFGS, 'linear_features',
                                ml_alg_kwargs)
