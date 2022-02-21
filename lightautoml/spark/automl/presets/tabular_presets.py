@@ -3,7 +3,10 @@ import os
 from copy import deepcopy, copy
 from typing import Optional, Sequence, Iterable, Union, Tuple
 
+from pyspark.ml import Transformer
 from pyspark.sql import SparkSession
+from pyspark.sql import functions as F, types as SparkTypes
+from tqdm import tqdm
 
 from lightautoml.automl.presets.base import upd_params
 from lightautoml.dataset.base import RolesDict
@@ -43,6 +46,15 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         "cb": 2,
         "cb_tuned": 6,
     }
+
+    @property
+    def transformer(self) -> Transformer:
+        """Returns Spark MLlib Transformer.
+        Represents a Transformer with fitted models."""
+
+        assert self._transformer is not None, "Pipeline is not fitted!"
+
+        return self._transformer
 
     def __init__(
             self,
@@ -511,70 +523,116 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
         raise ValueError("Input data format is not supported")
 
+    def _get_histogram(data: SparkDataFrame, column: str, n_bins: int) -> Tuple[]:
+        assert n_bins > 0, "n_bins must be greater than 0"
+        bin_edges, counts = data.select(column).rdd.histogram(n_bins)
+        return counts, bin_edges
+
     def get_individual_pdp(
             self,
-            test_data: ReadableToDf,
+            test_data: SparkDataFrame,
             feature_name: str,
             n_bins: Optional[int] = 30,
             top_n_categories: Optional[int] = 10,
             datetime_level: Optional[str] = "year",
     ):
         # TODO: SPARK-LAMA implement it later
-        raise NotImplementedError("Not supported yet")
-        # assert feature_name in self.reader._roles
-        # assert datetime_level in ["year", "month", "dayofweek"]
+        assert feature_name in self.reader._roles
+        assert datetime_level in ["year", "month", "dayofweek"]
         # test_i = test_data.copy()
-        # # Numerical features
-        # if self.reader._roles[feature_name].name == "Numeric":
-        #     counts, bin_edges = np.histogram(test_data[feature_name].dropna(), bins=n_bins)
-        #     grid = (bin_edges[:-1] + bin_edges[1:]) / 2
-        #     ys = []
-        #     for i in tqdm(grid):
-        #         test_i[feature_name] = i
-        #         preds = self.predict(test_i).data
-        #         ys.append(preds)
-        # # Categorical features
-        # if self.reader._roles[feature_name].name == "Category":
-        #     feature_cnt = test_data[feature_name].value_counts()
-        #     grid = list(feature_cnt.index.values[:top_n_categories])
-        #     counts = list(feature_cnt.values[:top_n_categories])
-        #     ys = []
-        #     for i in tqdm(grid):
-        #         test_i[feature_name] = i
-        #         preds = self.predict(test_i).data
-        #         ys.append(preds)
-        #     if len(feature_cnt) > top_n_categories:
-        #         freq_mapping = {feature_cnt.index[i]: i for i, _ in enumerate(feature_cnt)}
-        #         # add "OTHER" class
-        #         test_i = test_data.copy()
-        #         # sample from other classes with the same distribution
-        #         test_i[feature_name] = (
-        #             test_i[feature_name][np.array([freq_mapping[k] for k in test_i[feature_name]]) > top_n_categories]
-        #                 .sample(n=test_data.shape[0], replace=True)
-        #                 .values
-        #         )
-        #         preds = self.predict(test_i).data
-        #         grid.append("<OTHER>")
-        #         ys.append(preds)
-        #         counts.append(feature_cnt.values[top_n_categories:].sum())
-        # # Datetime Features
-        # if self.reader._roles[feature_name].name == "Datetime":
-        #     test_data_read = self.reader.read(test_data)
-        #     feature_datetime = pd.arrays.DatetimeArray(test_data_read._data[feature_name])
-        #     if datetime_level == "year":
-        #         grid = np.unique([i.year for i in feature_datetime])
-        #     elif datetime_level == "month":
-        #         grid = np.arange(1, 13)
-        #     else:
-        #         grid = np.arange(7)
-        #     ys = []
-        #     for i in tqdm(grid):
-        #         test_i[feature_name] = change_datetime(feature_datetime, datetime_level, i)
-        #         preds = self.predict(test_i).data
-        #         ys.append(preds)
-        #     counts = Counter([getattr(i, datetime_level) for i in feature_datetime])
-        #     counts = [counts[i] for i in grid]
-        # return grid, ys, counts
+        # Numerical features
+        if self.reader._roles[feature_name].name == "Numeric":
+
+            # counts, bin_edges = np.histogram(test_data[feature_name].dropna(), bins=n_bins)
+            counts, bin_edges = self._get_histogram(test_data, feature_name, n_bins)_
+            grid = (bin_edges[:-1] + bin_edges[1:]) / 2
+            ys = []
+            for i in tqdm(grid):
+                # test_i[feature_name] = i
+                
+                # replace feature column values with constant
+                sdf = test_data.select(*[c for c in test_data.columns if c != feature_name], F.lit(i).alias(feature_name))
+
+                # preds = self.predict(test_ i).data
+                # infer via transformer
+                preds = self.transformer.transform(sdf)
+                ys.append(preds)
+        # Categorical features
+        if self.reader._roles[feature_name].name == "Category":
+            feature_cnt = test_data.groupBy(feature_name).count.orderBy(F.desc("count")).collect() #limit(top_n_categories).
+            # test_data.select(feature_name).groupBy(F.col(feature_name)).agg(F.count(F.col(feature_name)).alias('cnt')).filter(F.col("cnt") > 10)
+            # feature_cnt = test_data[feature_name].value_counts()
+            # grid = list(feature_cnt.index.values[:top_n_categories])
+            # counts = list(feature_cnt.values[:top_n_categories])
+            grid = [row[feature_name] for row in feature_cnt[:top_n_categories]]
+            counts = [row["count"] for row in feature_cnt[:top_n_categories]]
+            ys = []
+            for i in tqdm(grid):
+                # test_i[feature_name] = i
+                sdf = test_data.select(*[c for c in test_data.columns if c != feature_name], F.lit(i).alias(feature_name))
+                # preds = self.predict(test_i).data
+                preds = self.transformer.transform(sdf)
+                ys.append(preds)
+            if len(feature_cnt) > top_n_categories:
+                # freq_mapping = {feature_cnt.index[i]: i for i, _ in enumerate(feature_cnt)}
+                # add "OTHER" class
+                # test_i = test_data.copy()
+                # sample from other classes with the same distribution
+                # test_i[feature_name] = (
+                #     test_i[feature_name][np.array([freq_mapping[k] for k in test_i[feature_name]]) > top_n_categories]
+                #         .sample(n=test_data.shape[0], replace=True)
+                #         .values
+                # )
+                # unique other categories
+                other_categories_list = [row[feature_name] for row in feature_cnt[top_n_categories:]]
+                # get dataframe with other categories with saved distributions
+                other_categories_collection = test_data.select(F.row_number().alias("row_num"), feature_name) \
+                                                .filter(F.col(feature_name).isin(*other_categories_list)) \
+                                                .collect()
+                # dict with key=%row number% and value=%category%
+                other_categories_dict = {x["row_num"]: x[feature_name] for x in other_categories_collection}
+                max_row_num = len(other_categories_collection)
+
+                def get_category_by_row_num(row_num):
+                    if remainder := row_num % max_row_num == 0:
+                        key = row_num
+                    else:
+                        key = remainder
+                    return other_categories_dict[key]
+                get_category_udf = F.udf(get_category_by_row_num, SparkTypes.StringType())
+
+                # add row number to main dataframe and exclude feature_name column
+                test_data = test_data.select(F.row_number().alias("row_num"), *[f for f in test_data.columns if f != feature_name])
+
+                # exclude row number from dataframe and add back feature_name column filled with other categories same distribution
+                all_columns_without_row_num = [f for f in test_data.columns if f != "row_num"]
+                feature_col = get_category_udf(F.col("row_num")).alias(feature_name)
+                sdf = test_data.select(*all_columns_without_row_num, feature_col)
+
+                # preds = self.predict(test_i).data
+                preds = self.transformer.transform(sdf)
+                grid.append("<OTHER>")
+                ys.append(preds)
+                # counts.append(feature_cnt.values[top_n_categories:].sum())
+                counts.append(sum([row["count"] for row in feature_cnt[top_n_categories:]]))
+        # Datetime Features
+        if self.reader._roles[feature_name].name == "Datetime":
+            test_data_read = self.reader.read(test_data)
+            feature_datetime = pd.arrays.DatetimeArray(test_data_read._data[feature_name])
+            if datetime_level == "year":
+                grid = np.unique([i.year for i in feature_datetime])
+            elif datetime_level == "month":
+                grid = np.arange(1, 13)
+            else:
+                grid = np.arange(7)
+            ys = []
+            for i in tqdm(grid):
+                test_i[feature_name] = change_datetime(feature_datetime, datetime_level, i)
+                preds = self.predict(test_i).data
+                ys.append(preds)
+            counts = Counter([getattr(i, datetime_level) for i in feature_datetime])
+            counts = [counts[i] for i in grid]
+        return grid, ys, counts
 
     def plot_pdp(
             self,
