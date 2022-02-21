@@ -214,8 +214,12 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         pass
 
     def predict(self, dataset: SparkDataset) -> SparkDataset:
-        raise NotImplementedError("Not supported for Spark. Use transformer property instead ")
-        pass
+        sdf = self.transformer.transform(dataset.data)
+
+        ds = dataset.empty()
+        ds.set_data(sdf, [self.prediction_feature], self.prediction_role)
+
+        return ds
 
     @staticmethod
     def _get_predict_column(model: SparkMLModel) -> str:

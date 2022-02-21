@@ -15,10 +15,12 @@ from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.features.lgb_pipeline import LGBAdvancedPipeline, LGBSimpleFeatures
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.reader.base import PandasToPandasReader
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
+from lightautoml.spark.validation.iterators import SparkFoldsIterator
 from lightautoml.tasks import Task
 from lightautoml.validation.np_iterators import FoldsIterator
 from .. import DatasetForTest, spark as spark_sess
@@ -205,17 +207,18 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     lama_on_spark_oof_metric = score(oof_pred)
     lama_on_spark_test_metric = score(test_pred)
 
-    train_valid = FoldsIterator(dumped_train_ds)
+    train_valid = SparkFoldsIterator(dumped_train_ds)
     ml_algo = ml_algo_spark_clazz()
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
+    ml_algo = cast(SparkTabularMLAlgo, ml_algo)
     assert ml_algo is not None
     test_pred = ml_algo.predict(dumped_test_ds)
     score = train_valid.train.task.get_dataset_metric()
-    spark_based_oof_metric = score(oof_pred)
-    spark_based_test_metric = score(test_pred)
+    spark_based_oof_metric = score(oof_pred[:, ml_algo.prediction_feature])
+    spark_based_test_metric = score(test_pred[:, ml_algo.prediction_feature])
 
     print(f"LAMA-on-Spark oof: {lama_on_spark_oof_metric}. Spark oof: {spark_based_oof_metric}")
-    print(f"LAMA-on-Spark test: {lama_on_spark_test_metric}. LAMA-on-Spark test: {spark_based_test_metric}")
+    print(f"LAMA-on-Spark test: {lama_on_spark_test_metric}. Spark test: {spark_based_test_metric}")
 
     max_diff_in_percents = 0.05
 
@@ -239,7 +242,7 @@ def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
                               ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset_0125x")])
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures,
                               dict(), 'lgbsimple_features')
@@ -268,6 +271,6 @@ def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any],
     compare_mlalgos_by_quality(spark, cv, config, LinearLBFGS, SparkLinearLBFGS, 'linear_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="reg+binary")])
-def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset")])
+def test_quality_mlalgo_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, BoostLGBM, SparkBoostLGBM, 'lgbadv_features')
