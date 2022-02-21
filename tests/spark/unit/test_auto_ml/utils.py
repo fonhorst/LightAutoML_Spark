@@ -1,8 +1,9 @@
-from typing import List, cast, Optional
+from typing import List, cast, Optional, Any
 
 from pyspark.ml import Transformer
 
 from lightautoml.automl.blend import WeightedBlender
+from lightautoml.reader.base import UserDefinedRolesDict
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from lightautoml.spark.automl.blend import SparkWeightedBlender
 from lightautoml.spark.automl.presets.base import SparkAutoMLPreset
@@ -10,6 +11,7 @@ from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
+from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 
@@ -25,6 +27,18 @@ class FakeOpTransformer(Transformer):
 
     def _transform(self, dataset):
         return dataset.select('*', [F.array(*[F.rand() for i in range(self._n_classes)]).alias(f) for f in self._cos_to_generate])
+
+
+class DummyReader(SparkToSparkReader):
+    def __init__(self, task: SparkTask):
+        super().__init__(task)
+
+    def fit_read(self, train_data: SparkDataFrame, features_names: Any = None, roles: UserDefinedRolesDict = None,
+                 **kwargs: Any) -> SparkDataset:
+        return super().fit_read(train_data, features_names, roles, **kwargs)
+
+    def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
+        return super().read(data, features_names, add_array_attrs)
 
 
 class DummySparkMLPipeline(SparkMLPipeline):
@@ -67,6 +81,8 @@ class DummyTabularAutoML(SparkAutoMLPreset):
 
     def create_automl(self, **fit_args):
         # initialize
+        reader = DummyReader(self.task)
+
         cacher_key = "main_cache"
         first_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_0_Pipe_{i}") for i in range(3)]
         second_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_1_Pipe_{i}") for i in range(2)]
