@@ -75,6 +75,7 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
 
     # Process spark-based features with LAMA
     pds = dumped_train_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_train_ds.to_pandas().to_numpy()
+
     train_valid = FoldsIterator(pds)
     ml_algo = ml_algo_lama_clazz()
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
@@ -86,8 +87,9 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
 
     # compare with native features of LAMA
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
-    pdf = pd.read_csv(config['path'], **read_csv_args)
-    train_pdf, test_pdf = train_test_split(pdf, test_size=0.2, random_state=42)
+    train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
+    test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
+    # train_pdf, test_pdf = train_test_split(pdf, test_size=0.2, random_state=100)
     reader = PandasToPandasReader(task=Task(train_valid.train.task.name), cv=cv, advanced_roles=False)
     train_ds = reader.fit_read(train_pdf, roles=config['roles'])
     test_ds = reader.read(test_pdf, add_array_attrs=True)
@@ -110,24 +112,24 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
 
     max_diff_in_percents = 0.05
 
-    assert spark_based_oof_metric > lama_oof_metric or (lama_oof_metric - spark_based_oof_metric) / max(lama_oof_metric, spark_based_oof_metric) < max_diff_in_percents
-    assert spark_based_oof_metric > lama_oof_metric or (lama_oof_metric - spark_based_oof_metric) / min(lama_oof_metric, spark_based_oof_metric) < max_diff_in_percents
+    # assert spark_based_oof_metric > lama_oof_metric or abs((lama_oof_metric - spark_based_oof_metric) / max(lama_oof_metric, spark_based_oof_metric)) < max_diff_in_percents
+    # assert spark_based_oof_metric > lama_oof_metric or abs((lama_oof_metric - spark_based_oof_metric) / min(lama_oof_metric, spark_based_oof_metric)) < max_diff_in_percents
 
-    assert spark_based_test_metric > lama_test_metric or (lama_test_metric - spark_based_test_metric) / max(lama_test_metric, spark_based_test_metric) < max_diff_in_percents
-    assert spark_based_test_metric > lama_test_metric or (lama_test_metric - spark_based_test_metric) / min(lama_test_metric, spark_based_test_metric) < max_diff_in_percents
+    assert spark_based_test_metric > lama_test_metric or abs((lama_test_metric - spark_based_test_metric) / max(lama_test_metric, spark_based_test_metric)) < max_diff_in_percents
+    assert spark_based_test_metric > lama_test_metric or abs((lama_test_metric - spark_based_test_metric) / min(lama_test_metric, spark_based_test_metric)) < max_diff_in_percents
 
 
 def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str, Any],
                               lama_clazz, slama_clazz, ml_alg_kwargs: Dict[str, Any], pipeline_name: str):
     checkpoint_fp_dir = '/opt/test_checkpoints/feature_pipelines'
-    spark_dss = prepared_datasets(spark, cv, [ds_config], checkpoint_dir='/opt/test_checkpoints/')
+    spark_dss = prepared_datasets(spark, cv, [ds_config], checkpoint_dir='/opt/test_checkpoints/reader_datasets')
     spark_train_ds, spark_test_ds = spark_dss[0]
 
     ds_name = os.path.basename(os.path.splitext(ds_config['path'])[0])
 
     # LAMA pipeline
     read_csv_args = {'dtype':  ds_config['dtype']} if 'dtype' in ds_config else dict()
-    pdf = pd.read_csv(ds_config['path'], **read_csv_args)
+    pdf = pd.read_csv(ds_config['train_path'], **read_csv_args)
     reader = PandasToPandasReader(task=Task(spark_train_ds.task.name), cv=cv, advanced_roles=False)
     ds = reader.fit_read(pdf, roles=ds_config['roles'])
 
@@ -199,7 +201,7 @@ def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv
                                          ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="buzz_dataset")])
 def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
                                          dict(), 'lgbsimple_features')
