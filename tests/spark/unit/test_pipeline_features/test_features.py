@@ -15,6 +15,8 @@ from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.features.lgb_pipeline import LGBAdvancedPipeline, LGBSimpleFeatures
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.reader.base import PandasToPandasReader
+from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
+from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.tasks import Task
@@ -170,13 +172,68 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     dump_data(chkp_test_path, slama_test_feats[:, slama_pipeline.output_features], cv=cv)
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
+def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, Any],
+                                         ml_algo_lama_clazz, ml_algo_spark_clazz, pipeline_name: str):
+    checkpoint_dir = '/opt/test_checkpoints/feature_pipelines'
+    path = config['path']
+    ds_name = os.path.basename(os.path.splitext(path)[0])
+
+    dump_train_path = os.path.join(checkpoint_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_train.dump") \
+        if checkpoint_dir is not None else None
+    dump_test_path = os.path.join(checkpoint_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_test.dump") \
+        if checkpoint_dir is not None else None
+
+    train_res = load_dump_if_exist(spark, dump_train_path)
+    test_res = load_dump_if_exist(spark, dump_test_path)
+    if not train_res or not test_res:
+        raise ValueError("Dataset should be processed with feature pipeline "
+                         "and the corresponding dump should exist. Please, run corresponding non-quality test first.")
+    dumped_train_ds, _ = train_res
+    dumped_test_ds, _ = test_res
+
+    test_ds = dumped_test_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_test_ds.to_pandas().to_numpy()
+
+    # Process spark-based features with LAMA
+    pds = dumped_train_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_train_ds.to_pandas().to_numpy()
+
+    train_valid = FoldsIterator(pds)
+    ml_algo = ml_algo_lama_clazz()
+    ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
+    assert ml_algo is not None
+    test_pred = ml_algo.predict(test_ds)
+    score = train_valid.train.task.get_dataset_metric()
+    lama_on_spark_oof_metric = score(oof_pred)
+    lama_on_spark_test_metric = score(test_pred)
+
+    train_valid = FoldsIterator(dumped_train_ds)
+    ml_algo = ml_algo_spark_clazz()
+    ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
+    assert ml_algo is not None
+    test_pred = ml_algo.predict(dumped_test_ds)
+    score = train_valid.train.task.get_dataset_metric()
+    spark_based_oof_metric = score(oof_pred)
+    spark_based_test_metric = score(test_pred)
+
+    print(f"LAMA-on-Spark oof: {lama_on_spark_oof_metric}. Spark oof: {spark_based_oof_metric}")
+    print(f"LAMA-on-Spark test: {lama_on_spark_test_metric}. LAMA-on-Spark test: {spark_based_test_metric}")
+
+    max_diff_in_percents = 0.05
+
+    assert spark_based_test_metric > lama_on_spark_test_metric or abs(
+        (lama_on_spark_test_metric - spark_based_test_metric) / max(lama_on_spark_test_metric,
+                                                           spark_based_test_metric)) < max_diff_in_percents
+    assert spark_based_test_metric > lama_on_spark_test_metric or abs(
+        (lama_on_spark_test_metric - spark_based_test_metric) / min(lama_on_spark_test_metric,
+                                                           spark_based_test_metric)) < max_diff_in_percents
+
+
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset_05x")])
 def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures,
                               ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset_05x")])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
                               ml_alg_kwargs, 'lgbadv_features')
@@ -204,3 +261,13 @@ def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv
 def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
                                          dict(), 'lgbsimple_features')
+
+
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="reg+binary")])
+def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
+    compare_mlalgos_by_quality(spark, cv, config, LinearLBFGS, SparkLinearLBFGS, 'linear_features')
+
+
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="reg+binary")])
+def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
+    compare_mlalgos_by_quality(spark, cv, config, BoostLGBM, SparkBoostLGBM, 'lgbadv_features')
