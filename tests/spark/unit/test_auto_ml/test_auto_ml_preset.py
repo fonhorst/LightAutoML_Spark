@@ -14,6 +14,9 @@ def test_automl_preset(spark: SparkSession):
     automl = DummyTabularAutoML()
 
     # 1. check for output result, features, roles (required columns in data, including return_all_predictions)
-    # 2. checking for layer-to-layer data transfer (internal in DummyTabularAutoML)
-    # 3. blending works correctly
+    # 2. checking for layer-to-layer data transfer (internal in DummyTabularAutoML):
+    #   - all predictions of the first level are available in all pipes of the second level
+    #   - all inputs data are presented in all pipes of the first level
+    #   - all inputs data are presented in all pipes of the second level (if skip_conn)
+    # 3. blending and return_all_predictions works correctly
     res_ds = automl.fit_predict(train_data, roles={"target": "TARGET"})
