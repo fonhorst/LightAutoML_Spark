@@ -15,6 +15,7 @@ from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.transformers.base import ObsoleteSparkTransformer, SparkBaseEstimator, SparkBaseTransformer, \
     SparkColumnsAndRoles
+from lightautoml.spark.utils import log_exec_time
 from lightautoml.transformers.base import LAMLTransformer
 from lightautoml.transformers.numeric import NumpyTransformable
 
@@ -35,6 +36,7 @@ def spark() -> SparkSession:
         .config("spark.driver.memory", "8g")
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+        .config("spark.sql.shuffle.partitions", 4)
             # .config("spark.sql.autoBroadcastJoinThreshold", "-1")
         .getOrCreate()
     )
@@ -129,8 +131,9 @@ def compare_sparkml_transformers_results(spark: SparkSession,
     # for row in lama_np_ds:
     #     print(row)
 
-    if isinstance(t_spark, SparkBaseEstimator):
-        t_spark = t_spark.fit(sds.data)
+    with log_exec_time("SPARK EXEC"):
+        if isinstance(t_spark, SparkBaseEstimator):
+            t_spark = t_spark.fit(sds.data)
 
     transformed_df = t_spark.transform(sds.data)
     transformed_sds = SparkColumnsAndRoles.make_dataset(t_spark, sds, transformed_df)
@@ -264,8 +267,9 @@ def compare_transformers_results(spark: SparkSession,
     # for row in lama_np_ds:
     #     print(row)
 
-    t_spark.fit(sds)
-    transformed_sds = t_spark.transform(sds)
+    with log_exec_time():
+        t_spark.fit(sds)
+        transformed_sds = t_spark.transform(sds)
 
     spark_np_ds = transformed_sds.to_numpy()
     print(f"\nTransformed SPRK: \n{spark_np_ds}")

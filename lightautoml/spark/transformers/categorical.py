@@ -1,3 +1,4 @@
+import itertools
 import logging
 import pickle
 from collections import defaultdict
@@ -838,6 +839,171 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer):
         logger.info(f"[{type(self)} (TE)] transform is finished")
 
         return output
+
+
+class SparkTargetEncoderEstimator2(SparkBaseEstimator):
+    _fit_checks = (categorical_check, oof_task_check, encoding_check)
+    _transform_checks = ()
+    _fname_prefix = "oof"
+
+    def __init__(self,
+                 input_cols: List[str],
+                 input_roles: Dict[str, ColumnRole],
+                 alphas: Sequence[float] = (0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 250.0, 1000.0),
+                 task_name: Optional[str] = None,
+                 folds_column: Optional[str] = None,
+                 target_column: Optional[str] = None,
+                 do_replace_columns: bool = False
+                ):
+        super().__init__(input_cols, input_roles, do_replace_columns,
+                         NumericRole(np.float32, prob=task_name == "binary"))
+        self.alphas = alphas
+        self._task_name = task_name
+        self._folds_column = folds_column
+        self._target_column = target_column
+
+    @staticmethod
+    def score_func_binary(target, candidate) -> float:
+        return -(
+            target * np.log(candidate) + (1 - target) * np.log(1 - candidate)
+        )
+
+    @staticmethod
+    def score_func_reg(target, candidate) -> float:
+        return (target - candidate) ** 2
+
+    def _fit(self, dataset: SparkDataFrame) -> "SparkTargetEncoderTransformer":
+        logger.info(f"[{type(self)} (TE)] fit_transform is started")
+
+        assert self._target_column in dataset.columns, "Target should be presented in the dataframe"
+        assert self._folds_column in dataset.columns, "Folds should be presented in the dataframe"
+
+        self.encodings = []
+
+        sdf = dataset
+        sc = sdf.sql_ctx.sparkSession.sparkContext
+
+        _fc = F.col(self._folds_column)
+        _tc = F.col(self._target_column)
+
+        n_folds, prior, total_target_sum, total_count = sdf.select(
+            F.max(_fc) + 1,
+            F.mean(_tc.cast("double")),
+            F.sum(_tc).cast("double"),
+            F.count(_tc)
+        ).first()
+
+        folds_prior_pdf = sdf.groupBy(_fc).agg(
+            ((total_target_sum - F.sum(_tc)) / (total_count - F.count(_tc))).alias("_folds_prior")
+        ).collect()
+
+        def binary_score(col_name: str):
+            return F.mean(-(_tc * F.log(col_name) + (1 - _tc) * F.log(1 - F.col(col_name)))).alias(col_name)
+
+        def reg_score(col_name: str):
+            return F.mean(F.pow((_tc - F.col(col_name)), F.lit(2))).alias(col_name)
+
+        for feature in self.getInputCols():
+            _cur_col = F.col(feature)
+            windowSpec = Window.partitionBy(_cur_col)
+            f_df = sdf.groupBy(_cur_col, _fc).agg(F.sum(_tc).alias("f_sum"), F.count(_tc).alias("f_count")).cache()
+
+            oof_df = (
+                f_df
+                    .select(
+                    _cur_col,
+                    _fc,
+                    (F.sum('f_sum').over(windowSpec) - F.col("f_sum")).alias("oof_sum"),
+                    (F.sum('f_count').over(windowSpec) - F.col("f_count")).alias("oof_count")
+                )
+            )
+
+            mapping = {row["folds"]: row["_folds_prior"] for row in folds_prior_pdf}
+            folds_prior_exp = F.create_map([F.lit(x) for x in itertools.chain(*mapping.items())])
+
+            candidates_cols = [
+                ((F.col('oof_sum') + F.lit(alpha) * folds_prior_exp[_fc]) / (F.col('oof_count') + F.lit(alpha))).cast(
+                    "double").alias(f"candidate_{i}")
+                for i, alpha in enumerate(self.alphas)
+            ]
+
+            candidates_df = oof_df.select(_cur_col, _fc, *candidates_cols)
+
+            score_func = binary_score if self._task_name == "binary" else reg_score
+
+            scores = (
+                sdf
+                    .join(candidates_df, on=[feature, self._folds_column])
+                    .select(*[score_func(f"candidate_{i}") for i, alpha in enumerate(self.alphas)])
+                    .first()
+                    .asDict()
+            )
+
+            seq_scores = [scores[f"candidate_{i}"] for i, alpha in enumerate(self.alphas)]
+            best_alpha = self.alphas[np.argmin(seq_scores)]
+
+            encoding = f_df.groupby(_cur_col).agg(
+                ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding")).collect()
+            f_df.unpersist()
+
+            encoding = {row[feature]: row['encoding'] for row in encoding}
+
+            self.encodings.append(encoding)
+
+            logger.debug(f"[{type(self)} (TE)] Encodings have been calculated")
+
+        logger.info(f"[{type(self)} (TE)] fit_transform is finished")
+
+        return SparkTargetEncoderTransformer(
+            encodings=self.encodings,
+            input_cols=self.getInputCols(),
+            input_roles=self.getInputRoles(),
+            output_cols=self.getOutputCols(),
+            output_roles=self.getOutputRoles(),
+            do_replace_columns=self.getDoReplaceColumns()
+        )
+
+
+# class SparkTargetEncoderTransformer2(SparkBaseTransformer):
+#     _fit_checks = (categorical_check, oof_task_check, encoding_check)
+#     _transform_checks = ()
+#     _fname_prefix = "oof"
+#
+#     def __init__(self,
+#                  encodings: List[Dict[str, Any]],
+#                  input_cols: List[str],
+#                  output_cols: List[str],
+#                  input_roles: RolesDict,
+#                  output_roles: RolesDict,
+#                  do_replace_columns: bool = False):
+#         super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
+#         self._encodings = encodings
+#
+#     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+#
+#         cols_to_select = []
+#         logger.info(f"[{type(self)} (TE)] transform is started")
+#
+#         sc = dataset.sql_ctx.sparkSession.sparkContext
+#
+#         # TODO SPARK-LAMA: Нужно что-то придумать, чтобы ориентироваться по именам колонок, а не их индексу
+#         # Просто взять и забираться из dataset.features е вариант, т.к. в transform может прийти другой датасет
+#         # В оригинальной ламе об этом не парились, т.к. сразу переходили в numpy. Если прислали датасет не с тем
+#         # порядком строк - ну штоош, это проблемы того, кто датасет этот сюда вкинул. Стоит ли нам тоже придерживаться
+#         # этой логики?
+#         for i, (col_name, out_name) in enumerate(zip(self.getInputCols(), self.getOutputCols())):
+#             _cur_col = F.col(col_name)
+#             logger.debug(f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._encodings[i])}")
+#
+#             values = sc.broadcast(self._encodings[i])
+#
+#             cols_to_select.append(pandas_dict_udf(values)(_cur_col).alias(out_name))
+#
+#         output = self._make_output_df(dataset, cols_to_select)
+#
+#         logger.info(f"[{type(self)} (TE)] transform is finished")
+#
+#         return output
 
 
 class MultiClassTargetEncoder(ObsoleteSparkTransformer):

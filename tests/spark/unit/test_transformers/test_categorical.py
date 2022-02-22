@@ -10,7 +10,8 @@ from lightautoml.dataset.roles import CategoryRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
-    SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator
+    SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator, \
+    SparkTargetEncoderEstimator2
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     TargetEncoder
@@ -109,7 +110,7 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     train_ds = le.fit_transform(train_ds)
     train_ds = train_ds.to_pandas()
 
-    transformer = SparkTargetEncoderEstimator(
+    transformer = SparkTargetEncoderEstimator2(
         input_cols=train_ds.features,
         input_roles=train_ds.roles,
         task_name=train_ds.task.name,
@@ -117,15 +118,18 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
         folds_column='folds'
     )
 
-    compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer)
+    compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer, compare_feature_distributions=True)
 
 
+# @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset_0125x")])
+# @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset_head50k")])
+# @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset")])
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any], cv: int):
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
     pdf = pd.read_csv(config['path'], **read_csv_args)
 
-    reader = PandasToPandasReader(task=Task("binary"), cv=CV, advanced_roles=False)
+    reader = PandasToPandasReader(task=Task(config["task_type"]), cv=CV, advanced_roles=False)
     train_ds = reader.fit_read(pdf, roles=config['roles'])
 
     le_cols = get_columns_by_role(train_ds, "Category")
@@ -135,7 +139,7 @@ def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any
     train_ds = le.fit_transform(train_ds)
     train_ds = train_ds.to_pandas()
 
-    transformer = SparkTargetEncoderEstimator(
+    transformer = SparkTargetEncoderEstimator2(
         input_cols=train_ds.features,
         input_roles=train_ds.roles,
         task_name=train_ds.task.name,

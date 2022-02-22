@@ -100,7 +100,7 @@ def log_exec_time(name: Optional[str] = None):
     duration = (end - start).total_seconds()
 
     msg = f"Exec time of {name}: {duration}" if name else f"Exec time: {duration}"
-    logger.info(msg)
+    logger.warning(msg)
 
 
 # log_exec_time() class to return elapsed time value
