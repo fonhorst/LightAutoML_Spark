@@ -259,7 +259,7 @@ def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
                               ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset="lama_test_dataset")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset")])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
                               ml_alg_kwargs, 'lgbadv_features')
@@ -277,7 +277,7 @@ def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv
                                          ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='lama_test_dataset')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset')])
 def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM,
                                          ml_alg_kwargs, 'lgbadv_features')
@@ -295,7 +295,7 @@ def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any],
                                ml_alg_kwargs)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_0125x')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset')])
 def test_quality_mlalgo_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM, SparkBoostLGBM, 'lgbadv_features',
                                ml_alg_kwargs)

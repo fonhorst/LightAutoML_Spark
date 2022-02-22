@@ -1,37 +1,24 @@
 import itertools
 import logging
-import pickle
 from collections import defaultdict
-from copy import deepcopy
-from itertools import chain, combinations
-from typing import Optional, Sequence, List, Tuple, Dict, Union, cast, Iterator, Any
+from itertools import combinations
+from typing import Optional, Sequence, List, Tuple, Dict, Any
 
 import numpy as np
 import pandas as pd
 from pandas import Series
 from pyspark.ml import Transformer
 from pyspark.ml.feature import OneHotEncoder
-from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame, Window, Column, SparkSession
-from pyspark.sql.functions import udf, array, monotonically_increasing_id
-from pyspark.sql.types import FloatType, DoubleType, IntegerType
+from pyspark.ml.param.shared import Param, Params
+from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame, Window, Column
 from sklearn.utils.murmurhash import murmurhash3_32
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
-from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.mlwriters import TmpСommonMLWriter
-from lightautoml.spark.transformers.base import ObsoleteSparkTransformer, SparkBaseEstimator, SparkBaseTransformer
-from lightautoml.spark.utils import get_cached_df_through_rdd, cache
+from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
     multiclass_task_check
-from lightautoml.transformers.base import LAMLTransformer
-
-from pyspark.ml import Transformer, Estimator
-from pyspark.ml.param.shared import HasInputCols, HasOutputCols
-from pyspark.ml.param.shared import TypeConverters, Param, Params
-from pyspark.ml.util import MLReadable, MLWritable, MLWriter
-
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +101,7 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
     def _fit(self, dataset: SparkDataFrame) -> "SparkLabelEncoderTransformer":
         logger.info(f"[{type(self)} (LE)] fit is started")
 
-        roles = self._input_internediate_roles#self.getOrDefault(self.inputRoles)
+        roles = self._input_internediate_roles
 
         df = dataset
 
@@ -614,7 +601,7 @@ class SparkOHEEncoderEstimator(SparkBaseEstimator):
         super().__init__(input_cols,
                          input_roles,
                          do_replace_columns=do_replace_columns,
-                         output_role=None) # TODO: temporary stub, output roles are not calculated at this moment
+                         output_role=None)
 
         self._make_sparse = make_sparse
         self._total_feats_cnt = total_feats_cnt
@@ -790,8 +777,8 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
                 )
             )
 
-            mapping = {row["folds"]: row["_folds_prior"] for row in folds_prior_pdf}
-            folds_prior_exp = F.create_map([F.lit(x) for x in itertools.chain(*mapping.items())])
+            mapping = {row[self._folds_column]: row["_folds_prior"] for row in folds_prior_pdf}
+            folds_prior_exp = F.create_map(*[F.lit(x) for x in itertools.chain(*mapping.items())])
 
             candidates_cols = [
                 ((F.col('oof_sum') + F.lit(alpha) * folds_prior_exp[_fc]) / (F.col('oof_count') + F.lit(alpha))).cast(

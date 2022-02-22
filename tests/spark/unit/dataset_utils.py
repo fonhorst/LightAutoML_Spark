@@ -9,6 +9,8 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask
 
+import pyspark.sql.functions as F
+
 
 DUMP_METADATA_NAME = "metadata.pickle"
 DUMP_DATA_NAME = "data.parquet"
@@ -34,7 +36,12 @@ def dump_data(path: str, ds: SparkDataset, **meta_kwargs):
     with open(metadata_file, 'wb') as f:
         pickle.dump(metadata, f)
 
-    ds.data.write.parquet(data_file)
+    cols_to_rename = [
+        F.col(c).alias(c.replace("(", "[").replace(")", "]"))
+        for c in ds.data.columns
+    ]
+
+    ds.data.select(*cols_to_rename).write.parquet(data_file)
 
 
 def load_dump_if_exist(spark: SparkSession, path: Optional[str] = None) -> Optional[Tuple[SparkDataset, Dict]]:
@@ -50,7 +57,14 @@ def load_dump_if_exist(spark: SparkSession, path: Optional[str] = None) -> Optio
     with open(metadata_file, "rb") as f:
         metadata = pickle.load(f)
 
-    df = spark.read.parquet(data_file).repartition(16).cache()
+    df = spark.read.parquet(data_file)
+
+    cols_to_rename = [
+        F.col(c).alias(c.replace("[", "(").replace("]", ")"))
+        for c in df.columns
+    ]
+
+    df = df.select(*cols_to_rename).repartition(16).cache()
     df.write.mode('overwrite').format('noop').save()
 
     ds = SparkDataset(
