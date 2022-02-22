@@ -120,7 +120,7 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="tiny_used_cars_dataset")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="lama_test_dataset")])
 def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any], cv: int):
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
     pdf = pd.read_csv(config['path'], **read_csv_args)
