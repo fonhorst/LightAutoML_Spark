@@ -425,7 +425,7 @@ class TargetEncoder(LAMLTransformer):
         return idx
 
     def fit(self, dataset: NumpyOrPandas):
-        super().fit_transform(dataset)
+        self.fit_transform(dataset)
 
     def fit_transform(self, dataset: NumpyOrPandas) -> NumpyDataset:
         """Calc oof encoding and save encoding stats for new data.

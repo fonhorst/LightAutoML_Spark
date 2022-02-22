@@ -1,16 +1,20 @@
 import numpy as np
+import pandas as pd
 import pytest
 from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
-    SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator
+    SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator
 from lightautoml.tasks import Task
-from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions
+from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
+    TargetEncoder
 from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata
 
 spark = spark_sess
+
+CV = 5
 
 DATASETS = [
 
@@ -83,6 +87,32 @@ def test_catintersections_encoder(spark: SparkSession, dataset: DatasetForTest):
         input_roles=ds.roles
     )
     compare_sparkml_by_metadata(spark, ds, CatIntersectstions(), transformer)
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
+    # reader = PandasToPandasReader(task=Task("binary"), cv=CV, advanced_roles=False)
+    # train_ds = reader.fit_read(dataset.dataset, roles=dataset.roles)
+
+    target = pd.Series(np.random.choice(a=[0, 1], size=dataset.dataset.shape[0], p=[0.5, 0.5]))
+    folds = pd.Series(np.random.choice(a=[i for i in range(CV)],
+                                       size=dataset.dataset.shape[0], p=[1.0 / CV for i in range(CV)]))
+
+    train_ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"), target=target, folds=folds)
+
+    le = LabelEncoder()
+    train_ds = le.fit_transform(train_ds)
+    train_ds = train_ds.to_pandas()
+
+    transformer = SparkTargetEncoderEstimator(
+        input_cols=train_ds.features,
+        input_roles=train_ds.roles,
+        task_name=train_ds.task.name,
+        target_column='target',
+        folds_column='folds'
+    )
+
+    compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer)
 
 
 # @pytest.mark.parametrize("dataset", DATASETS)

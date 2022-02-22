@@ -33,7 +33,7 @@ def spark() -> SparkSession:
         .appName("LAMA-test-app")
         .master("local[4]")
         .config("spark.driver.memory", "8g")
-        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4")
+        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
             # .config("spark.sql.autoBroadcastJoinThreshold", "-1")
         .getOrCreate()
@@ -354,8 +354,16 @@ def from_pandas_to_spark(p: PandasDataset,
         pdf['target'] = target
         kwargs['target'] = 'target'
 
+    if 'target' in p.__dict__ and p.target is not None:
+        pdf['target'] = p.target
+        kwargs['target'] = 'target'
+
     if folds is not None:
         pdf['folds'] = folds
+        kwargs['folds'] = 'folds'
+
+    if 'folds' in p.__dict__ and p.folds is not None:
+        pdf['folds'] = p.folds
         kwargs['folds'] = 'folds'
 
     obj_columns = list(pdf.select_dtypes(include=['object']))
