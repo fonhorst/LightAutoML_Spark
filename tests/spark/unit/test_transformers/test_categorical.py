@@ -143,7 +143,7 @@ def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any
         folds_column='folds'
     )
 
-    compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer)
+    compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer, compare_feature_distributions=True)
 
 
 # @pytest.mark.parametrize("dataset", DATASETS)

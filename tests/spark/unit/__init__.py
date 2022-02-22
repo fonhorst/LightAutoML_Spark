@@ -62,11 +62,43 @@ def spark_with_deps() -> SparkSession:
     spark.stop()
 
 
+def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
+    stats_names = ['count', 'mean',
+                   'std', 'min',
+                   '25%', '50%',
+                   '75%', 'max']
+
+    lama_df_stats = lama_df.describe()
+    spark_df_stats = spark_df.describe()
+    columns = list(lama_df_stats)
+    for col in columns:
+        if col not in list(spark_df):
+            print(col)
+            spark_df = spark_df.rename(columns={'oof__'+col:col})
+            spark_df_stats = spark_df.describe()
+
+        lama_col_uniques = lama_df[col].unique()
+        spark_col_uniques = spark_df[col].unique()
+        lama_col_uniques_num = len(lama_col_uniques)
+        spark_col_uniques_num = len(spark_col_uniques)
+        # comparing uniques:\n",
+        if abs(lama_col_uniques_num - spark_col_uniques_num) > lama_col_uniques_num * diff_proc:
+            print()
+            print(f'Difference between uniques {lama_col_uniques_num} (lama) and {spark_col_uniques_num} (spark)')
+            print('Lama: ', lama_col_uniques)
+            print('Spark: ', spark_col_uniques)
+            print()
+        for stats_col in stats_names:
+            if abs(lama_df_stats[col][stats_col] - spark_df_stats[col][stats_col]) > lama_df_stats[col][stats_col] * diff_proc:
+                print(f'Difference in col {col} and stats {stats_col} between {lama_df_stats[col][stats_col]} (lama) and {spark_df_stats[col][stats_col]} (spark)')
+
+
 def compare_sparkml_transformers_results(spark: SparkSession,
                                          ds: PandasDataset,
                                          t_lama: LAMLTransformer,
                                          t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
-                                         compare_metadata_only: bool = False) -> Tuple[NumpyDataset, NumpyDataset]:
+                                         compare_feature_distributions: bool = True,
+                                         compare_content: bool = True) -> Tuple[NumpyDataset, NumpyDataset]:
     """
     Args:
         spark: session to be used for calculating the example
@@ -139,7 +171,12 @@ def compare_sparkml_transformers_results(spark: SparkSession,
     # compare roles equality for the columns
     assert lama_np_ds.roles == {f: spark_np_ds.roles[f] for f in lama_np_ds.features}, "Roles are not equal"
 
-    if not compare_metadata_only:
+    if compare_feature_distributions:
+        trans_data: pd.DataFrame = lama_np_ds.to_pandas().data
+        trans_data_result: pd.DataFrame = spark_np_ds.to_pandas().data
+        compare_feature_distrs_in_datasets(trans_data[lama_np_ds.features], trans_data_result[lama_np_ds.features])
+
+    if compare_content:
         # features: List[int] = [i for i, _ in sorted(enumerate(transformed_ds.features), key=lambda x: x[1])]
         feat_map = {f: i for i, f in enumerate(spark_np_ds.features)}
         features: List[int] = [feat_map[f] for f in lama_np_ds.features]
@@ -174,9 +211,10 @@ def compare_sparkml_by_content(spark: SparkSession,
 
 
 def compare_sparkml_by_metadata(spark: SparkSession,
-                       ds: PandasDataset,
-                       t_lama: LAMLTransformer,
-                       t_spark: Union[SparkBaseEstimator, SparkBaseTransformer]) -> Tuple[NumpyDataset, NumpyDataset]:
+                                ds: PandasDataset,
+                                t_lama: LAMLTransformer,
+                                t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
+                                compare_feature_distributions: bool = False) -> Tuple[NumpyDataset, NumpyDataset]:
     """
         Args:
             spark: session to be used for calculating the example
@@ -187,7 +225,9 @@ def compare_sparkml_by_metadata(spark: SparkSession,
         Returns:
             A tuple of (LAMA transformed dataset, Spark transformed dataset)
         """
-    return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark, compare_metadata_only=True)
+    return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark,
+                                                compare_feature_distributions=compare_feature_distributions,
+                                                compare_content=False)
 
 def compare_transformers_results(spark: SparkSession,
                                  ds: PandasDataset,
