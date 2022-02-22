@@ -1,3 +1,5 @@
+from typing import Dict, Any
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,12 +7,15 @@ from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
+from lightautoml.pipelines.utils import get_columns_by_role
+from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
     SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     TargetEncoder
 from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata
+from ..dataset_utils import get_test_datasets
 
 spark = spark_sess
 
@@ -99,6 +104,32 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
                                        size=dataset.dataset.shape[0], p=[1.0 / CV for i in range(CV)]))
 
     train_ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"), target=target, folds=folds)
+
+    le = LabelEncoder()
+    train_ds = le.fit_transform(train_ds)
+    train_ds = train_ds.to_pandas()
+
+    transformer = SparkTargetEncoderEstimator(
+        input_cols=train_ds.features,
+        input_roles=train_ds.roles,
+        task_name=train_ds.task.name,
+        target_column='target',
+        folds_column='folds'
+    )
+
+    compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer)
+
+
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="tiny_used_cars_dataset")])
+def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any], cv: int):
+    read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
+    pdf = pd.read_csv(config['path'], **read_csv_args)
+
+    reader = PandasToPandasReader(task=Task("binary"), cv=CV, advanced_roles=False)
+    train_ds = reader.fit_read(pdf, roles=config['roles'])
+
+    le_cols = get_columns_by_role(train_ds, "Category")
+    train_ds = train_ds[:, le_cols]
 
     le = LabelEncoder()
     train_ds = le.fit_transform(train_ds)
