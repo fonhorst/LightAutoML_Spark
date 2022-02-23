@@ -502,7 +502,7 @@ class SparkTabularDataFeatures:
 
     def get_binned_data(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
-    ) -> Optional[SparkBaseTransformer]:
+    ) -> Optional[SparkBaseEstimator]:
         """Get encoded quantiles of numeric features.
 
         Args:
@@ -639,3 +639,16 @@ class SparkTabularDataFeatures:
         top = list(df.index[:top_n])
 
         return top
+
+
+class SparkEmptyFeaturePipeline(SparkFeaturesPipeline):
+    def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
+        return SparkNoOpTransformer()
+
+
+class SparkNoOpTransformer(SparkBaseTransformer):
+    def __init__(self):
+        super().__init__(input_cols=[], output_cols=[], input_roles=dict(), output_roles=dict())
+
+    def _transform(self, dataset):
+        return dataset

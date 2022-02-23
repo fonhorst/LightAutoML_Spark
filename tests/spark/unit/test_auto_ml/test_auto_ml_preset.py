@@ -7,15 +7,17 @@ spark = spark_sess
 
 
 def test_automl_preset(spark: SparkSession):
+    n_classes = 10
+
     train_data = spark.createDataFrame([
-        {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % 5} for i in range(80)
+        {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % n_classes} for i in range(120)
     ])
 
     test_data = spark.createDataFrame([
-        {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % 5} for i in range(80, 100)
+        {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % n_classes} for i in range(120, 140)
     ])
 
-    automl = DummyTabularAutoML()
+    automl = DummyTabularAutoML(n_classes=n_classes)
 
     # 1. check for output result, features, roles (required columns in data, including return_all_predictions)
     # 2. checking for layer-to-layer data transfer (internal in DummyTabularAutoML):

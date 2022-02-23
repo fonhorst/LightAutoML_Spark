@@ -9,7 +9,7 @@ from pyspark.ml import Transformer, PipelineModel
 
 from lightautoml.validation.base import TrainValidIterator
 from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from ..features.base import SparkFeaturesPipeline, SelectTransformer
+from ..features.base import SparkFeaturesPipeline, SelectTransformer, SparkEmptyFeaturePipeline
 from ...dataset.roles import NumericVectorOrArrayRole
 from ...transformers.base import ColumnsSelectorTransformer
 from ...utils import Cacher, NoOpTransformer
@@ -35,6 +35,9 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         post_selection: Optional[SelectionPipeline] = None,
         name: Optional[str] = None
     ):
+        if features_pipeline is None:
+            features_pipeline = SparkEmptyFeaturePipeline()
+
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
         self._cacher_key = cacher_key

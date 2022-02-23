@@ -1,25 +1,23 @@
 from copy import copy
-from typing import List, cast, Optional, Any
+from typing import List, cast, Optional, Any, Tuple
 
-from pyspark.ml import Transformer
-from pyspark.ml.functions import vector_to_array, array_to_vector
+import numpy as np
+import pyspark.sql.functions as F
+from pyspark.ml import Transformer, PipelineModel
+from pyspark.ml.functions import array_to_vector
 
-from lightautoml.automl.blend import WeightedBlender
 from lightautoml.dataset.roles import NumericRole
 from lightautoml.reader.base import UserDefinedRolesDict
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from lightautoml.spark.automl.blend import SparkWeightedBlender
 from lightautoml.spark.automl.presets.base import SparkAutoMLPreset
-from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
-
-import pyspark.sql.functions as F
-import numpy as np
 
 
 class FakeOpTransformer(Transformer):
@@ -29,7 +27,13 @@ class FakeOpTransformer(Transformer):
         self._n_classes = n_classes
 
     def _transform(self, dataset):
-        return dataset.select('*', [F.array(*[F.rand() for i in range(self._n_classes)]).alias(f) for f in self._cos_to_generate])
+        return dataset.select(
+            '*',
+            *[
+                array_to_vector(F.array(*[F.rand() for i in range(self._n_classes)])).alias(f)
+                for f in self._cos_to_generate
+            ]
+        )
 
 
 class DummyReader(SparkToSparkReader):
@@ -52,6 +56,46 @@ class DummyReader(SparkToSparkReader):
         data = self._create_unique_ids(data, cacher_key='main_cache')
         sds = SparkDataset(data, self._roles, task=self.task, target=self.target_col)
         return sds
+
+
+class DummyMLAlgo(SparkTabularMLAlgo):
+    _name = "dummy"
+
+    def __init__(self, n_classes: int, name: str):
+        self._name = name
+        super().__init__()
+        self.n_classes = n_classes
+
+    def fit_predict_single_fold(self, fold_prediction_column: str, full: SparkDataset, train: SparkDataset,
+                                valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+        prediction = array_to_vector(F.array(*[F.lit(10*10 + j) for j in range(self.n_classes)]))\
+            .alias(fold_prediction_column)
+        pred_df = valid.data.select('*', prediction)
+
+        fake_op = FakeOpTransformer(cols_to_generate=[fold_prediction_column], n_classes=self.n_classes)
+        ml_model = PipelineModel(stages=[fake_op])
+
+        return ml_model, pred_df, fold_prediction_column
+
+    def _build_transformer(self) -> Transformer:
+        avr = self._build_averaging_transformer()
+        fake_ops = [
+            FakeOpTransformer(cols_to_generate=[mcol], n_classes=self.n_classes)
+            for mcol in self._models_prediction_columns
+        ]
+        averaging_model = PipelineModel(stages=fake_ops + [avr])
+        return averaging_model
+
+    def _build_averaging_transformer(self) -> Transformer:
+        avr = AveragingTransformer(
+            self.task.name,
+            input_cols=self._models_prediction_columns,
+            output_col=self.prediction_feature,
+            remove_cols=self._models_prediction_columns,
+            convert_to_array_first=not (self.task.name == "reg"),
+            dim_num=self.n_classes
+        )
+        return avr
 
 
 class DummySparkMLPipeline(SparkMLPipeline):
@@ -99,17 +143,29 @@ class DummySparkMLPipeline(SparkMLPipeline):
 
 
 class DummyTabularAutoML(SparkAutoMLPreset):
-    def __init__(self):
+    def __init__(self, n_classes: int):
         config_path = '/home/nikolay/wspace/LightAutoML/lightautoml/spark/automl/presets/tabular_config.yml'
         super().__init__(SparkTask("multiclass"), config_path=config_path)
+        self._n_classes = n_classes
 
     def create_automl(self, **fit_args):
         # initialize
         reader = DummyReader(self.task)
 
         cacher_key = "main_cache"
-        first_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_0_Pipe_{i}") for i in range(3)]
-        second_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_1_Pipe_{i}") for i in range(2)]
+
+        # first_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_0_Pipe_{i}") for i in range(3)]
+        # second_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_1_Pipe_{i}") for i in range(2)]
+
+        first_level = [
+            SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
+            for i in range(1)
+        ]
+        second_level = [
+            SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
+            for i in range(1)
+        ]
+
         levels = [first_level, second_level]
 
         blender = SparkWeightedBlender()
