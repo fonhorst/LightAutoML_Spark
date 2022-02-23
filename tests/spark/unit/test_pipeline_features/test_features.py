@@ -175,7 +175,8 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
 
 
 def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, Any],
-                                        fp_lama_clazz, ml_algo_lama_clazz, ml_algo_spark_clazz, pipeline_name: str, ml_alg_kwargs):
+                               fp_lama_clazz, ml_algo_lama_clazz, ml_algo_spark_clazz,
+                               pipeline_name: str, ml_alg_kwargs):
     checkpoint_dir = '/opt/test_checkpoints/feature_pipelines'
     path = config['path']
     ds_name = os.path.basename(os.path.splitext(path)[0])
