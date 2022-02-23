@@ -1,23 +1,24 @@
 import os
 from typing import cast
 
+import pandas as pd
+
 from lightautoml.ml_algo.boost_lgbm import BoostLGBM
+from lightautoml.ml_algo.linear_sklearn import LinearLBFGS
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
-from lightautoml.pipelines.features.lgb_pipeline import LGBSimpleFeatures
+from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo
-from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
+from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.utils import spark_session
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
 from lightautoml.tasks import Task
 from lightautoml.validation.np_iterators import FoldsIterator
 from tests.spark.unit.dataset_utils import get_test_datasets, load_dump_if_exist
 
-import pandas as pd
-
-PIPELINE_NAME = 'lgbsimple_features'
-CV = 5
+PIPELINE_NAME = 'linear_features'
+CV = 3
 
 configs = get_test_datasets(setting="multiclass")
 config = configs[1]
@@ -34,9 +35,9 @@ dump_test_path = os.path.join(checkpoint_dir, f"dump_{PIPELINE_NAME}_{ds_name}_{
 
 ml_alg_kwargs = {}
 
-fp_lama_clazz = LGBSimpleFeatures
-ml_algo_lama_clazz = BoostLGBM
-ml_algo_spark_clazz = SparkBoostLGBM
+fp_lama_clazz = LinearFeatures
+ml_algo_lama_clazz = LinearLBFGS
+ml_algo_spark_clazz = SparkLinearLBFGS
 
 with spark_session(master="local[4]") as spark:
     train_res = load_dump_if_exist(spark, dump_train_path)

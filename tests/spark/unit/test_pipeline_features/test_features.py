@@ -43,7 +43,7 @@ DATASETS = [
                    })
 ]
 
-CV = 5
+CV = 3
 
 ml_alg_kwargs = {
     'auto_unique_co': 10,
@@ -284,7 +284,7 @@ def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv
                                          ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='ipums_97')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='multiclass')])
 def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
                                          dict(), 'lgbsimple_features')
