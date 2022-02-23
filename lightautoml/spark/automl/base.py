@@ -217,6 +217,7 @@ class SparkAutoML:
                 train_valid = self._create_validation_iterator(level_predictions, None, None, cv_iter=cv_iter)
                 train_valid.input_roles = initial_level_roles
                 level_predictions = ml_pipe.fit_predict(train_valid)
+                # level_predictions = self._break_plan(level_predictions)
 
                 pipes.append(ml_pipe)
 
@@ -397,3 +398,11 @@ class SparkAutoML:
         dataset.set_data(sdf, sdf.columns, train.roles)
 
         return dataset
+
+    @staticmethod
+    def _break_plan(train: SparkDataset) -> SparkDataset:
+        new_df = train.spark_session.createDataFrame(train.data.rdd)
+
+        sds = train.empty()
+        sds.set_data(new_df, train.features, train.roles)
+        return sds
