@@ -122,11 +122,11 @@ def calculate_automl(path: str,
     with spark_session(**spark_args) as spark:
         with log_exec_timer("spark-lama training") as train_timer:
             task = SparkTask(task_type)
-            # train_data, test_data = prepare_test_and_train(spark, path, seed)
+            train_data, test_data = prepare_test_and_train(spark, path, seed)
 
-            data_path, ext = os.path.splitext(path)
-            train_data = spark.read.csv(f"{data_path}_train{ext}", header=True, escape="\"")
-            test_data = spark.read.csv(f"{data_path}_test{ext}", header=True, escape="\"")
+            # data_path, ext = os.path.splitext(path)
+            # train_data = spark.read.csv(f"{data_path}_train{ext}", header=True, escape="\"")
+            # test_data = spark.read.csv(f"{data_path}_test{ext}", header=True, escape="\"")
 
             # test_data_dropped = test_data \
             #     .drop(F.col(target_col))
