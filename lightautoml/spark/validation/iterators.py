@@ -195,5 +195,9 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         return SparkHoldoutIterator(self.train)
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
+        assert len(val_preds) > 0
+        num_partitions = val_preds[0].rdd.getNumPartitions()
         full_val_preds = functools.reduce(lambda x, y: x.unionByName(y), val_preds)
+        full_val_preds = full_val_preds.coalesce(num_partitions)
+
         return full_val_preds

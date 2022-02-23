@@ -1,9 +1,18 @@
+import logging
+import logging.config
+import time
+
 from pyspark.sql import SparkSession
 
+from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from .utils import DummyTabularAutoML
 from .. import spark as spark_sess
 
 spark = spark_sess
+
+logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
+logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
+logger = logging.getLogger(__name__)
 
 
 def test_automl_preset(spark: SparkSession):
@@ -26,4 +35,7 @@ def test_automl_preset(spark: SparkSession):
     #   - all inputs data are presented in all pipes of the second level (if skip_conn)
     # 3. blending and return_all_predictions works correctly
     oof_ds = automl.fit_predict(train_data, roles={"target": "TARGET"})
-    pred_ds = automl.predict(test_data)
+    # pred_ds = automl.predict(test_data)
+
+    logger.info("Finished")
+    time.sleep(600)

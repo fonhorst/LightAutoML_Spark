@@ -1,5 +1,5 @@
 from copy import copy
-from typing import List, cast, Optional, Any, Tuple
+from typing import List, cast, Optional, Any, Tuple, Callable
 
 import numpy as np
 import pyspark.sql.functions as F
@@ -18,6 +18,7 @@ from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
+from lightautoml.spark.validation.iterators import SparkFoldsIterator
 
 
 class FakeOpTransformer(Transformer):
@@ -148,6 +149,10 @@ class DummyTabularAutoML(SparkAutoMLPreset):
         super().__init__(SparkTask("multiclass"), config_path=config_path)
         self._n_classes = n_classes
 
+    def _create_validation_iterator(self, train: SparkDataset, valid: Optional[SparkDataset], n_folds: Optional[int],
+                                    cv_iter: Optional[Callable]) -> SparkBaseTrainValidIterator:
+        return SparkFoldsIterator(train, n_folds)
+
     def create_automl(self, **fit_args):
         # initialize
         reader = DummyReader(self.task)
@@ -161,12 +166,13 @@ class DummyTabularAutoML(SparkAutoMLPreset):
             SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
             for i in range(1)
         ]
-        second_level = [
-            SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
-            for i in range(1)
-        ]
+        # second_level = [
+        #     SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
+        #     for i in range(1)
+        # ]
 
-        levels = [first_level, second_level]
+        # levels = [first_level, second_level]
+        levels = [first_level]
 
         blender = SparkWeightedBlender()
 
