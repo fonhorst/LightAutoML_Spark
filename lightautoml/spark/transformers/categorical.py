@@ -1051,7 +1051,6 @@ class SparkMultiTargetEncoderTransformer(SparkBaseTransformer):
             for tcv in {tcv for tcv, _ in enc.keys()}:
                 cols_to_select.append(mcte_transform_udf(values)(F.lit(tcv), _cc).alias(out_name))
 
-
         output = self._make_output_df(dataset, cols_to_select)
 
         logger.info(f"[{type(self)} (MCTE)] transform is finished")

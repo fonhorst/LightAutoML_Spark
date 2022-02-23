@@ -5,6 +5,7 @@ from typing import Tuple, get_args, cast, List, Optional, Dict, Union
 import numpy as np
 import pandas as pd
 import pytest
+from pyspark.ml import Estimator
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
@@ -131,7 +132,7 @@ def compare_sparkml_transformers_results(spark: SparkSession,
     #     print(row)
 
     with log_exec_time("SPARK EXEC"):
-        if isinstance(t_spark, SparkBaseEstimator):
+        if isinstance(t_spark, Estimator):
             t_spark = t_spark.fit(sds.data)
 
     transformed_df = t_spark.transform(sds.data)
@@ -230,6 +231,7 @@ def compare_sparkml_by_metadata(spark: SparkSession,
     return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark,
                                                 compare_feature_distributions=compare_feature_distributions,
                                                 compare_content=False)
+
 
 def compare_transformers_results(spark: SparkSession,
                                  ds: PandasDataset,

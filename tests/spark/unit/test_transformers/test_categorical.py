@@ -83,16 +83,24 @@ def test_ordinal_encoder(spark: SparkSession, dataset: DatasetForTest):
     compare_sparkml_by_content(spark, ds, OrdinalEncoder(), transformer)
 
 
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_catintersections_encoder(spark: SparkSession, dataset: DatasetForTest):
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset")])
+def test_cat_intersections(spark: SparkSession, config: Dict[str, Any], cv: int):
+    read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
+    pdf = pd.read_csv(config['path'], **read_csv_args)
 
-    ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
+    reader = PandasToPandasReader(task=Task(config["task_type"]), cv=CV, advanced_roles=False)
+    train_ds = reader.fit_read(pdf, roles=config['roles'])
+
+    # ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
+    le_cols = get_columns_by_role(train_ds, "Category")
+    train_ds = train_ds[:, le_cols]
 
     transformer = SparkCatIntersectionsEstimator(
-        input_cols=ds.features,
-        input_roles=ds.roles
+        input_cols=train_ds.features,
+        input_roles=train_ds.roles
     )
-    compare_sparkml_by_metadata(spark, ds, CatIntersectstions(), transformer)
+
+    compare_sparkml_by_metadata(spark, train_ds, CatIntersectstions(), transformer, compare_feature_distributions=True)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
