@@ -122,7 +122,11 @@ def calculate_automl(path: str,
     with spark_session(**spark_args) as spark:
         with log_exec_timer("spark-lama training") as train_timer:
             task = SparkTask(task_type)
-            train_data, test_data = prepare_test_and_train(spark, path, seed)
+            # train_data, test_data = prepare_test_and_train(spark, path, seed)
+
+            data_path, ext = os.path.splitext(path)
+            train_data = spark.read.csv(f"{data_path}_train{ext}", header=True, escape="\"")
+            test_data = spark.read.csv(f"{data_path}_test{ext}", header=True, escape="\"")
 
             # test_data_dropped = test_data \
             #     .drop(F.col(target_col))
@@ -141,7 +145,7 @@ def calculate_automl(path: str,
                 roles=roles
             )
 
-        log_data("spark_test_part", {"test": test_data.select(SparkDataset.ID_COLUMN, target_col).toPandas()})
+        # log_data("spark_test_part", {"test": test_data.select(SparkDataset.ID_COLUMN, target_col).toPandas()})
 
         logger.info("Predicting on out of fold")
 
@@ -221,7 +225,8 @@ def calculate_lgbadv_boostlgb(
 
     with spark_session(**spark_args) as spark:
         with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
-            chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
+            # chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
+            chkp = None
             if not chkp:
                 task = SparkTask(task_type)
                 train_data, test_data = prepare_test_and_train(spark, path, seed)

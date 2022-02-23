@@ -460,8 +460,8 @@ def get_test_datasets(dataset:Optional[str] = None,  setting: str = "all") -> Li
             dss["buzz_dataset"],
             dss['lama_test_dataset'],
             dss["ailerons_dataset"],
-            # dss["internet_usage"],
-            dss["gesture_segmentation"]
+            dss["gesture_segmentation"],
+            dss['ipums_97']
         ]
     elif setting == "all":
         # exccluding all heavy datasets

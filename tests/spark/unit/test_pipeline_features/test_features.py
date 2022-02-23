@@ -1,3 +1,5 @@
+import logging
+import logging.config
 import os
 from typing import Dict, Any, cast
 
@@ -20,6 +22,7 @@ from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
+from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
 from lightautoml.tasks import Task
 from lightautoml.validation.np_iterators import FoldsIterator
@@ -43,7 +46,7 @@ DATASETS = [
                    })
 ]
 
-CV = 3
+CV = 5
 
 ml_alg_kwargs = {
     'auto_unique_co': 10,
@@ -52,6 +55,11 @@ ml_alg_kwargs = {
     'output_categories': True,
     'top_intersections': 4
 }
+
+
+logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/lama.log'))
+logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
+logger = logging.getLogger(__name__)
 
 
 def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: Dict[str, Any],
@@ -260,7 +268,7 @@ def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
                               ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting="all-tasks")])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
                               ml_alg_kwargs, 'lgbadv_features')

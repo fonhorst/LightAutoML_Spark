@@ -13,8 +13,8 @@ experiments:
     repeat_rate: 1
     params:
       func: ["calculate_automl"]
-      dataset: ["buzz_dataset"]
-      seed: [42, 100]
+      dataset: ["used_cars_dataset"]
+      seed: [42]
       cv: [5]
       use_algos:
         - [["lgb"]]
@@ -33,7 +33,7 @@ default_spark_config: {
   spark.kubernetes.driver.label.appname: driver-test-submit-run,
   spark.kubernetes.executor.label.appname: executor-test-submit-run,
   spark.kubernetes.executor.deleteOnTermination: 'true',
-  spark.jars.packages: com.microsoft.azure:synapseml_2.12:0.9.4,
+  spark.jars.packages: com.microsoft.azure:synapseml_2.12:0.9.5,
   spark.jars.repositories: https://mmlspark.azureedge.net/maven,
   spark.driver.cores: '4',
   spark.driver.memory: '16g',

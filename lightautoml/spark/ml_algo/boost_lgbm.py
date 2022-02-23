@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 from copy import copy
 from typing import Callable, Dict, Optional, Tuple, Union, cast
 
@@ -105,8 +106,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         else:
             raise ValueError(f"Unsupported task type: {task}")
 
-
-
         if task != "reg":
             if "alpha" in params:
                 del params["alpha"]
@@ -120,11 +119,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return params, verbose_eval
 
     def init_params_on_input(self, train_valid_iterator: TrainValidIterator) -> dict:
-        # TODO: SPARK-LAMA doing it to make _get_default_search_spaces working
         self.task = train_valid_iterator.train.task
 
         sds = cast(SparkDataset, train_valid_iterator.train)
-        # TODO: SPARK-LAMA may be expensive
         rows_num = sds.data.count()
         task = train_valid_iterator.train.task.name
 
@@ -310,18 +307,25 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         else:
             params['predictionCol'] = fold_prediction_column
 
+        master_addr = train.spark_session.conf.get('spark.master')
+        if master_addr.startswith('local'):
+            cores_str = master_addr[len("local["):-1]
+            cores = int(cores_str) if cores_str != "*" else multiprocessing.cpu_count()
+            params["numThreads"] = max(cores - 1, 1)
+        else:
+            params["numThreads"] = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
+
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
             validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
-            numThreads=3,
             useSingleDatasetMode=True,
             isProvideTrainingMetric=True
         )
 
-        logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}")
+        logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
 
         if full.task.name == "reg":
             lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
