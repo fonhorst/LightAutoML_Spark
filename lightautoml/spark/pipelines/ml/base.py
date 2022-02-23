@@ -99,6 +99,15 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
 
         # all out roles for the output dataset
         out_roles = copy(self._output_roles)
+        # we need also add roles for predictions of previous pipe in this layer
+        # because they are not part of either output roles of this pipe
+        # (pipes work only with input data to the layer itself, e.g. independently)
+        # nor input roles of train_valid iterator
+        # (for each pipe iterator represent only input columns to the layer,
+        # not outputs of other ml pipes in the layer)
+        out_roles.update(train_valid.train.roles)
+        # we also need update our out_roles with input_roles to replace roles of input of the layer
+        # in case they were changed by SparkChangeRolesTransformer
         out_roles.update(input_roles)
 
         select_transformer = ColumnsSelectorTransformer(

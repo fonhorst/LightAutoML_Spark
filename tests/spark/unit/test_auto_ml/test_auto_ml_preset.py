@@ -8,7 +8,11 @@ spark = spark_sess
 
 def test_automl_preset(spark: SparkSession):
     train_data = spark.createDataFrame([
-        {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % 5} for i in range(100)
+        {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % 5} for i in range(80)
+    ])
+
+    test_data = spark.createDataFrame([
+        {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % 5} for i in range(80, 100)
     ])
 
     automl = DummyTabularAutoML()
@@ -19,4 +23,5 @@ def test_automl_preset(spark: SparkSession):
     #   - all inputs data are presented in all pipes of the first level
     #   - all inputs data are presented in all pipes of the second level (if skip_conn)
     # 3. blending and return_all_predictions works correctly
-    res_ds = automl.fit_predict(train_data, roles={"target": "TARGET"})
+    oof_ds = automl.fit_predict(train_data, roles={"target": "TARGET"})
+    pred_ds = automl.predict(test_data)

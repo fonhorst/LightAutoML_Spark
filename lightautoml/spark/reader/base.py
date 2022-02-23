@@ -451,17 +451,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
             return sdf, folds_col
 
-            # # TODO: SPARK-LAMA need to validate the column
-            # df = sdf
-            # datasets = []
-            # for i in range(self.cv):
-            #     condition = sdf[folds_col] == i
-            #     # filtering and dropping folds col
-            #     validation = df.filter(condition).drop(folds_col)
-            #     train = df.filter(~condition).drop(folds_col)
-            #     datasets.append((train, validation))
-            # return datasets
-
         h = 1.0 / self.cv
         folds_col = self.DEFAULT_READER_FOLD_COL
         sdf_with_folds = sdf.select(

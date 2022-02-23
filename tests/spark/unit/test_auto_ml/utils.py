@@ -1,8 +1,11 @@
+from copy import copy
 from typing import List, cast, Optional, Any
 
 from pyspark.ml import Transformer
+from pyspark.ml.functions import vector_to_array, array_to_vector
 
 from lightautoml.automl.blend import WeightedBlender
+from lightautoml.dataset.roles import NumericRole
 from lightautoml.reader.base import UserDefinedRolesDict
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from lightautoml.spark.automl.blend import SparkWeightedBlender
@@ -35,10 +38,20 @@ class DummyReader(SparkToSparkReader):
 
     def fit_read(self, train_data: SparkDataFrame, features_names: Any = None, roles: UserDefinedRolesDict = None,
                  **kwargs: Any) -> SparkDataset:
-        return super().fit_read(train_data, features_names, roles, **kwargs)
+
+        self.target_col = roles["target"]
+        self._roles = {c: NumericRole() for c in train_data.columns if c != self.target_col}
+
+        train_data = self._create_unique_ids(train_data, cacher_key='main_cache')
+        train_data, folds_col = self._create_folds(train_data, kwargs={})
+
+        sds = SparkDataset(train_data, self._roles, task=self.task, target=self.target_col, folds=folds_col)
+        return sds
 
     def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
-        return super().read(data, features_names, add_array_attrs)
+        data = self._create_unique_ids(data, cacher_key='main_cache')
+        sds = SparkDataset(data, self._roles, task=self.task, target=self.target_col)
+        return sds
 
 
 class DummySparkMLPipeline(SparkMLPipeline):
@@ -47,7 +60,7 @@ class DummySparkMLPipeline(SparkMLPipeline):
         cacher_key: str = "",
         name: str = "dummy_pipe"
     ):
-        super().__init__(cacher_key, [], name=name)
+        super().__init__(cacher_key, [], force_calc=[True], name=name)
 
     def fit_predict(self, train_valid: SparkBaseTrainValidIterator) -> SparkDataset:
         val_ds = train_valid.get_validation_data()
@@ -67,17 +80,28 @@ class DummySparkMLPipeline(SparkMLPipeline):
         self._transformer = FakeOpTransformer(cols_to_generate=self.output_features, n_classes=n_classes)
 
         sdf = cast(SparkDataFrame, val_ds.data)
-        sdf = sdf.select('*', *self._output_roles.keys())
+        sdf = sdf.select(
+            '*',
+            *[
+                array_to_vector(F.array(*[F.lit(i*10 + j) for j in range(n_classes)])).alias(name)
+                for i, name in enumerate(self._output_roles.keys())
+            ]
+        )
+
+        out_roles = copy(self._output_roles)
+        out_roles.update(train_valid.train.roles)
+        out_roles.update(train_valid.input_roles)
 
         out_val_ds = cast(SparkDataset, val_ds.empty())
-        out_val_ds.set_data(sdf, list(self._output_roles.keys()), self._output_roles)
+        out_val_ds.set_data(sdf, list(out_roles.keys()), out_roles)
 
         return out_val_ds
 
 
 class DummyTabularAutoML(SparkAutoMLPreset):
     def __init__(self):
-        super().__init__(SparkTask("multiclass"))
+        config_path = '/home/nikolay/wspace/LightAutoML/lightautoml/spark/automl/presets/tabular_config.yml'
+        super().__init__(SparkTask("multiclass"), config_path=config_path)
 
     def create_automl(self, **fit_args):
         # initialize
