@@ -166,13 +166,13 @@ class DummyTabularAutoML(SparkAutoMLPreset):
             SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
             for i in range(1)
         ]
-        # second_level = [
-        #     SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
-        #     for i in range(1)
-        # ]
+        second_level = [
+            SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
+            for i in range(1)
+        ]
 
-        # levels = [first_level, second_level]
-        levels = [first_level]
+        levels = [first_level, second_level]
+        # levels = [first_level]
 
         blender = SparkWeightedBlender()
 

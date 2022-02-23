@@ -224,7 +224,10 @@ class Cacher(Estimator):
 
     def _fit(self, dataset):
         ds = dataset.cache()
-        ds.write.mode('overwrite').format('noop').save()
+        logger.info(f"Cacher {self._key}. Starting to materialize data.")
+        # ds.write.mode('overwrite').format('noop').save()
+        ds.count()
+        logger.info(f"Cacher {self._key}. Finished data materialization.")
 
         previous_ds = self._cacher_dict.get(self._key, None)
         if previous_ds is not None:

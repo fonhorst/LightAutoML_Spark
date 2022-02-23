@@ -37,7 +37,7 @@ def spark() -> SparkSession:
         .config("spark.driver.memory", "8g")
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-        .config("spark.sql.shuffle.partitions", 4)
+        .config("spark.sql.shuffle.partitions", 200)
             # .config("spark.sql.autoBroadcastJoinThreshold", "-1")
         .getOrCreate()
     )
