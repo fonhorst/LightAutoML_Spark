@@ -1,7 +1,7 @@
 package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
-import org.apache.spark.ml.feature.StringIndexer
+import org.apache.spark.ml.feature.{StringIndexer, StringIndexerModel}
 import org.apache.spark.ml.feature.lightautoml.LAMLStringIndexer
 
 
@@ -26,7 +26,7 @@ object TestLAMLStringIndexer extends App {
 
   val startTime = System.currentTimeMillis()
 
-  val indexer = new StringIndexer(uid = "abc").setInputCol("value").setOutputCol("index").setHandleInvalid("keep")
+  val indexer = new StringIndexer().setInputCol("value").setOutputCol("index").setHandleInvalid("keep")
   println(indexer.uid)
 
   val model = indexer.fit(df)
@@ -35,10 +35,14 @@ object TestLAMLStringIndexer extends App {
   println("-- Spark Indexed --")
   testIndexed.show(100)
 
-  val lamaIndexer = new LAMLStringIndexer(uid = "abc", minFreq = 0, defaultValue = 99.0)
+  val lamaIndexer = new LAMLStringIndexer(minFreq = 0, defaultValue = 99.0)
           .setInputCol("value")
           .setOutputCol("index")
           .setHandleInvalid("keep")
+
+  val _lamaModelTestNoRuntimeError = new LAMLStringIndexerModel(labelsArray = Array(Array("a", "b")), defaultValue = 0.0)
+
+  val _sparkModelTestNoRuntimeError = new StringIndexerModel(labelsArray = Array(Array("a", "b")))
 
   println(lamaIndexer.uid)
 
@@ -52,6 +56,8 @@ object TestLAMLStringIndexer extends App {
 
   println(s"Duration = ${(endTime - startTime) / 1000D} seconds")
   println(s"Size: ${cnt}")
+
+  println(s"[${indexer.uid} - ${model.uid}] // [${lamaIndexer.uid} - ${lamaModel.uid}]")
 
   while (args(0).toBoolean) {
     Thread.sleep(1000)

@@ -155,6 +155,30 @@ class LAMLStringIndexerModel(override val uid: String,
                              defaultValue: Double = 0.0)
         extends StringIndexerModel(labelsArray) {
 
+
+  @Since("1.5.0")
+  def this(uid: String, labels: Array[String]) = this(uid, Array(labels))
+
+  @Since("1.5.0")
+  def this(labels: Array[String]) = this(Identifiable.randomUID("strIdx"), Array(labels))
+
+  @Since("3.2.0")
+  def this(labels: Array[String], defaultValue: Double) = this(
+    Identifiable.randomUID("strIdx"),
+    Array(labels),
+    defaultValue
+  )
+
+  @Since("3.0.0")
+  def this(labelsArray: Array[Array[String]]) = this(Identifiable.randomUID("strIdx"), labelsArray)
+
+  @Since("3.2.0")
+  def this(labelsArray: Array[Array[String]], defaultValue: Double) = this(
+    Identifiable.randomUID("strIdx"),
+    labelsArray,
+    defaultValue
+  )
+
   // Prepares the maps for string values to corresponding index values.
   private val labelsToIndexArray: Array[OpenHashMap[String, Double]] = {
     for (labels <- labelsArray) yield {
