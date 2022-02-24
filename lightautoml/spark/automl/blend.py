@@ -181,20 +181,12 @@ class SparkBestModelSelector(SparkBlender, WeightedBlender):
 
 class SparkWeightedBlender(SparkBlender, WeightedBlender):
     def __init__(self, max_iters: int = 5, max_inner_iters: int = 7, max_nonzero_coef: float = 0.05,):
-        super().__init__()
-        super(WeightedBlender, self).__init__(max_iters, max_inner_iters, max_nonzero_coef)
+        SparkBlender.__init__(self)
+        WeightedBlender.__init__(self, max_iters, max_inner_iters, max_nonzero_coef)
         self._predictions_dataset: Optional[SparkDataset] = None
 
     def _get_weighted_pred(self, splitted_preds: Sequence[str], wts: Optional[np.ndarray]) -> SparkDataset:
-        avr = AveragingTransformer(
-            task_name=self._task.name,
-            input_cols=list(splitted_preds),
-            output_col=self._single_prediction_col_name,
-            remove_cols=list(splitted_preds),
-            convert_to_array_first=True,
-            weights=wts,
-            dim_num=self._outp_dim
-        )
+        avr = self._build_avr_transformer(splitted_preds, wts)
 
         weighted_preds_sdf = avr.transform(self._predictions_dataset.data)
 
@@ -203,6 +195,17 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
 
         return wpreds_sds
 
+    def _build_avr_transformer(self, splitted_preds: Sequence[str], wts: Optional[np.ndarray]) -> AveragingTransformer:
+        return AveragingTransformer(
+            task_name=self._task.name,
+            input_cols=list(splitted_preds),
+            output_col=self._single_prediction_col_name,
+            remove_cols=list(splitted_preds),
+            convert_to_array_first=True,
+            weights=wts.tolist(),
+            dim_num=self._outp_dim
+        )
+
     def _fit_predict(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) \
             -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
 
@@ -210,7 +213,7 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
 
         sm = self.split_models(predictions, pipes)
         pred_cols = [pred_col for pred_col, _, _ in sm]
-        pipe_idx = np.ndarray([pidx for _, _, pidx in sm])
+        pipe_idx = np.array([pidx for _, _, pidx in sm])
 
         wts = self._optimize(pred_cols)
 
@@ -218,6 +221,7 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         pipes, self.wts = self._prune_pipe(pipes, wts, pipe_idx)
         pipes = cast(Sequence[SparkMLPipeline], pipes)
 
+        self._transformer = self._build_avr_transformer(reweighted_pred_cols, self.wts)
         outp = self._get_weighted_pred(reweighted_pred_cols, self.wts)
 
         return outp, pipes

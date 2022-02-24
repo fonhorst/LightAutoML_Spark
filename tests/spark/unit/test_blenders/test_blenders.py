@@ -9,6 +9,7 @@ from pyspark.sql import SparkSession
 
 from lightautoml.automl.blend import BestModelSelector, Blender, WeightedBlender
 from lightautoml.dataset.np_pd_dataset import NumpyDataset
+from lightautoml.dataset.roles import NumericRole
 from lightautoml.spark.automl.blend import SparkBestModelSelector, SparkWeightedBlender
 
 from lightautoml.spark.dataset.base import SparkDataset
@@ -18,6 +19,8 @@ from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline as SparkNestedTabularMLPipeline
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
+from lightautoml.spark.transformers.base import ColumnsSelectorTransformer, DropColumnsTransformer
+from lightautoml.spark.validation.iterators import SparkDummyIterator
 from lightautoml.tasks import Task
 from .. import from_pandas_to_spark, spark as spark_sess, compare_obtained_datasets
 
@@ -79,36 +82,41 @@ def do_compare_blenders(spark: SparkSession, lama_blender: Blender, spark_blende
 
 
 def test_weighted_blender(spark: SparkSession):
-    target_col = "target"
+    target_col = "some_target"
+    folds_col = "folds"
     n_classes = 10
     models_count = 4
 
     data = [
-        {f"pred_{i}": DenseVector([j for j in range(n_classes)]) for i in range(models_count)}
-        for _ in range(100)
+        {
+            SparkDataset.ID_COLUMN: i,
+            "a": i, "b": 100 + i, "c": 100 * i,
+            target_col: random.randint(0, n_classes),
+            folds_col: random.randint(0, 2)
+        }
+        for i in range(100)
     ]
-    for i, d in enumerate(data):
-        d[SparkDataset.ID_COLUMN] = i
-        d[target_col] = random.randint(0, 5)
 
-    roles = {
-        f"pred_{i}": NumericVectorOrArrayRole(
-            size=n_classes,
-            element_col_name_template=f"pred_{i}" + "_{}",
-            dtype=np.float32,
-            force_input=True,
-            prob=False
-        ) for i in range(models_count)
-    }
+    roles = {"a": NumericRole(), "b": NumericRole(), "c": NumericRole()}
+
+    data_sdf = spark.createDataFrame(data)
+    data_sds = SparkDataset(data=data_sdf, task=SparkTask("multiclass"),
+                            roles=roles, target=target_col, folds=folds_col)
 
     pipes = [
         SparkMLPipeline(cacher_key='test_cache', ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")])
         for i in range(models_count)
     ]
 
-    predictions_sdf = spark.createDataFrame(data)
-    pred_sds = SparkDataset(data=predictions_sdf, task=SparkTask("multiclass"), roles=roles, target=target_col)
+    for pipe in pipes:
+        data_sds = pipe.fit_predict(SparkDummyIterator(data_sds))
+
+    preds_roles = {c: role for c, role in data_sds.roles.items() if c not in roles}
+
+    sdf = data_sds.data.drop(*list(roles.keys()))
+    ml_ds = data_sds.empty()
+    ml_ds.set_data(sdf, list(preds_roles.keys()), preds_roles)
 
     swb = SparkWeightedBlender()
-    blended_sds, filtered_pipes = swb.fit_predict(pred_sds, pipes)
-    transformed_preds_sdf = swb.transformer.transform(pred_sds.data)
+    blended_sds, filtered_pipes = swb.fit_predict(ml_ds, pipes)
+    transformed_preds_sdf = swb.transformer.transform(ml_ds.data)
