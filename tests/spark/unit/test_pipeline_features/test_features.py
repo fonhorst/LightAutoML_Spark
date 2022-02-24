@@ -275,7 +275,7 @@ def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
                               ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_0125x')])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_head50k')])
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures,
                               dict(), 'lgbsimple_features')
@@ -293,7 +293,7 @@ def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv
                                          ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_0125x')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_head50k')])
 def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
                                          dict(), 'lgbsimple_features')
@@ -311,7 +311,7 @@ def test_quality_mlalgo_boostlgbm(spark: SparkSession, config: Dict[str, Any], c
                                ml_alg_kwargs)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_0125x')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_head50k')])
 def test_quality_mlalgo_simple_features_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM, SparkBoostLGBM, 'lgbsimple_features',
                                {})
