@@ -1,19 +1,19 @@
 import sbt.Keys.resolvers
 
-name := "scala-transformers"
+name := "spark-lightautoml"
 
 version := "0.1"
 
 scalaVersion := "2.12.12"
 
-idePackagePrefix := Some("lightautoml.scala.transformers")
+//idePackagePrefix := Some("org.apache.spark.ml.feature.lightautoml")
 
 resolvers ++= Seq(
   ("Confluent" at "http://packages.confluent.io/maven")
         .withAllowInsecureProtocol(true)
 )
 
-mainClass := Some("lightautoml.scala.transformers.test_udfs")
+mainClass := Some("org.apache.spark.ml.feature.lightautoml.test_udfs")
 
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "3.2.0",
