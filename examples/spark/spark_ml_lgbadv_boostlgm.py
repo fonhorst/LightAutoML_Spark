@@ -56,8 +56,13 @@ if __name__ == "__main__":
         spark_ml_algo = cast(SparkBoostLGBM, spark_ml_algo)
 
         final = PipelineModel(stages=[lgb_features.transformer, spark_ml_algo.transformer])
+        final.write().overwrite().save("/tmp/SparkLGBAdvancedPipeline_SparkBoostLGBM")
 
         final_result = final.transform(sdataset.data)
         final_result.write.mode('overwrite').format('noop').save()
+
+        pipeline_model = PipelineModel.load("/tmp/SparkLGBAdvancedPipeline_SparkBoostLGBM")
+        df = pipeline_model.transform(sdataset.data)
+        df.toPandas().to_csv("/tmp/SparkLGBAdvancedPipeline_SparkBoostLGBM.csv")
 
         logger.info("Finished")

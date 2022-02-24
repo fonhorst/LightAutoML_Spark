@@ -7,7 +7,7 @@ from pyspark.ml import PredictionModel, PipelineModel, Transformer
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.param import Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
-from pyspark.ml.util import MLWritable
+from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as F, Column
 from pyspark.sql.functions import isnan
 from pyspark.sql.types import IntegerType
@@ -279,7 +279,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         return output
 
 
-class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
+class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParamsWritable, DefaultParamsReadable):
     taskName = Param(Params._dummy(), "taskName", "task name")
     removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
     convertToArrayFirst = Param(Params._dummy(), "convertToArrayFirst", "convert to array first")
@@ -287,9 +287,9 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
     dimNum = Param(Params._dummy(), "dimNum", "dim num")
 
     def __init__(self,
-                 task_name: str,
-                 input_cols: List[str],
-                 output_col: str,
+                 task_name: str = None,
+                 input_cols: List[str] = [],
+                 output_col: str = "averaged_values",
                  remove_cols: Optional[List[str]] = None,
                  convert_to_array_first: bool = False,
                  weights: Optional[List[int]] = None,
@@ -365,6 +365,3 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, MLWritable):
         logger.info(f"In the end of transformer {type(self)}. Columns: {sorted(dataset.columns)}")
 
         return out_df
-
-    def write(self):
-        pass

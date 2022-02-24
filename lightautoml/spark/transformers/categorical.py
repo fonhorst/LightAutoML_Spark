@@ -16,6 +16,7 @@ from sklearn.utils.murmurhash import murmurhash3_32
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
+from lightautoml.spark.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
     multiclass_task_check
@@ -142,7 +143,7 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
                                             dicts=self.dicts)
 
 
-class SparkLabelEncoderTransformer(SparkBaseTransformer, TypesHelper):
+class SparkLabelEncoderTransformer(SparkBaseTransformer, TypesHelper, CommonPickleMLWritable, CommonPickleMLReadable):
     _transform_checks = ()
     _fname_prefix = "le"
 
@@ -537,7 +538,7 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
         )
 
 
-class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEncoderTransformer):
+class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEncoderTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
@@ -823,7 +824,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         )
 
 
-class SparkTargetEncoderTransformer(SparkBaseTransformer):
+class SparkTargetEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
 
     _fit_checks = (categorical_check, oof_task_check, encoding_check)
     _transform_checks = ()
