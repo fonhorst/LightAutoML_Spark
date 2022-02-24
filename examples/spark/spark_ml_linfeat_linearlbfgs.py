@@ -56,8 +56,14 @@ if __name__ == "__main__":
         spark_ml_algo = cast(SparkLinearLBFGS, spark_ml_algo)
 
         final = PipelineModel(stages=[linear_features.transformer, spark_ml_algo.transformer])
+        final.write().overwrite().save("/tmp/LinearFeatures_LinearLBFGS")
 
         final_result = final.transform(sdataset.data)
-        final_result.write.mode('overwrite').format('noop').save()
+        # final_result.write.mode('overwrite').format('noop').save()
+        final_result.toPandas().to_csv("/tmp/LinearFeatures_LinearLBFGS.csv")
+
+        loaded_pipeline = PipelineModel.load("/tmp/LinearFeatures_LinearLBFGS")
+        df = loaded_pipeline.transform(sdataset.data)
+        df.toPandas().to_csv("/tmp/LinearFeatures_LinearLBFGS_loaded_pipeline.csv")
 
         logger.info("Finished")
