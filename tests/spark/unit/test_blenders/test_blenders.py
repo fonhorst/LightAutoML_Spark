@@ -15,6 +15,7 @@ from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM as SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
+from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline as SparkNestedTabularMLPipeline
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.tasks import Task
@@ -23,7 +24,7 @@ from .. import from_pandas_to_spark, spark as spark_sess, compare_obtained_datas
 import numpy as np
 import pyspark.sql.functions as F
 
-from ..test_auto_ml.utils import DummySparkMLPipeline
+from ..test_auto_ml.utils import DummySparkMLPipeline, DummyMLAlgo
 
 spark = spark_sess
 
@@ -79,26 +80,31 @@ def do_compare_blenders(spark: SparkSession, lama_blender: Blender, spark_blende
 
 def test_weighted_blender(spark: SparkSession):
     target_col = "target"
-    N = 10
-    M = 4
+    n_classes = 10
+    models_count = 4
 
     data = [
-        {f"pred_{i}": DenseVector([j for j in range(N)]) for i in range(M)}
+        {f"pred_{i}": DenseVector([j for j in range(n_classes)]) for i in range(models_count)}
         for _ in range(100)
     ]
-    for d in data:
+    for i, d in enumerate(data):
+        d[SparkDataset.ID_COLUMN] = i
         d[target_col] = random.randint(0, 5)
+
     roles = {
         f"pred_{i}": NumericVectorOrArrayRole(
-            size=N,
+            size=n_classes,
             element_col_name_template=f"pred_{i}" + "_{}",
             dtype=np.float32,
             force_input=True,
             prob=False
-        ) for i in range(M)
+        ) for i in range(models_count)
     }
 
-    pipes = [DummySparkMLPipeline() for i in range(M)]
+    pipes = [
+        SparkMLPipeline(cacher_key='test_cache', ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")])
+        for i in range(models_count)
+    ]
 
     predictions_sdf = spark.createDataFrame(data)
     pred_sds = SparkDataset(data=predictions_sdf, task=SparkTask("multiclass"), roles=roles, target=target_col)
