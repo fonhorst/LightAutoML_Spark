@@ -293,12 +293,12 @@ class ObsoleteSparkTransformer(LAMLTransformer):
         return new_roles
 
 
-class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols):
+class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols, DefaultParamsWritable, DefaultParamsReadable):
     optionalCols = Param(Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString)
 
     def __init__(self,
-                 input_cols: Optional[List[str]] = None,
-                 optional_cols: Optional[List[str]] = None):
+                 input_cols: Optional[List[str]] = [],
+                 optional_cols: Optional[List[str]] = []):
         super().__init__()
         optional_cols = optional_cols if optional_cols else []
         assert len(set(input_cols).intersection(set(optional_cols))) == 0, \

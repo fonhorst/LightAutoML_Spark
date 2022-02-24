@@ -2,6 +2,8 @@ import logging.config
 import logging.config
 from copy import deepcopy
 
+from pyspark.ml import PipelineModel
+
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
@@ -67,7 +69,15 @@ if __name__ == "__main__":
 
         _ = ml_pipe.fit_predict(iterator)
 
+        ml_pipe.transformer.write().overwrite().save('/tmp/SparkMLPipeline')
+
         final_result = ml_pipe.transformer.transform(sdataset.data)
-        final_result.write.mode('overwrite').format('noop').save()
+        # final_result.write.mode('overwrite').format('noop').save()
+        final_result.toPandas().to_csv('/tmp/SparkMLPipeline.csv')
+
+        pipeline_model = PipelineModel.load('/tmp/SparkMLPipeline')
+        result = pipeline_model.transform(sdataset.data)
+        result.toPandas().to_csv('/tmp/SparkMLPipeline_loaded_model.csv')
+
 
         logger.info("Finished")
