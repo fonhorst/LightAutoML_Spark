@@ -187,6 +187,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
                                pipeline_name: str, ml_alg_kwargs):
     checkpoint_dir = '/opt/test_checkpoints/feature_pipelines'
     path = config['path']
+    task_name = config['task_type']
     ds_name = os.path.basename(os.path.splitext(path)[0])
 
     dump_train_path = os.path.join(checkpoint_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_train.dump") \
@@ -202,10 +203,10 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     dumped_train_ds, _ = train_res
     dumped_test_ds, _ = test_res
 
-    test_ds = dumped_test_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_test_ds.to_pandas().to_numpy()
+    # test_ds = dumped_test_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_test_ds.to_pandas().to_numpy()
 
     # Process spark-based features with LAMA
-    pds = dumped_train_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_train_ds.to_pandas().to_numpy()
+    # pds = dumped_train_ds.to_pandas() if ml_algo_lama_clazz == BoostLGBM else dumped_train_ds.to_pandas().to_numpy()
 
     # train_valid = FoldsIterator(pds)
     # ml_algo = ml_algo_lama_clazz()
@@ -217,12 +218,12 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     # lama_on_spark_test_metric = score(test_pred)
 
     # compare with native features of LAMA
-    train_valid = FoldsIterator(pds)
+    # train_valid = FoldsIterator(pds)
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
     train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
     test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
     # train_pdf, test_pdf = train_test_split(pdf, test_size=0.2, random_state=100)
-    reader = PandasToPandasReader(task=Task(train_valid.train.task.name), cv=cv, advanced_roles=False)
+    reader = PandasToPandasReader(task=Task(task_name), cv=cv, advanced_roles=False)
     train_ds = reader.fit_read(train_pdf, roles=config['roles'])
     test_ds = reader.read(test_pdf, add_array_attrs=True)
     lama_pipeline = fp_lama_clazz(**ml_alg_kwargs)
