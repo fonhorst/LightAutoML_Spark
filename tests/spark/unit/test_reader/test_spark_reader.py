@@ -17,7 +17,7 @@ from ..dataset_utils import get_test_datasets
 spark = spark_sess
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(dataset="lama_test_dataset")])
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(setting="all-tasks")])
 def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
         # 1. it should have _id
@@ -43,7 +43,7 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int):
     dtype = config['dtype'] if 'dtype' in config else None
 
     df = spark.read.csv(path, header=True, escape="\"")
-    sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv)
+    sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv, advanced_roles=False)
 
     sdataset = sreader.fit_read(df, roles=roles)
     checks(sdataset)

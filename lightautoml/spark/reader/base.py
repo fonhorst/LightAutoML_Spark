@@ -347,23 +347,19 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             **kwargs
         )
 
-        # TODO: SPARK-LAMA will be implemented later
         if self.advanced_roles:
             new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
-        
+
             droplist = [x for x in new_roles if new_roles[x].name == "Drop" and not self._roles[x].force_input]
             self.upd_used_features(remove=droplist)
             self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
-        
-            # TODO: SPARK-LAMA send parent for unwinding
+
             dataset = SparkDataset(
                 train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
                 self.roles,
                 task=self.task,
                 **kwargs
             )
-
-        # log_data("spark_reader_fit_read", {"train": dataset.to_pandas()})
 
         return dataset
 
@@ -380,28 +376,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             Dataset with new columns.
 
         """
-        # kwargs = {}
-        # service_columns = []
-        # if add_array_attrs:
-        #     for array_attr in self.used_array_attrs:
-        #         col_name = self.used_array_attrs[array_attr]
-        #
-        #         if col_name not in data.columns:
-        #             continue
-        #
-        #         if array_attr == "target":
-        #             data = self._process_target_column(self.task.name, self.class_mapping, data, col_name)
-        #
-        #         kwargs[array_attr] = col_name
-        #         service_columns.append(col_name)
-        #
-        # data = self._create_unique_ids(data)
-        #
-        # data = data.select(
-        #     SparkDataset.ID_COLUMN,
-        #     *service_columns,
-        #     *[self._convert_column(feat, self.roles[feat]) for feat in self.used_features]
-        # )
 
         kwargs = {}
         if add_array_attrs:
@@ -486,19 +460,10 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             uniques = [r[target_col] for r in uniques]
             self._n_classes = len(uniques)
 
-            # TODO: make it pretty
-            # 1. check the column type if it is numeric or not
-            # 2. if it is string can i convert it to num?
             if isinstance(sdf.schema[target_col].dataType, NumericType):
                 uniques = sorted(uniques)
                 self.class_mapping = {x: i for i, x in enumerate(uniques)}
                 srtd = np.ndarray(uniques)
-            # elif isinstance(sdf.schema[target_col], StringType):
-            #     try:
-            #         srtd = np.ndarray(sorted([int(el) for el in uniques]))
-            #         sdf = sdf
-            #     except ValueError:
-            #         srtd = None
             elif isinstance(sdf.schema[target_col].dataType, StringType):
                 self.class_mapping = {x: f"{i}" for i, x in enumerate(uniques)}
                 srtd = None
@@ -623,8 +588,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
               for feature in features if isinstance(train_data.schema[feature].dataType, NumericType)],
             *[F.mean((F.isnull(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
               for feature in features if not isinstance(train_data.schema[feature].dataType, NumericType)],
-            # *[(1 - (F.approx_count_distinct(feature) / F.count(feature))).alias(f"{feature}_constant_rate")
-            #   for feature in features]
         ).first()
 
         estimated_features = []
@@ -649,16 +612,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         return estimated_features
 
-        # return [
-        #     (
-        #         feature,
-        #         (row[f"{feature}_nan_rate"] < self.max_nan_rate)
-        #         and (row[f"{feature}_constant_rate"] < self.max_constant_rate)
-        #     )
-        #     for feature in features
-        # ]
-
-    # TODO: SPARK-LAMA will be implemented later
     def advanced_roles_guess(self, dataset: SparkDataset, manual_roles: Optional[RolesDict] = None) -> RolesDict:
         """Advanced roles guess over user's definition and reader's simple guessing.
 

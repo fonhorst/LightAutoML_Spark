@@ -1,21 +1,19 @@
 from typing import Dict, Optional, Union, List
 
+import numpy as np
+import pandas as pd
 from pyspark.ml import Pipeline
+from pyspark.sql import functions as F, Window
 from pyspark.sql.types import IntegerType
 
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.reader.guess_roles import calc_ginis, RolesDict
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.transformers.base import SparkSequentialTransformer, SparkChangeRolesTransformer
-
-from pyspark.sql import functions as F, Window
-
-import pandas as pd
-import numpy as np
-
-from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, SparkOrdinalEncoderEstimator, \
-    MultiClassTargetEncoder, SparkTargetEncoderEstimator
+from lightautoml.spark.transformers.base import SparkChangeRolesTransformer
+from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
+    SparkOrdinalEncoderEstimator, SparkTargetEncoderEstimator
 from lightautoml.spark.transformers.numeric import SparkQuantileBinningEstimator
+from lightautoml.transformers.categorical import MultiClassTargetEncoder
 
 
 def get_gini_func(target_col: str):
@@ -287,13 +285,6 @@ def get_category_roles_stat(
     train.set_data(sdf, roles_to_identify, roles)
 
     assert train.folds is not None
-
-    # if train.folds is None:
-    #     train.folds = set_sklearn_folds(train.task, train.target.values, cv=5, random_state=42, group=train.group)
-    #
-    # if subsample is not None:
-    #     idx = np.random.RandomState(random_state).permutation(train.shape[0])[:subsample]
-    #     train = train[idx]
 
     # check task specific
     if train.task.name == "multiclass":
