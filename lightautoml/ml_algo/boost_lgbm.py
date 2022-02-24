@@ -1,7 +1,6 @@
 """Wrapped LightGBM for tabular datasets."""
 
 import logging
-
 from contextlib import redirect_stdout
 from copy import copy
 from typing import Callable
@@ -11,18 +10,15 @@ from typing import Tuple
 
 import lightgbm as lgb
 import numpy as np
-
 from pandas import Series
 
-from ..pipelines.selection.base import ImportanceEstimator
-from ..utils.logging import LoggerStream
-from ..utils.tmp_utils import log_data
-from ..validation.base import TrainValidIterator
 from .base import TabularDataset
 from .base import TabularMLAlgo
 from .tuning.base import Distribution
 from .tuning.base import SearchSpace
-
+from ..pipelines.selection.base import ImportanceEstimator
+from ..utils.logging import LoggerStream
+from ..validation.base import TrainValidIterator
 
 logger = logging.getLogger(__name__)
 

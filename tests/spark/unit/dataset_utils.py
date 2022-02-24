@@ -254,6 +254,25 @@ all_datastes = {
         }
     },
 
+    "used_cars_dataset_no_cols_limit": {
+        "path": "/opt/spark_data/small_used_cars_data.csv",
+        "train_path": "/opt/spark_data/small_used_cars_data_train.csv",
+        "test_path": "/opt/spark_data/small_used_cars_data_test.csv",
+        "task_type": "reg",
+        "metric_name": "mse",
+        "target_col": "price",
+        "roles": {
+            "target": "price",
+            "drop": ['Unnamed: 0', '_c0'],
+        },
+        "dtype": {
+            'fleet': 'str', 'frame_damaged': 'str',
+            'has_accidents': 'str', 'isCab': 'str',
+            'is_cpo': 'str', 'is_new': 'str',
+            'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+        }
+    },
+
     # "used_cars_dataset_2x": {
     #     "path": "/opt/spark_data/derivative_datasets/2x_cleaned.csv",
     #     "task_type": "reg",
@@ -420,7 +439,7 @@ def prepared_datasets(spark: SparkSession,
         train_df = spark.read.csv(train_path, header=True, escape="\"")
         test_df = spark.read.csv(test_path, header=True, escape="\"")
 
-        sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv)
+        sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv, advanced_roles=False)
         train_ds = sreader.fit_read(train_df, roles=roles)
         test_ds = sreader.read(test_df, add_array_attrs=True)
 
