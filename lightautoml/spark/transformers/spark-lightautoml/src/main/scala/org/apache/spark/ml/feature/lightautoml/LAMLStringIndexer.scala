@@ -4,7 +4,10 @@ import org.apache.spark.SparkException
 import org.apache.spark.ml.feature.{StringIndexer, StringIndexerAggregator, StringIndexerModel}
 import org.apache.spark.annotation.Since
 import org.apache.spark.ml.attribute.NominalAttribute
+import org.apache.spark.ml.param._
+import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.util._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.{If, Literal}
 import org.apache.spark.sql.functions.{collect_set, udf}
 import org.apache.spark.sql.types.StringType
@@ -15,22 +18,38 @@ import org.apache.spark.util.collection.OpenHashMap
 @Since("1.4.0")
 class LAMLStringIndexer @Since("1.4.0")(
                                                @Since("1.4.0") override val uid: String,
-                                               minFreq: Long = 5,
-                                               defaultValue: Double = 0.0
-                                       ) extends StringIndexer {
+                                               //val minFreq: Long = 5,
+                                               //val defaultValue: Double = 0.0
+                                       ) extends StringIndexer(uid) {
 
   @Since("1.4.0")
   def this() = this(Identifiable.randomUID("strIdx"))
 
-  def this(minFreq: Long) = this(Identifiable.randomUID("strIdx"), minFreq = minFreq)
+//  def this(minFreq: Long) = this(Identifiable.randomUID("strIdx"), minFreq = minFreq)
+//
+//  def this(defaultValue: Double) = this(Identifiable.randomUID("strIdx"), defaultValue = defaultValue)
+//
+//  def this(minFreq: Long, defaultValue: Double) = this(
+//    uid = Identifiable.randomUID("strIdx"),
+//    minFreq,
+//    defaultValue
+//  )
 
-  def this(defaultValue: Double) = this(Identifiable.randomUID("strIdx"), defaultValue = defaultValue)
+  @Since("3.2.0")
+  val minFreq: Param[Long] = new Param[Long](this, "minFreq", doc = "minFreq")
 
-  def this(minFreq: Long, defaultValue: Double) = this(
-    uid = Identifiable.randomUID("strIdx"),
-    minFreq,
-    defaultValue
-  )
+  /** @group setParam */
+  @Since("3.2.0")
+  def setMinFreq(value: Long): this.type = set(minFreq, value)
+
+  @Since("3.2.0")
+  val defaultValue: Param[Float] = new Param[Float](this, "defaultValue", doc = "defaultValue")
+
+  /** @group setParam */
+  @Since("3.2.0")
+  def setDefaultValue(value: Float): this.type = set(defaultValue, value)
+
+  setDefault(minFreq -> 5, defaultValue -> 0.0F)
 
   private def getSelectedCols(dataset: Dataset[_], inputCols: Seq[String]): Seq[Column] = {
     inputCols.map { colName =>
@@ -65,7 +84,7 @@ class LAMLStringIndexer @Since("1.4.0")(
     val sortFunc = StringIndexer.getSortFunc(ascending = ascending)
     val orgStrings = countByValue(dataset, inputCols).toSeq
     ThreadUtils.parmap(orgStrings, "sortingStringLabels", 8) { counts =>
-      counts.toSeq.filter(_._2 > minFreq).sortWith(sortFunc).map(_._1).toArray
+      counts.toSeq.filter(_._2 > $(minFreq)).sortWith(sortFunc).map(_._1).toArray
     }.toArray
   }
 
@@ -102,8 +121,8 @@ class LAMLStringIndexer @Since("1.4.0")(
       new LAMLStringIndexerModel(
         uid = uid,
         labelsArray = labelsArray,
-        defaultValue = defaultValue
-      ).setParent(this)
+        //defaultValue = defaultValue
+      ).setDefaultValue($(defaultValue)).setParent(this)
     )
   }
 
@@ -151,9 +170,9 @@ object LAMLStringIndexer extends DefaultParamsReadable[LAMLStringIndexer] {
 
 @Since("1.4.0")
 class LAMLStringIndexerModel(override val uid: String,
-                             override val labelsArray: Array[Array[String]],
-                             defaultValue: Double = 0.0)
-        extends StringIndexerModel(labelsArray) {
+                             override val labelsArray: Array[Array[String]]/*,
+                             defaultValue: Double = 0.0*/)
+        extends StringIndexerModel(uid, labelsArray) {
 
 
   @Since("1.5.0")
@@ -162,22 +181,32 @@ class LAMLStringIndexerModel(override val uid: String,
   @Since("1.5.0")
   def this(labels: Array[String]) = this(Identifiable.randomUID("strIdx"), Array(labels))
 
-  @Since("3.2.0")
-  def this(labels: Array[String], defaultValue: Double) = this(
-    Identifiable.randomUID("strIdx"),
-    Array(labels),
-    defaultValue
-  )
+//  @Since("3.2.0")
+//  def this(labels: Array[String], defaultValue: Double) = this(
+//    Identifiable.randomUID("strIdx"),
+//    Array(labels),
+//    defaultValue
+//  )
 
   @Since("3.0.0")
   def this(labelsArray: Array[Array[String]]) = this(Identifiable.randomUID("strIdx"), labelsArray)
 
+//  @Since("3.2.0")
+//  def this(labelsArray: Array[Array[String]], defaultValue: Double) = this(
+//    Identifiable.randomUID("strIdx"),
+//    labelsArray,
+//    defaultValue
+//  )
+
   @Since("3.2.0")
-  def this(labelsArray: Array[Array[String]], defaultValue: Double) = this(
-    Identifiable.randomUID("strIdx"),
-    labelsArray,
-    defaultValue
-  )
+  val defaultValue: Param[Float] = new Param[Float](this, "defaultValue", doc = "defaultValue")
+
+  /** @group setParam */
+  @Since("3.2.0")
+  def setDefaultValue(value: Float): this.type = set(defaultValue, value)
+
+  setDefault(defaultValue -> 0.0F)
+
 
   // Prepares the maps for string values to corresponding index values.
   private val labelsToIndexArray: Array[OpenHashMap[String, Double]] = {
@@ -218,7 +247,7 @@ class LAMLStringIndexerModel(override val uid: String,
     udf { label: String =>
       if (label == null) {
         if (keepInvalid) {
-          labels.length
+          $(defaultValue)
         } else {
           throw new SparkException("StringIndexer encountered NULL value. To handle or skip " +
                   "NULLS, try setting StringIndexer.handleInvalid.")
@@ -227,7 +256,7 @@ class LAMLStringIndexerModel(override val uid: String,
         if (labelToIndex.contains(label)) {
           labelToIndex(label)
         } else if (keepInvalid) {
-          defaultValue
+          $(defaultValue)
         } else {
           throw new SparkException(s"Unseen label: $label. To handle unseen labels, " +
                   s"set Param handleInvalid to ${StringIndexer.KEEP_INVALID}.")

@@ -35,12 +35,14 @@ object TestLAMLStringIndexer extends App {
   println("-- Spark Indexed --")
   testIndexed.show(100)
 
-  val lamaIndexer = new LAMLStringIndexer(minFreq = 0, defaultValue = 99.0)
-          .setInputCol("value")
-          .setOutputCol("index")
+  val lamaIndexer = new LAMLStringIndexer()
+          .setMinFreq(5)
+          .setDefaultValue(-1.0F)
+          .setInputCols(Array("value"))
+          .setOutputCols(Array("index"))
           .setHandleInvalid("keep")
 
-  val _lamaModelTestNoRuntimeError = new LAMLStringIndexerModel(labelsArray = Array(Array("a", "b")), defaultValue = 0.0)
+  val _lamaModelTestNoRuntimeError = new LAMLStringIndexerModel(labelsArray = Array(Array("a", "b")))
 
   val _sparkModelTestNoRuntimeError = new StringIndexerModel(labelsArray = Array(Array("a", "b")))
 

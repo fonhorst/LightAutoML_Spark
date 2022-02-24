@@ -6,6 +6,7 @@ from pyspark.ml.param.shared import HasThreshold, HasThresholds, HasInputCol, Ha
     HasSeed, HasNumFeatures, HasStepSize, HasMaxIter, TypeConverters, Param, Params
 from pyspark.ml.util import JavaMLReadable, JavaMLWritable
 from pyspark.ml.wrapper import JavaEstimator, JavaModel, JavaParams, JavaTransformer
+from pyspark.ml.common import inherit_doc
 
 
 class _StringIndexerParams(JavaParams, HasHandleInvalid, HasInputCol, HasOutputCol,
@@ -57,7 +58,11 @@ class _StringIndexerParams(JavaParams, HasHandleInvalid, HasInputCol, HasOutputC
         return self.getOrDefault(self.stringOrderType)
 
 
+@inherit_doc
 class LAMLStringIndexer(JavaEstimator, _StringIndexerParams, JavaMLReadable, JavaMLWritable):
+    """
+    Custom implementation of PySpark StringIndexer wrapper
+    """
 
     @keyword_only
     def __init__(self, *, inputCol=None, outputCol=None, inputCols=None, outputCols=None,
@@ -70,8 +75,8 @@ class LAMLStringIndexer(JavaEstimator, _StringIndexerParams, JavaMLReadable, Jav
         self._java_obj = self._new_java_obj(
             "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexer",
             self.uid,
-            self.minFreq,
-            self.defaultValue
+            # self.minFreq,
+            # self.defaultValue
         )
         kwargs = self._input_kwargs
         self.setParams(**kwargs)
@@ -80,6 +85,12 @@ class LAMLStringIndexer(JavaEstimator, _StringIndexerParams, JavaMLReadable, Jav
     @since("1.4.0")
     def setParams(self, *, inputCol=None, outputCol=None, inputCols=None, outputCols=None,
                   handleInvalid="error", stringOrderType="frequencyDesc", minFreq=5, defaultValue=0.):
+
+        """
+        setParams(self, \\*, inputCol=None, outputCol=None, inputCols=None, outputCols=None, \
+                  handleInvalid="error", stringOrderType="frequencyDesc")
+        Sets params for this StringIndexer.
+        """
 
         kwargs = self._input_kwargs
         return self._set(**kwargs)
@@ -201,13 +212,14 @@ class LAMLStringIndexerModel(JavaModel, _StringIndexerParams, JavaMLReadable, Ja
         model = LAMLStringIndexerModel._create_from_java_class(
             "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel",
             jlabels,
-            defaultValue
+            # defaultValue
         )
         model.setInputCol(inputCol)
         if outputCol is not None:
             model.setOutputCol(outputCol)
         if handleInvalid is not None:
             model.setHandleInvalid(handleInvalid)
+        model.setDefaultValue(defaultValue)
         return model
 
     @classmethod
@@ -224,13 +236,14 @@ class LAMLStringIndexerModel(JavaModel, _StringIndexerParams, JavaMLReadable, Ja
         model = LAMLStringIndexerModel._create_from_java_class(
             "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel",
             jlabels,
-            defaultValue
+            # defaultValue
         )
         model.setInputCols(inputCols)
         if outputCols is not None:
             model.setOutputCols(outputCols)
         if handleInvalid is not None:
             model.setHandleInvalid(handleInvalid)
+        model.setDefaultValue(defaultValue)
         return model
 
     @property
