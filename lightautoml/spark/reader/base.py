@@ -649,7 +649,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             stat = calc_encoding_rules(stat, **advanced_roles_params)
             new_roles_dict = {**new_roles_dict, **rule_based_roles_guess(stat)}
             top_scores.append(stat["max_score"])
-        #
+
         # # # guess categories handling type
         stat = get_category_roles_stat(
             dataset,

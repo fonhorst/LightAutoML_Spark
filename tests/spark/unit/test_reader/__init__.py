@@ -9,7 +9,11 @@ from pyspark.sql import SparkSession
 def spark() -> SparkSession:
     os.environ['PYSPARK_PYTHON'] = '/home/nikolay/.conda/envs/LAMA/bin/python'
 
-    spark = SparkSession.builder.config("master", "local[4]").config('spark.driver.memory', '8g').getOrCreate()
+    spark = SparkSession.builder\
+        .config("master", "local[4]")\
+        .config('spark.driver.memory', '8g')\
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true")\
+        .getOrCreate()
 
     print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
 
