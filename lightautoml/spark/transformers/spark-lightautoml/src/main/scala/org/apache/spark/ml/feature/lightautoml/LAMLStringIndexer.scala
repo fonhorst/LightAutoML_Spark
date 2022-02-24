@@ -1,30 +1,36 @@
 package org.apache.spark.ml.feature.lightautoml
 
-import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkException
-import org.apache.spark.ml.feature.{StringIndexer, StringIndexerAggregator, StringIndexerBase, StringIndexerModel}
+import org.apache.spark.ml.feature.{StringIndexer, StringIndexerAggregator, StringIndexerModel}
 import org.apache.spark.annotation.Since
-import org.apache.spark.ml.Model
 import org.apache.spark.ml.attribute.NominalAttribute
-import org.apache.spark.ml.feature.StringIndexerModel.StringIndexModelWriter
-import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.ml.util._
 import org.apache.spark.sql.catalyst.expressions.{If, Literal}
 import org.apache.spark.sql.functions.{collect_set, udf}
-import org.apache.spark.sql.types.{StringType, StructType}
+import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, Encoders}
 import org.apache.spark.util.ThreadUtils
-import org.apache.spark.util.VersionUtils.majorMinorVersion
 import org.apache.spark.util.collection.OpenHashMap
 
 @Since("1.4.0")
-class LAMLStringIndexer @Since("1.4.0")(@Since("1.4.0") override val uid: String,
-                                                minFreq: Long = 5) extends StringIndexer {
+class LAMLStringIndexer @Since("1.4.0")(
+                                               @Since("1.4.0") override val uid: String,
+                                               minFreq: Long = 5,
+                                               defaultValue: Double = 0.0
+                                       ) extends StringIndexer {
 
   @Since("1.4.0")
   def this() = this(Identifiable.randomUID("strIdx"))
 
-  def this(minFreq: Long) = this(Identifiable.randomUID("strIdx"), minFreq)
+  def this(minFreq: Long) = this(Identifiable.randomUID("strIdx"), minFreq = minFreq)
+
+  def this(defaultValue: Double) = this(Identifiable.randomUID("strIdx"), defaultValue = defaultValue)
+
+  def this(minFreq: Long, defaultValue: Double) = this(
+    uid = Identifiable.randomUID("strIdx"),
+    minFreq,
+    defaultValue
+  )
 
   private def getSelectedCols(dataset: Dataset[_], inputCols: Seq[String]): Seq[Column] = {
     inputCols.map { colName =>
@@ -96,7 +102,7 @@ class LAMLStringIndexer @Since("1.4.0")(@Since("1.4.0") override val uid: String
       new LAMLStringIndexerModel(
         uid = uid,
         labelsArray = labelsArray,
-        defaultValue = 0.0//defaultValue
+        defaultValue = defaultValue
       ).setParent(this)
     )
   }
@@ -148,14 +154,6 @@ class LAMLStringIndexerModel(override val uid: String,
                              override val labelsArray: Array[Array[String]],
                              defaultValue: Double = 0.0)
         extends StringIndexerModel(labelsArray) {
-
-//  import LAMLStringIndexerModel._
-
-//  def this(uid: String, labels: Array[String]) = this(uid, Array(labels))
-//
-//  def this(labels: Array[String]) = this(Identifiable.randomUID("strIdx"), Array(labels))
-//
-//  def this(labelsArray: Array[Array[String]]) = this(Identifiable.randomUID("strIdx"), labelsArray)
 
   // Prepares the maps for string values to corresponding index values.
   private val labelsToIndexArray: Array[OpenHashMap[String, Double]] = {
@@ -266,58 +264,3 @@ class LAMLStringIndexerModel(override val uid: String,
     }
   }
 }
-
-
-//@Since("1.6.0")
-//object LAMLStringIndexerModel extends MLReadable[StringIndexerModel] {
-//
-//  private[LAMLStringIndexerModel]
-//  class StringIndexModelWriter(instance: LAMLStringIndexerModel) extends MLWriter {
-//
-//    private case class Data(labelsArray: Array[Array[String]])
-//
-//    override protected def saveImpl(path: String): Unit = {
-//      DefaultParamsWriter.saveMetadata(instance, path, sc)
-//      val data = Data(instance.labelsArray)
-//      val dataPath = new Path(path, "data").toString
-//      sparkSession.createDataFrame(Seq(data)).repartition(1).write.parquet(dataPath)
-//    }
-//  }
-//
-//  private class StringIndexerModelReader extends MLReader[StringIndexerModel] {
-//
-//    private val className = classOf[StringIndexerModel].getName
-//
-//    override def load(path: String): StringIndexerModel = {
-//      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
-//      val dataPath = new Path(path, "data").toString
-//
-//      // We support loading old `StringIndexerModel` saved by previous Spark versions.
-//      // Previous model has `labels`, but new model has `labelsArray`.
-//      val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
-//      val labelsArray = if (majorVersion < 3) {
-//        // Spark 2.4 and before.
-//        val data = sparkSession.read.parquet(dataPath)
-//                .select("labels")
-//                .head()
-//        val labels = data.getAs[Seq[String]](0).toArray
-//        Array(labels)
-//      } else {
-//        // After Spark 3.0.
-//        val data = sparkSession.read.parquet(dataPath)
-//                .select("labelsArray")
-//                .head()
-//        data.getSeq[scala.collection.Seq[String]](0).map(_.toArray).toArray
-//      }
-//      val model = new StringIndexerModel(metadata.uid, labelsArray)
-//      metadata.getAndSetParams(model)
-//      model
-//    }
-//  }
-//
-//  @Since("1.6.0")
-//  override def read: MLReader[StringIndexerModel] = new StringIndexerModelReader
-//
-//  @Since("1.6.0")
-//  override def load(path: String): StringIndexerModel = super.load(path)
-//}

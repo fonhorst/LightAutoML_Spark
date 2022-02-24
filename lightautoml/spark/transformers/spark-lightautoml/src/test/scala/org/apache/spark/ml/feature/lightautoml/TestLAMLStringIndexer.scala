@@ -35,7 +35,7 @@ object TestLAMLStringIndexer extends App {
   println("-- Spark Indexed --")
   testIndexed.show(100)
 
-  val lamaIndexer = new LAMLStringIndexer(uid = "abc", minFreq = 5)
+  val lamaIndexer = new LAMLStringIndexer(uid = "abc", minFreq = 0, defaultValue = 99.0)
           .setInputCol("value")
           .setOutputCol("index")
           .setHandleInvalid("keep")
