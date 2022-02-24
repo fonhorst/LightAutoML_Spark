@@ -26,6 +26,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     _name: str = "LightGBM"
 
     _default_params = {
+        "improvementTolerance": 1e-4,
         "learningRate": 0.05,
         "numLeaves": 128,
         "featureFraction": 0.7,
@@ -34,10 +35,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         "maxDepth": -1,
         "minGainToSplit": 0.0,
         "maxBin": 255,
-        "minDataInLeaf": 3,
+        "minDataInLeaf": 5,
         # e.g. num trees
         "numIterations": 3000,
-        "earlyStoppingRound": 100,
+        "earlyStoppingRound": 50,
         # for regression
         "alpha": 1.0,
         "lambdaL1": 0.0,

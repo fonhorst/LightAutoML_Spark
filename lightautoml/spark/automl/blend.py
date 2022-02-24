@@ -10,8 +10,7 @@ from pyspark.ml.util import MLWritable
 from pyspark.sql import functions as F
 from pyspark.sql.functions import isnan
 
-from lightautoml.automl.blend import Blender, \
-    WeightedBlender as LAMAWeightedBlender
+from lightautoml.automl.blend import WeightedBlender
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.reader.base import RolesDict
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
@@ -20,7 +19,6 @@ from lightautoml.spark.ml_algo.base import AveragingTransformer
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.tasks.base import DEFAULT_PREDICTION_COL_NAME
 from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
-from lightautoml.spark.utils import NoOpTransformer
 
 
 class SparkBlender(ABC):
@@ -33,7 +31,6 @@ class SparkBlender(ABC):
     """
 
     def __init__(self):
-        super().__init__()
         self._transformer = None
         self._single_prediction_col_name = DEFAULT_PREDICTION_COL_NAME
         self._pred_role: Optional[ColumnRole] = None
@@ -68,6 +65,14 @@ class SparkBlender(ABC):
         self._set_metadata(predictions, pipes)
 
         return self._fit_predict(predictions, pipes)
+
+    def predict(self, predictions: SparkDataset) -> SparkDataset:
+        sdf = self._transformer.transform(predictions.data)
+
+        sds = predictions.empty()
+        sds.set_data(sdf, list(self.output_roles.keys()), self.output_roles)
+
+        return sds
 
     def _fit_predict(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) \
         -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
@@ -128,7 +133,7 @@ class SparkBlender(ABC):
         return self._score(dataset, True)
 
 
-class SparkBestModelSelector(SparkBlender):
+class SparkBestModelSelector(SparkBlender, WeightedBlender):
     def _fit_predict(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) \
             -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
         """Simple fit - just take one best.
@@ -170,11 +175,10 @@ class SparkBestModelSelector(SparkBlender):
         return best_pred, [best_pipe]
 
 
-class SparkWeightedBlender(SparkBlender):
-    def __init__(self, max_nonzero_coef: float = 0.05):
+class SparkWeightedBlender(SparkBlender, WeightedBlender):
+    def __init__(self, max_iters: int = 5, max_inner_iters: int = 7, max_nonzero_coef: float = 0.05,):
         super().__init__()
-        self.wts = None
-        self._max_nonzero_coef = max_nonzero_coef
+        super(WeightedBlender, self).__init__(max_iters, max_inner_iters, max_nonzero_coef)
 
     def _fit_predict(self,
                      predictions: SparkDataset,
@@ -216,6 +220,18 @@ class SparkWeightedBlender(SparkBlender):
 
     def fit_predict(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) -> Tuple[
         SparkDataset, Sequence[SparkMLPipeline]]:
+
+        self._set_metadata(predictions, pipes)
+        splitted_preds, _, pipe_idx = cast(List[NumpyDataset], self.split_models(predictions))
+
+        wts = self._optimize(splitted_preds)
+        splitted_preds = [x for (x, w) in zip(splitted_preds, wts) if w > 0]
+        pipes, self.wts = self._prune_pipe(pipes, wts, pipe_idx)
+
+        outp = self._get_weighted_pred(splitted_preds, self.wts)
+
+        return outp, pipes
+
 
         pred_cols = [pred_col for pred_col, _, _ in self.split_models(predictions, pipes)]
 
