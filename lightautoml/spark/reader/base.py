@@ -19,6 +19,7 @@ from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType, Role
 from lightautoml.reader.guess_roles import calc_encoding_rules, rule_based_roles_guess, calc_category_rules, \
     rule_based_cat_handler_guess
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
+from lightautoml.spark.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from lightautoml.spark.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from lightautoml.spark.utils import Cacher
 from lightautoml.tasks import Task
@@ -684,7 +685,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         return new_roles_dict
 
 
-class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper):
+class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickleMLWritable, CommonPickleMLReadable):
     usedArrayAttrs = Param(Params._dummy(), "usedArrayAttrs", "usedArrayAttrs")
     addArrayAttrs = Param(Params._dummy(), "addArrayAttrs", "addArrayAttrs")
     roles = Param(Params._dummy(), "roles", "roles")
@@ -701,6 +702,7 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper):
         self.set(self.classMapping, class_mapping)
         self.set(self.usedArrayAttrs, used_array_attrs)
         self.set(self.roles, roles)
+        self.set(self.addArrayAttrs, None)
 
     def getTaskName(self) -> str:
         return self.getOrDefault(self.taskName)
