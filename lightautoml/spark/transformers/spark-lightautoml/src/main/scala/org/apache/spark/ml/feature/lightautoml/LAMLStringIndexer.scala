@@ -1,8 +1,10 @@
 package org.apache.spark.ml.feature.lightautoml
 
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkException
-import org.apache.spark.ml.feature.{StringIndexer, StringIndexerAggregator, StringIndexerModel}
+import org.apache.spark.ml.feature.{StringIndexer, StringIndexerAggregator, StringIndexerBase, StringIndexerModel}
 import org.apache.spark.annotation.Since
+import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.ml.attribute.NominalAttribute
 import org.apache.spark.ml.param._
 import org.apache.spark.ml.param.shared._
@@ -13,19 +15,79 @@ import org.apache.spark.sql.functions.{collect_set, udf}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, Encoders}
 import org.apache.spark.util.ThreadUtils
+import org.apache.spark.util.VersionUtils.majorMinorVersion
 import org.apache.spark.util.collection.OpenHashMap
 
 //import java.util
 
+private[lightautoml] trait LAMLStringIndexerBase extends StringIndexerBase {
+  // Overridden from StringIndexerBase due to we are able to handle Boolean columns.
+  private def validateAndTransformField(schema: StructType,
+                                        inputColName: String,
+                                        outputColName: String): StructField = {
+    val inputDataType = schema(inputColName).dataType
+    require(inputDataType == StringType || inputDataType.isInstanceOf[NumericType] || inputDataType == BooleanType,
+      s"The input column $inputColName must be string type, boolean type or numeric type, " +
+              s"but got $inputDataType.")
+    require(schema.fields.forall(_.name != outputColName),
+      s"Output column $outputColName already exists.")
+    NominalAttribute.defaultAttr.withName(outputColName).toStructField()
+  }
+
+  override protected def validateAndTransformSchema(schema: StructType,
+                                                    skipNonExistsCol: Boolean = false): StructType = {
+    val (inputColNames, outputColNames) = getInOutCols()
+
+    require(outputColNames.distinct.length == outputColNames.length,
+      s"Output columns should not be duplicate.")
+
+    val outputFields = inputColNames.zip(outputColNames).flatMap {
+      case (inputColName, outputColName) =>
+        schema.fieldNames.contains(inputColName) match {
+          case true => Some(validateAndTransformField(schema, inputColName, outputColName))
+          case false if skipNonExistsCol => None
+          case _ => throw new SparkException(s"Input column $inputColName does not exist.")
+        }
+    }
+    StructType(schema.fields ++ outputFields)
+  }
+}
+
+
 @Since("1.4.0")
 class LAMLStringIndexer @Since("1.4.0")(
                                                @Since("1.4.0") override val uid: String
-                                       ) extends StringIndexer {
+                                       ) extends Estimator[LAMLStringIndexerModel]
+        with LAMLStringIndexerBase with DefaultParamsWritable {
 
   @Since("1.4.0")
   def this() = this(Identifiable.randomUID("strIdx"))
 
-  // TODO: minFreqs required refactoring in 2 ways: 1 - parameter validation, 2 - default value
+  /** @group setParam */
+  @Since("1.6.0")
+  def setHandleInvalid(value: String): this.type = set(handleInvalid, value)
+
+  /** @group setParam */
+  @Since("2.3.0")
+  def setStringOrderType(value: String): this.type = set(stringOrderType, value)
+
+  /** @group setParam */
+  @Since("1.4.0")
+  def setInputCol(value: String): this.type = set(inputCol, value)
+
+  /** @group setParam */
+  @Since("1.4.0")
+  def setOutputCol(value: String): this.type = set(outputCol, value)
+
+  /** @group setParam */
+  @Since("3.0.0")
+  def setInputCols(value: Array[String]): this.type = set(inputCols, value)
+
+  /** @group setParam */
+  @Since("3.0.0")
+  def setOutputCols(value: Array[String]): this.type = set(outputCols, value)
+
+  // TODO: minFreqs required refactoring in multiple ways: 1 - parameter validation, 2 - default value, 3 - single minFreq
   @Since("3.2.0")
   val minFreqs: IntArrayParam = new IntArrayParam(this, "minFreqs", doc = "minFreqs")
 
@@ -40,17 +102,34 @@ class LAMLStringIndexer @Since("1.4.0")(
   @Since("3.2.0")
   def setDefaultValue(value: Double): this.type = set(defaultValue, value)
 
-  setDefault(defaultValue -> 0.0F)
+  @Since("3.2.0")
+  val freqLabel: Param[Boolean] = new Param[Boolean](this, "freqLabel", doc = "freqLabel")
+
+  /** @group setParam */
+  @Since("3.2.0")
+  def setFreqLabel(value: Boolean): this.type = set(freqLabel, value)
+
+  @Since("3.2.0")
+  val nanLast: Param[Boolean] = new Param[Boolean](this, "nanLast", doc = "nanLast")
+
+  /** @group setParam */
+  @Since("3.2.0")
+  def setNanLast(value: Boolean): this.type = set(nanLast, value)
+
+  setDefault(defaultValue -> 0.0D, nanLast -> false, freqLabel -> false)
 
   private def getSelectedCols(dataset: Dataset[_], inputCols: Seq[String]): Seq[Column] = {
     inputCols.map { colName =>
       val col = dataset.col(colName)
       if (col.expr.dataType == StringType) {
         col
+      } else if (col.expr.dataType == BooleanType) {
+        //col.cast(StringType)
+        new Column(col.expr).cast(StringType)
       } else {
         // We don't count for NaN values. Because `StringIndexerAggregator` only processes strings,
         // we replace NaNs with null in advance.
-        new Column(If(col.isNaN.expr, Literal(null), col.expr)).cast(StringType)
+        new Column(If(col.isNaN.expr, Literal("NaN")/*Literal(null)*/, col.expr)).cast(StringType)
       }
     }
   }
@@ -69,16 +148,20 @@ class LAMLStringIndexer @Since("1.4.0")(
             .collect()(0)
   }
 
-  private def sortByFreq(dataset: Dataset[_], ascending: Boolean): Array[Array[String]] = {
+  private def sortByFreq(dataset: Dataset[_], ascending: Boolean): Array[Array[(String, Long)]] = {
     val (inputCols, _) = getInOutCols()
 
     val sortFunc = StringIndexer.getSortFunc(ascending = ascending)
     val orgStrings = countByValue(dataset, inputCols).toSeq zip $(minFreqs)
-    ThreadUtils.parmap(orgStrings, "sortingStringLabels", 8) { data =>
-      val counts = data._1
-      val minFreq = data._2
-      counts.toSeq.filter(_._2 > minFreq).sortWith(sortFunc).map(_._1).toArray
-    }.toArray
+    val arr = ThreadUtils.parmap(orgStrings, "sortingStringLabels", 8) { case (counts, minFreq) =>
+      counts.toSeq.filter(_._2 > minFreq).sortWith(sortFunc).map(v => (v._1, v._2)).toArray
+    }
+
+    if ($(nanLast)){
+      arr.map(v => v.filter(w => w._1.equals("NaN")) :+ ("NaN", 0L)).toArray
+    } else {
+      arr.toArray
+    }
   }
 
   private def sortByAlphabet(dataset: Dataset[_], ascending: Boolean): Array[Array[String]] = {
@@ -99,7 +182,7 @@ class LAMLStringIndexer @Since("1.4.0")(
   }
 
   @Since("2.0.0")
-  override def fit(dataset: Dataset[_]): StringIndexerModel = {
+  override def fit(dataset: Dataset[_]): LAMLStringIndexerModel = {
     transformSchema(dataset.schema, logging = true)
 
     // In case of equal frequency when frequencyDesc/Asc, the strings are further sorted
@@ -107,17 +190,22 @@ class LAMLStringIndexer @Since("1.4.0")(
     val labelsArray = $(stringOrderType) match {
       case StringIndexer.frequencyDesc => sortByFreq(dataset, ascending = false)
       case StringIndexer.frequencyAsc => sortByFreq(dataset, ascending = true)
-      case StringIndexer.alphabetDesc => sortByAlphabet(dataset, ascending = false)
-      case StringIndexer.alphabetAsc => sortByAlphabet(dataset, ascending = true)
     }
     copyValues(
       new LAMLStringIndexerModel(
         uid = uid,
         labelsArray = labelsArray
-      ).setDefaultValue($(defaultValue)).setParent(this)
+      ).setDefaultValue($(defaultValue)).setFreqLabel($(freqLabel)).setParent(this)
     )
   }
 
+  @Since("1.4.0")
+  override def transformSchema(schema: StructType): StructType = {
+    validateAndTransformSchema(schema)
+  }
+
+  @Since("1.4.1")
+  override def copy(extra: ParamMap): LAMLStringIndexer = defaultCopy(extra)
 }
 
 
@@ -130,10 +218,8 @@ object LAMLStringIndexer extends DefaultParamsReadable[LAMLStringIndexer] {
     Array(SKIP_INVALID, ERROR_INVALID, KEEP_INVALID)
   private[feature] val frequencyDesc: String = "frequencyDesc"
   private[feature] val frequencyAsc: String = "frequencyAsc"
-  private[feature] val alphabetDesc: String = "alphabetDesc"
-  private[feature] val alphabetAsc: String = "alphabetAsc"
   private[feature] val supportedStringOrderType: Array[String] =
-    Array(frequencyDesc, frequencyAsc, alphabetDesc, alphabetAsc)
+    Array(frequencyDesc, frequencyAsc)
 
   @Since("1.6.0")
   override def load(path: String): LAMLStringIndexer = super.load(path)
@@ -162,26 +248,39 @@ object LAMLStringIndexer extends DefaultParamsReadable[LAMLStringIndexer] {
 
 @Since("1.4.0")
 class LAMLStringIndexerModel(override val uid: String,
-                             override val labelsArray: Array[Array[String]])
-        extends StringIndexerModel(labelsArray) {
+                             val labelsArray: Array[Array[(String, Long)]])
+        extends Model[LAMLStringIndexerModel] with LAMLStringIndexerBase with MLWritable {
 
-
-  @Since("1.5.0")
-  def this(uid: String, labels: Array[String]) = this(uid, Array(labels))
+  import LAMLStringIndexerModel._
 
   @Since("1.5.0")
-  def this(labels: Array[String]) = this(Identifiable.randomUID("strIdx"), Array(labels))
+  def this(uid: String, labels: Array[(String, Long)]) = this(uid, Array(labels))
+
+  @Since("1.5.0")
+  def this(labels: Array[(String, Long)]) = this(Identifiable.randomUID("strIdx"), Array(labels))
 
   @Since("3.0.0")
-  def this(labelsArray: Array[Array[String]]) = this(Identifiable.randomUID("strIdx"), labelsArray)
-
-  // TODO: minFreqs required refactoring in 2 ways: 1 - parameter validation, 2 - default value
-  @Since("3.2.0")
-  val minFreqs: IntArrayParam = new IntArrayParam(this, "minFreqs", doc = "minFreqs")
+  def this(labelsArray: Array[Array[(String, Long)]]) = this(Identifiable.randomUID("strIdx"), labelsArray)
 
   /** @group setParam */
-  @Since("3.2.0")
-  def setMinFreq(value: Array[Int]): this.type = set(minFreqs, value)
+  @Since("1.6.0")
+  def setHandleInvalid(value: String): this.type = set(handleInvalid, value)
+
+  /** @group setParam */
+  @Since("1.4.0")
+  def setInputCol(value: String): this.type = set(inputCol, value)
+
+  /** @group setParam */
+  @Since("1.4.0")
+  def setOutputCol(value: String): this.type = set(outputCol, value)
+
+  /** @group setParam */
+  @Since("3.0.0")
+  def setInputCols(value: Array[String]): this.type = set(inputCols, value)
+
+  /** @group setParam */
+  @Since("3.0.0")
+  def setOutputCols(value: Array[String]): this.type = set(outputCols, value)
 
   @Since("3.2.0")
   val defaultValue: Param[Double] = new Param[Double](this, "defaultValue", doc = "defaultValue")
@@ -190,16 +289,35 @@ class LAMLStringIndexerModel(override val uid: String,
   @Since("3.2.0")
   def setDefaultValue(value: Double): this.type = set(defaultValue, value)
 
-  setDefault(defaultValue -> 0.0D)
+  @Since("3.2.0")
+  val freqLabel: Param[Boolean] = new Param[Boolean](this, "freqLabel", doc = "freqLabel")
 
+  /** @group setParam */
+  @Since("3.2.0")
+  def setFreqLabel(value: Boolean): this.type = set(freqLabel, value)
+
+  setDefault(defaultValue -> 0.0D, freqLabel -> false)
+
+  @deprecated("`labels` is deprecated and will be removed in 3.1.0. Use `labelsArray` " +
+          "instead.", "3.0.0")
+  @Since("1.5.0")
+  def labels: Array[(String, Long)] = {
+    require(labelsArray.length == 1, "This StringIndexerModel is fit on multiple columns. " +
+            "Call `labelsArray` instead.")
+    labelsArray(0)
+  }
 
   // Prepares the maps for string values to corresponding index values.
   private val labelsToIndexArray: Array[OpenHashMap[String, Double]] = {
     for (labels <- labelsArray) yield {
       val n = labels.length
       val map = new OpenHashMap[String, Double](n)
-      labels.zipWithIndex.foreach { case (label, idx) =>
-        map.update(label, idx + 1)
+      if ($(freqLabel)) {
+        labels.foreach { label => map.update(label._1, label._2) }
+      } else {
+        labels.zipWithIndex.foreach { case (label, idx) =>
+          map.update(label._1, idx + 1)
+        }
       }
       map
     }
@@ -275,13 +393,13 @@ class LAMLStringIndexerModel(override val uid: String,
                 "Skip StringIndexerModel for this column.")
         outputColNames(i) = null
       } else {
-        val filteredLabels = getHandleInvalid match {
-          case StringIndexer.KEEP_INVALID => labels :+ "__unknown"
-          case _ => labels
+        val labelsForMetadata = getHandleInvalid match {
+          case StringIndexer.KEEP_INVALID => labels.map(_._1) :+ "__unknown"
+          case _ => labels.map(_._1)
         }
         val metadata = NominalAttribute.defaultAttr
                 .withName(outputColName)
-                .withValues(filteredLabels)
+                .withValues(labelsForMetadata)
                 .toMetadata()
 
         val indexer = getIndexer(labelToIndex)
@@ -301,4 +419,80 @@ class LAMLStringIndexerModel(override val uid: String,
       filteredDataset.toDF()
     }
   }
+
+  @Since("1.4.0")
+  override def transformSchema(schema: StructType): StructType = {
+    validateAndTransformSchema(schema, skipNonExistsCol = true)
+  }
+
+  @Since("1.4.1")
+  override def copy(extra: ParamMap): LAMLStringIndexerModel = {
+    val copied = new LAMLStringIndexerModel(uid, labelsArray)
+    copyValues(copied, extra).setParent(parent)
+  }
+
+  @Since("1.6.0")
+  override def write: LAMLStringIndexModelWriter = new LAMLStringIndexModelWriter(this)
+
+  @Since("3.0.0")
+  override def toString: String = {
+    s"StringIndexerModel: uid=$uid, handleInvalid=${$(handleInvalid)}" +
+            get(stringOrderType).map(t => s", stringOrderType=$t").getOrElse("") +
+            get(inputCols).map(c => s", numInputCols=${c.length}").getOrElse("") +
+            get(outputCols).map(c => s", numOutputCols=${c.length}").getOrElse("")
+  }
+}
+
+@Since("1.6.0")
+object LAMLStringIndexerModel extends MLReadable[LAMLStringIndexerModel] {
+
+  private[LAMLStringIndexerModel]
+  class LAMLStringIndexModelWriter(instance: LAMLStringIndexerModel) extends MLWriter {
+
+    private case class Data(labelsArray: Array[Array[(String, Long)]])
+
+    override protected def saveImpl(path: String): Unit = {
+      DefaultParamsWriter.saveMetadata(instance, path, sc)
+      val data = Data(instance.labelsArray)
+      val dataPath = new Path(path, "data").toString
+      sparkSession.createDataFrame(Seq(data)).repartition(1).write.parquet(dataPath)
+    }
+  }
+
+  private class LAMLStringIndexerModelReader extends MLReader[LAMLStringIndexerModel] {
+
+    private val className = classOf[StringIndexerModel].getName
+
+    override def load(path: String): LAMLStringIndexerModel = {
+      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
+      val dataPath = new Path(path, "data").toString
+
+      // We support loading old `StringIndexerModel` saved by previous Spark versions.
+      // Previous model has `labels`, but new model has `labelsArray`.
+      val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
+      val labelsArray = if (majorVersion < 3) {
+        // Spark 2.4 and before.
+        val data = sparkSession.read.parquet(dataPath)
+                .select("labels")
+                .head()
+        val labels = data.getAs[Seq[(String, Long)]](0).toArray
+        Array(labels)
+      } else {
+        // After Spark 3.0.
+        val data = sparkSession.read.parquet(dataPath)
+                .select("labelsArray")
+                .head()
+        data.getSeq[scala.collection.Seq[(String, Long)]](0).map(_.toArray).toArray
+      }
+      val model = new LAMLStringIndexerModel(metadata.uid, labelsArray)
+      metadata.getAndSetParams(model)
+      model
+    }
+  }
+
+  @Since("1.6.0")
+  override def read: MLReader[LAMLStringIndexerModel] = new LAMLStringIndexerModelReader
+
+  @Since("1.6.0")
+  override def load(path: String): LAMLStringIndexerModel = super.load(path)
 }

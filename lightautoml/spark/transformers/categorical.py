@@ -154,11 +154,11 @@ class SparkLabelEncoderTransformer(SparkBaseTransformer, TypesHelper):
 
         logger.info(f"[{type(self)} (LE)] transform is started")
 
-        schema = dataset.schema
-
-        for col in self.getInputCols():
-            if str(schema[col].dataType) in ["BooleanType", "FloatType", "DoubleType", "DecimalType"]:
-                dataset = dataset.withColumn(col, F.col(col).astype("string"))
+        # schema = dataset.schema
+        #
+        # for col in self.getInputCols():
+        #     if str(schema[col].dataType) in ["BooleanType", "FloatType", "DoubleType", "DecimalType"]:
+        #         dataset = dataset.withColumn(col, F.col(col).astype("string"))
 
         model: LAMLStringIndexerModel = (
             self.indexer_model

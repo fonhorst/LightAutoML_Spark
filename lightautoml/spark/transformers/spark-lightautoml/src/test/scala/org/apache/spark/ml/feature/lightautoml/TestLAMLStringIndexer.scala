@@ -42,7 +42,7 @@ object TestLAMLStringIndexer extends App {
           .setOutputCols(Array("index"))
           .setHandleInvalid("keep")
 
-  val _lamaModelTestNoRuntimeError = new LAMLStringIndexerModel(labelsArray = Array(Array("a", "b")))
+  val _lamaModelTestNoRuntimeError = new LAMLStringIndexerModel(labelsArray = Array(Array(("a", 1), ("b", 2))))
 
   val _sparkModelTestNoRuntimeError = new StringIndexerModel(labelsArray = Array(Array("a", "b")))
 
@@ -50,6 +50,7 @@ object TestLAMLStringIndexer extends App {
 
   val lamaModel = lamaIndexer.fit(df)
   val lamaTestIndexed = lamaModel.transform(testDf)
+//  val lamaTestIndexed = lamaModel.transform(df)
 
   println("-- Lama Indexed --")
   lamaTestIndexed.show(100)
@@ -64,6 +65,4 @@ object TestLAMLStringIndexer extends App {
   while (args(0).toBoolean) {
     Thread.sleep(1000)
   }
-
-
 }
