@@ -131,7 +131,7 @@ def compare_sparkml_transformers_results(spark: SparkSession,
     # for row in lama_np_ds:
     #     print(row)
 
-    with log_exec_time("SPARK EXEC"):
+    with log_exec_time("SPARK EXEC", write_log=False):
         if isinstance(t_spark, Estimator):
             t_spark = t_spark.fit(sds.data)
 
@@ -139,7 +139,7 @@ def compare_sparkml_transformers_results(spark: SparkSession,
     transformed_sds = SparkColumnsAndRoles.make_dataset(t_spark, sds, transformed_df)
 
     spark_np_ds = transformed_sds.to_pandas()
-    print(f"\nTransformed SPRK: \n{spark_np_ds}")
+    print(f"\nTransformed SPRK: \n{spark_np_ds.data[spark_np_ds.features]}")
     # for row in spark_np_ds:
     #     print(row)
 
@@ -210,7 +210,7 @@ def compare_sparkml_by_content(spark: SparkSession,
         Returns:
             A tuple of (LAMA transformed dataset, Spark transformed dataset)
         """
-    return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark, compare_metadata_only=False)
+    return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark)
 
 
 def compare_sparkml_by_metadata(spark: SparkSession,

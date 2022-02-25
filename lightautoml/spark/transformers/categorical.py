@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from pandas import Series
 from pyspark.ml import Transformer
-from pyspark.ml.feature import OneHotEncoder, StringIndexer
+from pyspark.ml.feature import OneHotEncoder
 from pyspark.ml.param.shared import Param, Params
 from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame, Window, Column
 from sklearn.utils.murmurhash import murmurhash3_32
@@ -19,6 +19,8 @@ from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
     multiclass_task_check
+
+from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +85,7 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
     _transform_checks = ()
     _fname_prefix = "le"
 
-    _fillna_val = 0
+    _fillna_val = 0.
 
     def __init__(self,
                  input_cols: Optional[List[str]] = None,

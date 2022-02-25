@@ -27,8 +27,8 @@ def test_laml_string_indexer():
         inputCol="value",
         outputCol="index",
         handleInvalid="keep",
-        minFreq=5,
-        defaultValue=float("nan")
+        minFreqs=[5],
+        defaultValue=-1.
     )
 
     model: LAMLStringIndexerModel = indexer.fit(df)

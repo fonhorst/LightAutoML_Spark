@@ -36,7 +36,7 @@ object TestLAMLStringIndexer extends App {
   testIndexed.show(100)
 
   val lamaIndexer = new LAMLStringIndexer()
-          .setMinFreq(5)
+          .setMinFreq(Array(5))
           .setDefaultValue(-1.0F)
           .setInputCols(Array("value"))
           .setOutputCols(Array("index"))

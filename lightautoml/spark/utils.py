@@ -83,13 +83,14 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[]", 
 
 
 @contextmanager
-def log_exec_time(name: Optional[str] = None):
+def log_exec_time(name: Optional[str] = None, write_log=True):
 
-    # Add file handler for INFO 
-    file_handler_info = logging.FileHandler(f'/tmp/{name}_log.log.log', mode='a')
-    file_handler_info.setFormatter(logging.Formatter('%(message)s'))
-    file_handler_info.setLevel(logging.INFO)
-    logger.addHandler(file_handler_info)
+    # Add file handler for INFO
+    if write_log:
+        file_handler_info = logging.FileHandler(f'/tmp/{name}_log.log.log', mode='a')
+        file_handler_info.setFormatter(logging.Formatter('%(message)s'))
+        file_handler_info.setLevel(logging.INFO)
+        logger.addHandler(file_handler_info)
 
     start = datetime.now()
 

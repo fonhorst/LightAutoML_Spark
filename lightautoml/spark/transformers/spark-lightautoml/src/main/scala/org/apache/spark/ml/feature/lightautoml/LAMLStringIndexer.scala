@@ -15,6 +15,8 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, Encoders}
 import org.apache.spark.util.ThreadUtils
 import org.apache.spark.util.collection.OpenHashMap
 
+//import java.util
+
 @Since("1.4.0")
 class LAMLStringIndexer @Since("1.4.0")(
                                                @Since("1.4.0") override val uid: String
@@ -23,12 +25,13 @@ class LAMLStringIndexer @Since("1.4.0")(
   @Since("1.4.0")
   def this() = this(Identifiable.randomUID("strIdx"))
 
+  // TODO: minFreqs required refactoring in 2 ways: 1 - parameter validation, 2 - default value
   @Since("3.2.0")
-  val minFreq: Param[Int] = new Param[Int](this, "minFreq", doc = "minFreq")
+  val minFreqs: IntArrayParam = new IntArrayParam(this, "minFreqs", doc = "minFreqs")
 
   /** @group setParam */
   @Since("3.2.0")
-  def setMinFreq(value: Int): this.type = set(minFreq, value)
+  def setMinFreq(value: Array[Int]): this.type = set(minFreqs, value)
 
   @Since("3.2.0")
   val defaultValue: Param[Double] = new Param[Double](this, "defaultValue", doc = "defaultValue")
@@ -37,7 +40,7 @@ class LAMLStringIndexer @Since("1.4.0")(
   @Since("3.2.0")
   def setDefaultValue(value: Double): this.type = set(defaultValue, value)
 
-  setDefault(minFreq -> 5, defaultValue -> 0.0F)
+  setDefault(defaultValue -> 0.0F)
 
   private def getSelectedCols(dataset: Dataset[_], inputCols: Seq[String]): Seq[Column] = {
     inputCols.map { colName =>
@@ -70,9 +73,11 @@ class LAMLStringIndexer @Since("1.4.0")(
     val (inputCols, _) = getInOutCols()
 
     val sortFunc = StringIndexer.getSortFunc(ascending = ascending)
-    val orgStrings = countByValue(dataset, inputCols).toSeq
-    ThreadUtils.parmap(orgStrings, "sortingStringLabels", 8) { counts =>
-      counts.toSeq.filter(_._2 > $(minFreq)).sortWith(sortFunc).map(_._1).toArray
+    val orgStrings = countByValue(dataset, inputCols).toSeq zip $(minFreqs)
+    ThreadUtils.parmap(orgStrings, "sortingStringLabels", 8) { data =>
+      val counts = data._1
+      val minFreq = data._2
+      counts.toSeq.filter(_._2 > minFreq).sortWith(sortFunc).map(_._1).toArray
     }.toArray
   }
 
@@ -169,13 +174,14 @@ class LAMLStringIndexerModel(override val uid: String,
 
   @Since("3.0.0")
   def this(labelsArray: Array[Array[String]]) = this(Identifiable.randomUID("strIdx"), labelsArray)
-  
+
+  // TODO: minFreqs required refactoring in 2 ways: 1 - parameter validation, 2 - default value
   @Since("3.2.0")
-  val minFreq: Param[Int] = new Param[Int](this, "minFreq", doc = "minFreq")
+  val minFreqs: IntArrayParam = new IntArrayParam(this, "minFreqs", doc = "minFreqs")
 
   /** @group setParam */
   @Since("3.2.0")
-  def setMinFreq(value: Int): this.type = set(minFreq, value)
+  def setMinFreq(value: Array[Int]): this.type = set(minFreqs, value)
 
   @Since("3.2.0")
   val defaultValue: Param[Double] = new Param[Double](this, "defaultValue", doc = "defaultValue")
@@ -184,7 +190,7 @@ class LAMLStringIndexerModel(override val uid: String,
   @Since("3.2.0")
   def setDefaultValue(value: Double): this.type = set(defaultValue, value)
 
-  setDefault(minFreq -> 5, defaultValue -> 0.0D)
+  setDefault(defaultValue -> 0.0D)
 
 
   // Prepares the maps for string values to corresponding index values.

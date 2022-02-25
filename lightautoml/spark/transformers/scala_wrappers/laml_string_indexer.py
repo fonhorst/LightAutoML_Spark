@@ -31,10 +31,10 @@ class _StringIndexerParams(JavaParams, HasHandleInvalid, HasInputCol, HasOutputC
                           "in a special additional bucket, at index numLabels).",
                           typeConverter=TypeConverters.toString)
 
-    minFreq = Param(Params._dummy(),
-                    "minFreq",
-                    "The minimum number of the element occurrences not to skip it.",
-                    typeConverter=TypeConverters.toInt)
+    minFreqs = Param(Params._dummy(),
+                     "minFreqs",
+                     "The minimum number of the element occurrences not to skip it.",
+                     typeConverter=TypeConverters.toListInt)
 
     defaultValue = Param(Params._dummy(),
                          "defaultValue",
@@ -46,7 +46,7 @@ class _StringIndexerParams(JavaParams, HasHandleInvalid, HasInputCol, HasOutputC
         self._setDefault(
             handleInvalid="error",
             stringOrderType="frequencyDesc",
-            minFreq=5,
+            minFreqs=tuple(),
             defaultValue=0.
         )
 
@@ -66,7 +66,7 @@ class LAMLStringIndexer(JavaEstimator, _StringIndexerParams, JavaMLReadable, Jav
 
     @keyword_only
     def __init__(self, *, inputCol=None, outputCol=None, inputCols=None, outputCols=None,
-                 handleInvalid="error", stringOrderType="frequencyDesc", minFreq=5, defaultValue=0.):
+                 handleInvalid="error", stringOrderType="frequencyDesc", minFreqs=None, defaultValue=0.):
         """
         __init__(self, \\*, inputCol=None, outputCol=None, inputCols=None, outputCols=None, \
                  handleInvalid="error", stringOrderType="frequencyDesc")
@@ -82,7 +82,7 @@ class LAMLStringIndexer(JavaEstimator, _StringIndexerParams, JavaMLReadable, Jav
     @keyword_only
     @since("1.4.0")
     def setParams(self, *, inputCol=None, outputCol=None, inputCols=None, outputCols=None,
-                  handleInvalid="error", stringOrderType="frequencyDesc", minFreq=5, defaultValue=0.):
+                  handleInvalid="error", stringOrderType="frequencyDesc", minFreqs=None, defaultValue=0.):
 
         """
         setParams(self, \\*, inputCol=None, outputCol=None, inputCols=None, outputCols=None, \
@@ -136,11 +136,11 @@ class LAMLStringIndexer(JavaEstimator, _StringIndexerParams, JavaMLReadable, Jav
         return self._set(handleInvalid=value)
 
     @since("3.2.0")
-    def setMinFreq(self, value):
+    def setMinFreqs(self, value):
         """
-        Sets the value of :py:attr:`minFreq`.
+        Sets the value of :py:attr:`minFreqs`.
         """
-        return self._set(minFreq=value)
+        return self._set(minFreqs=value)
 
     @since("3.2.0")
     def setDefaultValue(self, value):
@@ -209,8 +209,7 @@ class LAMLStringIndexerModel(JavaModel, _StringIndexerParams, JavaMLReadable, Ja
         jlabels = LAMLStringIndexerModel._new_java_array(labels, java_class)
         model = LAMLStringIndexerModel._create_from_java_class(
             "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel",
-            jlabels,
-            # defaultValue
+            jlabels
         )
         model.setInputCol(inputCol)
         if outputCol is not None:
@@ -233,8 +232,7 @@ class LAMLStringIndexerModel(JavaModel, _StringIndexerParams, JavaMLReadable, Ja
         jlabels = LAMLStringIndexerModel._new_java_array(arrayOfLabels, java_class)
         model = LAMLStringIndexerModel._create_from_java_class(
             "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel",
-            jlabels,
-            # defaultValue
+            jlabels
         )
         model.setInputCols(inputCols)
         if outputCols is not None:
