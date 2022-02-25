@@ -344,19 +344,19 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             **kwargs
         )
 
-        if self.advanced_roles:
-            new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
-
-            droplist = [x for x in new_roles if new_roles[x].name == "Drop" and not self._roles[x].force_input]
-            self.upd_used_features(remove=droplist)
-            self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
-
-            dataset = SparkDataset(
-                train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
-                self.roles,
-                task=self.task,
-                **kwargs
-            )
+        # if self.advanced_roles:
+        #     new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
+        #
+        #     droplist = [x for x in new_roles if new_roles[x].name == "Drop" and not self._roles[x].force_input]
+        #     self.upd_used_features(remove=droplist)
+        #     self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
+        #
+        #     dataset = SparkDataset(
+        #         train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
+        #         self.roles,
+        #         task=self.task,
+        #         **kwargs
+        #     )
 
         return dataset
 

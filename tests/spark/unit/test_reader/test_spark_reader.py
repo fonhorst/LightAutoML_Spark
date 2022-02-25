@@ -91,7 +91,7 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int, agr:
     assert len(not_equal_encoding_types) == 0, f"Encoding types are different: {not_equal_encoding_types}"
 
 
-@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(dataset="used_cars_dataset_no_cols_limit")])
+@pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(setting="all-tasks")])
 def test_spark_reader_advanced_guess_roles(spark: SparkSession, config: Dict[str, Any], cv: int):
     task_type = config['task_type']
 

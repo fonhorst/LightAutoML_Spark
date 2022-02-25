@@ -11,7 +11,7 @@ from lightautoml.spark.validation.iterators import SparkHoldoutIterator, SparkFo
 from tests.spark.unit.dataset_utils import datasets, load_dump_if_exist
 
 pipeline_name = 'lgbsimple_features'
-config = datasets()['used_cars_dataset_head50k']
+config = datasets()["used_cars_dataset_head70k"]
 # config = datasets()['used_cars_dataset_0125x']
 # config = datasets()['used_cars_dataset']
 
@@ -45,8 +45,8 @@ with spark_session(master='local[4]') as spark:
     # dumped_test_ds = dumped_test_ds.empty()
     # dumped_test_ds.set_data(test_sdf, list(new_roles.keys()), new_roles)
 
-    train_valid = SparkHoldoutIterator(dumped_train_ds)
-    # train_valid = SparkFoldsIterator(dumped_train_ds)
+    # train_valid = SparkHoldoutIterator(dumped_train_ds)
+    train_valid = SparkFoldsIterator(dumped_train_ds)
     ml_algo = SparkBoostLGBM(freeze_defaults=False)
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     ml_algo = cast(SparkTabularMLAlgo, ml_algo)
