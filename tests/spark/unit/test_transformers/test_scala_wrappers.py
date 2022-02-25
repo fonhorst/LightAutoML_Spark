@@ -24,8 +24,8 @@ def test_laml_string_indexer():
     test_df = spark.read.json(test_file).cache()
 
     indexer: LAMLStringIndexer = LAMLStringIndexer(
-        inputCol="value",
-        outputCol="index",
+        inputCols=["value"],
+        outputCols=["None"],
         handleInvalid="keep",
         minFreqs=[5],
         defaultValue=-1.
@@ -33,7 +33,7 @@ def test_laml_string_indexer():
 
     model: LAMLStringIndexerModel = indexer.fit(df)
 
-    indexed_df = model.transform(test_df)
+    indexed_df = model.setOutputCols(["index"]).transform(test_df)
 
     print("-- Source DF --")
     df.show(100)

@@ -15,12 +15,14 @@ from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimato
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     TargetEncoder, MultiClassTargetEncoder
-from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata
+from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata, tiny_spark
 from ..dataset_utils import get_test_datasets
 
 spark = spark_sess
 
 CV = 5
+
+JAR_PATH = "D:\\Projects\\Sber\\LAMA\\Sber-LAMA\\lightautoml\\spark\\transformers\\spark-lightautoml\\target\\scala-2.12\\spark-lightautoml_2.12-0.1.jar"
 
 DATASETS = [
 
@@ -48,7 +50,15 @@ DATASETS = [
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_sparkml_label_encoder(spark: SparkSession, dataset: DatasetForTest):
+def test_sparkml_label_encoder(dataset: DatasetForTest):
+    spark = (
+        SparkSession
+        .builder
+        .appName("test_laml_string_indexer")
+        .master("local[1]")
+        .config("spark.jars", JAR_PATH)
+        .getOrCreate()
+    )
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
@@ -60,7 +70,16 @@ def test_sparkml_label_encoder(spark: SparkSession, dataset: DatasetForTest):
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_freq_encoder(spark: SparkSession, dataset: DatasetForTest):
+def test_freq_encoder(dataset: DatasetForTest):
+
+    spark = (
+        SparkSession
+        .builder
+        .appName("test_laml_string_indexer")
+        .master("local[1]")
+        .config("spark.jars", JAR_PATH)
+        .getOrCreate()
+    )
 
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 

@@ -51,6 +51,27 @@ def spark() -> SparkSession:
 
 
 @pytest.fixture(scope="session")
+def tiny_spark(jars=None) -> SparkSession:
+    _spark = (
+        SparkSession
+        .builder
+        .appName("LAMA-test-app")
+        .master("local[1]")
+    )
+    if jars is not None:
+        _spark.config("spark.jars", jars)
+
+    spark = _spark.getOrCreate()
+
+    print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
+
+    yield spark
+
+    # time.sleep(600)
+    spark.stop()
+
+
+@pytest.fixture(scope="session")
 def spark_with_deps() -> SparkSession:
     spark = SparkSession.builder.appName("LAMA-test-app")\
         .master("local[1]") \
