@@ -305,13 +305,13 @@ def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any],
                                ml_alg_kwargs)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_quality_mlalgo_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM, SparkBoostLGBM, 'lgbadv_features',
                                ml_alg_kwargs)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_head50k')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_quality_mlalgo_simple_features_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM, SparkBoostLGBM, 'lgbsimple_features',
                                {})
