@@ -217,7 +217,7 @@ class SparkFillnaMedianTransformer(SparkBaseTransformer, CommonPickleMLWritable,
         return out_sdf
 
 
-class SparkLogOddsTransformer(SparkBaseTransformer):
+class SparkLogOddsTransformer(SparkBaseTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
     """Convert probs to logodds."""
 
     _fit_checks = (numeric_check,)
@@ -384,7 +384,7 @@ class SparkQuantileBinningEstimator(SparkBaseEstimator):
         )
 
 
-class SparkQuantileBinningTransformer(SparkBaseTransformer):
+class SparkQuantileBinningTransformer(SparkBaseTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
     _fit_checks = (numeric_check,)
     _transform_checks = ()
     _fname_prefix = "qntl"

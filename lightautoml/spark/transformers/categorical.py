@@ -538,7 +538,7 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
         )
 
 
-class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEncoderTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
+class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEncoderTransformer):
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
@@ -654,7 +654,7 @@ class SparkOHEEncoderEstimator(SparkBaseEstimator):
         )
 
 
-class OHEEncoderTransformer(SparkBaseTransformer):
+class OHEEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
     """OHEEncoder Transformer"""
 
     _fit_checks = (categorical_check, encoding_check)
@@ -1020,7 +1020,7 @@ class SparkMulticlassTargetEncoderEstimator(SparkBaseEstimator):
         )
 
 
-class SparkMultiTargetEncoderTransformer(SparkBaseTransformer):
+class SparkMultiTargetEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
 
     _fit_checks = (categorical_check, multiclass_task_check, encoding_check)
     _transform_checks = ()
