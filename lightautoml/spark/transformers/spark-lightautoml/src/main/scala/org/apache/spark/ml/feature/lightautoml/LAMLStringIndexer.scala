@@ -17,37 +17,25 @@ import org.apache.spark.util.collection.OpenHashMap
 
 @Since("1.4.0")
 class LAMLStringIndexer @Since("1.4.0")(
-                                               @Since("1.4.0") override val uid: String,
-                                               //val minFreq: Long = 5,
-                                               //val defaultValue: Double = 0.0
-                                       ) extends StringIndexer(uid) {
+                                               @Since("1.4.0") override val uid: String
+                                       ) extends StringIndexer {
 
   @Since("1.4.0")
   def this() = this(Identifiable.randomUID("strIdx"))
 
-//  def this(minFreq: Long) = this(Identifiable.randomUID("strIdx"), minFreq = minFreq)
-//
-//  def this(defaultValue: Double) = this(Identifiable.randomUID("strIdx"), defaultValue = defaultValue)
-//
-//  def this(minFreq: Long, defaultValue: Double) = this(
-//    uid = Identifiable.randomUID("strIdx"),
-//    minFreq,
-//    defaultValue
-//  )
-
   @Since("3.2.0")
-  val minFreq: Param[Long] = new Param[Long](this, "minFreq", doc = "minFreq")
+  val minFreq: Param[Int] = new Param[Int](this, "minFreq", doc = "minFreq")
 
   /** @group setParam */
   @Since("3.2.0")
-  def setMinFreq(value: Long): this.type = set(minFreq, value)
+  def setMinFreq(value: Int): this.type = set(minFreq, value)
 
   @Since("3.2.0")
-  val defaultValue: Param[Float] = new Param[Float](this, "defaultValue", doc = "defaultValue")
+  val defaultValue: Param[Double] = new Param[Double](this, "defaultValue", doc = "defaultValue")
 
   /** @group setParam */
   @Since("3.2.0")
-  def setDefaultValue(value: Float): this.type = set(defaultValue, value)
+  def setDefaultValue(value: Double): this.type = set(defaultValue, value)
 
   setDefault(minFreq -> 5, defaultValue -> 0.0F)
 
@@ -120,8 +108,7 @@ class LAMLStringIndexer @Since("1.4.0")(
     copyValues(
       new LAMLStringIndexerModel(
         uid = uid,
-        labelsArray = labelsArray,
-        //defaultValue = defaultValue
+        labelsArray = labelsArray
       ).setDefaultValue($(defaultValue)).setParent(this)
     )
   }
@@ -170,9 +157,8 @@ object LAMLStringIndexer extends DefaultParamsReadable[LAMLStringIndexer] {
 
 @Since("1.4.0")
 class LAMLStringIndexerModel(override val uid: String,
-                             override val labelsArray: Array[Array[String]]/*,
-                             defaultValue: Double = 0.0*/)
-        extends StringIndexerModel(uid, labelsArray) {
+                             override val labelsArray: Array[Array[String]])
+        extends StringIndexerModel(labelsArray) {
 
 
   @Since("1.5.0")
@@ -181,31 +167,24 @@ class LAMLStringIndexerModel(override val uid: String,
   @Since("1.5.0")
   def this(labels: Array[String]) = this(Identifiable.randomUID("strIdx"), Array(labels))
 
-//  @Since("3.2.0")
-//  def this(labels: Array[String], defaultValue: Double) = this(
-//    Identifiable.randomUID("strIdx"),
-//    Array(labels),
-//    defaultValue
-//  )
-
   @Since("3.0.0")
   def this(labelsArray: Array[Array[String]]) = this(Identifiable.randomUID("strIdx"), labelsArray)
-
-//  @Since("3.2.0")
-//  def this(labelsArray: Array[Array[String]], defaultValue: Double) = this(
-//    Identifiable.randomUID("strIdx"),
-//    labelsArray,
-//    defaultValue
-//  )
-
+  
   @Since("3.2.0")
-  val defaultValue: Param[Float] = new Param[Float](this, "defaultValue", doc = "defaultValue")
+  val minFreq: Param[Int] = new Param[Int](this, "minFreq", doc = "minFreq")
 
   /** @group setParam */
   @Since("3.2.0")
-  def setDefaultValue(value: Float): this.type = set(defaultValue, value)
+  def setMinFreq(value: Int): this.type = set(minFreq, value)
 
-  setDefault(defaultValue -> 0.0F)
+  @Since("3.2.0")
+  val defaultValue: Param[Double] = new Param[Double](this, "defaultValue", doc = "defaultValue")
+
+  /** @group setParam */
+  @Since("3.2.0")
+  def setDefaultValue(value: Double): this.type = set(defaultValue, value)
+
+  setDefault(minFreq -> 5, defaultValue -> 0.0D)
 
 
   // Prepares the maps for string values to corresponding index values.
@@ -241,7 +220,7 @@ class LAMLStringIndexerModel(override val uid: String,
             .where(conditions.reduce(_ and _))
   }
 
-  private def getIndexer(labels: Seq[String], labelToIndex: OpenHashMap[String, Double]) = {
+  private def getIndexer(labelToIndex: OpenHashMap[String, Double]) = {
     val keepInvalid = (getHandleInvalid == StringIndexer.KEEP_INVALID)
 
     udf { label: String =>
@@ -299,7 +278,7 @@ class LAMLStringIndexerModel(override val uid: String,
                 .withValues(filteredLabels)
                 .toMetadata()
 
-        val indexer = getIndexer(labels, labelToIndex)
+        val indexer = getIndexer(labelToIndex)
 
         outputColumns(i) = indexer(dataset(inputColName).cast(StringType))
                 .as(outputColName, metadata)

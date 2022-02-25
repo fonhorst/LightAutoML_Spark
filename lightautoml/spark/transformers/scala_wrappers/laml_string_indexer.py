@@ -74,9 +74,7 @@ class LAMLStringIndexer(JavaEstimator, _StringIndexerParams, JavaMLReadable, Jav
         super(LAMLStringIndexer, self).__init__()
         self._java_obj = self._new_java_obj(
             "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexer",
-            self.uid,
-            # self.minFreq,
-            # self.defaultValue
+            self.uid
         )
         kwargs = self._input_kwargs
         self.setParams(**kwargs)
