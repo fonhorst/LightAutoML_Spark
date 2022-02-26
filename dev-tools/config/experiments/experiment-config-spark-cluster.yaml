@@ -31,7 +31,7 @@ experiments:
       seed: [ 42 ]
       cv: [ 5 ]
       use_algos:
-        - [ [ "lgb" ] ]
+        - [ [ "lgb", "linear_l2" ], [ "lgb"] ]
     spark_config:
       spark.executor.instances: [ '7' ]
       spark.executor.cores: [ '8' ]

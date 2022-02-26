@@ -152,7 +152,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         elif rows_num <= 100000:
             init_lr = 0.03
-            ntrees = 1200
+            ntrees = 2000
             es = 200
         elif rows_num <= 300000:
             init_lr = 0.04
@@ -322,9 +322,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             labelCol=full.target_column,
             validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
-            useSingleDatasetMode=True,
-            # parallelism='data_parallel',
-            # numTasks=8,
+            # useSingleDatasetMode=True,
+            # parallelism='voting_parallel',
             isProvideTrainingMetric=True
         )
 

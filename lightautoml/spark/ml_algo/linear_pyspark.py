@@ -30,8 +30,10 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
     _name: str = "LinearL2"
 
     _default_params = {
-        "tol": 1e-6,
+        "tol": 1e-4,
         "maxIter": 100,
+        "aggregationDepth": 4,
+        "elasticNetParam": 0.7,
         "regParam":
         [
             1e-5,
