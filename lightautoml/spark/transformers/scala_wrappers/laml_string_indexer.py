@@ -1,11 +1,8 @@
-# from pyspark.ml.feature import StringIndexer
-
 from pyspark import since, keyword_only, SparkContext
-from pyspark.ml.param.shared import HasThreshold, HasThresholds, HasInputCol, HasOutputCol, \
-    HasInputCols, HasOutputCols, HasHandleInvalid, HasRelativeError, HasFeaturesCol, HasLabelCol, \
-    HasSeed, HasNumFeatures, HasStepSize, HasMaxIter, TypeConverters, Param, Params
+from pyspark.ml.param.shared import HasInputCol, HasOutputCol, \
+    HasInputCols, HasOutputCols, HasHandleInvalid, TypeConverters, Param, Params
 from pyspark.ml.util import JavaMLReadable, JavaMLWritable
-from pyspark.ml.wrapper import JavaEstimator, JavaModel, JavaParams, JavaTransformer
+from pyspark.ml.wrapper import JavaEstimator, JavaModel, JavaParams
 from pyspark.ml.common import inherit_doc
 
 
@@ -18,7 +15,7 @@ class _StringIndexerParams(JavaParams, HasHandleInvalid, HasInputCol, HasOutputC
     stringOrderType = Param(Params._dummy(), "stringOrderType",
                             "How to order labels of string column. The first label after " +
                             "ordering is assigned an index of 0. Supported options: " +
-                            "frequencyDesc, frequencyAsc. " +
+                            "frequencyDesc, frequencyAsc, alphabetDesc, alphabetAsc. " +
                             "Default is frequencyDesc. In case of equal frequency when " +
                             "under frequencyDesc/Asc, the strings are further sorted " +
                             "alphabetically",
@@ -348,4 +345,4 @@ class LAMLStringIndexerModel(JavaModel, _StringIndexerModelParams, JavaMLReadabl
         Array of ordered list of labels, corresponding to indices to be assigned
         for each input column.
         """
-        return self._call_java("labelsArray")
+        return self._call_java("getStringLabels")

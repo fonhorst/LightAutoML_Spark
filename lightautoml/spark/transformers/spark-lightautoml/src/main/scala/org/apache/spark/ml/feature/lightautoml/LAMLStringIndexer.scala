@@ -151,34 +151,35 @@ class LAMLStringIndexer @Since("1.4.0")(
   private def sortByFreq(dataset: Dataset[_], ascending: Boolean): Array[Array[(String, Long)]] = {
     val (inputCols, _) = getInOutCols()
 
-    val sortFunc = StringIndexer.getSortFunc(ascending = ascending)
+    val sortFunc = LAMLStringIndexer.getSortFunc(ascending = ascending)
     val orgStrings = countByValue(dataset, inputCols).toSeq zip $(minFreqs)
+
     val arr = ThreadUtils.parmap(orgStrings, "sortingStringLabels", 8) { case (counts, minFreq) =>
       counts.toSeq.filter(_._2 > minFreq).sortWith(sortFunc).map(v => (v._1, v._2)).toArray
     }
 
     if ($(nanLast)){
-      arr.map(v => v.filter(w => w._1.equals("NaN")) :+ ("NaN", 0L)).toArray
+      arr.map(v => v.filter(w => !w._1.equals("NaN")) :+ ("NaN", 0L)).toArray
     } else {
       arr.toArray
     }
   }
 
-  private def sortByAlphabet(dataset: Dataset[_], ascending: Boolean): Array[Array[String]] = {
+  private def sortByAlphabet(dataset: Dataset[_], ascending: Boolean): Array[Array[(String, Long)]] = {
     val (inputCols, _) = getInOutCols()
 
-    val selectedCols = getSelectedCols(dataset, inputCols).map(collect_set)
-    val allLabels = dataset.select(selectedCols: _*)
-            .collect().toSeq.flatMap(_.toSeq)
-            .asInstanceOf[scala.collection.Seq[scala.collection.Seq[String]]].toSeq
-    ThreadUtils.parmap(allLabels, "sortingStringLabels", 8) { labels =>
-      val sorted = labels.filter(_ != null).sorted
-      if (ascending) {
-        sorted.toArray
-      } else {
-        sorted.reverse.toArray
-      }
-    }.toArray
+    val sortFunc = LAMLStringIndexer.getAlphabetSortFunc(ascending = ascending)
+    val orgStrings = countByValue(dataset, inputCols).toSeq zip $(minFreqs)
+
+    val arr = ThreadUtils.parmap(orgStrings, "sortingStringLabels", 8) { case (counts, minFreq) =>
+      counts.toSeq.filter(_._2 > minFreq).sortWith(sortFunc).map(v => (v._1, v._2)).toArray
+    }
+
+    if ($(nanLast)){
+      arr.map(v => v.filter(w => !w._1.equals("NaN")) :+ ("NaN", 0L)).toArray
+    } else {
+      arr.toArray
+    }
   }
 
   @Since("2.0.0")
@@ -188,8 +189,10 @@ class LAMLStringIndexer @Since("1.4.0")(
     // In case of equal frequency when frequencyDesc/Asc, the strings are further sorted
     // alphabetically.
     val labelsArray = $(stringOrderType) match {
-      case StringIndexer.frequencyDesc => sortByFreq(dataset, ascending = false)
-      case StringIndexer.frequencyAsc => sortByFreq(dataset, ascending = true)
+      case LAMLStringIndexer.frequencyDesc => sortByFreq(dataset, ascending = false)
+      case LAMLStringIndexer.frequencyAsc => sortByFreq(dataset, ascending = true)
+      case LAMLStringIndexer.alphabetDesc => sortByAlphabet(dataset, ascending = false)
+      case LAMLStringIndexer.alphabetAsc => sortByAlphabet(dataset, ascending = true)
     }
     copyValues(
       new LAMLStringIndexerModel(
@@ -218,15 +221,17 @@ object LAMLStringIndexer extends DefaultParamsReadable[LAMLStringIndexer] {
     Array(SKIP_INVALID, ERROR_INVALID, KEEP_INVALID)
   private[feature] val frequencyDesc: String = "frequencyDesc"
   private[feature] val frequencyAsc: String = "frequencyAsc"
+  private[feature] val alphabetDesc: String = "alphabetDesc"
+  private[feature] val alphabetAsc: String = "alphabetAsc"
   private[feature] val supportedStringOrderType: Array[String] =
-    Array(frequencyDesc, frequencyAsc)
+    Array(frequencyDesc, frequencyAsc, alphabetDesc, alphabetAsc)
 
   @Since("1.6.0")
   override def load(path: String): LAMLStringIndexer = super.load(path)
 
   // Returns a function used to sort strings by frequency (ascending or descending).
   // In case of equal frequency, it sorts strings by alphabet (ascending).
-  private[feature] def getSortFunc(ascending: Boolean): ((String, Long), (String, Long)) => Boolean = {
+  private[lightautoml] def getSortFunc(ascending: Boolean): ((String, Long), (String, Long)) => Boolean = {
     if (ascending) {
       case ((strA: String, freqA: Long), (strB: String, freqB: Long)) =>
         if (freqA == freqB) {
@@ -243,6 +248,25 @@ object LAMLStringIndexer extends DefaultParamsReadable[LAMLStringIndexer] {
         }
     }
   }
+
+  private[lightautoml] def getAlphabetSortFunc(ascending: Boolean): ((String, Long), (String, Long)) => Boolean = {
+    if (ascending) {
+      case ((strA: String, freqA: Long), (strB: String, freqB: Long)) =>
+        if (strA == strB) {
+          freqA < freqB
+        } else {
+          strA < strB
+        }
+    } else {
+      case ((strA: String, freqA: Long), (strB: String, freqB: Long)) =>
+        if (strA == strB) {
+          freqA < freqB
+        } else {
+          strA > strB
+        }
+    }
+  }
+
 }
 
 
@@ -301,14 +325,19 @@ class LAMLStringIndexerModel(override val uid: String,
   @deprecated("`labels` is deprecated and will be removed in 3.1.0. Use `labelsArray` " +
           "instead.", "3.0.0")
   @Since("1.5.0")
-  def labels: Array[(String, Long)] = {
+  def labels: Array[Array[String]] = {
     require(labelsArray.length == 1, "This StringIndexerModel is fit on multiple columns. " +
             "Call `labelsArray` instead.")
-    labelsArray(0)
+    labelsArray(0).map(v => Array(v._1, v._2.toString))
+  }
+
+  @Since("3.2.0")
+  def getStringLabels: Array[Array[Array[String]]] = {
+    labelsArray.map((col: Array[(String, Long)]) => col.map(pair => Array(pair._1, pair._2.toString)))
   }
 
   // Prepares the maps for string values to corresponding index values.
-  private val labelsToIndexArray: Array[OpenHashMap[String, Double]] = {
+  private lazy val labelsToIndexArray: Array[OpenHashMap[String, Double]] = {
     for (labels <- labelsArray) yield {
       val n = labels.length
       val map = new OpenHashMap[String, Double](n)

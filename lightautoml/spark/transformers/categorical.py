@@ -9,9 +9,7 @@ import pandas as pd
 from pandas import Series
 from pyspark.ml import Transformer
 from pyspark.ml.feature import OneHotEncoder
-from pyspark.ml.param.shared import Param, Params
 from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame, Window, Column
-from pyspark.sql.types import StructType
 from sklearn.utils.murmurhash import murmurhash3_32
 
 from lightautoml.dataset.base import RolesDict
@@ -62,13 +60,13 @@ class TypesHelper:
         }
     )
 
-    _spark_numeric_types = (
-        SparkTypes.ShortType,
-        SparkTypes.IntegerType,
-        SparkTypes.LongType,
-        SparkTypes.FloatType,
-        SparkTypes.DoubleType,
-        SparkTypes.DecimalType
+    _spark_numeric_types_str = (
+        "ShortType",
+        "IntegerType",
+        "LongType",
+        "FloatType",
+        "DoubleType",
+        "DecimalType"
     )
 
 
@@ -104,25 +102,22 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
     def _fit(self, dataset: SparkDataFrame) -> "SparkLabelEncoderTransformer":
         logger.info(f"[{type(self)} (LE)] fit is started")
 
-        cols_to_select = []
-        schema = dataset.schema
+        roles = self._input_intermediate_roles
+        columns = self._input_intermediate_columns
 
-        for col in self._input_intermediate_columns:
-            if str(schema[col].dataType) in ["BooleanType", "FloatType", "DoubleType", "DecimalType"]:
-                c = F.col(col).astype("string").alias(col)
-            else:
-                c = F.col(col)
-            cols_to_select.append(c)
+        if self._fname_prefix == "inter":
+            roles = self._input_roles
+            columns = self._input_columns
 
         indexer = LAMLStringIndexer(
-            inputCols=self._input_intermediate_columns,
+            inputCols=columns,
             outputCols=self.getOutputCols(),
-            minFreqs=[role.unknown for name, role in self._input_intermediate_roles.items()],
+            minFreqs=[roles[col_name].unknown for col_name in columns],
             handleInvalid="keep",
             defaultValue=self._fillna_val
         )
 
-        self.indexer_model = indexer.fit(dataset.select(*cols_to_select))
+        self.indexer_model = indexer.fit(dataset)
 
         logger.info(f"[{type(self)} (LE)] fit is finished")
 
@@ -153,24 +148,24 @@ class SparkLabelEncoderTransformer(SparkBaseTransformer, TypesHelper):
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
 
         logger.info(f"[{type(self)} (LE)] transform is started")
-
-        # schema = dataset.schema
-        #
-        # for col in self.getInputCols():
-        #     if str(schema[col].dataType) in ["BooleanType", "FloatType", "DoubleType", "DecimalType"]:
-        #         dataset = dataset.withColumn(col, F.col(col).astype("string"))
+        columns = self.getInputCols()
+        out_columns = self.getOutputCols()
+        if self._fname_prefix == "inter":
+            columns = self._input_columns
+            out_columns = sorted(out_columns)
 
         model: LAMLStringIndexerModel = (
             self.indexer_model
                 .setDefaultValue(self._fillna_val)
                 .setHandleInvalid("keep")
-                .setInputCols(self.getInputCols())
-                .setOutputCols(self.getOutputCols())
+                .setInputCols(columns)
+                .setOutputCols(out_columns)
         )
 
         logger.info(f"[{type(self)} (LE)] Transform is finished")
 
-        output = self._make_output_df(model.transform(dataset), self.getOutputCols())
+        # output = self._make_output_df(model.transform(dataset), self.getOutputCols())
+        output = model.transform(dataset)
 
         return output
 
@@ -193,38 +188,24 @@ class SparkOrdinalEncoderEstimator(SparkLabelEncoderEstimator):
 
         logger.info(f"[{type(self)} (ORD)] fit is started")
 
-        # roles = dataset.roles
-        roles = self.getOrDefault(self.inputRoles)
+        cols_to_process = [
+            col for col in self.getInputCols()
+            if str(dataset.schema[col].dataType) not in self._spark_numeric_types_str
+        ]
 
-        self.dicts = {}
-        for i in self._use_cols:
+        min_freqs = [self._input_intermediate_roles[col].unknown for col in cols_to_process]
 
-            logger.debug(f"[{type(self)} (ORD)] fit column {i}")
+        indexer = LAMLStringIndexer(
+            stringOrderType="alphabetAsc",
+            inputCols=cols_to_process,
+            outputCols=[f"{self._fname_prefix}__{col}" for col in cols_to_process],
+            minFreqs=min_freqs,
+            handleInvalid="keep",
+            defaultValue=self._fillna_val,
+            nanLast=True  # Only for ORD
+        )
 
-            role = roles[i]
-
-            if not type(dataset.schema[i].dataType) in self._spark_numeric_types:
-
-                co = role.unknown
-
-                cnts = dataset \
-                    .groupBy(i).count() \
-                    .where((F.col("count") > co) & F.col(i).isNotNull()) \
-
-                # TODO SPARK-LAMA: isnan raises an exception if column is boolean.
-                if type(dataset.schema[i].dataType) != SparkTypes.BooleanType:
-                    cnts = cnts \
-                        .where(~F.isnan(F.col(i)))
-
-                cnts = cnts \
-                    .select(i) \
-                    .toPandas()
-
-                logger.debug(f"[{type(self)} (ORD)] toPandas is completed")
-
-                cnts = Series(cnts[i].astype(str).rank().values, index=cnts[i])
-                self.dicts[i] = cnts.append(Series([cnts.shape[0] + 1], index=[float("nan")])).drop_duplicates()
-                logger.debug(f"[{type(self)} (ORD)] pandas processing is completed")
+        self.indexer_model = indexer.fit(dataset)
 
         logger.info(f"[{type(self)} (ORD)] fit is finished")
 
@@ -233,24 +214,13 @@ class SparkOrdinalEncoderEstimator(SparkLabelEncoderEstimator):
                                               input_roles=self.getInputRoles(),
                                               output_roles=self.getOutputRoles(),
                                               do_replace_columns=self.getDoReplaceColumns(),
-                                              dicts=self.dicts)
-
-
-def ord_pandas_dict_udf(broadcasted_dict, fillna_value):
-
-    def f(s: Series) -> Series:
-        values_dict = broadcasted_dict.value
-        fillna_val = fillna_value.value
-        s[s == "nan"] = float("nan")
-        s[s == None] = float("nan")
-        return s.map(values_dict).fillna(fillna_val)
-    return F.pandas_udf(f, "double")
+                                              indexer_model=self.indexer_model)
 
 
 class SparkOrdinalEncoderTransformer(SparkLabelEncoderTransformer):
     _transform_checks = ()
     _fname_prefix = "ord"
-    _fillna_val = np.nan
+    _fillna_val = float("nan")
 
     def __init__(self,
                  input_cols: List[str],
@@ -258,72 +228,43 @@ class SparkOrdinalEncoderTransformer(SparkLabelEncoderTransformer):
                  input_roles: RolesDict,
                  output_roles: RolesDict,
                  do_replace_columns: bool,
-                 dicts: Dict):
-        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns, dicts)
+                 indexer_model: LAMLStringIndexerModel):
+        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns, indexer_model)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
 
         logger.info(f"[{type(self)} (ORD)] transform is started")
 
-        df = dataset.fillna(self._fillna_val)
-        sc = df.sql_ctx.sparkSession.sparkContext
-        fill_na_val = sc.broadcast(self._fillna_val)
+        input_columns = self.getInputCols()
+        output_columns = self.getOutputCols()
 
-        cols_to_select = []
+        cols_to_process = [
+            col for col in self.getInputCols()
+            if str(dataset.schema[col].dataType) not in self._spark_numeric_types_str
+        ]
 
-        for i, out_col in zip(self._input_columns,  self.getOutputCols()):
-            logger.debug(f"[{type(self)} (ORD)] transform col {i}")
+        # TODO: Fix naming
+        transformed_cols = [f"{self._fname_prefix}__{col}" for col in cols_to_process]
 
-            _ic = F.col(i)
+        model: LAMLStringIndexerModel = (
+            self.indexer_model
+                .setDefaultValue(self._fillna_val)
+                .setHandleInvalid("keep")
+                .setInputCols(cols_to_process)
+                .setOutputCols(transformed_cols)
+        )
 
-            if i not in self._dicts:
-                col = _ic
-            elif len(self._dicts[i]) == 0:
-                col = F.lit(self._fillna_val)
-            else:
-                vals = self._dicts[i].to_dict()
+        indexed_dataset = model.transform(dataset)
 
-                null_value = self._fillna_val
-                if None in vals:
-                    null_value = vals[None]
-                    _ = vals.pop(None, None)
-
-                if len(vals) == 0:
-                    col = F.when(_ic.isNull(), null_value).otherwise(None)
-                else:
-
-                    nan_value = self._fillna_val
-
-                    # if np.isnan(list(vals.keys())).any():  # not working
-                    # Вот этот кусок кода тут по сути из-за OrdinalEncoder, который
-                    # в КАЖДЫЙ dicts пихает nan. И вот из-за этого приходится его отсюда чистить.
-                    # Нужно подумать, как это всё зарефакторить.
-                    new_dict = {}
-                    for key, value in vals.items():
-                        try:
-                            if np.isnan(key):
-                                nan_value = value
-                            else:
-                                new_dict[key] = value
-                        except TypeError:
-                            new_dict[key] = value
-
-                    vals = new_dict
-
-                    if len(vals) == 0:
-                        col = F.lit(nan_value)
-                    else:
-                        logger.debug(f"[{type(self)} (ORD)] map size: {len(vals)}")
-
-                        labels = sc.broadcast(self._dicts[i].to_dict())
-
-                        col = ord_pandas_dict_udf(labels, fill_na_val)(_ic).astype("double")
-
-            cols_to_select.append(col.alias(out_col))
+        for input_col, output_col in zip(input_columns, output_columns):
+            if output_col in transformed_cols:
+                continue
+            indexed_dataset = indexed_dataset.withColumn(output_col, F.col(input_col))
 
         logger.info(f"[{type(self)} (ORD)] Transform is finished")
 
-        output = self._make_output_df(df, cols_to_select).fillna(self._fillna_val)
+        # output = self._make_output_df(indexed_dataset, self.getOutputCols())
+        output = indexed_dataset
 
         return output
 
@@ -346,25 +287,16 @@ class SparkFreqEncoderEstimator(SparkLabelEncoderEstimator):
 
         logger.info(f"[{type(self)} (FE)] fit is started")
 
-        cols_to_select = []
-        schema = dataset.schema
-
-        for col in self._input_intermediate_columns:
-            if str(schema[col].dataType) in ["BooleanType", "FloatType", "DoubleType", "DecimalType"]:
-                c = F.col(col).astype("string").alias(col)
-            else:
-                c = F.col(col)
-            cols_to_select.append(c)
-
         indexer = LAMLStringIndexer(
             inputCols=self._input_intermediate_columns,
             outputCols=self.getOutputCols(),
             minFreqs=[1 for _ in self._input_intermediate_columns],
             handleInvalid="keep",
-            defaultValue=self._fillna_val
+            defaultValue=self._fillna_val,
+            freqLabel=True  # Only for FREQ encoder
         )
 
-        self.indexer_model = indexer.fit(dataset.select(*cols_to_select))
+        self.indexer_model = indexer.fit(dataset)
 
         logger.info(f"[{type(self)} (FE)] fit is finished")
 
@@ -414,7 +346,8 @@ class SparkCatIntersectionsHelper:
                   intersections: Optional[Sequence[Sequence[str]]]) -> SparkDataFrame:
         columns_to_select = [
             self._make_category(comb)
-                .alias(f"{self._make_col_name(comb)}") for comb in intersections]
+                .alias(f"{self._make_col_name(comb)}") for comb in intersections
+        ]
         df = df.select('*', *columns_to_select)
         return df
 
@@ -423,6 +356,7 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
+    _fname_prefix = "inter"
 
     def __init__(self,
                  input_cols: List[str],
@@ -450,7 +384,7 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
                 label_encoded=True,
             ) for comb in self.intersections
         }
-        self._input_columns = list(self._input_roles.keys())
+        self._input_columns = sorted(list(self._input_roles.keys()))
 
         out_roles = {f"{self._fname_prefix}__{f}": role
                      for f, role in self._input_roles.items()}
@@ -472,7 +406,7 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
             input_roles=self.getInputRoles(),
             output_roles=self.getOutputRoles(),
             do_replace_columns=self.getDoReplaceColumns(),
-            dicts=self.dicts,
+            indexer_model=self.indexer_model,
             intersections=self.intersections
         )
 
@@ -490,15 +424,15 @@ class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEn
                  input_roles: RolesDict,
                  output_roles: RolesDict,
                  do_replace_columns: bool,
-                 dicts: Dict,
+                 indexer_model: LAMLStringIndexerModel,
                  intersections: Optional[Sequence[Sequence[str]]] = None):
 
-        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns, dicts)
+        super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns, indexer_model)
         self.intersections = intersections
 
     def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
         inter_df = self._build_df(df, self.intersections)
-        temp_cols = set(inter_df.columns).difference(df.columns)
+        temp_cols = sorted(list(set(inter_df.columns).difference(df.columns)))
         self._input_columns = temp_cols
 
         out_df = super()._transform(inter_df)

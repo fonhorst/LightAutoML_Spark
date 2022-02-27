@@ -26,31 +26,20 @@ object TestLAMLStringIndexer extends App {
 
   val startTime = System.currentTimeMillis()
 
-  val indexer = new StringIndexer().setInputCol("value").setOutputCol("index").setHandleInvalid("keep")
-  println(indexer.uid)
-
-  val model = indexer.fit(df)
-  val testIndexed = model.transform(testDf)
-
-  println("-- Spark Indexed --")
-  testIndexed.show(100)
-
   val lamaIndexer = new LAMLStringIndexer()
-          .setMinFreq(Array(5))
-          .setDefaultValue(-1.0F)
+          .setMinFreq(Array(1))
+          .setFreqLabel(true)
+          .setDefaultValue(1.0F)
           .setInputCols(Array("value"))
           .setOutputCols(Array("index"))
           .setHandleInvalid("keep")
 
-  val _lamaModelTestNoRuntimeError = new LAMLStringIndexerModel(labelsArray = Array(Array(("a", 1), ("b", 2))))
-
-  val _sparkModelTestNoRuntimeError = new StringIndexerModel(labelsArray = Array(Array("a", "b")))
+  //val _lamaModelTestNoRuntimeError = new LAMLStringIndexerModel(labelsArray = Array(Array(("a", 1), ("b", 2))))
 
   println(lamaIndexer.uid)
 
   val lamaModel = lamaIndexer.fit(df)
   val lamaTestIndexed = lamaModel.transform(testDf)
-//  val lamaTestIndexed = lamaModel.transform(df)
 
   println("-- Lama Indexed --")
   lamaTestIndexed.show(100)
@@ -60,7 +49,7 @@ object TestLAMLStringIndexer extends App {
   println(s"Duration = ${(endTime - startTime) / 1000D} seconds")
   println(s"Size: ${cnt}")
 
-  println(s"[${indexer.uid} - ${model.uid}] // [${lamaIndexer.uid} - ${lamaModel.uid}]")
+//  println(s"[${indexer.uid} - ${model.uid}] // [${lamaIndexer.uid} - ${lamaModel.uid}]")
 
   while (args(0).toBoolean) {
     Thread.sleep(1000)

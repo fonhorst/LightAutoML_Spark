@@ -1,6 +1,5 @@
 from pyspark.sql import SparkSession
 
-# from pyspark.ml.feature import StringIndexer, StringIndexerModel
 from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
 
 
