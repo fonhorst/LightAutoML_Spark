@@ -26,7 +26,7 @@ DATASETS = [
 
     # DatasetForTest("unit/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("unit/resources/datasets/house_prices.csv",
+    DatasetForTest("tests/spark/unit/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
@@ -129,7 +129,7 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer, compare_feature_distributions=True)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="lama_test_dataset")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset")])
 def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any], cv: int):
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
     pdf = pd.read_csv(config['path'], **read_csv_args)
@@ -137,7 +137,8 @@ def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any
     reader = PandasToPandasReader(task=Task(config["task_type"]), cv=CV, advanced_roles=False)
     train_ds = reader.fit_read(pdf, roles=config['roles'])
 
-    le_cols = get_columns_by_role(train_ds, "Category")
+    # le_cols = get_columns_by_role(train_ds, "Category")
+    le_cols = ["engine_type"]
     train_ds = train_ds[:, le_cols]
 
     le = LabelEncoder()

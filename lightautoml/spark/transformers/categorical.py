@@ -793,10 +793,10 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
             scores = (
                 sdf
-                    .join(candidates_df, on=[feature, self._folds_column])
-                    .select(*[score_func(f"candidate_{i}") for i, alpha in enumerate(self.alphas)])
-                    .first()
-                    .asDict()
+                .join(candidates_df, on=[feature, self._folds_column])
+                .select(*[score_func(f"candidate_{i}") for i, alpha in enumerate(self.alphas)])
+                .first()
+                .asDict()
             )
 
             seq_scores = [scores[f"candidate_{i}"] for i, alpha in enumerate(self.alphas)]

@@ -74,6 +74,9 @@ def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
     lama_df_stats = lama_df.describe()
     spark_df_stats = spark_df.describe()
     columns = list(lama_df_stats)
+
+    found_difference = False
+
     for col in columns:
         if col not in list(spark_df):
             print(col)
@@ -86,6 +89,7 @@ def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
         spark_col_uniques_num = len(spark_col_uniques)
         # comparing uniques:\n",
         if abs(lama_col_uniques_num - spark_col_uniques_num) > lama_col_uniques_num * diff_proc:
+            found_difference = True
             print()
             print(f'Difference between uniques {lama_col_uniques_num} (lama) and {spark_col_uniques_num} (spark)')
             print('Lama: ', lama_col_uniques)
@@ -93,7 +97,10 @@ def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
             print()
         for stats_col in stats_names:
             if abs(lama_df_stats[col][stats_col] - spark_df_stats[col][stats_col]) > lama_df_stats[col][stats_col] * diff_proc:
+                found_difference = True
                 print(f'Difference in col {col} and stats {stats_col} between {lama_df_stats[col][stats_col]} (lama) and {spark_df_stats[col][stats_col]} (spark)')
+
+    assert not found_difference
 
 
 def compare_sparkml_transformers_results(spark: SparkSession,
@@ -116,7 +123,8 @@ def compare_sparkml_transformers_results(spark: SparkSession,
     """
     sds = from_pandas_to_spark(ds, spark, ds.target)
 
-    transformed_ds = t_lama.fit_transform(ds)
+    transformed_ds_1 = t_lama.fit_transform(ds)
+    transformed_ds = t_lama.transform(ds)
 
     # print(f"Transformed LAMA: {transformed_ds.data}")
 
