@@ -59,10 +59,11 @@ if __name__ == "__main__":
         final.write().overwrite().save("/tmp/SparkLGBAdvancedPipeline_SparkBoostLGBM")
 
         final_result = final.transform(sdataset.data)
-        final_result.write.mode('overwrite').format('noop').save()
+        final_result.toPandas().to_csv("/tmp/SparkLGBAdvancedPipeline_SparkBoostLGBM.csv")
+        # final_result.write.mode('overwrite').format('noop').save()
 
         pipeline_model = PipelineModel.load("/tmp/SparkLGBAdvancedPipeline_SparkBoostLGBM")
         df = pipeline_model.transform(sdataset.data)
-        df.toPandas().to_csv("/tmp/SparkLGBAdvancedPipeline_SparkBoostLGBM.csv")
+        df.toPandas().to_csv("/tmp/SparkLGBAdvancedPipeline_SparkBoostLGBM_loaded_pipeline.csv")
 
         logger.info("Finished")
