@@ -86,9 +86,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         logger.info(f"Input columns for MLALgo: {sorted(train_valid_iterator.input_features)}")
         logger.info(f"Train size for MLAlgo: {train_valid_iterator.train.data.count()}")
 
-        prob = train_valid_iterator.train.task.name in ["binary", "multiclass"]
-        self._prediction_role = NumericRole(np.float32, force_input=True, prob=prob)
-
         # log_data(f"spark_fit_predict_{type(self).__name__}", {"train": train_valid_iterator.train.to_pandas()})
 
         assert self.is_fitted is False, "Algo is already fitted"
@@ -109,12 +106,25 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         valid_ds = cast(SparkDataset, train_valid_iterator.get_validation_data())
 
         # spark
+        prob = train_valid_iterator.train.task.name in ["binary", "multiclass"]
         outp_dim = 1
         if self.task.name == "multiclass":
             outp_dim = valid_ds.data.select(F.max(valid_ds.target_column).alias("max")).first()
             outp_dim = outp_dim["max"] + 1
+            self._prediction_role = NumericVectorOrArrayRole(outp_dim,
+                                                             f"{self.prediction_feature}" + "_{}",
+                                                             np.float32,
+                                                             force_input=True,
+                                                             prob=True)
         elif self.task.name == "binary":
             outp_dim = 2
+            self._prediction_role = NumericVectorOrArrayRole(outp_dim,
+                                                             f"{self.prediction_feature}" + "_{}",
+                                                             np.float32,
+                                                             force_input=True,
+                                                             prob=True)
+        else:
+            self._prediction_role = NumericRole(np.float32, force_input=True, prob=False)
 
         self.n_classes = outp_dim
 

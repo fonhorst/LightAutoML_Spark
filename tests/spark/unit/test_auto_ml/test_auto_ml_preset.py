@@ -44,4 +44,3 @@ def test_automl_preset(spark: SparkSession):
     pred_df.write.mode('overwrite').format('noop').save()
 
     logger.info("Finished")
-    time.sleep(600)
