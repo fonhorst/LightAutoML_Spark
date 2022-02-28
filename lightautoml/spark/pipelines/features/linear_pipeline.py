@@ -123,22 +123,22 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             te_part = SparkSequentialTransformer([te_part, target_encoder_stage])
             te_list.append(te_part)
         
-        # # get intersection of top categories
-        # intersections = self.get_categorical_intersections(train)
-        # if intersections is not None:
-        #     if target_encoder is not None:
-        #         target_encoder_stage = target_encoder(
-        #             input_cols=intersections.getOutputCols(),
-        #             input_roles=intersections.getOutputRoles(),
-        #             task_name=train.task.name,
-        #             folds_column=train.folds_column,
-        #             target_column=train.target_column,
-        #             do_replace_columns=True
-        #         )
-        #         ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
-        #         te_list.append(ints_part)
-        #     else:
-        #         sparse_list.append(intersections)
+        # get intersection of top categories
+        intersections = self.get_categorical_intersections(train)
+        if intersections is not None:
+            if target_encoder is not None:
+                target_encoder_stage = target_encoder(
+                    input_cols=intersections.getOutputCols(),
+                    input_roles=intersections.getOutputRoles(),
+                    task_name=train.task.name,
+                    folds_column=train.folds_column,
+                    target_column=train.target_column,
+                    do_replace_columns=True
+                )
+                ints_part = SparkSequentialTransformer([intersections, target_encoder_stage])
+                te_list.append(ints_part)
+            else:
+                sparse_list.append(intersections)
 
         # add datetime seasonality
         seas_cats = self.get_datetime_seasons(train, CategoryRole(np.int32))

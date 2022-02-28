@@ -31,21 +31,6 @@ from ..dataset_utils import get_test_datasets, prepared_datasets, load_dump_if_e
 
 spark = spark_sess
 
-DATASETS = [
-
-    # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
-
-    DatasetForTest("unit/resources/datasets/house_prices.csv",
-                   columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
-                   roles={
-                       "Id": CategoryRole(np.int32),
-                       "MSSubClass": CategoryRole(np.int32),
-                       "MSZoning": CategoryRole(str),
-                       "LotFrontage": CategoryRole(np.float32),
-                       "WoodDeckSF": CategoryRole(bool)
-                   })
-]
-
 CV = 5
 
 ml_alg_kwargs = {
@@ -155,11 +140,11 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     slama_lf_pds = cast(PandasDataset, slama_feats.to_pandas())
 
     # assert sorted(slama_pipeline.output_features) == sorted(lf_pds.features)
-    assert sorted(slama_pipeline.output_features) == sorted([f for f in lf_pds.features if not f.startswith('nanflg_')])
+    assert sorted(slama_pipeline.output_features) == sorted([f for f in lf_pds.features])
     assert len(set(spark_train_ds.features).difference(slama_feats.features)) == 0
     assert len(set(ds.features).difference(slama_feats.features)) == 0
-    assert set(slama_pipeline.output_roles.keys()) == set(f for f in lf_pds.roles.keys() if not f.startswith('nanflg_'))
-    assert all([(f in slama_feats.roles) for f in lf_pds.roles.keys() if not f.startswith('nanflg_')])
+    assert set(slama_pipeline.output_roles.keys()) == set(f for f in lf_pds.roles.keys())
+    assert all([(f in slama_feats.roles) for f in lf_pds.roles.keys()])
 
     not_equal_roles = [
         feat
@@ -269,7 +254,7 @@ def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int
                               ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_0125x')])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
                               ml_alg_kwargs, 'lgbadv_features')
