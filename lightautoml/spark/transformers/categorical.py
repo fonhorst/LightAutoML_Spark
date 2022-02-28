@@ -273,6 +273,8 @@ class SparkOrdinalEncoderTransformer(SparkLabelEncoderTransformer):
                 continue
             indexed_dataset = indexed_dataset.withColumn(output_col, F.col(input_col))
 
+        indexed_dataset = indexed_dataset.replace(float('nan'), 0.0, subset=output_columns)
+
         logger.info(f"[{type(self)} (ORD)] Transform is finished")
 
         # output = self._make_output_df(indexed_dataset, self.getOutputCols())
