@@ -137,8 +137,7 @@ def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any
     reader = PandasToPandasReader(task=Task(config["task_type"]), cv=CV, advanced_roles=False)
     train_ds = reader.fit_read(pdf, roles=config['roles'])
 
-    # le_cols = get_columns_by_role(train_ds, "Category")
-    le_cols = ["engine_type"]
+    le_cols = get_columns_by_role(train_ds, "Category")
     train_ds = train_ds[:, le_cols]
 
     le = LabelEncoder()
