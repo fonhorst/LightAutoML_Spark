@@ -9,6 +9,7 @@ import pandas as pd
 from pandas import Series
 from pyspark.ml import Transformer
 from pyspark.ml.feature import OneHotEncoder
+from pyspark.ml.param.shared import Param, Params
 from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame, Window, Column
 from sklearn.utils.murmurhash import murmurhash3_32
 

@@ -15,20 +15,20 @@ from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimato
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     TargetEncoder, MultiClassTargetEncoder
-from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata, tiny_spark
+from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata
 from ..dataset_utils import get_test_datasets
 
 spark = spark_sess
 
 CV = 5
 
-JAR_PATH = "D:\\Projects\\Sber\\LAMA\\Sber-LAMA\\lightautoml\\spark\\transformers\\spark-lightautoml\\target\\scala-2.12\\spark-lightautoml_2.12-0.1.jar"
+# JAR_PATH = "D:\\Projects\\Sber\\LAMA\\Sber-LAMA\\lightautoml\\spark\\transformers\\spark-lightautoml\\target\\scala-2.12\\spark-lightautoml_2.12-0.1.jar"
 
 DATASETS = [
 
     # DatasetForTest("unit/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("unit/resources/datasets/house_prices.csv",
+    DatasetForTest("tests/spark/unit/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
@@ -50,37 +50,18 @@ DATASETS = [
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_sparkml_label_encoder(dataset: DatasetForTest):
-    spark = (
-        SparkSession
-        .builder
-        .appName("test_laml_string_indexer")
-        .master("local[1]")
-        .config("spark.jars", JAR_PATH)
-        .getOrCreate()
-    )
-
+def test_sparkml_label_encoder(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
     transformer = SparkLabelEncoderEstimator(
         input_cols=ds.features,
         input_roles=ds.roles
     )
-    compare_sparkml_by_content(spark, ds, LabelEncoder(), transformer)
+    compare_sparkml_by_metadata(spark, ds, LabelEncoder(), transformer, compare_feature_distributions=True)
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_freq_encoder(dataset: DatasetForTest):
-
-    spark = (
-        SparkSession
-        .builder
-        .appName("test_laml_string_indexer")
-        .master("local[1]")
-        .config("spark.jars", JAR_PATH)
-        .getOrCreate()
-    )
-
+def test_freq_encoder(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
     transformer = SparkFreqEncoderEstimator(
@@ -91,17 +72,7 @@ def test_freq_encoder(dataset: DatasetForTest):
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_ordinal_encoder(dataset: DatasetForTest):
-
-    spark = (
-        SparkSession
-        .builder
-        .appName("test_laml_string_indexer")
-        .master("local[1]")
-        .config("spark.jars", JAR_PATH)
-        .getOrCreate()
-    )
-
+def test_ordinal_encoder(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
     transformer = SparkOrdinalEncoderEstimator(
@@ -112,16 +83,7 @@ def test_ordinal_encoder(dataset: DatasetForTest):
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_cat_intersections(dataset: DatasetForTest):
-    spark = (
-        SparkSession
-        .builder
-        .appName("test_laml_string_indexer")
-        .master("local[1]")
-        .config("spark.jars", JAR_PATH)
-        .getOrCreate()
-    )
-
+def test_cat_intersections(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles)
 
     # read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()

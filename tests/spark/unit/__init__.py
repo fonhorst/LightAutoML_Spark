@@ -24,6 +24,7 @@ from lightautoml.transformers.numeric import NumpyTransformable
 # NOTE!!!
 # All tests require PYSPARK_PYTHON env variable to be set
 # for example: PYSPARK_PYTHON=/home/nikolay/.conda/envs/LAMA/bin/python
+JAR_PATH = 'jars/spark-lightautoml_2.12-0.1.jar'
 
 
 @pytest.fixture(scope="session")
@@ -35,10 +36,10 @@ def spark() -> SparkSession:
         .appName("LAMA-test-app")
         .master("local[4]")
         .config("spark.driver.memory", "8g")
+        .config("spark.jars", JAR_PATH)
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.sql.shuffle.partitions", 200)
-            # .config("spark.sql.autoBroadcastJoinThreshold", "-1")
         .getOrCreate()
     )
 
@@ -95,6 +96,9 @@ def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
     lama_df_stats = lama_df.describe()
     spark_df_stats = spark_df.describe()
     columns = list(lama_df_stats)
+
+    found_difference = False
+
     for col in columns:
         if col not in list(spark_df):
             print(col)
@@ -107,6 +111,7 @@ def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
         spark_col_uniques_num = len(spark_col_uniques)
         # comparing uniques:\n",
         if abs(lama_col_uniques_num - spark_col_uniques_num) > lama_col_uniques_num * diff_proc:
+            found_difference = True
             print()
             print(f'Difference between uniques {lama_col_uniques_num} (lama) and {spark_col_uniques_num} (spark)')
             print('Lama: ', lama_col_uniques)
@@ -114,7 +119,10 @@ def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
             print()
         for stats_col in stats_names:
             if abs(lama_df_stats[col][stats_col] - spark_df_stats[col][stats_col]) > lama_df_stats[col][stats_col] * diff_proc:
+                found_difference = True
                 print(f'Difference in col {col} and stats {stats_col} between {lama_df_stats[col][stats_col]} (lama) and {spark_df_stats[col][stats_col]} (spark)')
+
+    assert not found_difference
 
 
 def compare_sparkml_transformers_results(spark: SparkSession,

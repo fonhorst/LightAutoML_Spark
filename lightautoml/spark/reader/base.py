@@ -1,18 +1,16 @@
 import logging
+from copy import copy
 from copy import deepcopy
 from typing import Optional, Any, List, Dict, Tuple
 
 import numpy as np
 import pandas as pd
-
-from copy import copy
-
 from pyspark.ml import Transformer
 from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as F
-from pyspark.sql.types import IntegerType, NumericType, DoubleType, FloatType, StringType
+from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
-from lightautoml.dataset.base import array_attr_roles, valid_array_attributes, RolesDict
+from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
 from lightautoml.dataset.utils import roles_parser
 from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType, RolesDict
@@ -22,7 +20,6 @@ from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from lightautoml.spark.utils import Cacher
 from lightautoml.tasks import Task
-from lightautoml.utils.tmp_utils import log_data
 
 logger = logging.getLogger(__name__)
 
@@ -391,8 +388,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         dataset = SparkDataset(data, roles=self.roles, task=self.task, **kwargs)
 
-        log_data("spark_reader_read", {"predict": dataset.to_pandas()})
-
         return dataset
 
     def make_transformer(self):
@@ -629,6 +624,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             Dict.
 
         """
+        logger.info("AdvGuessRoles: Calculating advanced guess roles")
+
         if manual_roles is None:
             manual_roles = {}
         top_scores = []
@@ -644,13 +641,15 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             subsample=self.samples,
         )
 
+        logger.info("AdvGuessRoles: Numeric roles stats were calculated")
+
         if len(stat) > 0:
             # upd stat with rules
 
             stat = calc_encoding_rules(stat, **advanced_roles_params)
             new_roles_dict = {**new_roles_dict, **rule_based_roles_guess(stat)}
             top_scores.append(stat["max_score"])
-        #
+
         # # # guess categories handling type
         stat = get_category_roles_stat(
             dataset,
@@ -664,6 +663,9 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             stat = calc_category_rules(stat)
             new_roles_dict = {**new_roles_dict, **rule_based_cat_handler_guess(stat)}
             top_scores.append(stat["max_score"])
+
+        logger.info("AdvGuessRoles: Category roles stats were calculated")
+
         #
         # # get top scores of feature
         if len(top_scores) > 0:
@@ -676,6 +678,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 random_state=self.random_state,
                 subsample=self.samples
             )
+
+            logger.info("AdvGuessRoles: Null scores stats were calculated")
             top_scores = pd.concat([null_scores, top_scores], axis=1).max(axis=1)
             rejected = list(top_scores[top_scores < drop_co].index)
             logger.info("Feats was rejected during automatic roles guess: {0}".format(rejected))

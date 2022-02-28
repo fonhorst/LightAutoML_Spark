@@ -1,4 +1,3 @@
-import functools
 import logging
 from typing import Tuple, cast, List, Optional, Union
 
@@ -8,8 +7,7 @@ from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.param import Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
 from pyspark.ml.util import MLWritable
-from pyspark.sql import functions as F, Column
-from pyspark.sql.functions import isnan
+from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType
 
 from lightautoml.dataset.roles import NumericRole, ColumnRole
@@ -17,13 +15,9 @@ from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles
-from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.utils import Cacher
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
-from lightautoml.utils.tmp_utils import log_data
-
-# from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
 
 logger = logging.getLogger(__name__)
 
