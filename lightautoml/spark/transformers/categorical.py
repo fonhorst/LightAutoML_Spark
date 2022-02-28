@@ -1,6 +1,7 @@
 import itertools
 import logging
 from collections import defaultdict
+from dataclasses import dataclass
 from itertools import combinations
 from typing import Optional, Sequence, List, Tuple, Dict, Any
 
@@ -29,6 +30,17 @@ logger = logging.getLogger(__name__)
 # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749534669
 murmurhash3_32_udf = F.udf(lambda value: murmurhash3_32(value.replace("NaN", "nan"), seed=42) if value is not None else None, SparkTypes.IntegerType())
 
+
+@dataclass
+class OOfFeatsMapping:
+    folds_column: str
+    # count of different categories in the categorical column being processed
+    dim_size: int
+    # mapping from category to a continious reperesentation found by target encoder
+    # category may be represented:
+    # - cat (plain category)
+    # - dim_size * folds_num + cat
+    mapping: Dict[int, float]
 
 class TypesHelper:
     _ad_hoc_types_mapper = defaultdict(
@@ -70,7 +82,6 @@ class TypesHelper:
 
 
 def pandas_dict_udf(broadcasted_dict):
-
     def f(s: Series) -> Series:
         values_dict = broadcasted_dict.value
         return s.map(values_dict)
@@ -738,10 +749,10 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         assert self._target_column in dataset.columns, "Target should be presented in the dataframe"
         assert self._folds_column in dataset.columns, "Folds should be presented in the dataframe"
 
-        self.encodings = []
+        self.encodings: Dict[str, Dict[int, float]] = dict()
+        oof_feats_encoding: Dict[str, OOfFeatsMapping] = dict()
 
         sdf = dataset
-        sc = sdf.sql_ctx.sparkSession.sparkContext
 
         _fc = F.col(self._folds_column)
         _tc = F.col(self._target_column)
@@ -765,6 +776,8 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
         for feature in self.getInputCols():
             _cur_col = F.col(feature)
+            dim_size, = sdf.select((F.max(_cur_col) + 1).alias("dim_size")).first()
+
             windowSpec = Window.partitionBy(_cur_col)
             f_df = sdf.groupBy(_cur_col, _fc).agg(F.sum(_tc).alias("f_sum"), F.count(_tc).alias("f_count")).cache()
 
@@ -800,7 +813,8 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             )
 
             seq_scores = [scores[f"candidate_{i}"] for i, alpha in enumerate(self.alphas)]
-            best_alpha = self.alphas[np.argmin(seq_scores)]
+            best_alpha_idx = np.argmin(seq_scores)
+            best_alpha = self.alphas[best_alpha_idx]
 
             encoding = f_df.groupby(_cur_col).agg(
                 ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding")).collect()
@@ -808,7 +822,13 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
             encoding = {row[feature]: row['encoding'] for row in encoding}
 
-            self.encodings.append(encoding)
+            self.encodings[feature] = encoding
+
+            oof_feats = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding")).collect()
+            oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
+                row[self._folds_column] * dim_size + row[feature]: row['encoding'] for row in oof_feats
+            })
+            oof_feats_encoding[feature] = oof_feats
 
             logger.debug(f"[{type(self)} (TE)] Encodings have been calculated")
 
@@ -820,7 +840,8 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             input_roles=self.getInputRoles(),
             output_cols=self.getOutputCols(),
             output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns()
+            do_replace_columns=self.getDoReplaceColumns(),
+            oof_feats_encoding=oof_feats_encoding
         )
 
 
@@ -831,14 +852,16 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer):
     _fname_prefix = "oof"
 
     def __init__(self,
-                 encodings: List[Dict[str, Any]],
+                 encodings: Dict[str, Dict[int, float]],
                  input_cols: List[str],
                  output_cols: List[str],
                  input_roles: RolesDict,
                  output_roles: RolesDict,
-                 do_replace_columns: bool = False):
+                 do_replace_columns: bool = False,
+                 oof_feats_encoding: Optional[Dict[str, OOfFeatsMapping]] = None):
         super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
         self._encodings = encodings
+        self._oof_feats_encoding = oof_feats_encoding
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
 
@@ -852,15 +875,27 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer):
         # В оригинальной ламе об этом не парились, т.к. сразу переходили в numpy. Если прислали датасет не с тем
         # порядком строк - ну штоош, это проблемы того, кто датасет этот сюда вкинул. Стоит ли нам тоже придерживаться
         # этой логики?
-        for i, (col_name, out_name) in enumerate(zip(self.getInputCols(), self.getOutputCols())):
+        for col_name, out_name in zip(self.getInputCols(), self.getOutputCols()):
             _cur_col = F.col(col_name)
-            logger.debug(f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._encodings[i])}")
 
-            values = sc.broadcast(self._encodings[i])
-
-            cols_to_select.append(pandas_dict_udf(values)(_cur_col).alias(out_name))
+            if self._oof_feats_encoding is not None:
+                oof_feats: OOfFeatsMapping = self._oof_feats_encoding[col_name]
+                _fc = F.col(oof_feats.folds_column)
+                # this is necessary to process data differently first time
+                # e.g. during pipeline fitting
+                values = sc.broadcast(oof_feats.mapping)
+                cols_to_select.append(
+                    pandas_dict_udf(values)(_fc * F.lit(oof_feats.dim_size) + _cur_col).alias(out_name)
+                )
+            else:
+                logger.debug(
+                    f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._encodings[col_name])}")
+                values = sc.broadcast(self._encodings[col_name])
+                cols_to_select.append(pandas_dict_udf(values)(_cur_col).alias(out_name))
 
         output = self._make_output_df(dataset, cols_to_select)
+
+        self._oof_feats_encoding = None
 
         logger.info(f"[{type(self)} (TE)] transform is finished")
 

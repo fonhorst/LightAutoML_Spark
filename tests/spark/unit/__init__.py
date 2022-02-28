@@ -123,8 +123,8 @@ def compare_sparkml_transformers_results(spark: SparkSession,
     """
     sds = from_pandas_to_spark(ds, spark, ds.target)
 
-    transformed_ds_1 = t_lama.fit_transform(ds)
-    transformed_ds = t_lama.transform(ds)
+    transformed_ds = t_lama.fit_transform(ds)
+    # transformed_ds = t_lama.transform(ds)
 
     # print(f"Transformed LAMA: {transformed_ds.data}")
 
