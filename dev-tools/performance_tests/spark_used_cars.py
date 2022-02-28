@@ -231,7 +231,7 @@ def calculate_lgbadv_boostlgb(
                 task = SparkTask(task_type)
                 train_data, test_data = prepare_test_and_train(spark, path, seed)
 
-                sreader = SparkToSparkReader(task=task, cv=3)
+                sreader = SparkToSparkReader(task=task, cv=3, advanced_roles=False)
                 sdataset = sreader.fit_read(train_data, roles=roles)
 
                 ml_alg_kwargs = {

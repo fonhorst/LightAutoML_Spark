@@ -56,8 +56,6 @@ def calculate_automl(path: str,
             roles=roles
         )
 
-    log_data("lama_test_part", {"test": test_data})
-
     if metric_name == "mse":
         evaluator = sklearn.metrics.mean_squared_error
     elif metric_name == "areaUnderROC":

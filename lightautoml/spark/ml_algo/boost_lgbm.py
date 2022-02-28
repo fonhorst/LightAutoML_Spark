@@ -46,7 +46,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     _name: str = "LightGBM"
 
     _default_params = {
-        "improvementTolerance": 1e-4,
+        # "improvementTolerance": 1e-4,
         "learningRate": 0.05,
         "numLeaves": 128,
         "featureFraction": 0.7,
@@ -172,7 +172,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         elif rows_num <= 100000:
             init_lr = 0.03
-            ntrees = 1200
+            ntrees = 2000
             es = 200
         elif rows_num <= 300000:
             init_lr = 0.04
@@ -342,7 +342,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             labelCol=full.target_column,
             validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
-            useSingleDatasetMode=True,
+            # useSingleDatasetMode=True,
+            # parallelism='voting_parallel',
             isProvideTrainingMetric=True
         )
 

@@ -1,7 +1,6 @@
 """Wrapped LightGBM for tabular datasets."""
 
 import logging
-
 from contextlib import redirect_stdout
 from copy import copy
 from typing import Callable
@@ -11,18 +10,15 @@ from typing import Tuple
 
 import lightgbm as lgb
 import numpy as np
-
 from pandas import Series
 
-from ..pipelines.selection.base import ImportanceEstimator
-from ..utils.logging import LoggerStream
-from ..utils.tmp_utils import log_data
-from ..validation.base import TrainValidIterator
 from .base import TabularDataset
 from .base import TabularMLAlgo
 from .tuning.base import Distribution
 from .tuning.base import SearchSpace
-
+from ..pipelines.selection.base import ImportanceEstimator
+from ..utils.logging import LoggerStream
+from ..validation.base import TrainValidIterator
 
 logger = logging.getLogger(__name__)
 
@@ -259,18 +255,18 @@ class BoostLGBM(TabularMLAlgo, ImportanceEstimator):
         lgb_valid = lgb.Dataset(valid.data, label=valid_target, weight=valid_weight)
 
         # TODO: SPARK-LAMA remove later
-        with redirect_stdout(LoggerStream(logger, verbose_eval=100)):
-            model = lgb.train(
-                params,
-                lgb_train,
-                num_boost_round=num_trees,
-                valid_sets=[lgb_valid],
-                valid_names=["valid"],
-                fobj=fobj,
-                feval=feval,
-                early_stopping_rounds=early_stopping_rounds,
-                verbose_eval=verbose_eval,
-            )
+        # with redirect_stdout(LoggerStream(logger, verbose_eval=100)):
+        model = lgb.train(
+            params,
+            lgb_train,
+            num_boost_round=num_trees,
+            valid_sets=[lgb_valid],
+            valid_names=["valid"],
+            fobj=fobj,
+            feval=feval,
+            early_stopping_rounds=early_stopping_rounds,
+            verbose_eval=verbose_eval,
+        )
 
         val_pred = model.predict(valid.data)
         val_pred = self.task.losses["lgb"].bw_func(val_pred)

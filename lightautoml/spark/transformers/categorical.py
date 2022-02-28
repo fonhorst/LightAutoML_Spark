@@ -385,7 +385,8 @@ class SparkOrdinalEncoderTransformer(SparkLabelEncoderTransformer):
 
         logger.info(f"[{type(self)} (ORD)] Transform is finished")
 
-        output = self._make_output_df(df, cols_to_select).fillna(self._fillna_val)
+        output = self._make_output_df(df, cols_to_select)
+        output = output.fillna(self._fillna_val)
 
         return output
 

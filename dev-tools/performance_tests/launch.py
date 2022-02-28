@@ -24,9 +24,9 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
     # dataset_name = "lama_test_dataset"
     # dataset_name = "ailerons_dataset"
     # dataset_name = "buzz_dataset"
-    # dataset_name = "used_cars_dataset_head50k"
+    dataset_name = "used_cars_dataset_head60k"
     # dataset_name = "used_cars_dataset_0125x"
-    dataset_name = "used_cars_dataset_025x"
+    # dataset_name = "used_cars_dataset_025x"
     # dataset_name = "used_cars_dataset_05x"
     # dataset_name = "used_cars_dataset_1x"
     # dataset_name = "tiny_used_cars_dataset"
@@ -67,6 +67,6 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
 
 if __name__ == "__main__":
-    calculate_quality(lama_automl)
-    # calculate_quality(spark_automl, delete_dir=False)
+    # calculate_quality(lama_automl)
+    calculate_quality(spark_automl, delete_dir=False)
     # calculate_quality(calculate_lgbadv_boostlgb, delete_dir=False)
