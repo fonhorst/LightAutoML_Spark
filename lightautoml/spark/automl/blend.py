@@ -1,3 +1,4 @@
+import logging
 from abc import ABC
 from copy import copy
 from typing import List, Optional, Sequence, Tuple, cast, Callable
@@ -20,6 +21,9 @@ from lightautoml.spark.ml_algo.base import AveragingTransformer
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.tasks.base import DEFAULT_PREDICTION_COL_NAME, SparkTask
 from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
+
+
+logger = logging.getLogger(__name__)
 
 
 class SparkBlender(ABC):
@@ -55,6 +59,7 @@ class SparkBlender(ABC):
     def fit_predict(
         self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]
     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
+        logger.info(f"Blender {type(self)} starting fit_predict")
 
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
             self._transformer = ColumnsSelectorTransformer(
@@ -66,7 +71,11 @@ class SparkBlender(ABC):
 
         self._set_metadata(predictions, pipes)
 
-        return self._fit_predict(predictions, pipes)
+        result = self._fit_predict(predictions, pipes)
+
+        logger.info(f"Blender {type(self)} finished fit_predict")
+
+        return result
 
     def predict(self, predictions: SparkDataset) -> SparkDataset:
         sdf = self._transformer.transform(predictions.data)
