@@ -231,7 +231,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     lama_test_feats = lama_pipeline.transform(test_ds)
     lama_feats = lama_feats if ml_algo_lama_clazz == BoostLGBM else lama_feats.to_numpy()
     train_valid = FoldsIterator(lama_feats.to_numpy())
-    ml_algo = ml_algo_lama_clazz(cacher_key='test')
+    ml_algo = ml_algo_lama_clazz()
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     assert ml_algo is not None
     test_pred = ml_algo.predict(lama_test_feats)
@@ -241,7 +241,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     lama_test_metric = score(test_pred)
 
     train_valid = SparkFoldsIterator(dumped_train_ds)
-    ml_algo = ml_algo_spark_clazz()
+    ml_algo = ml_algo_spark_clazz(cacher_key='test')
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     ml_algo = cast(SparkTabularMLAlgo, ml_algo)
     assert ml_algo is not None
