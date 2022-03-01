@@ -38,12 +38,11 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[]", 
             .builder
             .appName("SPARK-LAMA-app")
             .master(master)
+            .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
             .config("spark.sql.shuffle.partitions", "16")
             .config("spark.kryoserializer.buffer.max", "512m")
-            # .config("spark.driver.extraJavaOptions", "-Ddev.ludovic.netlib.blas.nativeLibPath=/usr/lib64/libopenblaso-r0.3.17.so")
-            # .config("spark.executor.extraJavaOptions", "-Ddev.ludovic.netlib.blas.nativeLibPath=/usr/lib64/libopenblaso-r0.3.17.so")
             .config("spark.driver.cores", "4")
             .config("spark.driver.memory", "16g")
             .config("spark.cores.max", "16")
