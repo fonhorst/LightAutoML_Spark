@@ -17,6 +17,8 @@ RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/ap
     apt-get update && \
     apt-get install -y sbt
 
+RUN rm -rf /var/lib/apt/lists/*
+
 # Copy source code. Instead of copying every time you are able to mount source code directory in this path.
 COPY lightautoml/spark/transformers/spark-lightautoml /lightautoml/spark/transformers/spark-lightautoml
 
@@ -30,7 +32,6 @@ RUN cd /lightautoml/spark/transformers/spark-lightautoml && \
 # JAR file will be located at: /lightautoml/spark/transformers/spark-lightautoml/target/scala-2.12/spark-lightautoml_2.12-{VERSION}.jar
 CMD cd /lightautoml/spark/transformers/spark-lightautoml && \
     sbt clean && \
-    sbt package && \
-    sbt shell
+    sbt package
 
 
