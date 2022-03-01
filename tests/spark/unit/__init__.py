@@ -25,6 +25,7 @@ from lightautoml.transformers.numeric import NumpyTransformable
 # NOTE!!!
 # All tests require PYSPARK_PYTHON env variable to be set
 # for example: PYSPARK_PYTHON=/home/nikolay/.conda/envs/LAMA/bin/python
+JAR_PATH = 'jars/spark-lightautoml_2.12-0.1.jar'
 
 
 @pytest.fixture(scope="session")
@@ -36,10 +37,10 @@ def spark() -> SparkSession:
         .appName("LAMA-test-app")
         .master("local[4]")
         .config("spark.driver.memory", "8g")
+        .config("spark.jars", JAR_PATH)
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.sql.shuffle.partitions", 200)
-            # .config("spark.sql.autoBroadcastJoinThreshold", "-1")
         .getOrCreate()
     )
 
@@ -110,10 +111,8 @@ def compare_datasets(ds: PandasDataset,
                      compare_feature_distributions: bool = True,
                      compare_content: bool = False):
     lama_np_ds = cast(NumpyTransformable, transformed_ds).to_numpy()
-    print(f"\nTransformed LAMA: \n{lama_np_ds}")
-
     spark_np_ds = transformed_sds.to_pandas()
-    print(f"\nTransformed SPRK: \n{spark_np_ds}")
+    print(f"\nTransformed SPRK: \n{spark_np_ds.data[spark_np_ds.features]}")
     # for row in spark_np_ds:
     #     print(row)
 
@@ -232,7 +231,7 @@ def compare_sparkml_by_metadata(spark: SparkSession,
                                 ds: PandasDataset,
                                 t_lama: LAMLTransformer,
                                 t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
-                                compare_feature_distributions: bool = False):
+                                compare_feature_distributions: bool = False) -> Tuple[NumpyDataset, NumpyDataset]:
     """
         Args:
             spark: session to be used for calculating the example
@@ -243,9 +242,9 @@ def compare_sparkml_by_metadata(spark: SparkSession,
         Returns:
             A tuple of (LAMA transformed dataset, Spark transformed dataset)
         """
-    compare_sparkml_transformers_results(spark, ds, t_lama, t_spark,
-                                         compare_feature_distributions=compare_feature_distributions,
-                                         compare_content=False)
+    return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark,
+                                                compare_feature_distributions=compare_feature_distributions,
+                                                compare_content=False)
 
 
 def compare_transformers_results(spark: SparkSession,

@@ -31,21 +31,6 @@ from ..dataset_utils import get_test_datasets, prepared_datasets, load_dump_if_e
 
 spark = spark_sess
 
-DATASETS = [
-
-    # DatasetForTest("test_transformers/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
-
-    DatasetForTest("unit/resources/datasets/house_prices.csv",
-                   columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
-                   roles={
-                       "Id": CategoryRole(np.int32),
-                       "MSSubClass": CategoryRole(np.int32),
-                       "MSZoning": CategoryRole(str),
-                       "LotFrontage": CategoryRole(np.float32),
-                       "WoodDeckSF": CategoryRole(bool)
-                   })
-]
-
 CV = 5
 
 ml_alg_kwargs = {
@@ -155,11 +140,11 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     slama_lf_pds = cast(PandasDataset, slama_feats.to_pandas())
 
     # assert sorted(slama_pipeline.output_features) == sorted(lf_pds.features)
-    assert sorted(slama_pipeline.output_features) == sorted([f for f in lf_pds.features if not f.startswith('nanflg_')])
+    assert sorted(slama_pipeline.output_features) == sorted([f for f in lf_pds.features])
     assert len(set(spark_train_ds.features).difference(slama_feats.features)) == 0
     assert len(set(ds.features).difference(slama_feats.features)) == 0
-    assert set(slama_pipeline.output_roles.keys()) == set(f for f in lf_pds.roles.keys() if not f.startswith('nanflg_'))
-    assert all([(f in slama_feats.roles) for f in lf_pds.roles.keys() if not f.startswith('nanflg_')])
+    assert set(slama_pipeline.output_roles.keys()) == set(f for f in lf_pds.roles.keys())
+    assert all([(f in slama_feats.roles) for f in lf_pds.roles.keys()])
 
     not_equal_roles = [
         feat
@@ -240,6 +225,16 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     lama_oof_metric = score(oof_pred)
     lama_test_metric = score(test_pred)
 
+    sdf = dumped_train_ds.data.replace(float('nan'), 0.0, subset=[
+        f for f in dumped_train_ds.features if f.startswith("ord_")
+    ])
+
+    # new_dumped_train_ds = dumped_train_ds.empty()
+    # new_dumped_train_ds.set_data(sdf, dumped_train_ds.features, dumped_train_ds.roles)
+    # dumped_train_ds = new_dumped_train_ds
+    #
+    # # dumped_train_ds = dumped_train_ds[:, [f for f in dumped_train_ds.features if not f.startswith('ord_')]]
+
     train_valid = SparkFoldsIterator(dumped_train_ds)
     ml_algo = ml_algo_spark_clazz(cacher_key='test')
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
@@ -263,55 +258,55 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
                                                            spark_based_test_metric)) < max_diff_in_percents
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='reg+binary')])
 def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures,
                               ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset')])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting='reg+binary')])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
                               ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting="all-tasks")])
+@pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(setting="reg+binary")])
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures,
                               dict(), 'lgbsimple_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_head100k')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='reg+binary')])
 def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS,
                                          ml_alg_kwargs, 'linear_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='reg+binary')])
 def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM,
                                          ml_alg_kwargs, 'lgbadv_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset_head50k')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='reg+binary')])
 def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
                                          dict(), 'lgbsimple_features')
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="multiclass")])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting="reg+binary")])
 def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkLinearLBFGS, 'linear_features',
                                ml_alg_kwargs)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='used_cars_dataset')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='reg+binary')])
 def test_quality_mlalgo_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM, SparkBoostLGBM, 'lgbadv_features',
                                ml_alg_kwargs)
 
 
-@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='all-tasks')])
+@pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(setting='reg+binary')])
 def test_quality_mlalgo_simple_features_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM, SparkBoostLGBM, 'lgbsimple_features',
                                {})
