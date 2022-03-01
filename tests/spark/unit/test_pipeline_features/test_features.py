@@ -236,7 +236,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     # # dumped_train_ds = dumped_train_ds[:, [f for f in dumped_train_ds.features if not f.startswith('ord_')]]
 
     train_valid = SparkFoldsIterator(dumped_train_ds)
-    ml_algo = ml_algo_spark_clazz()
+    ml_algo = ml_algo_spark_clazz(cacher_key='test')
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     ml_algo = cast(SparkTabularMLAlgo, ml_algo)
     assert ml_algo is not None
