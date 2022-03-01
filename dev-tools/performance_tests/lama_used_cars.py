@@ -48,7 +48,7 @@ def calculate_automl(path: str,
             task=task,
             timeout=3600 * 3,
             general_params={"use_algos": use_algos},
-            reader_params={"cv": cv}
+            reader_params={"cv": cv, "advanced_roles": False}
         )
 
         oof_predictions = automl.fit_predict(
