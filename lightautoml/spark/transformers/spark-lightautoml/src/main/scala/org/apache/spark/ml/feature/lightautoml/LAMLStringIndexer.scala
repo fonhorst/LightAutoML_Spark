@@ -198,7 +198,7 @@ class LAMLStringIndexer @Since("1.4.0")(
       new LAMLStringIndexerModel(
         uid = uid,
         labelsArray = labelsArray
-      ).setDefaultValue($(defaultValue)).setFreqLabel($(freqLabel)).setParent(this)
+      ).setDefaultValue($(defaultValue)).setFreqLabel($(freqLabel)).setNanLast($(nanLast)).setParent(this)
     )
   }
 
@@ -320,7 +320,14 @@ class LAMLStringIndexerModel(override val uid: String,
   @Since("3.2.0")
   def setFreqLabel(value: Boolean): this.type = set(freqLabel, value)
 
-  setDefault(defaultValue -> 0.0D, freqLabel -> false)
+  @Since("3.2.0")
+  val nanLast: Param[Boolean] = new Param[Boolean](this, "nanLast", doc = "nanLast")
+
+  /** @group setParam */
+  @Since("3.2.0")
+  def setNanLast(value: Boolean): this.type = set(nanLast, value)
+
+  setDefault(defaultValue -> 0.0D, freqLabel -> false, nanLast -> false)
 
   @deprecated("`labels` is deprecated and will be removed in 3.1.0. Use `labelsArray` " +
           "instead.", "3.0.0")
@@ -379,7 +386,11 @@ class LAMLStringIndexerModel(override val uid: String,
     udf { label: String =>
       if (label == null) {
         if (keepInvalid) {
-          $(defaultValue)
+          if ($(nanLast)){
+            labelToIndex("NaN")
+          } else {
+            $(defaultValue)
+          }
         } else {
           throw new SparkException("StringIndexer encountered NULL value. To handle or skip " +
                   "NULLS, try setting StringIndexer.handleInvalid.")

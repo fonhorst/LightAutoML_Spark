@@ -593,6 +593,7 @@ class SparkTabularDataFeatures:
         # if self.subsample:
         #     sdf = sdf.sample(withReplacement=False, fraction=self.subsample, seed=self.random_state)
 
+        # TODO SPARK-LAMA: To improve performance we have used approx_count_distinct() instead of count_distinct()
         sdf = sdf.select([F.approx_count_distinct(col).alias(col) for col in feats])
         result = sdf.collect()[0]
 

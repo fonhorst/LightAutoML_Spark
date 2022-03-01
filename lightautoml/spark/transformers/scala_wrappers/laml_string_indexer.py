@@ -104,12 +104,18 @@ class _StringIndexerModelParams(JavaParams, HasHandleInvalid, HasInputCol, HasOu
                       "If true, label will be transformed to its occurrences",
                       typeConverter=TypeConverters.toBoolean)
 
+    nanLast = Param(Params._dummy(),
+                    "nanLast",
+                    "If true, appends 'NaN' label to the end of each mapping",
+                    typeConverter=TypeConverters.toBoolean)
+
     def __init__(self, *args):
         super(_StringIndexerModelParams, self).__init__(*args)
         self._setDefault(
             handleInvalid="error",
             defaultValue=0.,
-            freqLabel=False
+            freqLabel=False,
+            nanLast=False
         )
 
 
@@ -275,10 +281,17 @@ class LAMLStringIndexerModel(JavaModel, _StringIndexerModelParams, JavaMLReadabl
         """
         return self._set(freqLabel=value)
 
+    @since("3.2.0")
+    def setNanLast(self, value):
+        """
+        Sets the value of :py:attr:`nanLast`.
+        """
+        return self._set(nanLast=value)
+
     @classmethod
     @since("2.4.0")
     def from_labels(cls, labels, inputCol, outputCol=None, handleInvalid=None,
-                    defaultValue=0., freqLabel=False):
+                    defaultValue=0., freqLabel=False, nanLast=False):
         """
         Construct the model directly from an array of label strings,
         requires an active SparkContext.
@@ -298,6 +311,7 @@ class LAMLStringIndexerModel(JavaModel, _StringIndexerModelParams, JavaMLReadabl
 
         model.setDefaultValue(defaultValue)
         model.setFreqLabel(freqLabel)
+        model.setNanLast(nanLast)
 
         return model
 

@@ -22,13 +22,12 @@ spark = spark_sess
 
 CV = 5
 
-# JAR_PATH = "D:\\Projects\\Sber\\LAMA\\Sber-LAMA\\lightautoml\\spark\\transformers\\spark-lightautoml\\target\\scala-2.12\\spark-lightautoml_2.12-0.1.jar"
 
 DATASETS = [
 
     # DatasetForTest("unit/resources/datasets/dataset_23_cmc.csv", default_role=CategoryRole(np.int32)),
 
-    DatasetForTest("tests/spark/unit/resources/datasets/house_prices.csv",
+    DatasetForTest("unit/resources/datasets/house_prices.csv",
                    columns=["Id", "MSSubClass", "MSZoning", "LotFrontage", "WoodDeckSF"],
                    roles={
                        "Id": CategoryRole(np.int32),
