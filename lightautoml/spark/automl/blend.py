@@ -194,8 +194,11 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         WeightedBlender.__init__(self, max_iters, max_inner_iters, max_nonzero_coef)
         self._predictions_dataset: Optional[SparkDataset] = None
 
-    def _get_weighted_pred(self, splitted_preds: Sequence[str], wts: Optional[np.ndarray]) -> SparkDataset:
-        avr = self._build_avr_transformer(splitted_preds, wts)
+    def _get_weighted_pred(self,
+                           splitted_preds: Sequence[str],
+                           wts: Optional[np.ndarray],
+                           remove_splitted_preds_cols: Optional[List[str]] = None) -> SparkDataset:
+        avr = self._build_avr_transformer(splitted_preds, wts, remove_splitted_preds_cols)
 
         weighted_preds_sdf = avr.transform(self._predictions_dataset.data)
 
@@ -204,12 +207,19 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
 
         return wpreds_sds
 
-    def _build_avr_transformer(self, splitted_preds: Sequence[str], wts: Optional[np.ndarray]) -> AveragingTransformer:
+    def _build_avr_transformer(self, splitted_preds: Sequence[str],
+                               wts: Optional[np.ndarray],
+                               remove_splitted_preds_cols: Optional[List[str]] = None) -> AveragingTransformer:
+        remove_cols = list(splitted_preds)
+
+        if remove_splitted_preds_cols is not None:
+            remove_cols.extend(remove_splitted_preds_cols)
+
         return AveragingTransformer(
             task_name=self._task.name,
             input_cols=list(splitted_preds),
             output_col=self._single_prediction_col_name,
-            remove_cols=list(splitted_preds),
+            remove_cols=remove_cols,
             convert_to_array_first=True,
             weights=wts.tolist(),
             dim_num=self._outp_dim
@@ -227,11 +237,13 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         wts = self._optimize(pred_cols)
 
         reweighted_pred_cols = [x for (x, w) in zip(pred_cols, wts) if w > 0]
+        removed_cols = [x for (x, w) in zip(pred_cols, wts) if w == 0]
         pipes, self.wts = self._prune_pipe(pipes, wts, pipe_idx)
         pipes = cast(Sequence[SparkMLPipeline], pipes)
 
-        self._transformer = self._build_avr_transformer(reweighted_pred_cols, self.wts)
-        outp = self._get_weighted_pred(reweighted_pred_cols, self.wts)
+        self._transformer = self._build_avr_transformer(reweighted_pred_cols, self.wts,
+                                                        remove_splitted_preds_cols=removed_cols)
+        outp = self._get_weighted_pred(reweighted_pred_cols, self.wts, remove_splitted_preds_cols=removed_cols)
 
         return outp, pipes
 
