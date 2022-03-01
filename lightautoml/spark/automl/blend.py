@@ -234,16 +234,15 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         pred_cols = [pred_col for pred_col, _, _ in sm]
         pipe_idx = np.array([pidx for _, _, pidx in sm])
 
-        wts = self._optimize(pred_cols)
+        self.wts = self._optimize(pred_cols)
 
-        reweighted_pred_cols = [x for (x, w) in zip(pred_cols, wts) if w > 0]
-        removed_cols = [x for (x, w) in zip(pred_cols, wts) if w == 0]
-        pipes, self.wts = self._prune_pipe(pipes, wts, pipe_idx)
+        reweighted_pred_cols = [x for (x, w) in zip(pred_cols, self.wts)]
+        # removed_cols = [x for (x, w) in zip(pred_cols, wts) if w == 0]
+        # pipes, self.wts = self._prune_pipe(pipes, wts, pipe_idx)
         pipes = cast(Sequence[SparkMLPipeline], pipes)
 
-        self._transformer = self._build_avr_transformer(reweighted_pred_cols, self.wts,
-                                                        remove_splitted_preds_cols=removed_cols)
-        outp = self._get_weighted_pred(reweighted_pred_cols, self.wts, remove_splitted_preds_cols=removed_cols)
+        self._transformer = self._build_avr_transformer(reweighted_pred_cols, self.wts)
+        outp = self._get_weighted_pred(reweighted_pred_cols, self.wts)
 
         return outp, pipes
 
