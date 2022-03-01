@@ -33,12 +33,13 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
     config = copy(datasets()[dataset_name])
     # config["use_algos"] = [["lgb"], ["linear_l2"]]
-    config["use_algos"] = [["lgb", "linear_l2"], ["lgb"]]
+    # config["use_algos"] = [["lgb", "linear_l2"], ["lgb"]]
+    config["use_algos"] = [["lgb", "linear_l2"]]
 
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
     #              200000, 300000, 1_000_000, 2_000_000, 5_000_000, 74909, 54179, 68572, 25425]
 
-    cv = 5
+    cv = 3
     seeds = [42]
     results = []
     for seed in seeds:

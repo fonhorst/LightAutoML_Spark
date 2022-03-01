@@ -45,12 +45,14 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         self._models_prediction_columns: Optional[List[str]] = None
         self._transformer: Optional[Transformer] = None
 
-        self._prediction_col = f"prediction_{self._name}"
+        # self._prediction_col = f"prediction_{self._name}"
         self._prediction_role = None
 
     @property
     def prediction_feature(self) -> str:
-        return self._prediction_col
+        # return self._prediction_col
+        return f"prediction_{self._name}"
+
 
     @property
     def prediction_role(self) -> ColumnRole:

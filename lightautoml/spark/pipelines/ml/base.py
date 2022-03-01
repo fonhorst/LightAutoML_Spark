@@ -70,6 +70,7 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
 
         # train and apply pre selection
         input_roles = copy(train_valid.input_roles)
+        full_train_roles = copy(train_valid.train.roles)
 
         train_valid = train_valid.apply_selector(self.pre_selection)
 
@@ -108,7 +109,7 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         # nor input roles of train_valid iterator
         # (for each pipe iterator represent only input columns to the layer,
         # not outputs of other ml pipes in the layer)
-        out_roles.update(train_valid.train.roles)
+        out_roles.update(full_train_roles)
         # we also need update our out_roles with input_roles to replace roles of input of the layer
         # in case they were changed by SparkChangeRolesTransformer
         out_roles.update(input_roles)

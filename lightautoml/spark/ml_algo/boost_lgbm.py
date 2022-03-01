@@ -323,8 +323,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             labelCol=full.target_column,
             validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
-            # useSingleDatasetMode=True,
-            # parallelism='voting_parallel',
+            useSingleDatasetMode=True,
             isProvideTrainingMetric=True
         )
 
