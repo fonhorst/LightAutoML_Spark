@@ -32,12 +32,14 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
     def __init__(
             self,
+            cacher_key: str,
             default_params: Optional[dict] = None,
             freeze_defaults: bool = True,
             timer: Optional[TaskTimer] = None,
             optimization_search_space: Optional[dict] = {},
     ):
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
+        self._cacher_key = cacher_key
         self.n_classes: Optional[int] = None
         # names of columns that should contain predictions of individual models
         self._models_prediction_columns: Optional[List[str]] = None
@@ -177,7 +179,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         ]
         full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs, include_train=False)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
-        full_preds_df = Cacher(key='main_cache').fit(full_preds_df).transform(full_preds_df)
+        full_preds_df = Cacher(key=self._cacher_key).fit(full_preds_df).transform(full_preds_df)
 
         # create Spark MLlib Transformer and save to property var
         self._transformer = self._build_transformer()

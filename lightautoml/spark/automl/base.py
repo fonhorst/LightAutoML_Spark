@@ -17,6 +17,7 @@ from ..dataset.base import SparkDataset, SparkDataFrame
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..transformers.base import ColumnsSelectorTransformer
+from ..utils import Cacher
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 from ...reader.base import RolesDict
@@ -401,7 +402,8 @@ class SparkAutoML:
 
     @staticmethod
     def _break_plan(train: SparkDataset) -> SparkDataset:
-        new_df = train.spark_session.createDataFrame(train.data.rdd)
+        logger.info("Breaking the plan sequence to reduce wor for optimizer")
+        new_df = train.spark_session.createDataFrame(train.data.rdd, schema=train.data.schema, verifySchema=False)
 
         sds = train.empty()
         sds.set_data(new_df, train.features, train.roles)

@@ -64,7 +64,7 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 
     def __init__(self, n_classes: int, name: str):
         self._name = name
-        super().__init__()
+        super().__init__(cacher_key='dummy_ml_algo')
         self.n_classes = n_classes
 
     def fit_predict_single_fold(self, fold_prediction_column: str, full: SparkDataset, train: SparkDataset,

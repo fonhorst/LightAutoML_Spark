@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 
 def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
-    # dataset_name = "used_cars_dataset"
+    dataset_name = "used_cars_dataset"
     # dataset_name = "kdd_internet_usage"
     # dataset_name = "lama_test_dataset"
     # dataset_name = "ailerons_dataset"
     # dataset_name = "buzz_dataset"
-    dataset_name = "used_cars_dataset_head60k"
+    # dataset_name = "used_cars_dataset_head60k"
     # dataset_name = "used_cars_dataset_0125x"
     # dataset_name = "used_cars_dataset_025x"
     # dataset_name = "used_cars_dataset_05x"
@@ -33,7 +33,7 @@ def calculate_quality(calc_automl: Callable, delete_dir: bool = True):
 
     config = copy(datasets()[dataset_name])
     # config["use_algos"] = [["lgb"], ["linear_l2"]]
-    config["use_algos"] = [["lgb"]]
+    config["use_algos"] = [["lgb", "linear_l2"], ["lgb"]]
 
     # seeds = [1, 42, 100, 200, 333, 555, 777, 2000, 50000, 100500,
     #              200000, 300000, 1_000_000, 2_000_000, 5_000_000, 74909, 54179, 68572, 25425]

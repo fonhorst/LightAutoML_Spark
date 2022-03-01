@@ -231,7 +231,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     lama_test_feats = lama_pipeline.transform(test_ds)
     lama_feats = lama_feats if ml_algo_lama_clazz == BoostLGBM else lama_feats.to_numpy()
     train_valid = FoldsIterator(lama_feats.to_numpy())
-    ml_algo = ml_algo_lama_clazz()
+    ml_algo = ml_algo_lama_clazz(cacher_key='test')
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     assert ml_algo is not None
     test_pred = ml_algo.predict(lama_test_feats)

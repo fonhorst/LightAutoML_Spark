@@ -256,7 +256,7 @@ def calculate_lgbadv_boostlgb(
                 iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
                 iterator.input_roles = metadata['iterator_input_roles']
 
-            spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
+            spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', freeze_defaults=False)
             spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         return {pipe_timer.name: pipe_timer.duration}

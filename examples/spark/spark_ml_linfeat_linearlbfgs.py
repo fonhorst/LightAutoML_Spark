@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
         iterator = SparkFoldsIterator(sdataset, n_folds=3)
         linear_features = SparkLinearFeatures(**ml_alg_kwargs)
-        spark_ml_algo = SparkLinearLBFGS(freeze_defaults=False)
+        spark_ml_algo = SparkLinearLBFGS(cacher_key='example', freeze_defaults=False)
 
         # # Process features and train the model
         iterator = iterator.apply_feature_pipeline(linear_features)
