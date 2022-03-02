@@ -14,6 +14,7 @@ from pyspark.ml.feature import VectorAssembler
 from pyspark.sql import functions as F, SparkSession
 
 from dataset_utils import datasets
+from lightautoml.dataset.roles import NumericRole, CategoryRole
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
@@ -24,10 +25,13 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPi
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
+from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator
 from lightautoml.spark.utils import spark_session, log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
 from lightautoml.utils.tmp_utils import log_data, LAMA_LIBRARY
 from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -234,10 +238,17 @@ def calculate_pure_boostlgb(
         spark_args = {'session_args': spark_config}
     with spark_session(**spark_args) as spark:
         data = [
-            {'a': i, 'b': i + 10, 'c': i * 10, 'target': i, 'is_val': i % 2} for i in range(100)
+            {'_id': i, 'a': i, 'b': i + 10, 'c': i * 10, 'target': i, 'is_val': i % 2} for i in range(100)
         ]
 
         df = spark.createDataFrame(data)
+        ds = SparkDataset(df,
+                          {'a': CategoryRole(np.float32), 'b': CategoryRole(np.float32), 'c': CategoryRole(np.float32)},
+                          task=SparkTask('reg'),
+                          target='target')
+
+        est = SparkLabelEncoderEstimator(input_cols=ds.features, input_roles=ds.roles)
+        est.fit(ds.data)
 
         _assembler = VectorAssembler(
             inputCols=['a', 'b', 'c'],
