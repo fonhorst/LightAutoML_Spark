@@ -1,6 +1,6 @@
 FROM ubuntu:20.04
 
-# Install required utils & Amazon Java 8 JDK
+# Install required utils & Amazon Java 11 JDK
 RUN apt-get update && \
     apt-get install -y wget apt-transport-https curl gnupg software-properties-common && \
     wget -O- https://apt.corretto.aws/corretto.key | apt-key add - && \
