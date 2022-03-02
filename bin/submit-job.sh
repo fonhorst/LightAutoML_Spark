@@ -37,7 +37,7 @@ spark-submit \
   --conf 'spark.memory.storageFraction=0.5' \
   --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
   --conf 'spark.sql.execution.arrow.pyspark.enabled=true' \
-  --conf 'spark.kubernetes.file.upload.path=/tmp' \
+  --conf 'spark.kubernetes.file.upload.path=/mnt/nfs/spark_upload_dir' \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.options.claimName=scripts-shared-vol' \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.options.storageClass=local-hdd' \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.mount.path=/scripts/' \
@@ -54,4 +54,12 @@ spark-submit \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.options.storageClass=local-hdd' \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.mount.path=/exp_results' \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.mount.readOnly=false' \
+  --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.mnt-nfs.options.claimName=mnt-nfs' \
+  --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.mnt-nfs.options.storageClass=nfs' \
+  --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.mnt-nfs.mount.path=/mnt/nfs/' \
+  --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.mnt-nfs.mount.readOnly=false' \
+  --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.options.claimName=mnt-nfs' \
+  --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.options.storageClass=nfs' \
+  --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.mount.path=/mnt/nfs/' \
+  --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.mount.readOnly=false' \
   local:///scripts/${remote_script_path}
