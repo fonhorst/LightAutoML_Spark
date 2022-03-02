@@ -1,12 +1,16 @@
 FROM ubuntu:20.04
 
-# Install required utils & Amazon Java 11 JDK
+## Install required utils & Amazon Java 11 JDK
+#RUN apt-get update && \
+#    apt-get install -y wget apt-transport-https curl gnupg software-properties-common && \
+#    wget -O- https://apt.corretto.aws/corretto.key | apt-key add - && \
+#    add-apt-repository 'deb https://apt.corretto.aws stable main' && \
+#    apt-get update && \
+#    apt-get install -y java-11-amazon-corretto-jdk
+
 RUN apt-get update && \
     apt-get install -y wget apt-transport-https curl gnupg software-properties-common && \
-    wget -O- https://apt.corretto.aws/corretto.key | apt-key add - && \
-    add-apt-repository 'deb https://apt.corretto.aws stable main' && \
-    apt-get update && \
-    apt-get install -y java-11-amazon-corretto-jdk
+	apt-get install -y openjdk-11-jre
 
 # Install SBT
 RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/apt/sources.list.d/sbt.list && \

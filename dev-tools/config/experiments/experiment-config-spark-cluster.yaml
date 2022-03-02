@@ -26,7 +26,7 @@ experiments:
     library: [ "spark" ]
     repeat_rate: 1
     params:
-      func: [ "calculate_automl" ]
+      func: [ "calculate_pure_boostlgb" ]
       dataset: [ "lama_test_dataset" ]
       seed: [ 42 ]
       cv: [ 5 ]
@@ -58,8 +58,10 @@ default_spark_config: {
   spark.kubernetes.driver.label.appname: driver-test-submit-run,
   spark.kubernetes.executor.label.appname: executor-test-submit-run,
   spark.kubernetes.executor.deleteOnTermination: 'false',
+  spark.kubernetes.container.image.pullPolicy: 'Always',
   spark.scheduler.minRegisteredResourcesRatio: '1.0',
   spark.scheduler.maxRegisteredResourcesWaitingTime: '180s',
+#  spark.jars: jars/spark-lightautoml_2.12-0.1.jar,
   spark.jars.packages: com.microsoft.azure:synapseml_2.12:0.9.5,
   spark.jars.repositories: https://mmlspark.azureedge.net/maven,
   spark.driver.cores: '4',
@@ -72,7 +74,7 @@ default_spark_config: {
   spark.memory.storageFraction: '0.5',
   spark.sql.autoBroadcastJoinThreshold: 100MB,
   spark.sql.execution.arrow.pyspark.enabled: 'true',
-#  spark.jars: 'jars/spark-lightautoml_2.12-0.1.jar',
+  spark.jars: 'jars/spark-lightautoml_2.12-0.1.jar',
 
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.claimName: spark-lama-data,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass: local-hdd,
