@@ -282,10 +282,27 @@ class SparkOrdinalEncoderTransformer(SparkLabelEncoderTransformer):
 
         return output
 
+        return SparkOrdinalEncoderTransformer(input_cols=self.getInputCols(),
+                                              output_cols=self.getOutputCols(),
+                                              input_roles=self.getInputRoles(),
+                                              output_roles=self.getOutputRoles(),
+                                              do_replace_columns=self.getDoReplaceColumns(),
+                                              dicts=self.dicts)
 
 class SparkFreqEncoderEstimator(SparkLabelEncoderEstimator):
 
-    _fit_checks = (categorical_check,)
+def ord_pandas_dict_udf(broadcasted_dict, fillna_value):
+
+    def f(s: Series) -> Series:
+        values_dict = broadcasted_dict.value
+        fillna_val = fillna_value.value
+        s[s == "nan"] = float("nan")
+        s[s == None] = float("nan")
+        return s.map(values_dict).fillna(fillna_val)
+    return F.pandas_udf(f, "double")
+
+
+class SparkOrdinalEncoderTransformer(SparkLabelEncoderTransformer):
     _transform_checks = ()
     _fname_prefix = "freq"
 
@@ -365,12 +382,17 @@ class SparkCatIntersectionsHelper:
         df = df.select('*', *columns_to_select)
         return df
 
+        output = self._make_output_df(df, cols_to_select).fillna(self._fillna_val)
+
+        return output
 
 class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEncoderEstimator):
 
     _fit_checks = (categorical_check,)
     _transform_checks = ()
-    _fname_prefix = "inter"
+    _fname_prefix = "freq"
+
+    _fillna_val = 1
 
     def __init__(self,
                  input_cols: List[str],
@@ -454,6 +476,8 @@ class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEn
         out_df = out_df.drop(*temp_cols)
         return out_df
 
+        out_df = out_df.drop(*temp_cols)
+        return out_df
 
 class SparkOHEEncoderEstimator(SparkBaseEstimator):
     """

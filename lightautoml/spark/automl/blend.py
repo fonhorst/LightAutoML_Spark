@@ -25,6 +25,9 @@ from lightautoml.spark.transformers.base import ColumnsSelectorTransformer
 
 logger = logging.getLogger(__name__)
 
+    Blender learns how to make blend
+    on sequence of prediction datasets and prune pipes,
+    that are not used in final blend.
 
 class SparkBlender(ABC):
     """Basic class for blending.

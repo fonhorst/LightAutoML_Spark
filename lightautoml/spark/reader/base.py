@@ -10,7 +10,7 @@ from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
-from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
+from lightautoml.dataset.base import array_attr_roles, valid_array_attributes, RolesDict
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
 from lightautoml.dataset.utils import roles_parser
 from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType, RolesDict
