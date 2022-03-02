@@ -42,14 +42,14 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         transformers_list = []
 
         # process categories
-        categories = self._cols_by_role(train, "Category")
-        if len(categories) > 0:
-            roles = {f: train.roles[f] for f in categories}
-            cat_processing = SparkOrdinalEncoderEstimator(input_cols=categories,
-                                                          input_roles=roles,
-                                                          subs=None,
-                                                          random_state=42)
-            transformers_list.append(cat_processing)
+        # categories = self._cols_by_role(train, "Category")
+        # if len(categories) > 0:
+        #     roles = {f: train.roles[f] for f in categories}
+        #     cat_processing = SparkOrdinalEncoderEstimator(input_cols=categories,
+        #                                                   input_roles=roles,
+        #                                                   subs=None,
+        #                                                   random_state=42)
+        #     transformers_list.append(cat_processing)
 
         # process datetimes
         datetimes = self._cols_by_role(train, "Datetime")

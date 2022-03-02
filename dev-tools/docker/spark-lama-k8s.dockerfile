@@ -15,3 +15,5 @@ COPY dist/LightAutoML-0.3.0-py3-none-any.whl /tmp/LightAutoML-0.3.0-py3-none-any
 RUN pip install /tmp/LightAutoML-0.3.0-py3-none-any.whl
 
 USER ${spark_id}
+
+COPY jars jars

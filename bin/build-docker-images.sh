@@ -2,7 +2,7 @@
 
 set -e
 
-./bin/build-jars.sh
+#./bin/build-jars.sh
 
 repo="node2.bdcl:5000"
 

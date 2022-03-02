@@ -19,4 +19,6 @@ RUN pip install torchvision==0.9.1
 COPY dist/LightAutoML-0.3.0-py3-none-any.whl /tmp/LightAutoML-0.3.0-py3-none-any.whl
 RUN pip install /tmp/LightAutoML-0.3.0-py3-none-any.whl
 
+COPY jars jars
+
 

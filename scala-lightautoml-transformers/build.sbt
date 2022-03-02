@@ -4,7 +4,7 @@ name := "spark-lightautoml"
 
 version := "0.1"
 
-scalaVersion := "2.12.12"
+scalaVersion := "2.12.15"
 
 //idePackagePrefix := Some("org.apache.spark.ml.feature.lightautoml")
 

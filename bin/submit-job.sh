@@ -7,7 +7,7 @@ APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.serv
 KUBE_NAMESPACE=spark-lama-exps
 
 remote_script_path=run.py
-scp examples/spark/tabular_preset_automl.py \
+scp examples/spark/tabular_preset_automl_copy.py \
   node2.bdcl:/mnt/ess_storage/DN_1/tmp/scripts-shared-vol/${remote_script_path}
 
 ssh node2.bdcl "sudo chmod 755 /mnt/ess_storage/DN_1/tmp/scripts-shared-vol/${remote_script_path}"
@@ -22,9 +22,9 @@ spark-submit \
   --conf 'spark.kubernetes.driver.label.appname=driver-test-submit-run' \
   --conf 'spark.kubernetes.executor.label.appname=executor-test-submit-run' \
   --conf 'spark.kubernetes.executor.deleteOnTermination=false' \
+  --conf 'spark.kubernetes.container.image.pullPolicy=Always' \
   --conf 'spark.scheduler.minRegisteredResourcesRatio=1.0' \
   --conf 'spark.scheduler.maxRegisteredResourcesWaitingTime=180s' \
-  --conf 'spark.jars=jars/spark-lightautoml_2.12-0.1.jar' \
   --conf 'spark.jars.packages=com.microsoft.azure:synapseml_2.12:0.9.5' \
   --conf 'spark.jars.repositories=https://mmlspark.azureedge.net/maven' \
   --conf 'spark.driver.cores=4' \
@@ -63,3 +63,5 @@ spark-submit \
   --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.mount.path=/mnt/nfs/' \
   --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.mount.readOnly=false' \
   local:///scripts/${remote_script_path}
+
+# --conf 'spark.jars=jars/spark-lightautoml_2.12-0.1.jar' \
