@@ -283,6 +283,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         (
             params,
             verbose_eval,
+            fobj,
+            feval,
         ) = self._infer_params()
 
         logger.info(f"Input cols for the vector assembler: {full.features}")
