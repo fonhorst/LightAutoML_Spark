@@ -4,16 +4,18 @@ set -e
 
 APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 
-KUBE_NAMESPACE=spark-lama-exp
+KUBE_NAMESPACE=spark-lama-exps
 
 remote_script_path=run.py
 scp examples/spark/tabular_preset_automl.py \
   node2.bdcl:/mnt/ess_storage/DN_1/tmp/scripts-shared-vol/${remote_script_path}
 
+ssh node2.bdcl "sudo chmod 755 /mnt/ess_storage/DN_1/tmp/scripts-shared-vol/${remote_script_path}"
+
 spark-submit \
   --master k8s://${APISERVER} \
   --deploy-mode cluster \
-  --conf 'spark.driver.bindAddress=0.0.0.0' \
+  --conf 'spark.kubernetes.container.image=node2.bdcl:5000/spark-py-lama:lama-v3.2.0' \
   --conf 'spark.kubernetes.namespace='${KUBE_NAMESPACE} \
   --conf 'spark.kubernetes.authenticate.driver.serviceAccountName=spark' \
   --conf 'spark.kubernetes.memoryOverheadFactor=0.4' \
@@ -22,7 +24,7 @@ spark-submit \
   --conf 'spark.kubernetes.executor.deleteOnTermination=false' \
   --conf 'spark.scheduler.minRegisteredResourcesRatio=1.0' \
   --conf 'spark.scheduler.maxRegisteredResourcesWaitingTime=180s' \
-  --conf 'spark.jars=/jars/spark-lightautoml_2.12-0.1.jar' \
+  --conf 'spark.jars=jars/spark-lightautoml_2.12-0.1.jar' \
   --conf 'spark.jars.packages=com.microsoft.azure:synapseml_2.12:0.9.5' \
   --conf 'spark.jars.repositories=https://mmlspark.azureedge.net/maven' \
   --conf 'spark.driver.cores=4' \
@@ -35,6 +37,11 @@ spark-submit \
   --conf 'spark.memory.storageFraction=0.5' \
   --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
   --conf 'spark.sql.execution.arrow.pyspark.enabled=true' \
+  --conf 'spark.kubernetes.file.upload.path=/tmp' \
+  --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.options.claimName=scripts-shared-vol' \
+  --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.options.storageClass=local-hdd' \
+  --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.mount.path=/scripts/' \
+  --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.mount.readOnly=true' \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.claimName=spark-lama-data' \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass=local-hdd' \
   --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.path=/opt/spark_data/' \

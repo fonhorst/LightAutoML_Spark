@@ -34,55 +34,58 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[Sp
     return train_data, test_data
 
 
-with spark_session() as spark:
-    seed = 42
-    cv = 5
-    use_algos = [["lgb"]]
-    path = "/opt/spark_data/sampled_app_train.csv"
-    task_type = "binary"
-    roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
+spark = SparkSession.builder.getOrCreate()
 
-    with log_exec_timer("spark-lama training") as train_timer:
-        task = SparkTask(task_type)
-        train_data, test_data = prepare_test_and_train(spark, path, seed)
+seed = 42
+cv = 5
+use_algos = [["lgb"]]
+path = "/opt/spark_data/sampled_app_train.csv"
+task_type = "binary"
+roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
 
-        test_data_dropped = test_data
+with log_exec_timer("spark-lama training") as train_timer:
+    task = SparkTask(task_type)
+    train_data, test_data = prepare_test_and_train(spark, path, seed)
 
-        automl = SparkTabularAutoML(
-            spark=spark,
-            task=task,
-            general_params={"use_algos": use_algos},
-            reader_params={"cv": cv, "advanced_roles": False},
-            tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
-        )
+    test_data_dropped = test_data
 
-        oof_predictions = automl.fit_predict(
-            train_data,
-            roles=roles
-        )
+    automl = SparkTabularAutoML(
+        spark=spark,
+        task=task,
+        general_params={"use_algos": use_algos},
+        reader_params={"cv": cv, "advanced_roles": False},
+        tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
+    )
 
-    logger.info("Predicting on out of fold")
+    oof_predictions = automl.fit_predict(
+        train_data,
+        roles=roles
+    )
+
+logger.info("Predicting on out of fold")
+
+score = task.get_dataset_metric()
+metric_value = score(oof_predictions)
+
+logger.info(f"score for out-of-fold predictions: {metric_value}")
+
+with log_exec_timer("spark-lama predicting on test") as predict_timer:
+    te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
 
     score = task.get_dataset_metric()
-    metric_value = score(oof_predictions)
+    test_metric_value = score(te_pred)
 
-    logger.info(f"score for out-of-fold predictions: {metric_value}")
+    logger.info(f"score for test predictions: {test_metric_value}")
 
-    with log_exec_timer("spark-lama predicting on test") as predict_timer:
-        te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
+logger.info("Predicting is finished")
 
-        score = task.get_dataset_metric()
-        test_metric_value = score(te_pred)
+result = {
+    "metric_value": metric_value,
+    "test_metric_value": test_metric_value,
+    "train_duration_secs": train_timer.duration,
+    "predict_duration_secs": predict_timer.duration
+}
 
-        logger.info(f"score for test predictions: {test_metric_value}")
+print(f"EXP-RESULT: {result}")
 
-    logger.info("Predicting is finished")
-
-    result = {
-        "metric_value": metric_value,
-        "test_metric_value": test_metric_value,
-        "train_duration_secs": train_timer.duration,
-        "predict_duration_secs": predict_timer.duration
-    }
-
-    print(f"EXP-RESULT: {result}")
+spark.stop()
