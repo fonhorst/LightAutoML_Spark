@@ -65,11 +65,23 @@ def get_spark_session():
 if __name__ == "__main__":
     spark = get_spark_session()
 
-    seed = 100
+    seed = 42
     cv = 3
-    path = "/opt/spark_data/sampled_app_train.csv"
-    task_type = "binary"
-    roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
+    # path = "/opt/spark_data/sampled_app_train.csv"
+    # task_type = "binary"
+    # roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
+    path = "/opt/spark_data/small_used_cars_data.csv"
+    task_type = "reg"
+    roles = {
+                    "target": "price",
+                    "drop": ["dealer_zip", "description", "listed_date",
+                             "year", 'Unnamed: 0', '_c0',
+                             'sp_id', 'sp_name', 'trimId',
+                             'trim_name', 'major_options', 'main_picture_url',
+                             'interior_color', 'exterior_color'],
+                    "numeric": ['latitude', 'longitude', 'mileage']
+                }
+
     ml_alg_kwargs = {
         'auto_unique_co': 10,
         'max_intersection_depth': 3,
@@ -80,15 +92,13 @@ if __name__ == "__main__":
     cacher_key = "main_cache"
 
     with log_exec_time():
-
-        df = spark.read.csv(path, header=True, escape="\"")
         train_df, test_df = prepare_test_and_train(spark, path, seed)
 
         task = SparkTask(task_type)
         score = task.get_dataset_metric()
 
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
-        sdataset = sreader.fit_read(df, roles=roles)
+        sdataset = sreader.fit_read(train_df, roles=roles)
 
         iterator = SparkFoldsIterator(sdataset, n_folds=cv)
 

@@ -1,4 +1,5 @@
 import logging.config
+import os
 from typing import Tuple
 
 import pyspark.sql.functions as F
@@ -33,12 +34,34 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[Sp
     return train_data, test_data
 
 
+def get_spark_session():
+    if os.environ.get("SCRIPT_ENV", None) == "cluster":
+        return SparkSession.builder.getOrCreate()
+
+    spark_sess = (
+        SparkSession
+        .builder
+        .master("local[*]")
+        .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
+        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
+        .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+        .config("spark.sql.shuffle.partitions", "16")
+        .config("spark.driver.memory", "6g")
+        .config("spark.executor.memory", "6g")
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+        .getOrCreate()
+    )
+
+    return spark_sess
+
+
 if __name__ == "__main__":
-    spark = SparkSession.builder.getOrCreate()
+    spark = get_spark_session()
 
     seed = 42
     cv = 5
-    use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    use_algos = [["lgb"]]
     path = "/opt/spark_data/small_used_cars_data.csv"
     task_type = "reg"
     roles = {
