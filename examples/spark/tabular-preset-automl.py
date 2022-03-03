@@ -60,8 +60,7 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 5
-    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["lgb"]]
+    use_algos = [["lgb", "linear_l2"], ["lgb"]]
     path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
     task_type = "reg"
     roles = {
@@ -84,6 +83,7 @@ if __name__ == "__main__":
             spark=spark,
             task=task,
             lgb_params={'use_single_dataset_mode': True},
+            linear_l2_params={"default_params": {"regParam": [1]}},
             general_params={"use_algos": use_algos},
             reader_params={"cv": cv, "advanced_roles": False},
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
