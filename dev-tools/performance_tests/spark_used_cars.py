@@ -265,9 +265,9 @@ def calculate_pure_boostlgb(
             featuresCol=_assembler.getOutputCol(),
             labelCol='target',
             validationIndicatorCol='is_val',
-            # verbosity=1,
-            # useSingleDatasetMode=True,
-            # isProvideTrainingMetric=True
+            verbosity=1,
+            useSingleDatasetMode=True,
+            isProvideTrainingMetric=True
         )
 
         temp_sdf = _assembler.transform(df)

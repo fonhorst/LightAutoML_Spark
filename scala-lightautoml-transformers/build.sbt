@@ -13,8 +13,6 @@ resolvers ++= Seq(
         .withAllowInsecureProtocol(true)
 )
 
-mainClass := Some("org.apache.spark.ml.feature.lightautoml.test_udfs")
-
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "3.2.0",
   "org.apache.spark" %% "spark-sql" % "3.2.0",
