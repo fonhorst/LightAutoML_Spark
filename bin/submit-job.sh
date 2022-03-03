@@ -56,4 +56,4 @@ spark-submit \
   --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.options.storageClass=nfs' \
   --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.mount.path=/mnt/nfs/' \
   --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.mount.readOnly=false' \
-  ./examples/spark/tabular_preset_automl_copy.py
+  ./examples/spark/spark_ml_pipe_lgb.py
