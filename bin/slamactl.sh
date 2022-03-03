@@ -65,8 +65,16 @@ function build_lama_image() {
   rm -rf dist
 }
 
+function build_dist() {
+    build_jars
+    build_pyspark_images
+    build_lama_image
+}
+
 function submit_job() {
   script_path=$1
+
+  filename=$(echo ${script_path} | python -c 'import os; path = input(); print(os.path.splitext(os.path.basename(path))[0]);')
 
   spark-submit \
     --master k8s://${APISERVER} \
@@ -75,8 +83,8 @@ function submit_job() {
     --conf 'spark.kubernetes.namespace='${KUBE_NAMESPACE} \
     --conf 'spark.kubernetes.authenticate.driver.serviceAccountName=spark' \
     --conf 'spark.kubernetes.memoryOverheadFactor=0.4' \
-    --conf 'spark.kubernetes.driver.label.appname=driver-test-submit-run' \
-    --conf 'spark.kubernetes.executor.label.appname=executor-test-submit-run' \
+    --conf 'spark.kubernetes.driver.label.appname='${filename} \
+    --conf 'spark.kubernetes.executor.label.appname='{filename} \
     --conf 'spark.kubernetes.executor.deleteOnTermination=false' \
     --conf 'spark.kubernetes.container.image.pullPolicy=Always' \
     --conf 'spark.kubernetes.driverEnv.SCRIPT_ENV=cluster' \
@@ -96,10 +104,6 @@ function submit_job() {
     --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
     --conf 'spark.sql.execution.arrow.pyspark.enabled=true' \
     --conf 'spark.kubernetes.file.upload.path=/mnt/nfs/spark_upload_dir' \
-    --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.options.claimName=scripts-shared-vol' \
-    --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.options.storageClass=local-hdd' \
-    --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.mount.path=/scripts/' \
-    --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.scripts-shared-vol.mount.readOnly=true' \
     --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.claimName=spark-lama-data' \
     --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass=local-hdd' \
     --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.mount.path=/opt/spark_data/' \
@@ -108,10 +112,6 @@ function submit_job() {
     --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass=local-hdd' \
     --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.path=/opt/spark_data/' \
     --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-lama-data.mount.readOnly=true' \
-    --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.options.claimName=exp-results-vol' \
-    --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.options.storageClass=local-hdd' \
-    --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.mount.path=/exp_results' \
-    --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.exp-results-vol.mount.readOnly=false' \
     --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.mnt-nfs.options.claimName=mnt-nfs' \
     --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.mnt-nfs.options.storageClass=nfs' \
     --conf 'spark.kubernetes.driver.volumes.persistentVolumeClaim.mnt-nfs.mount.path=/mnt/nfs/' \
@@ -121,6 +121,15 @@ function submit_job() {
     --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.mount.path=/mnt/nfs/' \
     --conf 'spark.kubernetes.executor.volumes.persistentVolumeClaim.mnt-nfs.mount.readOnly=false' \
     ${script_path}
+}
+
+function port_forward() {
+  script_path=$1
+  filename=$(echo ${script_path} | python -c 'import os; path = input(); print(os.path.splitext(os.path.basename(path))[0]);')
+  spark_app_selector=$(kubectl -n spark-lama-exps get pod -l appname=${filename} -l spark-role=driver -o jsonpath='{.items[0].metadata.labels.spark-app-selector}')
+
+  svc_name=$(kubectl -n ${KUBE_NAMESPACE} get svc -l spark-app-selector=${spark_app_selector} -o jsonpath='{.items[0].metadata.name}')
+  kubectl -n spark-lama-exps port-forward svc/${svc_name} 9040:4040
 }
 
 function help() {
@@ -133,7 +142,9 @@ function help() {
     build-pyspark-images - Builds and pushes base pyspark images required to start pyspark on cluster.
       Pushing requires remote docker repo address accessible from the cluster.
     build-lama-image - Builds and pushes a docker image to be used for running lama remotely on the cluster.
+    build-dist - build_jars, build_pyspark_images, build_lama_image in a sequence
     submit-job - Submit a pyspark application with script that represent SLAMA automl app.
+    port-forward - Forwards port 4040 of the driver to 9040 port
     help - prints this message
   "
 }
@@ -166,8 +177,16 @@ function main () {
         build_lama_image
         ;;
 
+    "build-dist")
+        build_dist
+        ;;
+
     "submit-job")
         submit_job "${@}"
+        ;;
+
+    "port-forward")
+        port_forward "${@}"
         ;;
 
     "help")
