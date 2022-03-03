@@ -7,7 +7,7 @@ APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.serv
 KUBE_NAMESPACE=spark-lama-exps
 
 remote_script_path=run.py
-scp examples/spark/submit_lgb_si_test.py \
+scp examples/spark/tabular_preset_automl_copy.py \
   node2.bdcl:/mnt/ess_storage/DN_1/tmp/scripts-shared-vol/${remote_script_path}
 
 ssh node2.bdcl "sudo chmod 755 /mnt/ess_storage/DN_1/tmp/scripts-shared-vol/${remote_script_path}"

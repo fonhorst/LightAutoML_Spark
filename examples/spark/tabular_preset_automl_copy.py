@@ -38,7 +38,7 @@ spark = SparkSession.builder.getOrCreate()
 
 seed = 42
 cv = 5
-use_algos = [["lgb"]]
+use_algos = [["lgb", "linear_l2"], ["lgb"]]
 path = "/opt/spark_data/sampled_app_train.csv"
 task_type = "binary"
 roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
