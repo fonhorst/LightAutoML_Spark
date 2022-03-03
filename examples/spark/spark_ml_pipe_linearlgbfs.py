@@ -10,7 +10,9 @@ from pyspark.sql import SparkSession
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
+from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
+from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
@@ -91,8 +93,8 @@ if __name__ == "__main__":
 
         iterator = SparkFoldsIterator(sdataset, n_folds=cv)
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key=cacher_key, freeze_defaults=False)
-        spark_features_pipeline = SparkLGBAdvancedPipeline(cacher_key=cacher_key, **ml_alg_kwargs)
+        spark_ml_algo = SparkLinearLBFGS(cacher_key=cacher_key, freeze_defaults=False)
+        spark_features_pipeline = SparkLinearFeatures(cacher_key=cacher_key, **ml_alg_kwargs)
         spark_selector = ImportanceCutoffSelector(
             cutoff=0.0,
             feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),

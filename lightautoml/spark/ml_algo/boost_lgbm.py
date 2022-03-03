@@ -28,7 +28,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     _name: str = "LightGBM"
 
     _default_params = {
-        # "improvementTolerance": 1e-4,
         "learningRate": 0.05,
         "numLeaves": 128,
         "featureFraction": 0.7,
@@ -45,8 +44,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         "alpha": 1.0,
         "lambdaL1": 0.0,
         "lambdaL2": 0.0,
-        # seeds
-        # "baggingSeed": 42
     }
 
     # mapping between metric name defined via SparkTask
