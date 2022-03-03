@@ -39,9 +39,18 @@ spark = SparkSession.builder.getOrCreate()
 seed = 42
 cv = 5
 use_algos = [["lgb", "linear_l2"], ["lgb"]]
-path = "/opt/spark_data/sampled_app_train.csv"
-task_type = "binary"
-roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
+path = "/opt/spark_data/small_used_cars_data.csv"
+task_type = "reg"
+roles = {
+                "target": "price",
+                "drop": ["dealer_zip", "description", "listed_date",
+                         "year", 'Unnamed: 0', '_c0',
+                         'sp_id', 'sp_name', 'trimId',
+                         'trim_name', 'major_options', 'main_picture_url',
+                         'interior_color', 'exterior_color'],
+                # "numeric": ['latitude', 'longitude', 'mileage']
+                "numeric": ['longitude', 'mileage']
+            }
 
 with log_exec_timer("spark-lama training") as train_timer:
     task = SparkTask(task_type)
