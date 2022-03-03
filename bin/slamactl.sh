@@ -83,8 +83,8 @@ function submit_job() {
     --conf 'spark.kubernetes.namespace='${KUBE_NAMESPACE} \
     --conf 'spark.kubernetes.authenticate.driver.serviceAccountName=spark' \
     --conf 'spark.kubernetes.memoryOverheadFactor=0.4' \
-    --conf 'spark.kubernetes.driver.label.appname='${filename} \
-    --conf 'spark.kubernetes.executor.label.appname='{filename} \
+    --conf "spark.kubernetes.driver.label.appname=${filename}" \
+    --conf "spark.kubernetes.executor.label.appname=${filename}" \
     --conf 'spark.kubernetes.executor.deleteOnTermination=false' \
     --conf 'spark.kubernetes.container.image.pullPolicy=Always' \
     --conf 'spark.kubernetes.driverEnv.SCRIPT_ENV=cluster' \
@@ -134,8 +134,9 @@ function port_forward() {
 
 function help() {
   echo "
-  Supported env variables:
+  Required env variables:
     KUBE_NAMESPACE - a kubernetes namespace to make actions in
+    REPO - a private docker repository to push images to. It should be accessible by the cluster.
 
   List of commands.
     build-jars - Builds scala-based components of Slama and creates appropriate jar files in jar folder of the project
@@ -146,6 +147,12 @@ function help() {
     submit-job - Submit a pyspark application with script that represent SLAMA automl app.
     port-forward - Forwards port 4040 of the driver to 9040 port
     help - prints this message
+
+  Examples:
+  1. Start job
+     KUBE_NAMESPACE=spark-lama-exps REPO=node2.bdcl:5000 ./bin/slamactl.sh submit-job ./examples/spark/tabular-preset-automl.py
+  2. Forward Spark WebUI on local port
+     KUBE_NAMESPACE=spark-lama-exps REPO=node2.bdcl:5000 ./bin/slamactl.sh port-forward ./examples/spark/tabular-preset-automl.py
   "
 }
 
