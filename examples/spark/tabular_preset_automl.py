@@ -62,7 +62,7 @@ if __name__ == "__main__":
     cv = 5
     # use_algos = [["lgb", "linear_l2"], ["lgb"]]
     use_algos = [["lgb"]]
-    path = "/opt/spark_data/small_used_cars_data.csv"
+    path = "/opt/spark_data/derivative_datasets/1x_dataset.csv"
     task_type = "reg"
     roles = {
                     "target": "price",
