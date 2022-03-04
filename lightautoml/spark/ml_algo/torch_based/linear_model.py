@@ -157,6 +157,10 @@ class SparkTorchBasedLinearEstimator:
         )
         # TODO: SPARK-LAMA check for _loss_fn weights arg
         #  there should be a way to pass weights inside
+
+        # TODO: SPARK-LAMA feature_cols = ['features', 'features_cat']
+        #   we need 2 different vector assemblers to represent data
+        #   as it is expected by CatLinear
         torch_estimator = hvd.TorchEstimator(
             backend=backend,
             store=store,
