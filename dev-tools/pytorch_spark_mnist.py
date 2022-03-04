@@ -50,7 +50,7 @@ if __name__ == '__main__':
     # elif args.num_proc:
     #     conf.setMaster('local[{}]'.format(args.num_proc))
 
-    conf.setMaster('local[1]')
+    conf.setMaster('local[4]')
     spark = SparkSession.builder.config(conf=conf).getOrCreate()
 
     # Setup our store for intermediate data
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     loss = nn.NLLLoss()
 
     # Train a Horovod Spark Estimator on the DataFrame
-    backend = SparkBackend(num_proc=args.num_proc,
+    backend = SparkBackend(num_proc=1,
                            stdout=sys.stdout, stderr=sys.stderr,
                            prefix_output_with_timestamp=True)
     torch_estimator = hvd.TorchEstimator(backend=backend,
