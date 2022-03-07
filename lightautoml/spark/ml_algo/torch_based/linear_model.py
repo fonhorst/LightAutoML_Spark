@@ -23,11 +23,11 @@ from lightautoml.tasks.losses import TorchLossWrapper
 logger = logging.getLogger(__name__)
 
 
-class CustomLGBFS(optim.LBFGS):
-    def step(self, closure: Optional[Callable] = None) -> Optional[float]:
-        if closure is None:
-            closure = lambda: -np.inf
-        return super().step(closure)
+# class CustomLGBFS(optim.LBFGS):
+#     def step(self, closure: Optional[Callable] = None) -> Optional[float]:
+#         if closure is None:
+#             closure = lambda: -np.inf
+#         return super().step(closure)
 
 
 class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
@@ -166,13 +166,18 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         numeric_assembler = VectorAssembler(inputCols=numeric_feats, outputCol="numeric_features")
         cat_assembler = VectorAssembler(inputCols=cat_feats, outputCol="cat_features")
 
-        opt = CustomLGBFS(
+        # opt = CustomLGBFS(
+        #     self.model.parameters(),
+        #     lr=0.1,
+        #     max_iter=self.max_iter,
+        #     tolerance_change=self.tol,
+        #     tolerance_grad=self.tol,
+        #     line_search_fn="strong_wolfe",
+        # )
+
+        opt = optim.Adam(
             self.model.parameters(),
-            lr=0.1,
-            max_iter=self.max_iter,
-            tolerance_change=self.tol,
-            tolerance_grad=self.tol,
-            line_search_fn="strong_wolfe",
+            lr=0.1
         )
 
         def _train_minibatch_fn():
@@ -185,10 +190,11 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                 if loss.requires_grad:
                     loss.backward()
 
-                def closure():
-                    return loss
-                # specific need for LBGFS optimizer
-                optimizer.step(closure)
+                # def closure():
+                #     return loss
+                # # specific need for LBGFS optimizer
+                # optimizer.step(closure)
+                optimizer.step()
                 return outputs, loss
 
             return train_minibatch
