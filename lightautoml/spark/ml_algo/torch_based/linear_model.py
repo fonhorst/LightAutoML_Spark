@@ -186,7 +186,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                 optimizer.zero_grad()
                 outputs = model(*inputs)
                 outputs, labels = transform_outputs(outputs, labels)
-                loss = _loss_fn(loss_fn, model, outputs, labels, sample_weights, c)
+                loss = _loss_fn(loss_fn, model, labels, outputs, sample_weights, c)
 
                 if loss.requires_grad:
                     loss.backward()
@@ -215,14 +215,17 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         # TODO: SPARK-LAMA feature_cols = ['features', 'features_cat']
         #   we need 2 different vector assemblers to represent data
         #   as it is expected by CatLinear
+
+        loss = nn.MSELoss(reduction='none')
         torch_estimator = hvd.TorchEstimator(
             backend=backend,
             store=store,
             model=self.model,
             optimizer=opt,
             train_minibatch_fn=_train_minibatch_fn(),
-            # loss=lambda input, target: self._loss_fn(input, target.long(), None, c),
-            loss=self.loss,
+            # loss=lambda input, target: self.loss(input, target.long()),
+            loss=lambda input, target: loss(input, target.long()),
+            # loss=self.loss,
             # TODO: SPARK-LAMA shapes?
             # input_shapes=[[-1, 1, 28, 28]],
             input_shapes=[[-1, 1, len(numeric_feats)], [-1, 1, len(cat_feats)]],
@@ -304,6 +307,8 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
             metric: metric function. Format: metric(y_true, y_preds, sample_weight = None) -> float (greater_is_better).
 
         """
+        if loss is None:
+            loss = TorchLossWrapper(nn.MSELoss)
 
         super().__init__(input_roles, label_col, prediction_col, prediction_role, embed_sizes, val_df,
                          1, cs, max_iter, tol, early_stopping, loss, metric)
@@ -384,7 +389,7 @@ class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
 
 
 def _loss_fn(
-    loss: Callable,
+    loss_fn: Callable,
     model: Any,
     y_true: torch.Tensor,
     y_pred: torch.Tensor,
@@ -404,7 +409,7 @@ def _loss_fn(
 
     """
     # weighted loss
-    loss = loss(y_true, y_pred, sample_weight=weights)
+    loss = loss_fn(y_true, y_pred, sample_weights=weights)
 
     n = y_true.shape[0]
     if weights is not None:
