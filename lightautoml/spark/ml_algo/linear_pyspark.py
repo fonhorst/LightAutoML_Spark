@@ -332,7 +332,7 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
         ]
         self._embed_sizes = (
             train_valid_iterator.train.data
-            .select([(F.max(feat) + 1).alias(feat) for feat in cat_roles])
+            .select([(F.max(feat) + 1).astype('int').alias(feat) for feat in cat_roles])
             .first().asDict()
         )
 
@@ -396,6 +396,7 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
                 label_col=full.target_column,
                 prediction_col=fold_prediction_column,
                 prediction_role=self.prediction_role,
+                embed_sizes=self._embed_sizes,
                 val_df=valid.data,
                 **params
             )
@@ -405,6 +406,7 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
                 label_col=full.target_column,
                 prediction_col=fold_prediction_column,
                 prediction_role=self.prediction_role,
+                embed_sizes=self._embed_sizes,
                 val_df=valid.data,
                 output_size=self._dim_size,
                 **params

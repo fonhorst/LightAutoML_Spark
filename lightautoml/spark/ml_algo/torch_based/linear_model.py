@@ -1,6 +1,7 @@
+import functools
 import logging
 import sys
-from typing import Sequence, Optional, Callable, Dict, List
+from typing import Sequence, Optional, Callable, Dict, List, Any
 
 import horovod.spark.torch as hvd
 import numpy as np
@@ -20,6 +21,13 @@ from lightautoml.spark.transformers.base import SparkBaseEstimator, DropColumnsT
 from lightautoml.tasks.losses import TorchLossWrapper
 
 logger = logging.getLogger(__name__)
+
+
+class CustomLGBFS(optim.LBFGS):
+    def step(self, closure: Optional[Callable] = None) -> Optional[float]:
+        if closure is None:
+            closure = lambda: -np.inf
+        return super().step(closure)
 
 
 class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
@@ -158,7 +166,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         numeric_assembler = VectorAssembler(inputCols=numeric_feats, outputCol="numeric_features")
         cat_assembler = VectorAssembler(inputCols=cat_feats, outputCol="cat_features")
 
-        opt = optim.LBFGS(
+        opt = CustomLGBFS(
             self.model.parameters(),
             lr=0.1,
             max_iter=self.max_iter,
@@ -172,7 +180,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                 optimizer.zero_grad()
                 outputs = model(*inputs)
                 outputs, labels = transform_outputs(outputs, labels)
-                loss = loss_fn(outputs, labels, sample_weights)
+                loss = loss_fn(model, outputs, labels, sample_weights)
 
                 if loss.requires_grad:
                     loss.backward()
@@ -184,6 +192,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                 return outputs, loss
 
             return train_minibatch
+
+        loss_func = functools.partial(self._loss_fn, self.loss)
 
         # Setup our store for intermediate data
         store = Store.create('/tmp/hvd_spark')
@@ -206,7 +216,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             model=self.model,
             optimizer=opt,
             train_minibatch_fn=_train_minibatch_fn(),
-            loss=lambda input, target: self._loss_fn(input, target.long(), None, c),
+            # loss=lambda input, target: self._loss_fn(input, target.long(), None, c),
+            loss=loss_func,
             # TODO: SPARK-LAMA shapes?
             # input_shapes=[[-1, 1, 28, 28]],
             input_shapes=[[-1, 1, len(numeric_feats)], [-1, 1, len(cat_feats)]],
@@ -226,8 +237,10 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
 
         return PipelineModel(stages=[numeric_assembler, cat_assembler, torch_model, drop_columns])
 
+    @staticmethod
     def _loss_fn(
-        self,
+        loss: Callable,
+        model: Any,
         y_true: torch.Tensor,
         y_pred: torch.Tensor,
         weights: Optional[torch.Tensor],
@@ -246,13 +259,13 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
 
         """
         # weighted loss
-        loss = self.loss(y_true, y_pred, sample_weight=weights)
+        loss = loss(y_true, y_pred, sample_weight=weights)
 
         n = y_true.shape[0]
         if weights is not None:
             n = weights.sum()
 
-        all_params = torch.cat([y.view(-1) for (x, y) in self.model.named_parameters() if x != "bias"])
+        all_params = torch.cat([y.view(-1) for (x, y) in model.named_parameters() if x != "bias"])
 
         penalty = torch.norm(all_params, 2).pow(2) / 2 / n
 
