@@ -30,7 +30,6 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                  prediction_col: str,
                  prediction_role: ColumnRole,
                  val_col: Optional[str] = None,
-                 embed_sizes: Sequence[int] = (),
                  output_size: int = 1,
                  cs: Sequence[float] = (
                     0.00001,
@@ -74,7 +73,6 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         self.val_col = val_col
         self.set(self.predictionCol, prediction_col)
 
-        self.embed_sizes = embed_sizes
         self.output_size = output_size
 
         assert all([x > 0 for x in cs]), "All Cs should be greater than 0"
@@ -279,8 +277,6 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
                  prediction_col: str,
                  prediction_role: ColumnRole,
                  val_col: Optional[str] = None,
-                 embed_sizes: Sequence[int] = (),
-                 output_size: int = 1,
                  cs: Sequence[float] = (
                     0.00001,
                     0.00005,
@@ -319,8 +315,8 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
 
         """
 
-        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_col, embed_sizes,
-                         output_size, cs, max_iter, tol, early_stopping, loss, metric)
+        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_col,
+                         1, cs, max_iter, tol, early_stopping, loss, metric)
 
         numeric_feats = self._get_numeric_feats()
 
@@ -334,7 +330,7 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
 class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
     """Linear binary classifier."""
     def __init__(self, input_roles: Dict[str, ColumnRole], label_col: str, prediction_col: str,
-                 prediction_role: ColumnRole, val_col: Optional[str] = None, embed_sizes: Sequence[int] = (),
+                 prediction_role: ColumnRole, val_col: Optional[str] = None,
                  output_size: int = 1, cs: Sequence[float] = (
                     0.00001,
                     0.00005,
@@ -380,7 +376,7 @@ class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
         if loss is None:
             loss = TorchLossWrapper(_loss)
 
-        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_col, embed_sizes, output_size, cs,
+        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_col, output_size, cs,
                          max_iter, tol, early_stopping, loss, metric)
 
         numeric_feats = self._get_numeric_feats()

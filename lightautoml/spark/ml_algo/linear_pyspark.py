@@ -6,7 +6,7 @@ from typing import Tuple, Optional, List
 from typing import Union
 
 import numpy as np
-from pyspark.ml import Pipeline, Transformer, PipelineModel, Estimator
+from pyspark.ml import Pipeline, Transformer, PipelineModel, Estimator, PredictionModel
 from pyspark.ml.classification import LogisticRegression, LogisticRegressionModel
 from pyspark.ml.feature import VectorAssembler, OneHotEncoder
 from pyspark.ml.regression import LinearRegression, LinearRegressionModel
@@ -14,6 +14,7 @@ from pyspark.sql import functions as F
 
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
+from .torch_based.linear_model import SparkTorchBasedLinearRegression, SparkTorchBasedLogisticRegression
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ..transformers.base import DropColumnsTransformer
 from ..utils import DebugTransformer
@@ -244,3 +245,181 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         )
 
         return super().fit_predict(train_valid_iterator)
+
+
+class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
+
+    _name: str = "TorchBasedLinearL2"
+
+    _default_params = {
+        "tol": 1e-4,
+        "max_iter": 100,
+        "cs":
+        [
+            1e-5,
+            5e-5,
+            1e-4,
+            5e-4,
+            1e-3,
+            5e-3,
+            1e-2,
+            5e-2,
+            1e-1,
+            5e-1,
+            1,
+            5,
+            10,
+            50,
+            100,
+            500,
+            1000,
+            5000,
+            10000,
+            50000,
+            100000,
+        ],
+        "early_stopping": 2,
+    }
+
+    def __init__(self,
+                 cacher_key: str,
+                 default_params: Optional[dict] = None,
+                 freeze_defaults: bool = True,
+                 timer: Optional[TaskTimer] = None,
+                 optimization_search_space: Optional[dict] = {}):
+        super().__init__(cacher_key, default_params, freeze_defaults, timer, optimization_search_space)
+
+        self._prediction_col = f"prediction_{self._name}"
+        self.task = None
+        self._timer = timer
+        self._ohe = None
+        self._assembler = None
+
+        self._probability_col_name = "probability"
+        self._prediction_col_name = "prediction"
+
+        self._dim_size = None
+
+    def _infer_params(self,
+                      full: SparkDataset,
+                      fold_prediction_column: str) -> Estimator:
+        logger.debug("Building pipeline in linear lGBFS")
+        params = copy(self.params)
+
+        if full.task.name in ["binary", "multiclass"]:
+            model = SparkTorchBasedLinearRegression(
+                input_roles=self.input_roles,
+                label_col=full.target_column,
+                prediction_col=fold_prediction_column,
+                prediction_role=self.prediction_role,
+                val_col='is_val',
+                **params
+            )
+        elif full.task.name == "reg":
+            model = SparkTorchBasedLogisticRegression(
+                input_roles=self.input_roles,
+                label_col=full.target_column,
+                prediction_col=fold_prediction_column,
+                prediction_role=self.prediction_role,
+                val_col='is_val',
+                output_size=self._dim_size,
+                **params
+            )
+        else:
+            raise ValueError("Task not supported")
+
+        return model
+
+    def fit_predict_single_fold(self,
+                                fold_prediction_column: str,
+                                full: SparkDataset,
+                                train: SparkDataset,
+                                valid: SparkDataset
+    ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+        """Train on train dataset and predict on holdout dataset.
+
+        Args:
+            fold_prediction_column: column name for predictions made for this fold
+            full: Full dataset that include train and valid parts and a bool column that delimits records
+            train: Train Dataset.
+            valid: Validation Dataset.
+
+        Returns:
+            Target predictions for valid dataset.
+
+        """
+        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(self.input_features)} ")
+
+        estimator = self._infer_params(full, fold_prediction_column)
+
+        best_model: PredictionModel = estimator.fit(train.data)
+        best_val_pred = best_model.transform(valid.data)
+
+        return best_model, best_val_pred, fold_prediction_column
+
+    def predict_single_fold(self,
+                            dataset: SparkDataset,
+                            model: SparkMLModel) -> SparkDataFrame:
+        """Implements prediction on single fold.
+
+        Args:
+            model: Model uses to predict.
+            dataset: ``SparkDataset`` used for prediction.
+
+        Returns:
+            Predictions for input dataset.
+
+        """
+        pred = model.transform(dataset.data)
+        return pred
+
+    def _build_transformer(self) -> Transformer:
+        avr = self._build_averaging_transformer()
+        models = [el for m in self.models for el in [m, DropColumnsTransformer(
+            remove_cols=[],
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+        )]]
+        averaging_model = PipelineModel(stages=models + [avr])
+        return averaging_model
+
+    def _build_averaging_transformer(self) -> Transformer:
+        avr = AveragingTransformer(
+            self.task.name,
+            input_cols=self._models_prediction_columns,
+            output_col=self.prediction_feature,
+            remove_cols=self._models_prediction_columns,
+            convert_to_array_first=not (self.task.name == "reg"),
+            dim_num=self.n_classes
+        )
+        return avr
+
+    def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
+        """Fit and then predict accordig the strategy that uses train_valid_iterator.
+
+        If item uses more then one time it will
+        predict mean value of predictions.
+        If the element is not used in training then
+        the prediction will be ``numpy.nan`` for this item
+
+        Args:
+            train_valid_iterator: Classic cv-iterator.
+
+        Returns:
+            Dataset with predicted values.
+
+        """
+        self.timer.start()
+
+        if train_valid_iterator.train.task.name == 'multiclass':
+            self._dim_size = train_valid_iterator.train.select(
+                F.max(train_valid_iterator.train.target_column) + 1
+            ).first()
+        elif train_valid_iterator.train.task.name == 'binary':
+            self._dim_size = 2
+        else:
+            self._dim_size = 1
+
+        self.input_roles = train_valid_iterator.input_roles
+
+        return super().fit_predict(train_valid_iterator)
+
