@@ -302,6 +302,7 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
 
     def _infer_params(self,
                       full: SparkDataset,
+                      valid: SparkDataset,
                       fold_prediction_column: str) -> Estimator:
         logger.debug("Building pipeline in linear lGBFS")
         params = copy(self.params)
@@ -312,7 +313,7 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
                 label_col=full.target_column,
                 prediction_col=fold_prediction_column,
                 prediction_role=self.prediction_role,
-                val_col='is_val',
+                val_df=valid.data,
                 **params
             )
         elif full.task.name == "reg":
@@ -321,7 +322,7 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
                 label_col=full.target_column,
                 prediction_col=fold_prediction_column,
                 prediction_role=self.prediction_role,
-                val_col='is_val',
+                val_df=valid.data,
                 output_size=self._dim_size,
                 **params
             )
@@ -350,7 +351,7 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
         """
         logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(self.input_features)} ")
 
-        estimator = self._infer_params(full, fold_prediction_column)
+        estimator = self._infer_params(full, valid, fold_prediction_column)
 
         best_model: PredictionModel = estimator.fit(train.data)
         best_val_pred = best_model.transform(valid.data)

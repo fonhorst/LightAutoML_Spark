@@ -29,7 +29,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                  label_col: str,
                  prediction_col: str,
                  prediction_role: ColumnRole,
-                 val_col: Optional[str] = None,
+                 val_df: Optional[SparkDataFrame] = None,
                  output_size: int = 1,
                  cs: Sequence[float] = (
                     0.00001,
@@ -70,7 +70,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         """
         super().__init__(list(input_roles.keys()), input_roles, do_replace_columns=False, output_role=prediction_role)
         self.label_col = label_col
-        self.val_col = val_col
+        self.val_df = val_df
         self.set(self.predictionCol, prediction_col)
 
         self.output_size = output_size
@@ -109,7 +109,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         """
         assert self.model is not None, "Model should be defined"
 
-        if not self.val_col:
+        if not self.val_df:
             logger.info("Validation data should be defined. No validation will be performed and C = 1 will be used")
             return self._optimize(data, 1.0)
 
@@ -117,13 +117,11 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         best_model = None
         es = 0
 
-        val_df = data.where(F.col(self.val_col) == 1)
-
         for c in self.cs:
             model = self._optimize(data, c)
             val_pred = (
                 model
-                .transform(val_df)
+                .transform(self.val_df)
                 .select(SparkDataset.ID_COLUMN, self.label_col, self.getPredictionCol())
             )
             score = self.metric(val_pred)
@@ -276,7 +274,7 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
                  label_col: str,
                  prediction_col: str,
                  prediction_role: ColumnRole,
-                 val_col: Optional[str] = None,
+                 val_df: Optional[SparkDataFrame] = None,
                  cs: Sequence[float] = (
                     0.00001,
                     0.00005,
@@ -315,7 +313,7 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
 
         """
 
-        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_col,
+        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_df,
                          1, cs, max_iter, tol, early_stopping, loss, metric)
 
         numeric_feats = self._get_numeric_feats()
@@ -330,7 +328,7 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
 class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
     """Linear binary classifier."""
     def __init__(self, input_roles: Dict[str, ColumnRole], label_col: str, prediction_col: str,
-                 prediction_role: ColumnRole, val_col: Optional[str] = None,
+                 prediction_role: ColumnRole, val_df: Optional[SparkDataFrame] = None,
                  output_size: int = 1, cs: Sequence[float] = (
                     0.00001,
                     0.00005,
@@ -376,7 +374,7 @@ class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
         if loss is None:
             loss = TorchLossWrapper(_loss)
 
-        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_col, output_size, cs,
+        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_df, output_size, cs,
                          max_iter, tol, early_stopping, loss, metric)
 
         numeric_feats = self._get_numeric_feats()
