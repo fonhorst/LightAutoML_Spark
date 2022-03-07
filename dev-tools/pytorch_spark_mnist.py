@@ -41,6 +41,8 @@ parser.add_argument('--data-dir', default='/tmp',
                     help='location of the training dataset in the local filesystem (will be downloaded if needed)')
 
 if __name__ == '__main__':
+    os.environ['CUDA_VISIBLE_DEVICES'] = ""
+
     args = parser.parse_args()
 
     # Initialize SparkSession
