@@ -391,17 +391,6 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
         params = copy(self.params)
 
         if full.task.name in ["binary", "multiclass"]:
-            model = SparkTorchBasedLinearRegression(
-                input_roles=self.input_roles,
-                label_col=full.target_column,
-                prediction_col=fold_prediction_column,
-                prediction_role=self.prediction_role,
-                embed_sizes=self._embed_sizes,
-                val_df=valid.data,
-                metric=self.score,
-                **params
-            )
-        elif full.task.name == "reg":
             model = SparkTorchBasedLogisticRegression(
                 input_roles=self.input_roles,
                 label_col=full.target_column,
@@ -410,6 +399,17 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
                 embed_sizes=self._embed_sizes,
                 val_df=valid.data,
                 output_size=self._dim_size,
+                **params
+            )
+        elif full.task.name == "reg":
+            model = SparkTorchBasedLinearRegression(
+                input_roles=self.input_roles,
+                label_col=full.target_column,
+                prediction_col=fold_prediction_column,
+                prediction_role=self.prediction_role,
+                embed_sizes=self._embed_sizes,
+                val_df=valid.data,
+                metric=self.score,
                 **params
             )
         else:

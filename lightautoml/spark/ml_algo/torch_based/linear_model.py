@@ -231,7 +231,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         #   as it is expected by CatLinear
 
         # loss = nn.MSELoss(reduction='none')
-        loss = nn.MSELoss()
+        loss = nn.BCELoss()
         torch_estimator = hvd.TorchEstimator(
             backend=backend,
             store=store,
@@ -239,7 +239,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             optimizer=opt,
             # train_minibatch_fn=_train_minibatch_fn(),
             # loss=lambda input, target: self.loss(input, target.long()),
-            loss=lambda input, target: loss(input, target).double(),
+            loss=lambda input, target: loss(input, target),
             # loss=self.loss,
             # TODO: SPARK-LAMA shapes?
             # input_shapes=[[-1, 1, 28, 28]],
