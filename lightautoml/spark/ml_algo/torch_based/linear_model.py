@@ -18,6 +18,7 @@ from torch import optim
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.ml_algo.torch_based.linear_model import CatRegression, CatLogisticRegression, CatMulticlass, CatLinear
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.tasks.base import DEFAULT_PREDICTION_COL_NAME, DEFAULT_TARGET_COL_NAME
 from lightautoml.spark.transformers.base import SparkBaseEstimator, DropColumnsTransformer, ChangeTypeTransformer
 from lightautoml.tasks.losses import TorchLossWrapper
 
@@ -61,8 +62,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                  max_iter: int = 1000,
                  tol: float = 1e-5,
                  early_stopping: int = 2,
-                 loss=Optional[Callable],
-                 metric=Optional[Callable]):
+                 loss: Optional[Callable] = None,
+                 metric: Optional[Callable] = None):
         """
         Args:
             data_size: Not used.
@@ -132,7 +133,11 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             val_pred = (
                 model
                 .transform(self.val_df)
-                .select(SparkDataset.ID_COLUMN, self.label_col, self.getPredictionCol())
+                .select(
+                    SparkDataset.ID_COLUMN,
+                    F.col(self.label_col).alias(DEFAULT_TARGET_COL_NAME),
+                    F.col(self.getPredictionCol()).alias(DEFAULT_PREDICTION_COL_NAME)
+                )
             )
             score = self.metric(val_pred)
             logger.info(f"Linear model: C = {c} score = {score}")
@@ -181,24 +186,33 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             lr=0.1
         )
 
-        def _train_minibatch_fn():
-            def train_minibatch(model, optimizer, transform_outputs, loss_fn, inputs, labels, sample_weights):
-                optimizer.zero_grad()
-                outputs = model(*inputs)
-                outputs, labels = transform_outputs(outputs, labels)
-                loss = _loss_fn(loss_fn, model, labels, outputs, sample_weights, c)
-
-                if loss.requires_grad:
-                    loss.backward()
-
-                # def closure():
-                #     return loss
-                # # specific need for LBGFS optimizer
-                # optimizer.step(closure)
-                optimizer.step()
-                return outputs, loss
-
-            return train_minibatch
+        # def _train_minibatch_fn():
+        #     def train_minibatch(model, optimizer, transform_outputs, loss_fn, inputs, labels, sample_weights):
+        #         optimizer.zero_grad()
+        #
+        #         outputs = model(*inputs)
+        #
+        #         # raise ValueError(f"Inputs: {len(inputs)}, {inputs[0].shape}, {inputs[1].shape}. "
+        #         #                  f"Outputs: {len(outputs)}, {outputs.shape}"
+        #         #                  f"Labels: {len(labels)}, {labels[0].shape}")
+        #
+        #         outputs, labels = transform_outputs(outputs, labels)
+        #         # loss = _loss_fn(loss_fn, model, labels, outputs, sample_weights, c)
+        #         loss = loss_fn(outputs, labels, sample_weights)
+        #
+        #         # raise ValueError(f"Loss: {len(loss)}, {loss[0].shape}, {loss.shape}")
+        #
+        #         # if loss.requires_grad:
+        #         loss.backward()
+        #
+        #         # def closure():
+        #         #     return loss
+        #         # # specific need for LBGFS optimizer
+        #         # optimizer.step(closure)
+        #         optimizer.step()
+        # #         return outputs, loss
+        #
+        #     return train_minibatch
 
         # Setup our store for intermediate data
         store = Store.create('/tmp/hvd_spark')
@@ -216,25 +230,27 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         #   we need 2 different vector assemblers to represent data
         #   as it is expected by CatLinear
 
-        loss = nn.MSELoss(reduction='none')
+        # loss = nn.MSELoss(reduction='none')
+        loss = nn.MSELoss()
         torch_estimator = hvd.TorchEstimator(
             backend=backend,
             store=store,
             model=self.model,
             optimizer=opt,
-            train_minibatch_fn=_train_minibatch_fn(),
+            # train_minibatch_fn=_train_minibatch_fn(),
             # loss=lambda input, target: self.loss(input, target.long()),
-            loss=lambda input, target: loss(input, target.long()),
+            loss=lambda input, target: loss(input, target).double(),
             # loss=self.loss,
             # TODO: SPARK-LAMA shapes?
             # input_shapes=[[-1, 1, 28, 28]],
-            input_shapes=[[-1, 1, len(numeric_feats)], [-1, 1, len(cat_feats)]],
+            input_shapes=[[-1, len(numeric_feats)], [-1, len(cat_feats)]],
             feature_cols=[numeric_assembler.getOutputCol(), cat_assembler.getOutputCol()],
             label_cols=[self.label_col],
             batch_size=128,
-            epochs=self.max_iter,
+            # epochs=self.max_iter,
+            epochs=3,
             # validation=0.1,
-            verbose=1
+            verbose=2
         )
         change_type_transformer = ChangeTypeTransformer(input_columns=cat_feats)
         drop_columns = DropColumnsTransformer(remove_cols=torch_estimator.getFeatureCols())
@@ -242,7 +258,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         sdf = change_type_transformer.transform(train_df)
         sdf = numeric_assembler.transform(sdf)
         sdf = cat_assembler.transform(sdf)
-        torch_model = torch_estimator.fit(sdf).setOutputCols(self.getPredictionCol())
+        torch_model = torch_estimator.fit(sdf).setOutputCols([self.getPredictionCol()])
 
         return PipelineModel(stages=[change_type_transformer, numeric_assembler,
                                      cat_assembler, torch_model, drop_columns])
@@ -291,8 +307,8 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
                  max_iter: int = 1000,
                  tol: float = 1e-5,
                  early_stopping: int = 2,
-                 loss=Optional[Callable],
-                 metric=Optional[Callable]):
+                 loss: Optional[Callable] = None,
+                 metric: Optional[Callable] = None):
         """
         Args:
             data_size: used only for super function.
@@ -346,8 +362,10 @@ class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
                     7.0,
                     10.0,
                     20.0,
-            ), max_iter: int = 1000, tol: float = 1e-5, early_stopping: int = 2, loss=Optional[Callable],
-                 metric=Optional[Callable]):
+            ),
+                 max_iter: int = 1000, tol: float = 1e-5, early_stopping: int = 2,
+                 loss: Optional[Callable] = None,
+                 metric: Optional[Callable] = None):
         """
         Args:
             data_size: not used.

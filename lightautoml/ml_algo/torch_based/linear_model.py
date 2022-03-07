@@ -83,12 +83,13 @@ class CatLinear(nn.Module):
             categories: Input categorical features.
 
         """
+        numbers = numbers.double()
         categories = categories.type(torch.LongTensor)
 
         x = self.bias
 
-        if self.linear is not None:
-            x = x + self.linear(numbers)
+        # if self.linear is not None:
+        #     x = x + self.linear(numbers)
 
         if self.cat_params is not None:
             x = x + self.cat_params[categories + self.embed_idx].sum(dim=1)

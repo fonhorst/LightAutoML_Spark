@@ -398,6 +398,7 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
                 prediction_role=self.prediction_role,
                 embed_sizes=self._embed_sizes,
                 val_df=valid.data,
+                metric=self.score,
                 **params
             )
         elif full.task.name == "reg":

@@ -103,6 +103,19 @@ if __name__ == '__main__':
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
     loss = nn.NLLLoss()
 
+
+    def _train_minibatch_fn():
+        def train_minibatch(model, optimizer, transform_outputs, loss_fn, inputs, labels, sample_weights):
+            optimizer.zero_grad()
+            outputs = model(*inputs)
+            outputs, labels = transform_outputs(outputs, labels)
+            loss = loss_fn(outputs, labels, sample_weights)
+            loss.backward()
+            optimizer.step()
+            return outputs, loss
+
+        return train_minibatch
+
     # Train a Horovod Spark Estimator on the DataFrame
     backend = SparkBackend(num_proc=1,
                            stdout=sys.stdout, stderr=sys.stderr,
@@ -111,6 +124,7 @@ if __name__ == '__main__':
                                          store=store,
                                          model=model,
                                          optimizer=optimizer,
+                                         train_minibatch_fn=_train_minibatch_fn(),
                                          loss=lambda input, target: loss(input, target.long()),
                                          input_shapes=[[-1, 1, 28, 28]],
                                          feature_cols=['features'],
