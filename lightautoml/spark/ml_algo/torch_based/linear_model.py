@@ -4,15 +4,14 @@ from typing import Sequence, Optional, Callable, Dict, List
 
 import horovod.spark.torch as hvd
 import numpy as np
-import pyspark.sql.functions as F
 import torch
 from horovod.spark.common.backend import SparkBackend
 from horovod.spark.common.store import Store
-from pyspark.ml import PipelineModel, Transformer, Pipeline
+from pyspark.ml import PipelineModel, Transformer
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.param.shared import HasPredictionCol
-from torch import optim
 from torch import nn
+from torch import optim
 
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.ml_algo.torch_based.linear_model import CatRegression, CatLogisticRegression, CatMulticlass
@@ -29,6 +28,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                  label_col: str,
                  prediction_col: str,
                  prediction_role: ColumnRole,
+                 embed_sizes: Dict[str, int],
                  val_df: Optional[SparkDataFrame] = None,
                  output_size: int = 1,
                  cs: Sequence[float] = (
@@ -70,6 +70,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         """
         super().__init__(list(input_roles.keys()), input_roles, do_replace_columns=False, output_role=prediction_role)
         self.label_col = label_col
+        self.embed_sizes = embed_sizes
         self.val_df = val_df
         self.set(self.predictionCol, prediction_col)
 
@@ -258,25 +259,27 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         return loss + 0.5 * penalty / c
 
     def _get_numeric_feats(self) -> List[str]:
-        return [
+        feats = [
             feat for feat, role in self.getInputRoles().items()
             if isinstance(role, NumericRole)
         ]
+        return sorted(feats)
 
     def _get_cat_feats(self) -> List[str]:
-        return [
+        feats = [
             feat for feat, role in self.getInputRoles().items()
             if isinstance(role, CategoryRole)
         ]
+        return sorted(feats)
 
 
 class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
-    """Torch-based linear regressor optimized by L-BFGS."""
     def __init__(self,
                  input_roles: Dict[str, ColumnRole],
                  label_col: str,
                  prediction_col: str,
                  prediction_role: ColumnRole,
+                 embed_sizes: Dict[str, int],
                  val_df: Optional[SparkDataFrame] = None,
                  cs: Sequence[float] = (
                     0.00001,
@@ -316,22 +319,25 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
 
         """
 
-        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_df,
+        super().__init__(input_roles, label_col, prediction_col, prediction_role, embed_sizes, val_df,
                          1, cs, max_iter, tol, early_stopping, loss, metric)
 
         numeric_feats = self._get_numeric_feats()
+        cat_feats = self._get_cat_feats()
+        embed_sizes = [self.embed_sizes[feat] for feat in cat_feats]
 
         self.model = CatRegression(
             len(numeric_feats),
-            self.embed_sizes,
+            embed_sizes,
             self.output_size,
         )
+    """Torch-based linear regressor optimized by L-BFGS."""
 
 
 class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
     """Linear binary classifier."""
     def __init__(self, input_roles: Dict[str, ColumnRole], label_col: str, prediction_col: str,
-                 prediction_role: ColumnRole, val_df: Optional[SparkDataFrame] = None,
+                 prediction_role: ColumnRole, embed_sizes: Dict[str, int], val_df: Optional[SparkDataFrame] = None,
                  output_size: int = 1, cs: Sequence[float] = (
                     0.00001,
                     0.00005,
@@ -377,13 +383,15 @@ class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
         if loss is None:
             loss = TorchLossWrapper(_loss)
 
-        super().__init__(input_roles, label_col, prediction_col, prediction_role, val_df, output_size, cs,
+        super().__init__(input_roles, label_col, prediction_col, prediction_role, embed_sizes, val_df, output_size, cs,
                          max_iter, tol, early_stopping, loss, metric)
 
         numeric_feats = self._get_numeric_feats()
+        cat_feats = self._get_cat_feats()
+        embed_sizes = [self.embed_sizes[feat] for feat in cat_feats]
 
         self.model = _model(
             len(numeric_feats),
-            self.embed_sizes,
+            embed_sizes,
             self.output_size,
         )

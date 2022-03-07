@@ -2,7 +2,7 @@
 
 import logging
 from copy import copy
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict
 from typing import Union
 
 import numpy as np
@@ -17,6 +17,7 @@ from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from .torch_based.linear_model import SparkTorchBasedLinearRegression, SparkTorchBasedLogisticRegression
 from ..dataset.base import SparkDataset, SparkDataFrame
 from ..transformers.base import DropColumnsTransformer
+from ...dataset.roles import CategoryRole
 from ...utils.timer import TaskTimer
 
 logger = logging.getLogger(__name__)
@@ -297,7 +298,8 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
 
-        self._dim_size = None
+        self._dim_size: Optional[int] = None
+        self._embed_sizes: Optional[Dict[str, int]] = None
 
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
         """Fit and then predict accordig the strategy that uses train_valid_iterator.
@@ -324,6 +326,15 @@ class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
             self._dim_size = 2
         else:
             self._dim_size = 1
+
+        cat_roles = [
+            feat for feat, role in train_valid_iterator.input_roles.items() if isinstance(role, CategoryRole)
+        ]
+        self._embed_sizes = (
+            train_valid_iterator.train.data
+            .select([(F.max(feat) + 1).alias(feat) for feat in cat_roles])
+            .first().asDict()
+        )
 
         self.input_roles = train_valid_iterator.input_roles
 

@@ -314,7 +314,9 @@ def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any],
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_mlalgo_torchbased_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkTorchBaseLinearLBFGS, 'linear_features',
-                               ml_alg_kwargs, ml_kwargs={"default_params": {"cs": [1]}})
+                               ml_alg_kwargs,
+                               ml_kwargs_lama={"default_params": {"cs": [1]}},
+                               ml_kwargs_spark={"default_params": {"cs": [1]}})
 
 
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
