@@ -231,7 +231,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         #   as it is expected by CatLinear
 
         # loss = nn.MSELoss(reduction='none')
-        loss = nn.BCELoss()
+        loss = nn.MSELoss()
+        # loss = nn.BCELoss()
         torch_estimator = hvd.TorchEstimator(
             backend=backend,
             store=store,
