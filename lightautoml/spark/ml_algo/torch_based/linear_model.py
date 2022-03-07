@@ -5,6 +5,7 @@ from typing import Sequence, Optional, Callable, Dict, List, Any
 
 import horovod.spark.torch as hvd
 import numpy as np
+import pyspark.sql.functions as F
 import torch
 from horovod.spark.common.backend import SparkBackend
 from horovod.spark.common.store import Store
@@ -15,9 +16,9 @@ from torch import nn
 from torch import optim
 
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
-from lightautoml.ml_algo.torch_based.linear_model import CatRegression, CatLogisticRegression, CatMulticlass
+from lightautoml.ml_algo.torch_based.linear_model import CatRegression, CatLogisticRegression, CatMulticlass, CatLinear
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
-from lightautoml.spark.transformers.base import SparkBaseEstimator, DropColumnsTransformer
+from lightautoml.spark.transformers.base import SparkBaseEstimator, DropColumnsTransformer, ChangeTypeTransformer
 from lightautoml.tasks.losses import TorchLossWrapper
 
 logger = logging.getLogger(__name__)
@@ -234,14 +235,16 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             # validation=0.1,
             verbose=1
         )
-
+        change_type_transformer = ChangeTypeTransformer(input_columns=cat_feats)
         drop_columns = DropColumnsTransformer(remove_cols=torch_estimator.getFeatureCols())
 
-        sdf = numeric_assembler.transform(train_df)
+        sdf = change_type_transformer.transform(train_df)
+        sdf = numeric_assembler.transform(sdf)
         sdf = cat_assembler.transform(sdf)
         torch_model = torch_estimator.fit(sdf).setOutputCols(self.getPredictionCol())
 
-        return PipelineModel(stages=[numeric_assembler, cat_assembler, torch_model, drop_columns])
+        return PipelineModel(stages=[change_type_transformer, numeric_assembler,
+                                     cat_assembler, torch_model, drop_columns])
 
     @staticmethod
     def _loss_fn(

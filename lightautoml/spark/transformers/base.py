@@ -1,25 +1,20 @@
 import logging
 from abc import ABC
 from copy import copy, deepcopy
-from typing import Dict, cast, Sequence, List, Set, Optional, Union
+from typing import Dict, cast, List, Optional, Union
 
+import pyspark.sql.functions as F
+from pyspark.ml import Transformer, Estimator
+from pyspark.ml.param.shared import HasInputCols, HasOutputCols, TypeConverters
+from pyspark.ml.param.shared import Param, Params
+from pyspark.ml.util import MLWritable, MLWriter
 from pyspark.sql import Column
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
-from lightautoml.dataset.utils import concatenate
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.mlwriters import TmpСommonMLWriter
-from lightautoml.spark.utils import log_exec_time
-from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LAMAColumnsSelector, \
-    ChangeRoles as LAMAChangeRoles
-from lightautoml.transformers.base import Roles
-
-from pyspark.ml import Transformer, Estimator
-from pyspark.ml.param.shared import HasInputCols, HasOutputCols, TypeConverters
-from pyspark.ml.param.shared import Param, Params
-from pyspark.ml.util import MLReadable, MLWritable, MLWriter
-
+from lightautoml.transformers.base import LAMLTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -367,3 +362,16 @@ class SparkChangeRolesTransformer(SparkBaseTransformer):
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset
+
+
+class ChangeTypeTransformer(Transformer, HasInputCols, HasOutputCols):
+    def __init__(self, input_columns: List[str]):
+        super().__init__()
+        self.set(self.inputCols, input_columns)
+        self.set(self.outputCols, input_columns)
+
+    def _transform(self, dataset):
+        input_cols = set(self.getInputCols())
+        rest_cols = [c for c in dataset.columns if c not in input_cols]
+        output_cols = [F.col(c).astype('int').alias(c) for c in input_cols]
+        return dataset.select(*rest_cols, *output_cols)
