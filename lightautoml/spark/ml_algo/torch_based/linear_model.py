@@ -8,7 +8,7 @@ import pyspark.sql.functions as F
 import torch
 from horovod.spark.common.backend import SparkBackend
 from horovod.spark.common.store import Store
-from pyspark.ml import PipelineModel, Transformer
+from pyspark.ml import PipelineModel, Transformer, Pipeline
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.param.shared import HasPredictionCol
 from torch import optim
@@ -17,7 +17,7 @@ from torch import nn
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.ml_algo.torch_based.linear_model import CatRegression, CatLogisticRegression, CatMulticlass
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
-from lightautoml.spark.transformers.base import SparkBaseEstimator
+from lightautoml.spark.transformers.base import SparkBaseEstimator, DropColumnsTransformer
 from lightautoml.tasks.losses import TorchLossWrapper
 
 logger = logging.getLogger(__name__)
@@ -216,11 +216,13 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             verbose=1
         )
 
+        drop_columns = DropColumnsTransformer(remove_cols=torch_estimator.getFeatureCols())
+
         sdf = numeric_assembler.transform(train_df)
         sdf = cat_assembler.transform(sdf)
         torch_model = torch_estimator.fit(sdf).setOutputCols(self.getPredictionCol())
 
-        return PipelineModel(stages=[numeric_assembler, cat_assembler, torch_model])
+        return PipelineModel(stages=[numeric_assembler, cat_assembler, torch_model, drop_columns])
 
     def _loss_fn(
         self,
