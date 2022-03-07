@@ -207,7 +207,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             train_minibatch_fn=_train_minibatch_fn(),
             loss=lambda input, target: self._loss_fn(input, target.long(), None, c),
             # TODO: SPARK-LAMA shapes?
-            input_shapes=[[-1, 1, 28, 28]],
+            # input_shapes=[[-1, 1, 28, 28]],
+            input_shapes=[[-1, 1, len(numeric_feats)], [-1, 1, len(cat_feats)]],
             feature_cols=[numeric_assembler.getOutputCol(), cat_assembler.getOutputCol()],
             label_cols=[self.label_col],
             batch_size=128,
