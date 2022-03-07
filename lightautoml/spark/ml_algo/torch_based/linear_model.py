@@ -186,7 +186,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                 optimizer.zero_grad()
                 outputs = model(*inputs)
                 outputs, labels = transform_outputs(outputs, labels)
-                loss = loss_fn(model, outputs, labels, sample_weights)
+                loss = _loss_fn(loss_fn, model, outputs, labels, sample_weights, c)
 
                 if loss.requires_grad:
                     loss.backward()
@@ -199,8 +199,6 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                 return outputs, loss
 
             return train_minibatch
-
-        loss_func = functools.partial(self._loss_fn, self.loss)
 
         # Setup our store for intermediate data
         store = Store.create('/tmp/hvd_spark')
@@ -224,7 +222,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             optimizer=opt,
             train_minibatch_fn=_train_minibatch_fn(),
             # loss=lambda input, target: self._loss_fn(input, target.long(), None, c),
-            loss=loss_func,
+            loss=self.loss,
             # TODO: SPARK-LAMA shapes?
             # input_shapes=[[-1, 1, 28, 28]],
             input_shapes=[[-1, 1, len(numeric_feats)], [-1, 1, len(cat_feats)]],
@@ -245,40 +243,6 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
 
         return PipelineModel(stages=[change_type_transformer, numeric_assembler,
                                      cat_assembler, torch_model, drop_columns])
-
-    @staticmethod
-    def _loss_fn(
-        loss: Callable,
-        model: Any,
-        y_true: torch.Tensor,
-        y_pred: torch.Tensor,
-        weights: Optional[torch.Tensor],
-        c: float,
-    ) -> torch.Tensor:
-        """Weighted loss_fn wrapper.
-
-        Args:
-            y_true: True target values.
-            y_pred: Predicted target values.
-            weights: Item weights.
-            c: Regularization coefficients.
-
-        Returns:
-            Loss+Regularization value.
-
-        """
-        # weighted loss
-        loss = loss(y_true, y_pred, sample_weight=weights)
-
-        n = y_true.shape[0]
-        if weights is not None:
-            n = weights.sum()
-
-        all_params = torch.cat([y.view(-1) for (x, y) in model.named_parameters() if x != "bias"])
-
-        penalty = torch.norm(all_params, 2).pow(2) / 2 / n
-
-        return loss + 0.5 * penalty / c
 
     def _get_numeric_feats(self) -> List[str]:
         feats = [
@@ -417,3 +381,37 @@ class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
             embed_sizes,
             self.output_size,
         )
+
+
+def _loss_fn(
+    loss: Callable,
+    model: Any,
+    y_true: torch.Tensor,
+    y_pred: torch.Tensor,
+    weights: Optional[torch.Tensor],
+    c: float,
+) -> torch.Tensor:
+    """Weighted loss_fn wrapper.
+
+    Args:
+        y_true: True target values.
+        y_pred: Predicted target values.
+        weights: Item weights.
+        c: Regularization coefficients.
+
+    Returns:
+        Loss+Regularization value.
+
+    """
+    # weighted loss
+    loss = loss(y_true, y_pred, sample_weight=weights)
+
+    n = y_true.shape[0]
+    if weights is not None:
+        n = weights.sum()
+
+    all_params = torch.cat([y.view(-1) for (x, y) in model.named_parameters() if x != "bias"])
+
+    penalty = torch.norm(all_params, 2).pow(2) / 2 / n
+
+    return loss + 0.5 * penalty / c
