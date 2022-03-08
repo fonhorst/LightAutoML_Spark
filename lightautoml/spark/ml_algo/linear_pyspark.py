@@ -247,13 +247,13 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         return super().fit_predict(train_valid_iterator)
 
 
-class SparkTorchBaseLinearLBFGS(SparkTabularMLAlgo):
+class SparkTorchBasedLinearLBFGS(SparkTabularMLAlgo):
 
     _name: str = "TorchBasedLinearL2"
 
     _default_params = {
         "tol": 1e-4,
-        "max_iter": 100,
+        "max_iter": 1000,
         "cs":
         [
             1e-5,

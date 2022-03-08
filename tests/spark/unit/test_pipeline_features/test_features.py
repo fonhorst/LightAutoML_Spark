@@ -17,7 +17,7 @@ from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
-from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS, SparkTorchBaseLinearLBFGS
+from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS, SparkTorchBasedLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
@@ -294,7 +294,7 @@ def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any],
 
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_mlalgo_torchbased_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
-    compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkTorchBaseLinearLBFGS, 'linear_features',
+    compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkTorchBasedLinearLBFGS, 'linear_features',
                                ml_alg_kwargs,
                                ml_kwargs_lama={"default_params": {"cs": [1e-5]}},
                                ml_kwargs_spark={"default_params": {"cs": [1e-5]}})

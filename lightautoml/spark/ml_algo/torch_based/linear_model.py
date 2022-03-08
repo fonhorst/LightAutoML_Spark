@@ -174,47 +174,17 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         numeric_assembler = VectorAssembler(inputCols=numeric_feats, outputCol="numeric_features")
         cat_assembler = VectorAssembler(inputCols=cat_feats, outputCol="cat_features")
 
-        # opt = CustomLGBFS(
-        #     self.model.parameters(),
-        #     lr=0.1,
-        #     max_iter=self.max_iter,
-        #     tolerance_change=self.tol,
-        #     tolerance_grad=self.tol,
-        #     line_search_fn="strong_wolfe",
-        # )
-
-        # opt = optim.Adam(
-        #     self.model.parameters()
-        # )
-
         opt = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.5)
 
         def _train_minibatch_fn():
             def train_minibatch(model, optimizer, transform_outputs, loss_fn, inputs, labels, sample_weights):
                 optimizer.zero_grad()
-
                 outputs = model(*inputs)
-
-                # raise ValueError(f"Inputs: {len(inputs)}, {inputs[0].shape}, {inputs[1].shape}. "
-                #                  f"Outputs: {len(outputs)}, {outputs.shape}"
-                #                  f"Labels: {len(labels)}, {labels[0].shape}")
-
                 outputs, labels = transform_outputs(outputs, labels)
                 loss = _loss_fn(loss_fn, model, labels, outputs, sample_weights, c, n)
-                # loss = loss_fn(outputs, labels, sample_weights)
-
-                # raise ValueError(f"Loss: {len(loss)}, {loss[0].shape}, {loss.shape}")
-
-                # if loss.requires_grad:
                 loss.backward()
-
-                # def closure():
-                #     return loss
-                # # specific need for LBGFS optimizer
-                # optimizer.step(closure)
                 optimizer.step()
                 return outputs, loss
-
             return train_minibatch
 
         # Setup our store for intermediate data
@@ -223,8 +193,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         backend = SparkBackend(
             num_proc=1,
             stdout=sys.stdout,
-            stderr=sys.stderr,
-            # prefix_output_with_timestamp=True
+            stderr=sys.stderr
         )
         # TODO: SPARK-LAMA check for _loss_fn weights arg
         #  there should be a way to pass weights inside
@@ -232,38 +201,25 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         # TODO: SPARK-LAMA feature_cols = ['features', 'features_cat']
         #   we need 2 different vector assemblers to represent data
         #   as it is expected by CatLinear
-
-        # loss = nn.MSELoss(reduction='none')
         loss = nn.MSELoss()
-        # loss = nn.BCELoss()
         torch_estimator = hvd.TorchEstimator(
             backend=backend,
             store=store,
             model=self.model,
             optimizer=opt,
             train_minibatch_fn=_train_minibatch_fn(),
-            # loss=lambda input, target: self.loss(input, target.long()),
-            loss=lambda input, target: loss(input, target),
-            # loss=self.loss,
-            # TODO: SPARK-LAMA shapes?
-            # input_shapes=[[-1, 1, 28, 28]],
+            loss=loss,
             input_shapes=[[-1, len(numeric_feats)], [-1, len(cat_feats)]],
             feature_cols=[numeric_assembler.getOutputCol(), cat_assembler.getOutputCol()],
             label_cols=[self.label_col],
             batch_size=1024,
-            # epochs=self.max_iter,
-            epochs=1000,
-            # validation=0.1,
+            epochs=self.max_iter,
             verbose=2
         )
-        # change_type_transformer = ChangeTypeTransformer(input_columns=cat_feats)
         drop_columns = DropColumnsTransformer(remove_cols=torch_estimator.getFeatureCols())
 
-        # sdf = change_type_transformer.transform(train_df)
         sdf = numeric_assembler.transform(train_df)
         sdf = cat_assembler.transform(sdf)
-        # sdf = sdf.coalesce(1).cache()
-        # sdf.write.mode('overwrite').format('noop').save()
         torch_model = torch_estimator.fit(sdf).setOutputCols([self.getPredictionCol()])
 
         return PipelineModel(stages=[numeric_assembler, cat_assembler, torch_model, drop_columns])
