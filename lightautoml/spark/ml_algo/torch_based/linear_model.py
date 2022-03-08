@@ -1,4 +1,3 @@
-import functools
 import logging
 import sys
 from typing import Sequence, Optional, Callable, Dict, List, Any, Union
@@ -16,20 +15,13 @@ from torch import nn
 from torch import optim
 
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
-from lightautoml.ml_algo.torch_based.linear_model import CatRegression, CatLogisticRegression, CatMulticlass, CatLinear
+from lightautoml.ml_algo.torch_based.linear_model import CatRegression, CatLogisticRegression, CatMulticlass
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.tasks.base import DEFAULT_PREDICTION_COL_NAME, DEFAULT_TARGET_COL_NAME
-from lightautoml.spark.transformers.base import SparkBaseEstimator, DropColumnsTransformer, ChangeTypeTransformer
+from lightautoml.spark.transformers.base import SparkBaseEstimator, DropColumnsTransformer
 from lightautoml.tasks.losses import TorchLossWrapper
 
 logger = logging.getLogger(__name__)
-
-
-# class CustomLGBFS(optim.LBFGS):
-#     def step(self, closure: Optional[Callable] = None) -> Optional[float]:
-#         if closure is None:
-#             closure = lambda: -np.inf
-#         return super().step(closure)
 
 
 class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
@@ -66,8 +58,6 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                  metric: Optional[Callable] = None):
         """
         Args:
-            data_size: Not used.
-            categorical_idx: Indices of categorical features.
             embed_sizes: Categorical embedding sizes.
             output_size: Size of output layer.
             cs: Regularization coefficients.
@@ -108,11 +98,6 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
 
         Args:
             data: Data to train.
-            y: Train target values.
-            weights: Train items weights.
-            data_val: Data to validate.
-            y_val: Valid target values.
-            weights_val: Validation item weights.
 
         Returns:
             self.
@@ -120,16 +105,21 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         """
         assert self.model is not None, "Model should be defined"
 
+        if self._weights_col is not None:
+            n = data.select(F.sum(self._weights_col)).first()
+        else:
+            n = data.count()
+
         if not self.val_df:
             logger.info("Validation data should be defined. No validation will be performed and C = 1 will be used")
-            return self._optimize(data, 1.0)
+            return self._optimize(data, n, 1.0)
 
         best_score = -np.inf
         best_model = None
         es = 0
 
         for c in self.cs:
-            model = self._optimize(data, c)
+            model = self._optimize(data, n, c)
             val_pred = (
                 model
                 .transform(self.val_df)
@@ -155,19 +145,16 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
 
         return self._transformer
 
-    def _optimize(self, train_df: SparkDataFrame, c: float = 1) -> Transformer:
+    def _optimize(self, train_df: SparkDataFrame, n: Union[int, float], c: float = 1) -> Transformer:
         """Optimize single model.
 
         Args:
-            data: Numeric data to train.
-            data_cat: Categorical data to train.
-            y: Target values.
-            weights: Item weights.
+            train_df: Dataframe with numerical and categorical data
+                (two different columns containing vectors) to train.
+            n: either size of data or sum of weights
             c: Regularization coefficient.
 
         """
-        n = train_df.count()
-
         numeric_feats = self._get_numeric_feats()
         cat_feats = self._get_cat_feats()
 
@@ -175,6 +162,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         cat_assembler = VectorAssembler(inputCols=cat_feats, outputCol="cat_features")
 
         opt = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.5)
+
+        _loss_fn = self._loss_fn
 
         def _train_minibatch_fn():
             def train_minibatch(model, optimizer, transform_outputs, loss_fn, inputs, labels, sample_weights):
@@ -195,13 +184,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             stdout=sys.stdout,
             stderr=sys.stderr
         )
-        # TODO: SPARK-LAMA check for _loss_fn weights arg
-        #  there should be a way to pass weights inside
 
-        # TODO: SPARK-LAMA feature_cols = ['features', 'features_cat']
-        #   we need 2 different vector assemblers to represent data
-        #   as it is expected by CatLinear
-        loss = nn.MSELoss()
         torch_estimator = hvd.TorchEstimator(
             backend=backend,
             store=store,
@@ -238,6 +221,37 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         ]
         return sorted(feats)
 
+    @staticmethod
+    def _loss_fn(
+            loss_fn: Callable,
+            model: Any,
+            y_true: torch.Tensor,
+            y_pred: torch.Tensor,
+            weights: Optional[torch.Tensor],
+            c: float,
+            n: Union[int, float]
+    ) -> torch.Tensor:
+        """Weighted loss_fn wrapper.
+
+        Args:
+            y_true: True target values.
+            y_pred: Predicted target values.
+            weights: Item weights.
+            c: Regularization coefficients.
+
+        Returns:
+            Loss+Regularization value.
+
+        """
+        # weighted loss
+        loss = loss_fn(y_true, y_pred, sample_weights=weights)
+
+        all_params = torch.cat([y.view(-1) for (x, y) in model.named_parameters() if x != "bias"])
+
+        penalty = torch.norm(all_params, 2).pow(2) / 2 / n
+
+        return loss + 0.5 * penalty / c
+
 
 class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
     def __init__(self,
@@ -272,10 +286,7 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
                  metric: Optional[Callable] = None):
         """
         Args:
-            data_size: used only for super function.
-            categorical_idx: indices of categorical features.
             embed_sizes: categorical embedding sizes
-            output_size: size of output layer.
             cs: regularization coefficients.
             max_iter: maximum iterations of L-BFGS.
             tol: the tolerance for the stopping criteria.
@@ -286,7 +297,6 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
         """
         if loss is None:
             loss = TorchLossWrapper(nn.MSELoss)
-            # loss = nn.MSELoss()
 
         super().__init__(input_roles, label_col, prediction_col, prediction_role, embed_sizes, val_df,
                          1, cs, max_iter, tol, early_stopping, loss, metric)
@@ -330,8 +340,6 @@ class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
                  metric: Optional[Callable] = None):
         """
         Args:
-            data_size: not used.
-            categorical_idx: indices of categorical features.
             embed_sizes: categorical embedding sizes.
             output_size: size of output layer.
             cs: regularization coefficients.
@@ -366,39 +374,3 @@ class SparkTorchBasedLogisticRegression(SparkTorchBasedLinearEstimator):
             embed_sizes,
             self.output_size,
         )
-
-
-def _loss_fn(
-    loss_fn: Callable,
-    model: Any,
-    y_true: torch.Tensor,
-    y_pred: torch.Tensor,
-    weights: Optional[torch.Tensor],
-    c: float,
-    n: Union[int, float]
-) -> torch.Tensor:
-    """Weighted loss_fn wrapper.
-
-    Args:
-        y_true: True target values.
-        y_pred: Predicted target values.
-        weights: Item weights.
-        c: Regularization coefficients.
-
-    Returns:
-        Loss+Regularization value.
-
-    """
-    # weighted loss
-    loss = loss_fn(y_true, y_pred, sample_weights=weights)
-
-    # # n = y_true.shape[0]
-    # n = len(y_true)
-    # if weights is not None:
-    #     n = weights.sum()
-
-    all_params = torch.cat([y.view(-1) for (x, y) in model.named_parameters() if x != "bias"])
-
-    penalty = torch.norm(all_params, 2).pow(2) / 2 / n
-
-    return loss + 0.5 * penalty / c
