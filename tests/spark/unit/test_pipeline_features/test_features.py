@@ -31,7 +31,7 @@ spark = spark_sess
 
 # DATASETS_ARG = {"setting": "reg+binary"}
 # DATASETS_ARG = {"dataset": "lama_test_dataset"}
-DATASETS_ARG = {"dataset": "used_cars_dataset"}
+DATASETS_ARG = {"dataset": "used_cars_dataset_head100k"}
 
 CV = 5
 
@@ -199,53 +199,53 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
         ml_kwargs_spark = dict()
 
     # TODO: SPARK-LAMA temporary commenting this section to make smoke test
-    # read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
-    # train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
-    # test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
-    # # train_pdf, test_pdf = train_test_split(pdf, test_size=0.2, random_state=100)
-    # reader = PandasToPandasReader(task=Task(task_name), cv=cv, advanced_roles=False)
-    # train_ds = reader.fit_read(train_pdf, roles=config['roles'])
-    # test_ds = reader.read(test_pdf, add_array_attrs=True)
-    # lama_pipeline = fp_lama_clazz(**ml_alg_kwargs)
-    # lama_feats = lama_pipeline.fit_transform(train_ds)
-    # lama_test_feats = lama_pipeline.transform(test_ds)
-    # lama_feats = lama_feats if ml_algo_lama_clazz == BoostLGBM else lama_feats.to_numpy()
-    # train_valid = FoldsIterator(lama_feats.to_numpy())
-    # ml_algo = ml_algo_lama_clazz(**ml_kwargs_lama)
-    # ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
-    # assert ml_algo is not None
-    # test_pred = ml_algo.predict(lama_test_feats)
-    # # test_pred = ml_algo.predict(test_ds)
-    # score = train_valid.train.task.get_dataset_metric()
-    # lama_oof_metric = score(oof_pred)
-    # lama_test_metric = score(test_pred)
-    #
-    # sdf = dumped_train_ds.data.replace(float('nan'), 0.0, subset=[
-    #     f for f in dumped_train_ds.features if f.startswith("ord_")
-    # ])
+    read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
+    train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
+    test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
+    # train_pdf, test_pdf = train_test_split(pdf, test_size=0.2, random_state=100)
+    reader = PandasToPandasReader(task=Task(task_name), cv=cv, advanced_roles=False)
+    train_ds = reader.fit_read(train_pdf, roles=config['roles'])
+    test_ds = reader.read(test_pdf, add_array_attrs=True)
+    lama_pipeline = fp_lama_clazz(**ml_alg_kwargs)
+    lama_feats = lama_pipeline.fit_transform(train_ds)
+    lama_test_feats = lama_pipeline.transform(test_ds)
+    lama_feats = lama_feats if ml_algo_lama_clazz == BoostLGBM else lama_feats.to_numpy()
+    train_valid = FoldsIterator(lama_feats.to_numpy()).convert_to_holdout_iterator()
+    ml_algo = ml_algo_lama_clazz(**ml_kwargs_lama)
+    ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
+    assert ml_algo is not None
+    test_pred = ml_algo.predict(lama_test_feats)
+    # test_pred = ml_algo.predict(test_ds)
+    score = train_valid.train.task.get_dataset_metric()
+    lama_oof_metric = score(oof_pred)
+    lama_test_metric = score(test_pred)
+
+    sdf = dumped_train_ds.data.replace(float('nan'), 0.0, subset=[
+        f for f in dumped_train_ds.features if f.startswith("ord_")
+    ])
 
     train_valid = SparkFoldsIterator(dumped_train_ds).convert_to_holdout_iterator()
     ml_algo = ml_algo_spark_clazz(cacher_key='test', **ml_kwargs_spark)
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     ml_algo = cast(SparkTabularMLAlgo, ml_algo)
-    # assert ml_algo is not None
-    # test_pred = ml_algo.predict(dumped_test_ds)
-    # score = train_valid.train.task.get_dataset_metric()
-    # spark_based_oof_metric = score(oof_pred[:, ml_algo.prediction_feature])
-    # spark_based_test_metric = score(test_pred[:, ml_algo.prediction_feature])
+    assert ml_algo is not None
+    test_pred = ml_algo.predict(dumped_test_ds)
+    score = train_valid.train.task.get_dataset_metric()
+    spark_based_oof_metric = score(oof_pred[:, ml_algo.prediction_feature])
+    spark_based_test_metric = score(test_pred[:, ml_algo.prediction_feature])
 
     # TODO: SPARK-LAMA temporary commenting this section to make smoke test
-    # print(f"LAMA oof: {lama_oof_metric}. Spark oof: {spark_based_oof_metric}")
-    # print(f"LAMA test: {lama_test_metric}. Spark test: {spark_based_test_metric}")
-    #
-    # max_diff_in_percents = 0.05
-    #
-    # assert spark_based_test_metric > lama_test_metric or abs(
-    #     (lama_test_metric - spark_based_test_metric) / max(lama_test_metric,
-    #                                                        spark_based_test_metric)) < max_diff_in_percents
-    # assert spark_based_test_metric > lama_test_metric or abs(
-    #     (lama_test_metric - spark_based_test_metric) / min(lama_test_metric,
-    #                                                        spark_based_test_metric)) < max_diff_in_percents
+    print(f"LAMA oof: {lama_oof_metric}. Spark oof: {spark_based_oof_metric}")
+    print(f"LAMA test: {lama_test_metric}. Spark test: {spark_based_test_metric}")
+
+    max_diff_in_percents = 0.05
+
+    assert spark_based_test_metric > lama_test_metric or abs(
+        (lama_test_metric - spark_based_test_metric) / max(lama_test_metric,
+                                                           spark_based_test_metric)) < max_diff_in_percents
+    assert spark_based_test_metric > lama_test_metric or abs(
+        (lama_test_metric - spark_based_test_metric) / min(lama_test_metric,
+                                                           spark_based_test_metric)) < max_diff_in_percents
 
 
 @pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
@@ -296,8 +296,8 @@ def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any],
 def test_quality_mlalgo_torchbased_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkTorchBaseLinearLBFGS, 'linear_features',
                                ml_alg_kwargs,
-                               ml_kwargs_lama={"default_params": {"cs": [1]}},
-                               ml_kwargs_spark={"default_params": {"cs": [1]}})
+                               ml_kwargs_lama={"default_params": {"cs": [1e-5]}},
+                               ml_kwargs_spark={"default_params": {"cs": [1e-5]}})
 
 
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
