@@ -140,7 +140,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
                 )
             )
             score = self.metric(val_pred)
-            logger.info(f"Linear model: C = {c} score = {score}")
+            logger.info(f"Spark TorchBased Linear model: C = {c} score = {score}")
             if score > best_score:
                 best_score = score
                 best_model = model
@@ -248,10 +248,10 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             input_shapes=[[-1, len(numeric_feats)], [-1, len(cat_feats)]],
             feature_cols=[numeric_assembler.getOutputCol(), cat_assembler.getOutputCol()],
             label_cols=[self.label_col],
-            batch_size=1280,
+            batch_size=1024,
             # epochs=self.max_iter,
             epochs=1000,
-            validation=0.1,
+            # validation=0.1,
             verbose=2,
             partitions_per_process=1
         )
