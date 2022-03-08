@@ -162,8 +162,17 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         numeric_feats = self._get_numeric_feats()
         cat_feats = self._get_cat_feats()
 
-        numeric_assembler = VectorAssembler(inputCols=numeric_feats, outputCol="numeric_features")
-        cat_assembler = VectorAssembler(inputCols=cat_feats, outputCol="cat_features")
+        assemblers_stages = []
+        input_shapes = []
+        if len(numeric_feats) > 0:
+            numeric_assembler = VectorAssembler(inputCols=numeric_feats, outputCol="numeric_features")
+            assemblers_stages.append(numeric_assembler)
+            input_shapes.append([-1, len(numeric_feats)])
+
+        if len(cat_feats) > 0:
+            cat_assembler = VectorAssembler(inputCols=cat_feats, outputCol="cat_features")
+            assemblers_stages.append(cat_assembler)
+            input_shapes.append([-1, len(cat_feats)])
 
         opt = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.5)
 
@@ -196,8 +205,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             optimizer=opt,
             train_minibatch_fn=_train_minibatch_fn(),
             loss=self.loss,
-            input_shapes=[[-1, len(numeric_feats)], [-1, len(cat_feats)]],
-            feature_cols=[numeric_assembler.getOutputCol(), cat_assembler.getOutputCol()],
+            input_shapes=input_shapes,
+            feature_cols=[ass.getOutputCol() for ass in assemblers_stages],
             label_cols=[self.label_col],
             batch_size=1024,
             epochs=self.max_iter,
@@ -209,11 +218,11 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             cols = [c for c in train_df.columns if c != self.label_col]
             train_df = train_df.select(*cols, F.col(self.label_col).astype('int').alias(self.label_col))
 
-        sdf = numeric_assembler.transform(train_df)
-        sdf = cat_assembler.transform(sdf)
+        assemblers = PipelineModel(stages=assemblers_stages)
+        sdf = assemblers.transform(train_df)
         torch_model = torch_estimator.fit(sdf).setOutputCols([self.getPredictionCol()])
 
-        return PipelineModel(stages=[numeric_assembler, cat_assembler, torch_model, drop_columns])
+        return PipelineModel(stages=[assemblers, torch_model, drop_columns])
 
     def _get_numeric_feats(self) -> List[str]:
         feats = [

@@ -236,7 +236,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     spark_based_test_metric = score(test_pred[:, ml_algo.prediction_feature])
 
     # TODO: SPARK-LAMA temporary commenting this section to make smoke test
-    print(f"LAMA oof: {lama_oof_metric}. Spark oof: {lama_test_metric}")
+    print(f"LAMA oof: {lama_oof_metric}. Lama test: {lama_test_metric}")
     print(f"Spark oof: {spark_based_oof_metric}. Spark test: {spark_based_test_metric}")
 
     max_diff_in_percents = 0.05
