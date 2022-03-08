@@ -123,6 +123,10 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             val_pred = (
                 model
                 .transform(self.val_df)
+            )
+
+            val_pred = (
+                val_pred
                 .select(
                     SparkDataset.ID_COLUMN,
                     F.col(self.label_col).alias(DEFAULT_TARGET_COL_NAME),
@@ -201,6 +205,10 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         )
         drop_columns = DropColumnsTransformer(remove_cols=torch_estimator.getFeatureCols())
 
+        if self.output_size > 1:
+            cols = [c for c in train_df.columns if c != self.label_col]
+            train_df = train_df.select(*cols, F.col(self.label_col).astype('int').alias(self.label_col))
+
         sdf = numeric_assembler.transform(train_df)
         sdf = cat_assembler.transform(sdf)
         torch_model = torch_estimator.fit(sdf).setOutputCols([self.getPredictionCol()])
@@ -244,7 +252,9 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
 
         """
         # weighted loss
-        loss = loss_fn(y_true, y_pred, sample_weights=weights)
+        # raise ValueError(f"y_true: {len(y_true)}, {y_true[0].type()}, {y_true[0].shape}")
+
+        loss = loss_fn([y_true[0].long()], y_pred, sample_weights=weights)
 
         all_params = torch.cat([y.view(-1) for (x, y) in model.named_parameters() if x != "bias"])
 

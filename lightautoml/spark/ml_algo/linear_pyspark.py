@@ -398,6 +398,7 @@ class SparkTorchBasedLinearLBFGS(SparkTabularMLAlgo):
                 prediction_role=self.prediction_role,
                 embed_sizes=self._embed_sizes,
                 val_df=valid.data,
+                metric=self.score,
                 output_size=self._dim_size,
                 **params
             )
