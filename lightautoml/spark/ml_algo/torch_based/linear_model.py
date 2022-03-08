@@ -1,7 +1,7 @@
 import functools
 import logging
 import sys
-from typing import Sequence, Optional, Callable, Dict, List, Any
+from typing import Sequence, Optional, Callable, Dict, List, Any, Union
 
 import horovod.spark.torch as hvd
 import numpy as np
@@ -166,6 +166,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             c: Regularization coefficient.
 
         """
+        n = train_df.count()
+
         numeric_feats = self._get_numeric_feats()
         cat_feats = self._get_cat_feats()
 
@@ -187,33 +189,33 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
 
         opt = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.5)
 
-        # def _train_minibatch_fn():
-        #     def train_minibatch(model, optimizer, transform_outputs, loss_fn, inputs, labels, sample_weights):
-        #         optimizer.zero_grad()
-        #
-        #         outputs = model(*inputs)
-        #
-        #         # raise ValueError(f"Inputs: {len(inputs)}, {inputs[0].shape}, {inputs[1].shape}. "
-        #         #                  f"Outputs: {len(outputs)}, {outputs.shape}"
-        #         #                  f"Labels: {len(labels)}, {labels[0].shape}")
-        #
-        #         outputs, labels = transform_outputs(outputs, labels)
-        #         # loss = _loss_fn(loss_fn, model, labels, outputs, sample_weights, c)
-        #         loss = loss_fn(outputs, labels, sample_weights)
-        #
-        #         # raise ValueError(f"Loss: {len(loss)}, {loss[0].shape}, {loss.shape}")
-        #
-        #         # if loss.requires_grad:
-        #         loss.backward()
-        #
-        #         # def closure():
-        #         #     return loss
-        #         # # specific need for LBGFS optimizer
-        #         # optimizer.step(closure)
-        #         optimizer.step()
-        # #         return outputs, loss
-        #
-        #     return train_minibatch
+        def _train_minibatch_fn():
+            def train_minibatch(model, optimizer, transform_outputs, loss_fn, inputs, labels, sample_weights):
+                optimizer.zero_grad()
+
+                outputs = model(*inputs)
+
+                # raise ValueError(f"Inputs: {len(inputs)}, {inputs[0].shape}, {inputs[1].shape}. "
+                #                  f"Outputs: {len(outputs)}, {outputs.shape}"
+                #                  f"Labels: {len(labels)}, {labels[0].shape}")
+
+                outputs, labels = transform_outputs(outputs, labels)
+                loss = _loss_fn(loss_fn, model, labels, outputs, sample_weights, c, n)
+                # loss = loss_fn(outputs, labels, sample_weights)
+
+                # raise ValueError(f"Loss: {len(loss)}, {loss[0].shape}, {loss.shape}")
+
+                # if loss.requires_grad:
+                loss.backward()
+
+                # def closure():
+                #     return loss
+                # # specific need for LBGFS optimizer
+                # optimizer.step(closure)
+                optimizer.step()
+                return outputs, loss
+
+            return train_minibatch
 
         # Setup our store for intermediate data
         store = Store.create('/tmp/hvd_spark')
@@ -239,7 +241,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             store=store,
             model=self.model,
             optimizer=opt,
-            # train_minibatch_fn=_train_minibatch_fn(),
+            train_minibatch_fn=_train_minibatch_fn(),
             # loss=lambda input, target: self.loss(input, target.long()),
             loss=lambda input, target: loss(input, target),
             # loss=self.loss,
@@ -416,6 +418,7 @@ def _loss_fn(
     y_pred: torch.Tensor,
     weights: Optional[torch.Tensor],
     c: float,
+    n: Union[int, float]
 ) -> torch.Tensor:
     """Weighted loss_fn wrapper.
 
@@ -432,9 +435,10 @@ def _loss_fn(
     # weighted loss
     loss = loss_fn(y_true, y_pred, sample_weights=weights)
 
-    n = y_true.shape[0]
-    if weights is not None:
-        n = weights.sum()
+    # # n = y_true.shape[0]
+    # n = len(y_true)
+    # if weights is not None:
+    #     n = weights.sum()
 
     all_params = torch.cat([y.view(-1) for (x, y) in model.named_parameters() if x != "bias"])
 

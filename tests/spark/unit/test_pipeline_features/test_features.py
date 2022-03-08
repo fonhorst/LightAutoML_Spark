@@ -31,7 +31,7 @@ spark = spark_sess
 
 # DATASETS_ARG = {"setting": "reg+binary"}
 # DATASETS_ARG = {"dataset": "lama_test_dataset"}
-DATASETS_ARG = {"dataset": "used_cars_dataset_head100k"}
+DATASETS_ARG = {"dataset": "used_cars_dataset"}
 
 CV = 5
 
@@ -198,7 +198,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     if not ml_kwargs_spark:
         ml_kwargs_spark = dict()
 
-    # TODO: SPARK-LAMA temporary commenting this section to make smoke test
+    # # TODO: SPARK-LAMA temporary commenting this section to make smoke test
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
     train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
     test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
@@ -235,8 +235,8 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     spark_based_test_metric = score(test_pred[:, ml_algo.prediction_feature])
 
     # TODO: SPARK-LAMA temporary commenting this section to make smoke test
-    print(f"LAMA oof: {lama_oof_metric}. Spark oof: {spark_based_oof_metric}")
-    print(f"LAMA test: {lama_test_metric}. Spark test: {spark_based_test_metric}")
+    print(f"LAMA oof: {lama_oof_metric}. Spark oof: {lama_test_metric}")
+    print(f"Spark oof: {spark_based_oof_metric}. Spark test: {spark_based_test_metric}")
 
     max_diff_in_percents = 0.05
 
