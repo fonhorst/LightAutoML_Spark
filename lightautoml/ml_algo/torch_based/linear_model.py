@@ -83,8 +83,11 @@ class CatLinear(nn.Module):
             categories: Input categorical features.
 
         """
-        numbers = numbers.double()
+        numbers = numbers.type(torch.FloatTensor)
         categories = categories.type(torch.LongTensor)
+
+        # raise ValueError(f"Numbers: {numbers.type()}, shape: {numbers.shape}. "
+        #                  f"Categories: {categories.type()}, shape: {categories.shape}")
 
         x = self.bias
 

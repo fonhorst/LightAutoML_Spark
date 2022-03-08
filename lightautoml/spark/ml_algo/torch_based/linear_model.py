@@ -247,22 +247,21 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             input_shapes=[[-1, len(numeric_feats)], [-1, len(cat_feats)]],
             feature_cols=[numeric_assembler.getOutputCol(), cat_assembler.getOutputCol()],
             label_cols=[self.label_col],
-            batch_size=128,
+            batch_size=1280,
             # epochs=self.max_iter,
-            epochs=3,
+            epochs=1,
             # validation=0.1,
             verbose=2
         )
-        change_type_transformer = ChangeTypeTransformer(input_columns=cat_feats)
+        # change_type_transformer = ChangeTypeTransformer(input_columns=cat_feats)
         drop_columns = DropColumnsTransformer(remove_cols=torch_estimator.getFeatureCols())
 
-        sdf = change_type_transformer.transform(train_df)
-        sdf = numeric_assembler.transform(sdf)
+        # sdf = change_type_transformer.transform(train_df)
+        sdf = numeric_assembler.transform(train_df)
         sdf = cat_assembler.transform(sdf)
         torch_model = torch_estimator.fit(sdf).setOutputCols([self.getPredictionCol()])
 
-        return PipelineModel(stages=[change_type_transformer, numeric_assembler,
-                                     cat_assembler, torch_model, drop_columns])
+        return PipelineModel(stages=[numeric_assembler, cat_assembler, torch_model, drop_columns])
 
     def _get_numeric_feats(self) -> List[str]:
         feats = [
