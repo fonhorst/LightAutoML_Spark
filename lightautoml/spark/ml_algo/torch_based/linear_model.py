@@ -208,7 +208,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             model=self.model,
             optimizer=opt,
             train_minibatch_fn=_train_minibatch_fn(),
-            loss=loss,
+            loss=self.loss,
             input_shapes=[[-1, len(numeric_feats)], [-1, len(cat_feats)]],
             feature_cols=[numeric_assembler.getOutputCol(), cat_assembler.getOutputCol()],
             label_cols=[self.label_col],
@@ -286,6 +286,7 @@ class SparkTorchBasedLinearRegression(SparkTorchBasedLinearEstimator):
         """
         if loss is None:
             loss = TorchLossWrapper(nn.MSELoss)
+            # loss = nn.MSELoss()
 
         super().__init__(input_roles, label_col, prediction_col, prediction_role, embed_sizes, val_df,
                          1, cs, max_iter, tol, early_stopping, loss, metric)
