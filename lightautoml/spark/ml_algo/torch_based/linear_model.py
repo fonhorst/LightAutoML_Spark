@@ -181,10 +181,11 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         #     line_search_fn="strong_wolfe",
         # )
 
-        opt = optim.Adam(
-            self.model.parameters(),
-            lr=0.1
-        )
+        # opt = optim.Adam(
+        #     self.model.parameters()
+        # )
+
+        opt = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.5)
 
         # def _train_minibatch_fn():
         #     def train_minibatch(model, optimizer, transform_outputs, loss_fn, inputs, labels, sample_weights):
@@ -221,7 +222,7 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             num_proc=1,
             stdout=sys.stdout,
             stderr=sys.stderr,
-            prefix_output_with_timestamp=True
+            # prefix_output_with_timestamp=True
         )
         # TODO: SPARK-LAMA check for _loss_fn weights arg
         #  there should be a way to pass weights inside
@@ -249,9 +250,10 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
             label_cols=[self.label_col],
             batch_size=1280,
             # epochs=self.max_iter,
-            epochs=1,
-            # validation=0.1,
-            verbose=2
+            epochs=1000,
+            validation=0.1,
+            verbose=2,
+            partitions_per_process=1
         )
         # change_type_transformer = ChangeTypeTransformer(input_columns=cat_feats)
         drop_columns = DropColumnsTransformer(remove_cols=torch_estimator.getFeatureCols())
@@ -259,6 +261,8 @@ class SparkTorchBasedLinearEstimator(SparkBaseEstimator, HasPredictionCol):
         # sdf = change_type_transformer.transform(train_df)
         sdf = numeric_assembler.transform(train_df)
         sdf = cat_assembler.transform(sdf)
+        sdf = sdf.coalesce(1).cache()
+        sdf.write.mode('overwrite').format('noop').save()
         torch_model = torch_estimator.fit(sdf).setOutputCols([self.getPredictionCol()])
 
         return PipelineModel(stages=[numeric_assembler, cat_assembler, torch_model, drop_columns])

@@ -44,6 +44,8 @@ def spark() -> SparkSession:
         .getOrCreate()
     )
 
+    spark.sparkContext.setLogLevel("WARN")
+
     print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
 
     yield spark
