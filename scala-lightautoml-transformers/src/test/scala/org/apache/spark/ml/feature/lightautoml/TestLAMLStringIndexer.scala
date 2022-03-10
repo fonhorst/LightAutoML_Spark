@@ -2,7 +2,7 @@ package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.ml.feature.{StringIndexer, StringIndexerModel}
-import org.apache.spark.ml.feature.lightautoml.LAMLStringIndexer
+import org.apache.spark.ml.feature.lightautoml.{LAMLStringIndexer, LAMLStringIndexerModel}
 
 
 object TestLAMLStringIndexer extends App {
@@ -50,6 +50,10 @@ object TestLAMLStringIndexer extends App {
   println(s"Size: ${cnt}")
 
 //  println(s"[${indexer.uid} - ${model.uid}] // [${lamaIndexer.uid} - ${lamaModel.uid}]")
+
+  lamaModel.save("/tmp/LAMLStringIndexerModel")
+  val pipelineModel = LAMLStringIndexerModel.load("/tmp/LAMLStringIndexerModel")
+  pipelineModel.transform(testDf)
 
   while (args(0).toBoolean) {
     Thread.sleep(1000)
