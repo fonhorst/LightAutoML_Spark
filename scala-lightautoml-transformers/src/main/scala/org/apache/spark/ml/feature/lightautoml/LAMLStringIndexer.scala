@@ -96,21 +96,21 @@ class LAMLStringIndexer @Since("1.4.0")(
   def setMinFreq(value: Array[Int]): this.type = set(minFreqs, value)
 
   @Since("3.2.0")
-  val defaultValue: Param[Double] = new Param[Double](this, "defaultValue", doc = "defaultValue")
+  val defaultValue: DoubleParam = new DoubleParam(this, "defaultValue", doc = "defaultValue")
 
   /** @group setParam */
   @Since("3.2.0")
   def setDefaultValue(value: Double): this.type = set(defaultValue, value)
 
   @Since("3.2.0")
-  val freqLabel: Param[Boolean] = new Param[Boolean](this, "freqLabel", doc = "freqLabel")
+  val freqLabel: BooleanParam = new BooleanParam(this, "freqLabel", doc = "freqLabel")
 
   /** @group setParam */
   @Since("3.2.0")
   def setFreqLabel(value: Boolean): this.type = set(freqLabel, value)
 
   @Since("3.2.0")
-  val nanLast: Param[Boolean] = new Param[Boolean](this, "nanLast", doc = "nanLast")
+  val nanLast: BooleanParam = new BooleanParam(this, "nanLast", doc = "nanLast")
 
   /** @group setParam */
   @Since("3.2.0")
@@ -307,21 +307,21 @@ class LAMLStringIndexerModel(override val uid: String,
   def setOutputCols(value: Array[String]): this.type = set(outputCols, value)
 
   @Since("3.2.0")
-  val defaultValue: Param[Double] = new Param[Double](this, "defaultValue", doc = "defaultValue")
+  val defaultValue: DoubleParam = new DoubleParam(this, "defaultValue", doc = "defaultValue")
 
   /** @group setParam */
   @Since("3.2.0")
   def setDefaultValue(value: Double): this.type = set(defaultValue, value)
 
   @Since("3.2.0")
-  val freqLabel: Param[Boolean] = new Param[Boolean](this, "freqLabel", doc = "freqLabel")
+  val freqLabel: BooleanParam = new BooleanParam(this, "freqLabel", doc = "freqLabel")
 
   /** @group setParam */
   @Since("3.2.0")
   def setFreqLabel(value: Boolean): this.type = set(freqLabel, value)
 
   @Since("3.2.0")
-  val nanLast: Param[Boolean] = new Param[Boolean](this, "nanLast", doc = "nanLast")
+  val nanLast: BooleanParam = new BooleanParam(this, "nanLast", doc = "nanLast")
 
   /** @group setParam */
   @Since("3.2.0")
