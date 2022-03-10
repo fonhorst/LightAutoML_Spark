@@ -7,6 +7,7 @@ import warnings
 
 from copy import copy
 from copy import deepcopy
+from operator import itemgetter
 from typing import Optional
 
 import matplotlib.pyplot as plt
@@ -17,9 +18,12 @@ import seaborn as sns
 from jinja2 import Environment
 from jinja2 import FileSystemLoader
 from json2html import json2html
+from pyspark import RDD
+from pyspark.mllib.linalg import DenseMatrix
 
 from pyspark.sql.dataframe import DataFrame
 from pyspark.mllib.evaluation import BinaryClassificationMetrics, RegressionMetrics, MulticlassMetrics
+from pyspark.mllib.stat import KernelDensity
 import pyspark.sql.functions as F
 
 from sklearn.metrics import average_precision_score
@@ -38,6 +42,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.metrics import roc_curve
 
 
+from lightautoml.spark
 
 from lightautoml.addons.uplift import metrics as uplift_metrics
 from lightautoml.addons.uplift.metalearners import TLearner
@@ -45,6 +50,7 @@ from lightautoml.addons.uplift.metalearners import XLearner
 from lightautoml.addons.uplift.utils import _get_treatment_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.automl.presets.tabular_presets import ReadableIntoSparkDf
+from lightautoml.spark.report.handy_spark_utils import call2
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +75,80 @@ def extract_params(input_struct):
     return params
 
 
-def plot_roc_curve_image(data, path):
+def get_data_for_roc_and_pr_curve(input_data, scores_col_name="raw", true_labels_col_name="labels"):
+    data = round_score_col(input_data=input_data,
+                           min_co=0.001,
+                           max_co=0.999,
+                           step=0.001,
+                           scores_col_name=scores_col_name,
+                           true_labels_col_name=true_labels_col_name)
+
+    metrics = BinaryClassificationMetrics(
+        scoreAndLabels=data.select(
+            F.col(f"{scores_col_name}_rounded").astype("double"),
+            F.col(true_labels_col_name).astype("double")
+        ).rdd
+    )
+
+    thresholds = call2(metrics, "thresholds").collect()
+    roc = call2(metrics, "roc").collect()
+    pr = call2(metrics, "pr").collect()
+
+    df = pd.DataFrame(
+        list(
+            zip(thresholds, map(itemgetter(0), roc), map(itemgetter(1), roc), map(itemgetter(1), pr))
+        ) + [(0., 1., 1., 0.)]
+    )
+    df.columns = ["thresholds", "fpr", "recall", "precision"]
+
+    auc_score = metrics.areaUnderROC
+    ap_score = metrics.areaUnderPR
+
+    return [df, auc_score, ap_score]
+
+
+def plot_curves(input_data, scores_col_name, positive_rate, true_labels_col_name, roc_path, pr_path):
+    rounded_data, auc_score, ap_score = get_data_for_roc_and_pr_curve(input_data, scores_col_name, true_labels_col_name)
+
+    plot_roc_curve_image(rounded_data, auc_score, roc_path)
+    plot_pr_curve_image(rounded_data, ap_score, positive_rate, pr_path)
+    return auc_score, ap_score, rounded_data
+
+
+def round_score_col(input_data, min_co=0.01, max_co=0.99, step=0.01,
+                    scores_col_name="raw", true_labels_col_name="labels"):
+    scores = F.col(scores_col_name)
+    _id_col = F.col(SparkDataset.ID_COLUMN)
+    true_labels = F.col(true_labels_col_name)
+
+    return input_data.select(
+        _id_col,
+        true_labels,
+        (F.ceil(scores / step) * step).alias("_scores_prepared_value")
+    ).select(
+        _id_col,
+        true_labels,
+        F.when(
+            F.col("_scores_prepared_value") < min_co,
+            min_co
+        ).otherwise(
+            F.when(
+                F.col("_scores_prepared_value") > max_co,
+                max_co
+            ).otherwise(
+                F.col("_scores_prepared_value")
+            )
+        ).alias(f"{scores_col_name}_rounded")
+    )
+
+
+def plot_roc_curve_image(data, auc_score, path):
+
     sns.set(style="whitegrid", font_scale=1.5)
     plt.figure(figsize=(10, 10))
 
-    fpr, tpr, _ = roc_curve(data["y_true"], data["y_pred"])
-    auc_score = roc_auc_score(data["y_true"], data["y_pred"])
+    fpr = data["fpr"]
+    tpr = data["recall"]
 
     lw = 2
     plt.plot(fpr, tpr, color="blue", lw=lw, label="Trained model")
@@ -87,22 +161,20 @@ def plot_roc_curve_image(data, path):
     plt.xticks(np.arange(0, 1.01, 0.05), rotation=45)
     plt.yticks(np.arange(0, 1.01, 0.05))
     plt.grid(color="gray", linestyle="-", linewidth=1)
-    plt.title("ROC curve (GINI = {:.3f})".format(2 * auc_score - 1))
+    plt.title("Approx ROC curve (GINI = {:.3f})".format(2 * auc_score - 1))
     plt.savefig(path, bbox_extra_artists=(lgd,), bbox_inches="tight")
     plt.close()
-    return auc_score
 
 
-def plot_pr_curve_image(data, path):
+def plot_pr_curve_image(data, ap_score, positive_rate, path):
     sns.set(style="whitegrid", font_scale=1.5)
     plt.figure(figsize=(10, 10))
 
-    precision, recall, _ = precision_recall_curve(data["y_true"], data["y_pred"])
-    ap_score = average_precision_score(data["y_true"], data["y_pred"])
+    precision = data["precision"]
+    recall = data["recall"]
 
     lw = 2
     plt.plot(recall, precision, color="blue", lw=lw, label="Trained model")
-    positive_rate = np.sum(data["y_true"] == 1) / data.shape[0]
     plt.plot(
         [0, 1],
         [positive_rate, positive_rate],
@@ -119,7 +191,7 @@ def plot_pr_curve_image(data, path):
     plt.xticks(np.arange(0, 1.01, 0.05), rotation=45)
     plt.yticks(np.arange(0, 1.01, 0.05))
     plt.grid(color="gray", linestyle="-", linewidth=1)
-    plt.title("PR curve (AP = {:.3f})".format(ap_score))
+    plt.title("Approx PR curve (AP = {:.3f})".format(ap_score))
     plt.savefig(path, bbox_extra_artists=(lgd,), bbox_inches="tight")
     plt.close()
 
@@ -146,24 +218,43 @@ def plot_preds_distribution_by_bins(data, path):
     plt.close()
 
 
-def plot_distribution_of_logits(data, path):
+def plot_distribution_of_logits(input_data, path, scores_col_name, true_labels_col_name):
+
+    prep_data = round_score_col(input_data=input_data,
+                           min_co=0.001,
+                           max_co=0.999,
+                           step=0.001,
+                           scores_col_name=scores_col_name,
+                           true_labels_col_name=true_labels_col_name)
+
+    logits_col_name = f"{scores_col_name}_rounded"
+    logits_col = F.col(logits_col_name)
+
+    data = prep_data.select(logits_col).groupby(logits_col).count().toPandas()
+
     sns.set(style="whitegrid", font_scale=1.5)
     fig, axs = plt.subplots(figsize=(16, 10))
 
-    data["proba_logit"] = np.log(data["y_pred"].values / (1 - data["y_pred"].values))
+    data["proba_logit"] = np.log(data[logits_col_name].values / (1 - data[logits_col_name].values))
+
+    data_0 = data[data[true_labels_col_name] == 0]
     sns.kdeplot(
-        data[data["y_true"] == 0]["proba_logit"],
+        data_0["proba_logit"],
         shade=True,
         color="r",
         label="Class 0 logits",
         ax=axs,
+        weights=data_0["count"]
     )
+
+    data_1 = data[data[true_labels_col_name] == 1]
     sns.kdeplot(
-        data[data["y_true"] == 1]["proba_logit"],
+        data_1["proba_logit"],
         shade=True,
         color="g",
         label="Class 1 logits",
         ax=axs,
+        weights=data_1["count"]
     )
     axs.set_xlabel("Logits")
     axs.set_ylabel("Density")
@@ -172,17 +263,12 @@ def plot_distribution_of_logits(data, path):
     plt.close()
 
 
-def plot_pie_f1_metric(data, F1_thresh, path):
-
-    # metrics = MulticlassMetrics(predictionAndLabels=data.select(F.col("y_pred"), F.col("y_true")))
-    # metrics.precision()
-    # bmetrics = BinaryClassificationMetrics(data.select(F.col("y_pred"), F.col("y_true")))
-    # bmetrics.
-
-    tn, fp, fn, tp = confusion_matrix(data["y_true"], (data["y_pred"] > F1_thresh).astype(int)).ravel()
-    (_, prec), (_, rec), (_, F1), (_, _) = precision_recall_fscore_support(
-        data["y_true"], (data["y_pred"] > F1_thresh).astype(int)
-    )
+def plot_pie_f1_metric(data: RDD, path):
+    metrics = MulticlassMetrics(predictionAndLabels=data)
+    tn, fp, fn, tp = metrics.confusionMatrix().values
+    F1 = metrics.fMeasure(1.0)
+    prec = metrics.precision(1.0)
+    rec = metrics.recall(1.0)
 
     sns.set(style="whitegrid", font_scale=1.5)
     fig, ax = plt.subplots(figsize=(20, 10), subplot_kw=dict(aspect="equal"))
@@ -225,39 +311,27 @@ def plot_pie_f1_metric(data, F1_thresh, path):
     return prec, rec, F1
 
 
-def f1_score_w_co(input_data, min_co=0.01, max_co=0.99, step=0.01):
-    #data = input_data.copy()
-    #data["y_pred"] = np.clip(np.ceil(data["y_pred"].values / step) * step, min_co, max_co)
-    y_true = F.col("y_true")
-    _id_col = F.col(SparkDataset.ID_COLUMN)
-    y_pred = F.col("y_pred")
+def f1_score_w_co(input_data, min_co=0.01, max_co=0.99, step=0.01,
+                  true_labels_col_name="labels", scores_col_name="raw"):
 
-    data = input_data.select(
-        _id_col,
-        y_true,
-        (F.ceil(y_pred / step) * step).alias("_prepared_value")
-    ).select(
-        _id_col,
-        y_true,
-        F.when(
-            F.col("_prepared_value") < min_co,
-            min_co
-        ).otherwise(
-            F.when(
-                F.col("_prepared_value") > max_co,
-                max_co
-            ).otherwise(
-                F.col("_prepared_value")
-            )
-        ).alias("y_pred")
-    )
+    true_labels = F.col(true_labels_col_name)
+    scores = F.col(scores_col_name)
 
-    _grp = data.groupby(y_pred).agg(
-        F.sum(y_true).alias("sum"),
-        F.count(y_true).alias("count")
+    data = round_score_col(input_data=input_data,
+                           min_co=min_co,
+                           max_co=max_co,
+                           step=step,
+                           true_labels_col_name=true_labels_col_name,
+                           scores_col_name=scores_col_name)
+
+    _grp = data.groupby(scores).agg(
+        F.sum(true_labels).alias("sum"),
+        F.count(true_labels).alias("count")
     ).toPandas()
     pos = _grp["sum"].sum()
     neg = _grp["count"].sum() - pos
+
+    positive_rate = pos / _grp["count"].sum()
 
     grp = _grp.groupby("y_pred").agg(sum=("sum", "sum"), count=("count", "sum"))
     grp.sort_index(inplace=True)
@@ -275,7 +349,7 @@ def f1_score_w_co(input_data, min_co=0.01, max_co=0.99, step=0.01):
     best_score = grp["f1_score"].max()
     best_co = grp.index.values[grp["f1_score"] == best_score].mean()
 
-    return best_score, best_co
+    return best_score, best_co, positive_rate
 
 
 def get_bins_table(data: DataFrame, n_bins=20):
@@ -400,11 +474,13 @@ def plot_reg_scatter(data, path):
 # Multiclass plots:
 
 
-def plot_confusion_matrix(data, path):
+def plot_confusion_matrix(data: DenseMatrix, path):
+    arr = data.toArray()
+    cmat: "np.array" = arr / arr.sum(axis=1, keepdims=True)
+    # cmat: "np.array" = confusion_matrix(data["y_true"], data["y_pred"], normalize="true")
     sns.set(style="whitegrid", font_scale=1.5)
     fig, ax = plt.subplots(figsize=(16, 12))
 
-    cmat: "np.array" = confusion_matrix(data["y_true"], data["y_pred"], normalize="true")
     sns.heatmap(cmat, annot=True, linewidths=0.5, cmap="Purples", ax=ax)
     ax.set_xlabel("y_pred")
     ax.set_ylabel("y_true")
@@ -524,7 +600,7 @@ class ReportDeco:
             "multiclass": "multiclass_inference_section.html",
         }
 
-        self.title = "LAMA report"
+        self.title = "Spark-LAMA report"
         if self.interpretation:
             self.sections_order = [
                 "intro",
@@ -560,75 +636,155 @@ class ReportDeco:
         self.generate_report()
         return self
 
-    def _binary_classification_details(self, data):
+    def _binary_classification_details(self, data, positive_rate,
+                                       true_labels_col_name, scores_col_name, predicted_labels_col_name):
         # self._inference_content["sample_bins_table"] = get_bins_table(data)
+        # plot_preds_distribution_by_bins(
+        #     data,
+        #     path=os.path.join(self.output_path, self._inference_content["preds_distribution_by_bins"]),
+        # )
+
+        # Done
         prec, rec, F1 = plot_pie_f1_metric(
-            data,
-            self._F1_thresh,
+            data.select(
+                F.col(predicted_labels_col_name).astype("double"),
+                F.col(true_labels_col_name).astype("double")
+            ).rdd,
             path=os.path.join(self.output_path, self._inference_content["pie_f1_metric"]),
         )
-        auc_score = plot_roc_curve_image(
-            data,
-            path=os.path.join(self.output_path, self._inference_content["roc_curve"]),
+
+        # Done
+        auc_score, ap_score, rounded_data = plot_curves(
+            input_data=data,
+            scores_col_name=scores_col_name,
+            positive_rate=positive_rate,
+            true_labels_col_name=true_labels_col_name,
+            roc_path=os.path.join(self.output_path, self._inference_content["roc_curve"]),
+            pr_path=os.path.join(self.output_path, self._inference_content["pr_curve"])
         )
-        plot_pr_curve_image(
-            data,
-            path=os.path.join(self.output_path, self._inference_content["pr_curve"]),
-        )
-        plot_preds_distribution_by_bins(
-            data,
-            path=os.path.join(self.output_path, self._inference_content["preds_distribution_by_bins"]),
-        )
+
+        # Done
         plot_distribution_of_logits(
-            data,
+            input_data=data,
             path=os.path.join(self.output_path, self._inference_content["distribution_of_logits"]),
+            scores_col_name=scores_col_name,
+            true_labels_col_name=true_labels_col_name
         )
+
         return auc_score, prec, rec, F1
 
-    def _regression_details(self, data):
+    def _regression_details(self, data, true_values_col_name, predictions_col_name):
         # graphics
-        plot_target_distribution(
-            data,
-            path=os.path.join(self.output_path, self._inference_content["target_distribution"]),
-        )
-        plot_error_hist(
-            data,
-            path=os.path.join(self.output_path, self._inference_content["error_hist"]),
-        )
-        plot_reg_scatter(
-            data,
-            path=os.path.join(self.output_path, self._inference_content["scatter_plot"]),
-        )
+        # TODO
+        # plot_target_distribution(
+        #     data,
+        #     path=os.path.join(self.output_path, self._inference_content["target_distribution"]),
+        # )
+        # plot_error_hist(
+        #     data,
+        #     path=os.path.join(self.output_path, self._inference_content["error_hist"]),
+        # )
+        # plot_reg_scatter(
+        #     data,
+        #     path=os.path.join(self.output_path, self._inference_content["scatter_plot"]),
+        # )
         # metrics
-        mean_ae = mean_absolute_error(data["y_true"], data["y_pred"])
-        median_ae = median_absolute_error(data["y_true"], data["y_pred"])
-        mse = mean_squared_error(data["y_true"], data["y_pred"])
-        r2 = r2_score(data["y_true"], data["y_pred"])
-        evs = explained_variance_score(data["y_true"], data["y_pred"])
+        metrics = RegressionMetrics(
+            predictionAndObservations=data.select(
+                F.col(predictions_col_name).astype("double"),
+                F.col(true_values_col_name).astype("double")
+            ).rdd
+        )
+
+        mean_ae = metrics.meanAbsoluteError
+        # mean_ae = mean_absolute_error(data["y_true"], data["y_pred"])
+
+        median_ae = data.select(
+            F.percentile_approx(
+                F.abs(
+                    F.col(predictions_col_name).astype("double") - F.col(true_values_col_name).astype("double")
+                ),
+                0.5
+            )
+        ).first()[0]
+        # median_ae = median_absolute_error(data["y_true"], data["y_pred"])
+
+        mse = metrics.meanSquaredError
+        # mse = mean_squared_error(data["y_true"], data["y_pred"])
+
+        r2 = metrics.r2
+        # r2 = r2_score(data["y_true"], data["y_pred"])
+
+        evs = metrics.explainedVariance
+        # evs = explained_variance_score(data["y_true"], data["y_pred"])
+
         return mean_ae, median_ae, mse, r2, evs
 
-    def _multiclass_details(self, data):
-        y_true = data["y_true"]
-        y_pred = data["y_pred"]
+    def _multiclass_details(self, data, predicted_labels_col_name, true_labels_col_name):
+
+        true_labels_col = F.col(true_labels_col_name)
+
+        metrics = MulticlassMetrics(
+            predictionAndLabels=data.select(
+                F.col(predicted_labels_col_name).astype("double"),
+                true_labels_col.astype("double")
+            ).rdd
+        )
+
+        # tn, fp, fn, tp = metrics.confusionMatrix().values
+        labels_counts = data.select(true_labels_col).groupby(true_labels_col).count().toPandas()
+        total_labels_count = labels_counts["count"].sum()
+
+        # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html
+
+        p_micro = metrics.accuracy  # TODO: ???
+        p_macro_sum = 0.
+        for label in labels_counts[true_labels_col_name]:
+            p_macro_sum += metrics.precision(float(label))
+        p_macro = p_macro_sum / total_labels_count
+        p_weighted = metrics.weightedPrecision
+
+        r_micro = metrics.accuracy  # TODO: ???
+        r_macro_sum = 0.
+        for label in labels_counts[true_labels_col_name]:
+            r_macro_sum += metrics.recall(float(label))
+        r_macro = r_macro_sum / total_labels_count
+        r_weighted = metrics.weightedRecall
+
+        f_micro = metrics.accuracy  # TODO: ???
+        f_macro_sum = 0.
+        for label in labels_counts[true_labels_col_name]:
+            f_macro_sum += metrics.fMeasure(float(label))
+        f_macro = f_macro_sum / total_labels_count
+        f_weighted = metrics.weightedFMeasure()
+
+        # y_true = data["y_true"]
+        # y_pred = data["y_pred"]
         # precision
-        p_micro = precision_score(y_true, y_pred, average="micro")
-        p_macro = precision_score(y_true, y_pred, average="macro")
-        p_weighted = precision_score(y_true, y_pred, average="weighted")
+        # p_micro = precision_score(y_true, y_pred, average="micro")
+        # p_macro = precision_score(y_true, y_pred, average="macro")
+        # p_weighted = precision_score(y_true, y_pred, average="weighted")
         # recall
-        r_micro = recall_score(y_true, y_pred, average="micro")
-        r_macro = recall_score(y_true, y_pred, average="macro")
-        r_weighted = recall_score(y_true, y_pred, average="weighted")
+        # r_micro = recall_score(y_true, y_pred, average="micro")
+        # r_macro = recall_score(y_true, y_pred, average="macro")
+        # r_weighted = recall_score(y_true, y_pred, average="weighted")
         # f1-score
-        f_micro = f1_score(y_true, y_pred, average="micro")
-        f_macro = f1_score(y_true, y_pred, average="macro")
-        f_weighted = f1_score(y_true, y_pred, average="weighted")
+        # f_micro = f1_score(y_true, y_pred, average="micro")
+        # f_macro = f1_score(y_true, y_pred, average="macro")
+        # f_weighted = f1_score(y_true, y_pred, average="weighted")
 
         # classification report for features
         if self.mapping:
             classes = sorted(self.mapping, key=self.mapping.get)
         else:
             classes = np.arange(self._N_classes)
-        p, r, f, s = precision_recall_fscore_support(y_true, y_pred)
+
+        p = [metrics.precision(label) for label in labels_counts[true_labels_col_name]]
+        r = [metrics.recall(label) for label in labels_counts[true_labels_col_name]]
+        f = [metrics.fMeasure(label) for label in labels_counts[true_labels_col_name]]
+        s = list(labels_counts["count"])
+
+        # p, r, f, s = precision_recall_fscore_support(y_true, y_pred)
         cls_report = pd.DataFrame(
             {
                 "Class name": classes,
@@ -643,7 +799,7 @@ class ReportDeco:
         )
 
         plot_confusion_matrix(
-            data,
+            metrics.confusionMatrix(),
             path=os.path.join(self.output_path, self._inference_content["confusion_matrix"]),
         )
 
@@ -722,8 +878,14 @@ class ReportDeco:
             self._inference_content["preds_distribution_by_bins"] = "valid_preds_distribution_by_bins.png"
             self._inference_content["distribution_of_logits"] = "valid_distribution_of_logits.png"
             # graphics and metrics
-            _, self._F1_thresh = f1_score_w_co(data)
-            auc_score, prec, rec, F1 = self._binary_classification_details(data)
+            _, self._F1_thresh, positive_rate = f1_score_w_co(data)
+            auc_score, prec, rec, F1 = self._binary_classification_details(
+                data,
+                positive_rate,
+                true_labels_col_name="y_true",
+                scores_col_name="raw",
+                predicted_labels_col_name="label"
+            )
             # update model section
             evaluation_parameters = ["AUC-score", "Precision", "Recall", "F1-score"]
             self._model_summary = pd.DataFrame(
@@ -816,6 +978,7 @@ class ReportDeco:
                 self._n_test_sample
             )
             # graphics and metrics
+            # positive_rate = data.where()
             auc_score, prec, rec, F1 = self._binary_classification_details(data)
 
             if self._n_test_sample >= 2:
@@ -1014,8 +1177,8 @@ class ReportDeco:
 
     def _data_genenal_info(self, data):
         general_info = pd.DataFrame(columns=["Parameter", "Value"])
-        general_info.loc[0] = ("Number of records", data.shape[0])
-        general_info.loc[1] = ("Total number of features", data.shape[1])
+        general_info.loc[0] = ("Number of records", data.count())
+        general_info.loc[1] = ("Total number of features", len(data.columns))
         general_info.loc[2] = ("Used features", len(self._model.reader._used_features))
         general_info.loc[3] = (
             "Dropped features",
@@ -1033,18 +1196,36 @@ class ReportDeco:
         categorical_features = [feat_name for feat_name in roles if roles[feat_name].name == "Category"]
         datetime_features = [feat_name for feat_name in roles if roles[feat_name].name == "Datetime"]
 
+        total_count = train_data.count()
+
         # numerical roles
         numerical_features_df = []
         for feature_name in numerical_features:
+            current_column = F.col(feature_name)  # current_column
             item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(train_data[feature_name].isna().sum() / train_data.shape[0])
-            values = train_data[feature_name].dropna().values
-            item["min"] = np.min(values)
-            item["quantile_25"] = np.quantile(values, 0.25)
-            item["average"] = np.mean(values)
-            item["median"] = np.median(values)
-            item["quantile_75"] = np.quantile(values, 0.75)
-            item["max"] = np.max(values)
+            item["NaN ratio"] = "{:.4f}".format(
+                train_data.select(current_column).where(
+                    F.isnan(current_column) | F.isnull(current_column)
+                ).count()
+                / total_count
+            )
+            values: DataFrame = train_data.where(~F.isnan(current_column) & ~F.isnull(current_column))
+
+            stat_data: list = values.select(
+                F.min(current_column),
+                F.percentile_approx(current_column, 0.25),
+                F.avg(current_column),
+                F.percentile_approx(current_column, 0.5),
+                F.percentile_approx(current_column, 0.75),
+                F.max(current_column)
+            ).first()
+
+            item["min"] = stat_data[0]
+            item["quantile_25"] = stat_data[1]
+            item["average"] = stat_data[2]
+            item["median"] = stat_data[3]
+            item["quantile_75"] = stat_data[4]
+            item["max"] = stat_data[5]
             numerical_features_df.append(item)
         if numerical_features_df == []:
             self._numerical_features_table = None
@@ -1052,14 +1233,24 @@ class ReportDeco:
             self._numerical_features_table = pd.DataFrame(numerical_features_df).to_html(
                 index=False, float_format="{:.2f}".format, justify="left"
             )
+
         # categorical roles
         categorical_features_df = []
         for feature_name in categorical_features:
+            current_column = F.col(feature_name)
             item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(train_data[feature_name].isna().sum() / train_data.shape[0])
-            value_counts = train_data[feature_name].value_counts(normalize=True)
-            values = value_counts.index.values
-            counts = value_counts.values
+            item["NaN ratio"] = "{:.4f}".format(
+                train_data.select(current_column).where(
+                    F.isnan(current_column) | F.isnull(current_column)
+                ).count()
+                / total_count
+            )
+            value_counts = train_data.select(current_column).groupby(current_column).count().select(
+                current_column,
+                F.col("count") / total_count  # normalization
+            ).toPandas()
+            values = value_counts[feature_name]
+            counts = value_counts["count"]
             item["Number of unique values"] = len(counts)
             item["Most frequent value"] = values[0]
             item["Occurance of most frequent"] = "{:.1f}%".format(100 * counts[0])
@@ -1075,11 +1266,23 @@ class ReportDeco:
         # datetime roles
         datetime_features_df = []
         for feature_name in datetime_features:
+            current_column = F.col(feature_name)
             item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(train_data[feature_name].isna().sum() / train_data.shape[0])
-            values = train_data[feature_name].dropna().values
-            item["min"] = np.min(values)
-            item["max"] = np.max(values)
+            item["NaN ratio"] = "{:.4f}".format(
+                train_data.select(current_column).where(
+                    F.isnan(current_column) | F.isnull(current_column)
+                ).count()
+                / total_count
+            )
+            values = train_data.where(~F.isnan(current_column) & ~F.isnull(current_column))
+
+            stat_data = values.select(
+                F.min(current_column),
+                F.max(current_column)
+            ).first()
+
+            item["min"] = stat_data[0]
+            item["max"] = stat_data[1]
             item["base_date"] = self._model.reader._roles[feature_name].base_date
             datetime_features_df.append(item)
         if datetime_features_df == []:
@@ -1088,6 +1291,7 @@ class ReportDeco:
             self._datetime_features_table = pd.DataFrame(datetime_features_df).to_html(index=False, justify="left")
 
     def _describe_dropped_features(self, train_data):
+        total_count = train_data.count()
         self._max_nan_rate = self._model.reader.max_nan_rate
         self._max_constant_rate = self._model.reader.max_constant_rate
         self._features_dropped_list = self._model.reader._dropped_features
@@ -1096,8 +1300,33 @@ class ReportDeco:
         if dropped_list == []:
             self._dropped_features_table = None
         else:
-            dropped_nan_ratio = train_data[dropped_list].isna().sum() / train_data.shape[0]
+            dropped_nan_ratio = train_data.select(
+                *[
+                    (F.sum(
+                        F.when(
+                            F.isnan(F.col(col_name)), 1
+                        ).otherwise(
+                            F.when(
+                                F.isnull(F.col(col_name)), 1
+                            ).otherwise(0)
+                        )
+                    ) / total_count).alias(col_name)
+                    for col_name in dropped_list
+                ]
+            ).toPandas()
+            # dropped_nan_ratio = train_data[dropped_list].isna().sum() / train_data.shape[0]
             dropped_most_occured = pd.Series(np.nan, index=dropped_list)
+            fff.
+            dropped_most_occured = train_data.select(
+                *[
+                    (
+                        # F.countDistinct(F.col(col_name)) / total_count
+                        F.co
+                    ).alias(col_name)
+                    for col_name in dropped_list
+                ]
+            )
+
             for col in dropped_list:
                 col_most_occured = train_data[col].value_counts(normalize=True).values
                 if len(col_most_occured) > 0:
