@@ -501,7 +501,7 @@ object LAMLStringIndexerModel extends MLReadable[LAMLStringIndexerModel] {
 
   private class LAMLStringIndexerModelReader extends MLReader[LAMLStringIndexerModel] {
 
-    private val className = classOf[StringIndexerModel].getName
+    private val className = classOf[LAMLStringIndexerModel].getName
 
     override def load(path: String): LAMLStringIndexerModel = {
       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
