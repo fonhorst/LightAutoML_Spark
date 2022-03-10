@@ -17,7 +17,7 @@ from sklearn.utils.murmurhash import murmurhash3_32
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
+from lightautoml.spark.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable, SparkLabelEncoderTransformerMLReadable, SparkLabelEncoderTransformerMLWritable
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer
 from lightautoml.transformers.categorical import categorical_check, encoding_check, oof_task_check, \
     multiclass_task_check
@@ -142,7 +142,7 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
                                             indexer_model=self.indexer_model)
 
 
-class SparkLabelEncoderTransformer(SparkBaseTransformer, TypesHelper, CommonPickleMLWritable, CommonPickleMLReadable):
+class SparkLabelEncoderTransformer(SparkBaseTransformer, TypesHelper, SparkLabelEncoderTransformerMLWritable, SparkLabelEncoderTransformerMLReadable):
     _transform_checks = ()
     _fname_prefix = "le"
 

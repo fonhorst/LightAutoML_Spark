@@ -15,6 +15,8 @@ from pyspark.ml.util import MLWriter
 from synapse.ml.lightgbm import LightGBMClassificationModel
 from synapse.ml.lightgbm import LightGBMRegressionModel
 
+from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
+
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,58 @@ class СommonPickleMLReader(MLReader):
 
         with open(os.path.join(path, "transformer_class_instance.pickle"), 'rb') as handle:
             instance = pickle.load(handle)
+
+        return instance
+
+
+class SparkLabelEncoderTransformerMLWritable(MLWritable):
+    def write(self) -> MLWriter:
+        "Returns MLWriter instance that can save the Transformer instance."
+        return SparkLabelEncoderTransformerMLWriter(self)
+
+
+class SparkLabelEncoderTransformerMLReadable(MLReadable):
+    @classmethod
+    def read(cls):
+        """Returns an MLReader instance for this class."""
+        return SparkLabelEncoderTransformerMLReader()
+
+
+class SparkLabelEncoderTransformerMLWriter(MLWriter):
+    """Implements saving an Estimator/Transformer instance to disk.
+    Used when saving a trained pipeline.
+    Implements MLWriter.saveImpl(path) method.
+    """
+
+    def __init__(self, instance):
+        super().__init__()
+        self.instance = instance
+
+    def saveImpl(self, path: str) -> None:
+        logger.info(f"Save {self.instance.__class__.__name__} to '{path}'")
+
+        СommonPickleMLWriter.saveMetadata(self.instance, path, self.sc)
+
+        Path(path).mkdir(parents=True, exist_ok=True)
+        with open(os.path.join(path, "transformer_class_instance.pickle"), 'wb') as handle:
+            indexer_model = self.instance.indexer_model
+            self.instance.indexer_model = None
+            pickle.dump(self.instance, handle)
+            self.instance.indexer_model = indexer_model
+
+        self.instance.indexer_model.write().overwrite().save(os.path.join(path, "indexer_model"))
+
+
+class SparkLabelEncoderTransformerMLReader(MLReader):
+
+    def load(self, path):
+        """Load the ML instance from the input path."""
+
+        with open(os.path.join(path, "transformer_class_instance.pickle"), 'rb') as handle:
+            instance = pickle.load(handle)
+
+        indexer_model = LAMLStringIndexerModel.read().load(os.path.join(path, "indexer_model"))
+        instance.indexer_model = indexer_model
 
         return instance
 
