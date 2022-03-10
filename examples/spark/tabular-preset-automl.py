@@ -109,6 +109,9 @@ if __name__ == "__main__":
 
         logger.info(f"score for test predictions: {test_metric_value}")
 
+        transformer = automl.make_transformer()
+        transformer.write().overwrite().save("/tmp/automl_pipeline_1")
+
     with log_exec_timer("spark-lama predicting on test (#2 way)") as predict_timer_2:
         te_pred = automl.make_transformer().transform(test_data_dropped)
 
@@ -121,6 +124,9 @@ if __name__ == "__main__":
         ))
 
         logger.info(f"score for test predictions: {test_metric_value}")
+
+        transformer = automl.make_transformer()
+        transformer.write().overwrite().save("/tmp/automl_pipeline_2")
 
     logger.info("Predicting is finished")
 
