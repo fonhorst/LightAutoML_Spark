@@ -5,6 +5,8 @@ from pyspark.ml.util import JavaMLReadable, JavaMLWritable
 from pyspark.ml.wrapper import JavaEstimator, JavaModel, JavaParams
 from pyspark.ml.common import inherit_doc
 
+from lightautoml.spark.mlwriters import LAMLStringIndexerModelJavaMLReadable
+
 
 class _StringIndexerParams(JavaParams, HasHandleInvalid, HasInputCol, HasOutputCol,
                            HasInputCols, HasOutputCols):
@@ -227,7 +229,7 @@ class LAMLStringIndexer(JavaEstimator, _StringIndexerParams, JavaMLReadable, Jav
         return self._set(nanLast=value)
 
 
-class LAMLStringIndexerModel(JavaModel, _StringIndexerModelParams, JavaMLReadable, JavaMLWritable):
+class LAMLStringIndexerModel(JavaModel, _StringIndexerModelParams, LAMLStringIndexerModelJavaMLReadable, JavaMLWritable):
     """
     Model fitted by :py:class:`StringIndexer`.
 
