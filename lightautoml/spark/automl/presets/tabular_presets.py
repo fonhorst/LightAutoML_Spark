@@ -23,6 +23,7 @@ from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPi
 from lightautoml.spark.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask
+from lightautoml.spark.utils import Cacher
 
 logger = logging.getLogger(__name__)
 
@@ -157,8 +158,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             score *= 0.5
         return score
 
-    # TODO: SPARK-LAMA rewrite in the descdent
-    def get_selector(self, n_level: Optional[int] = 1) -> SelectionPipeline:
+    def get_selector(self, cacher_key: str, n_level: Optional[int] = 1) -> SelectionPipeline:
         selection_params = self.selection_params
         # lgb_params
         lgb_params = deepcopy(self.lgb_params)
@@ -177,9 +177,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             time_score = self.get_time_score(n_level, "lgb", False)
 
             sel_timer_0 = self.timer.get_task_timer("lgb", time_score)
-            selection_feats = SparkLGBSimpleFeatures()
+            selection_feats = SparkLGBSimpleFeatures(cacher_key=cacher_key)
 
-            selection_gbm = SparkBoostLGBM(timer=sel_timer_0, **lgb_params)
+            selection_gbm = SparkBoostLGBM(cacher_key=cacher_key, timer=sel_timer_0, **lgb_params)
             selection_gbm.set_prefix("Selector")
 
             if selection_params["importance_type"] == "permutation":
@@ -198,8 +198,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 time_score = self.get_time_score(n_level, "lgb", False)
 
                 sel_timer_1 = self.timer.get_task_timer("lgb", time_score)
-                selection_feats = SparkLGBSimpleFeatures()
-                selection_gbm = SparkBoostLGBM(timer=sel_timer_1, **lgb_params)
+                selection_feats = SparkLGBSimpleFeatures(cacher_key=cacher_key)
+                selection_gbm = SparkBoostLGBM(cacher_key=cacher_key, timer=sel_timer_1, **lgb_params)
                 selection_gbm.set_prefix("Selector")
 
                 importance = SparkNpPermutationImportanceEstimator()
@@ -213,18 +213,17 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                     max_features_cnt_in_result=selection_params["max_features_cnt_in_result"],
                 )
 
-                # TODO: SPARK-LAMA would it work here with SparkNpPermutationImportanceEstimator?
                 pre_selector = ComposedSelector([pre_selector, extra_selector])
 
         return pre_selector
 
-    def get_linear(self, n_level: int = 1, pre_selector: Optional[SelectionPipeline] = None) -> SparkNestedTabularMLPipeline:
+    def get_linear(self, cacher_key: str, n_level: int = 1, pre_selector: Optional[SelectionPipeline] = None) -> SparkNestedTabularMLPipeline:
 
         # linear model with l2
         time_score = self.get_time_score(n_level, "linear_l2")
         linear_l2_timer = self.timer.get_task_timer("reg_l2", time_score)
-        linear_l2_model = SparkLinearLBFGS(timer=linear_l2_timer, **self.linear_l2_params)
-        linear_l2_feats = SparkLinearFeatures(output_categories=True, **self.linear_pipeline_params)
+        linear_l2_model = SparkLinearLBFGS(cacher_key=cacher_key, timer=linear_l2_timer, **self.linear_l2_params)
+        linear_l2_feats = SparkLinearFeatures(output_categories=True, cacher_key=self._cacher_key, **self.linear_pipeline_params)
 
         linear_l2_pipe = SparkNestedTabularMLPipeline(
             self._cacher_key,
@@ -236,7 +235,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         )
         return linear_l2_pipe
 
-    # TODO: SPARK-LAMA rewrite in the descdent
     def get_gbms(
             self,
             keys: Sequence[str],
@@ -244,7 +242,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             pre_selector: Optional[SelectionPipeline] = None,
     ):
 
-        gbm_feats = SparkLGBAdvancedPipeline(**self.gbm_pipeline_params)
+        gbm_feats = SparkLGBAdvancedPipeline(cacher_key=self._cacher_key, **self.gbm_pipeline_params)
 
         ml_algos = []
         force_calc = []
@@ -254,7 +252,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             time_score = self.get_time_score(n_level, key)
             gbm_timer = self.timer.get_task_timer(algo_key, time_score)
             if algo_key == "lgb":
-                gbm_model = SparkBoostLGBM(timer=gbm_timer, **self.lgb_params)
+                gbm_model = SparkBoostLGBM(cacher_key=self._cacher_key, timer=gbm_timer, **self.lgb_params)
             elif algo_key == "cb":
                 # TODO: SPARK-LAMA implement this later
                 raise NotImplementedError("Not supported yet")
@@ -274,7 +272,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             force_calc.append(force)
 
         gbm_pipe = SparkNestedTabularMLPipeline(
-            self._cacher_key, ml_algos, force_calc, pre_selection=pre_selector, features_pipeline=gbm_feats, **self.nested_cv_params
+            self._cacher_key, ml_algos, force_calc, pre_selection=pre_selector,
+            features_pipeline=gbm_feats, **self.nested_cv_params
         )
 
         return gbm_pipe
@@ -292,7 +291,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         self.infer_auto_params(train_data, multilevel_avail)
         reader = SparkToSparkReader(task=self.task, **self.reader_params)
 
-        pre_selector = self.get_selector()
+        pre_selector = self.get_selector(cacher_key='selector_cache')
 
         levels = []
 
@@ -305,7 +304,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                         self.general_params["skip_conn"] or n == 0
                 ):
                     selector = pre_selector
-                lvl.append(self.get_linear(n + 1, selector))
+                lvl.append(self.get_linear(self._cacher_key, n + 1, selector))
 
             gbm_models = [
                 x for x in ["lgb", "lgb_tuned", "cb", "cb_tuned"] if
@@ -420,7 +419,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
         return oof_pred
 
-    # TODO: SPARK-LAMA rewrite in the descdent
     def predict(
             self,
             data: ReadableIntoSparkDf,
@@ -466,6 +464,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         data, _ = self._read_data(data, features_names, read_csv_params)
         pred = super().predict(data, features_names, return_all_predictions, add_reader_attrs)
         return pred
+
+    def release_cache(self):
+        sdf = Cacher.get_dataset_by_key(self._cacher_key)
+        if sdf is not None:
+            sdf.unpersist()
 
     def _read_data(self,
                    data: ReadableIntoSparkDf,

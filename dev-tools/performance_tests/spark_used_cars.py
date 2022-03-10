@@ -10,9 +10,11 @@ import shutil
 from typing import Dict, Any, Optional, Tuple, cast
 
 import yaml
+from pyspark.ml.feature import VectorAssembler
 from pyspark.sql import functions as F, SparkSession
 
 from dataset_utils import datasets
+from lightautoml.dataset.roles import NumericRole, CategoryRole
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
@@ -23,9 +25,13 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPi
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
+from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator
 from lightautoml.spark.utils import spark_session, log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
 from lightautoml.utils.tmp_utils import log_data, LAMA_LIBRARY
+from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -123,20 +129,13 @@ def calculate_automl(path: str,
         with log_exec_timer("spark-lama training") as train_timer:
             task = SparkTask(task_type)
             train_data, test_data = prepare_test_and_train(spark, path, seed)
-
-            # data_path, ext = os.path.splitext(path)
-            # train_data = spark.read.csv(f"{data_path}_train{ext}", header=True, escape="\"")
-            # test_data = spark.read.csv(f"{data_path}_test{ext}", header=True, escape="\"")
-
-            # test_data_dropped = test_data \
-            #     .drop(F.col(target_col))
             test_data_dropped = test_data
 
             automl = SparkTabularAutoML(
                 spark=spark,
                 task=task,
                 general_params={"use_algos": use_algos},
-                reader_params={"cv": cv},
+                reader_params={"cv": cv, "advanced_roles": False},
                 tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
             )
 
@@ -145,26 +144,7 @@ def calculate_automl(path: str,
                 roles=roles
             )
 
-        # log_data("spark_test_part", {"test": test_data.select(SparkDataset.ID_COLUMN, target_col).toPandas()})
-
         logger.info("Predicting on out of fold")
-
-        # predict_col = oof_predictions.features[0]
-        # oof_preds_for_eval = (
-        #     oof_predictions.data
-        #     .join(train_data, on=SparkDataset.ID_COLUMN)
-        #     .select(SparkDataset.ID_COLUMN, target_col, predict_col)
-        # )
-        #
-        # if metric_name == "mse":
-        #     evaluator = sklearn.metrics.mean_squared_error
-        # elif metric_name == "areaUnderROC":
-        #     evaluator = sklearn.metrics.roc_auc_score
-        # else:
-        #     raise ValueError(f"Metric {metric_name} is not supported")
-        #
-        # oof_preds_for_eval_pdf = oof_preds_for_eval.toPandas()
-        # metric_value = evaluator(oof_preds_for_eval_pdf[target_col].values, oof_preds_for_eval_pdf[predict_col].values)
 
         score = task.get_dataset_metric()
         metric_value = score(oof_predictions)
@@ -174,28 +154,8 @@ def calculate_automl(path: str,
         with log_exec_timer("spark-lama predicting on test") as predict_timer:
             te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
 
-            # te_pred = (
-            #     te_pred.data
-            #     .join(test_data, on=SparkDataset.ID_COLUMN)
-            #     .select(SparkDataset.ID_COLUMN, target_col, te_pred.features[0])
-            # )
-            #
-            # # test_metric_value = evaluator.evaluate(te_pred)
-            # # logger.info(f"{evaluator.getMetricName()} score for test predictions: {test_metric_value}")
-            #
-            # te_pred_pdf = te_pred.toPandas()
-            # test_metric_value = evaluator(te_pred_pdf[target_col].values, te_pred_pdf[predict_col].values)
-
             score = task.get_dataset_metric()
             test_metric_value = score(te_pred)
-
-            # alternative way of measuring (gives the same results)
-            # te_pred_df = te_pred.data.join(
-            #     test_data.select(SparkDataset.ID_COLUMN, F.col(target_col).astype(FloatType()).alias(target_col)),
-            #     on=SparkDataset.ID_COLUMN
-            # )
-            # ds = SparkDataset(te_pred_df, te_pred.roles, te_pred.task, target=target_col)
-            # test_metric_value = score(ds)
 
             logger.info(f"{metric_name} score for test predictions: {test_metric_value}")
 
@@ -256,10 +216,66 @@ def calculate_lgbadv_boostlgb(
                 iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
                 iterator.input_roles = metadata['iterator_input_roles']
 
-            spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
+            spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', freeze_defaults=False)
             spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         return {pipe_timer.name: pipe_timer.duration}
+
+
+def calculate_pure_boostlgb(
+        path: str,
+        task_type: str,
+        seed: int = 42,
+        cv: int = 5,
+        roles: Optional[Dict] = None,
+        spark_config: Optional[Dict[str, Any]] = None,
+        checkpoint_path: Optional[str] = None,
+        **_) -> Dict[str, Any]:
+    if not spark_config:
+        spark_args = {"master": "local[4]"}
+    else:
+        spark_args = {'session_args': spark_config}
+    with spark_session(**spark_args) as spark:
+        data = [
+            {'_id': i, 'a': i, 'b': i + 10, 'c': i * 10, 'target': i, 'is_val': i % 2} for i in range(100)
+        ]
+
+        df = spark.createDataFrame(data)
+        ds = SparkDataset(df,
+                          {'a': CategoryRole(np.float32), 'b': CategoryRole(np.float32), 'c': CategoryRole(np.float32)},
+                          task=SparkTask('reg'),
+                          target='target')
+
+        est = SparkLabelEncoderEstimator(input_cols=ds.features, input_roles=ds.roles)
+        est.fit(ds.data)
+
+        _assembler = VectorAssembler(
+            inputCols=['a', 'b', 'c'],
+            outputCol=f"vassembler_features",
+            handleInvalid="keep"
+        )
+
+        params = {'learningRate': 0.01, 'numLeaves': 32, 'featureFraction': 1, 'baggingFraction': 0.7, 'baggingFreq': 1,
+         'maxDepth': -1, 'minGainToSplit': 0.0, 'maxBin': 255, 'minDataInLeaf': 5, 'numIterations': 3000,
+         'earlyStoppingRound': 200, 'numThreads': 3, 'objective': 'regression', 'metric': 'mse'}
+
+        lgbm = LightGBMRegressor(
+            **params,
+            featuresCol=_assembler.getOutputCol(),
+            labelCol='target',
+            validationIndicatorCol='is_val',
+            verbosity=1,
+            useSingleDatasetMode=True,
+            isProvideTrainingMetric=True
+        )
+
+        temp_sdf = _assembler.transform(df)
+        ml_model = lgbm.fit(temp_sdf)
+
+        print("Success")
+
+        return {"Success": "true"}
+
 
 
 if __name__ == "__main__":
@@ -281,6 +297,8 @@ if __name__ == "__main__":
         func = calculate_automl
     elif func_name == "calculate_lgbadv_boostlgb":
         func = calculate_lgbadv_boostlgb
+    elif func_name == "calculate_pure_boostlgb":
+        func = calculate_pure_boostlgb
     else:
         raise ValueError(f"Incorrect func name: {func_name}. "
                          f"Only the following are supported: "

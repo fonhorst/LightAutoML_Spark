@@ -17,7 +17,6 @@ from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType, Role
 from lightautoml.reader.guess_roles import calc_encoding_rules, rule_based_roles_guess, calc_category_rules, \
     rule_based_cat_handler_guess
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
-from lightautoml.spark.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from lightautoml.spark.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from lightautoml.spark.utils import Cacher
 from lightautoml.tasks import Task
@@ -345,19 +344,19 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             **kwargs
         )
 
-        # if self.advanced_roles:
-        #     new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
-        #
-        #     droplist = [x for x in new_roles if new_roles[x].name == "Drop" and not self._roles[x].force_input]
-        #     self.upd_used_features(remove=droplist)
-        #     self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
-        #
-        #     dataset = SparkDataset(
-        #         train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
-        #         self.roles,
-        #         task=self.task,
-        #         **kwargs
-        #     )
+        if self.advanced_roles:
+            new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
+
+            droplist = [x for x in new_roles if new_roles[x].name == "Drop" and not self._roles[x].force_input]
+            self.upd_used_features(remove=droplist)
+            self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
+
+            dataset = SparkDataset(
+                train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
+                self.roles,
+                task=self.task,
+                **kwargs
+            )
 
         return dataset
 
@@ -383,21 +382,21 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                     continue
                 kwargs[array_attr] = col_name
 
-        transformer = self.make_transformer()
-        transformer.setAddArrayAttrs(add_array_attrs)
+        transformer = self.make_transformer(add_array_attrs)
         data = transformer.transform(data)
 
         dataset = SparkDataset(data, roles=self.roles, task=self.task, **kwargs)
 
         return dataset
 
-    def make_transformer(self):
+    def make_transformer(self, add_array_attrs: bool = False):
         roles = {f: self.roles[f] for f in self.used_features}
         transformer = SparkToSparkReaderTransformer(
             self.task.name,
             self.class_mapping,
             copy(self.used_array_attrs),
-            roles
+            roles,
+            add_array_attrs
         )
         return transformer
 
@@ -689,7 +688,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         return new_roles_dict
 
 
-class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickleMLWritable, CommonPickleMLReadable):
+class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper):
     usedArrayAttrs = Param(Params._dummy(), "usedArrayAttrs", "usedArrayAttrs")
     addArrayAttrs = Param(Params._dummy(), "addArrayAttrs", "addArrayAttrs")
     roles = Param(Params._dummy(), "roles", "roles")
@@ -700,13 +699,14 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickle
                  task_name: str,
                  class_mapping: Optional[Dict],
                  used_array_attrs: Dict[str, str],
-                 roles: Dict[str, ColumnRole]):
+                 roles: Dict[str, ColumnRole],
+                 add_array_attrs: bool = False):
         super().__init__()
         self.set(self.taskName, task_name)
         self.set(self.classMapping, class_mapping)
         self.set(self.usedArrayAttrs, used_array_attrs)
         self.set(self.roles, roles)
-        self.set(self.addArrayAttrs, None)
+        self.set(self.addArrayAttrs, add_array_attrs)
 
     def getTaskName(self) -> str:
         return self.getOrDefault(self.taskName)

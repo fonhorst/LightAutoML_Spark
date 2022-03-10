@@ -17,6 +17,7 @@ from ..dataset.base import SparkDataset, SparkDataFrame
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..transformers.base import ColumnsSelectorTransformer
+from ..utils import Cacher
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 from ...reader.base import RolesDict
@@ -217,7 +218,7 @@ class SparkAutoML:
                 train_valid = self._create_validation_iterator(level_predictions, None, None, cv_iter=cv_iter)
                 train_valid.input_roles = initial_level_roles
                 level_predictions = ml_pipe.fit_predict(train_valid)
-                # level_predictions = self._break_plan(level_predictions)
+                level_predictions = self._break_plan(level_predictions)
 
                 pipes.append(ml_pipe)
 
@@ -257,9 +258,6 @@ class SparkAutoML:
 
         blended_prediction, last_pipes = self.blender.fit_predict(level_predictions, pipes)
         self.levels.append(last_pipes)
-
-        # TODO: SPARK-LAMA fix it later
-        # self.reader.upd_used_features(remove=list(set(self.reader.used_features) - set(self.collect_used_feats())))
 
         del self._levels
 
@@ -351,7 +349,7 @@ class SparkAutoML:
             -> Tuple[Transformer, RolesDict]:
         stages = []
         if not no_reader:
-            stages.append(self.reader.make_transformer())
+            stages.append(self.reader.make_transformer(add_array_attrs=True))
 
         ml_pipes = [ml_pipe.transformer for level in self.levels for ml_pipe in level]
         stages.extend(ml_pipes)
@@ -363,11 +361,12 @@ class SparkAutoML:
             output_roles = dict()
             for ml_pipe in self.levels[-1]:
                 output_roles.update(ml_pipe.output_roles)
-            sel_tr = ColumnsSelectorTransformer(
-                input_cols=[SparkDataset.ID_COLUMN] + list(output_roles.keys()),
-                optional_cols=[self.reader.target_col] if self.reader.target_col else []
-            )
-            stages.append(sel_tr)
+
+        sel_tr = ColumnsSelectorTransformer(
+            input_cols=[SparkDataset.ID_COLUMN] + list(output_roles.keys()),
+            optional_cols=[self.reader.target_col] if self.reader.target_col else []
+        )
+        stages.append(sel_tr)
 
         automl_transformer = PipelineModel(stages=stages)
 
@@ -401,7 +400,8 @@ class SparkAutoML:
 
     @staticmethod
     def _break_plan(train: SparkDataset) -> SparkDataset:
-        new_df = train.spark_session.createDataFrame(train.data.rdd)
+        logger.info("Breaking the plan sequence to reduce wor for optimizer")
+        new_df = train.spark_session.createDataFrame(train.data.rdd, schema=train.data.schema, verifySchema=False)
 
         sds = train.empty()
         sds.set_data(new_df, train.features, train.roles)

@@ -1,9 +1,9 @@
-from typing import Dict, Optional, Union, List
+from typing import Optional, Union, List
 
 import numpy as np
 import pandas as pd
 from pyspark.ml import Pipeline
-from pyspark.sql import functions as F, Window
+from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType, StructField, StructType
 
 from lightautoml.dataset.roles import CategoryRole
@@ -11,7 +11,7 @@ from lightautoml.reader.guess_roles import calc_ginis, RolesDict
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.transformers.base import SparkChangeRolesTransformer
 from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
-    SparkOrdinalEncoderEstimator, SparkTargetEncoderEstimator
+    SparkOrdinalEncoderEstimator, SparkTargetEncoderEstimator, SparkMulticlassTargetEncoderEstimator
 from lightautoml.spark.transformers.numeric import SparkQuantileBinningEstimator
 from lightautoml.transformers.categorical import MultiClassTargetEncoder
 
@@ -153,7 +153,7 @@ def get_numeric_roles_stat(
 
     # check task specific
     if train.task.name == "multiclass":
-        encoder = MultiClassTargetEncoder
+        encoder = SparkMulticlassTargetEncoderEstimator
     else:
         encoder = SparkTargetEncoderEstimator
 
