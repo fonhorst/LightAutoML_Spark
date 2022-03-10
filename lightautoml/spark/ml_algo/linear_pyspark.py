@@ -30,9 +30,9 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
     _name: str = "LinearL2"
 
     _default_params = {
-        "tol": 1e-4,
+        "tol": 1e-6,
         "maxIter": 100,
-        "aggregationDepth": 4,
+        "aggregationDepth": 2,
         "elasticNetParam": 0.7,
         "regParam":
         [
@@ -99,11 +99,18 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         def build_pipeline(reg_param: int):
             instance_params = copy(params)
             instance_params["regParam"] = reg_param
-            if self.task.name in ["binary", "multiclass"]:
+            if self.task.name == "binary":
                 model = LogisticRegression(featuresCol=self._assembler.getOutputCol(),
                                            labelCol=train.target_column,
                                            probabilityCol=self._probability_col_name,
                                            rawPredictionCol=fold_prediction_column,
+                                           predictionCol=self._prediction_col_name,
+                                           **instance_params)
+            elif self.task.name == "multiclass":
+                model = LogisticRegression(featuresCol=self._assembler.getOutputCol(),
+                                           labelCol=train.target_column,
+                                           probabilityCol=fold_prediction_column,
+                                           rawPredictionCol=self._probability_col_name,
                                            predictionCol=self._prediction_col_name,
                                            **instance_params)
             elif self.task.name == "reg":
