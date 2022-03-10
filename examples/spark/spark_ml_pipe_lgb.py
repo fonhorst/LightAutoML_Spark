@@ -2,6 +2,8 @@ import logging.config
 import logging.config
 from copy import deepcopy
 
+from pyspark.ml import PipelineModel
+
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
@@ -47,12 +49,12 @@ if __name__ == "__main__":
 
             iterator = SparkFoldsIterator(sdataset, n_folds=3)
 
-            spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
+            spark_ml_algo = SparkBoostLGBM(freeze_defaults=False, cacher_key=cacher_key)
             spark_features_pipeline = SparkLGBAdvancedPipeline(cacher_key=cacher_key, **ml_alg_kwargs)
             spark_selector = ImportanceCutoffSelector(
                 cutoff=0.0,
                 feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),
-                ml_algo=SparkBoostLGBM(freeze_defaults=False),
+                ml_algo=SparkBoostLGBM(freeze_defaults=False, cacher_key='preselector'),
                 imp_estimator=ModelBasedImportanceEstimator()
             )
 
@@ -66,7 +68,13 @@ if __name__ == "__main__":
 
             _ = ml_pipe.fit_predict(iterator)
 
+            ml_pipe.transformer.write().overwrite().save("/tmp/spark_ml_pipe_lgb")
+
             final_result = ml_pipe.transformer.transform(sdataset.data)
             final_result.write.mode('overwrite').format('noop').save()
+
+            pipeline_model = PipelineModel.load("/tmp/spark_ml_pipe_lgb")
+            pred = pipeline_model.transform(sdataset.data)
+
 
         logger.info("Finished")
