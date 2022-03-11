@@ -214,9 +214,16 @@ class LightGBMModelWrapperMLWriter(MLWriter):
         cls = instance.__module__ + '.' + instance.__class__.__name__
         model_cls = instance.model.__module__ + '.' + instance.model.__class__.__name__
 
+        if isinstance(instance.model, LightGBMClassificationModel):
+            rawPredictionCol = instance.model.getRawPredictionCol()
+        else:
+            rawPredictionCol = None
         basicMetadata = {"class": cls, "timestamp": int(round(time.time() * 1000)),
                          "sparkVersion": sc.version, "uid": uid, "paramMap":
-                         {"featuresCol": instance.model.getFeaturesCol(), "predictionCol": instance.model.getPredictionCol()},
+                         {"featuresCol": instance.model.getFeaturesCol(),
+                          "predictionCol": instance.model.getPredictionCol(),
+                          "rawPredictionCol": rawPredictionCol
+                         },
                          "defaultParamMap": None, "modelClass": model_cls}
 
         return json.dumps(basicMetadata, separators=[',', ':'])
@@ -244,6 +251,8 @@ class LightGBMModelWrapperMLReader(MLReader):
         model_wrapper.model = model_type.loadNativeModelFromFile(os.path.join(path, "model"))
         model_wrapper.model.setFeaturesCol(metadata["paramMap"]["featuresCol"])
         model_wrapper.model.setPredictionCol(metadata["paramMap"]["predictionCol"])
+        if metadata["paramMap"]["rawPredictionCol"]:
+            model_wrapper.model.setRawPredictionCol(metadata["paramMap"]["rawPredictionCol"])
 
         return model_wrapper
 
