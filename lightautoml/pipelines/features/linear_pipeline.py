@@ -143,14 +143,14 @@ class LinearFeatures(FeaturesPipeline, TabularDataFeatures):
             te_part = SequentialTransformer([te_part, target_encoder()])
             te_list.append(te_part)
 
-        # # get intersection of top categories
-        # intersections = self.get_categorical_intersections(train)
-        # if intersections is not None:
-        #     if target_encoder is not None:
-        #         ints_part = SequentialTransformer([intersections, target_encoder()])
-        #         te_list.append(ints_part)
-        #     else:
-        #         sparse_list.append(intersections)
+        # get intersection of top categories
+        intersections = self.get_categorical_intersections(train)
+        if intersections is not None:
+            if target_encoder is not None:
+                ints_part = SequentialTransformer([intersections, target_encoder()])
+                te_list.append(ints_part)
+            else:
+                sparse_list.append(intersections)
 
         # add datetime seasonality
         seas_cats = self.get_datetime_seasons(train, CategoryRole(np.int32))

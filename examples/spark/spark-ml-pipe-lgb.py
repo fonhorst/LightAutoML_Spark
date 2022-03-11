@@ -129,6 +129,12 @@ if __name__ == "__main__":
         test_score = score(test_pred_df)
         logger.info(f"Test score (#2 way): {test_score}")
 
+        transformer.write().overwrite().save("/tmp/reader_and_spark_ml_pipe_lgb")
+
+        # 3. third way (via loaded Spark ML Pipeline)
+        pipeline_model = PipelineModel.load("/tmp/reader_and_spark_ml_pipe_lgb")
+        pred = pipeline_model.transform(test_df)
+
     logger.info("Finished")
 
     spark.stop()

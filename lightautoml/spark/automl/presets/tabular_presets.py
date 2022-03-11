@@ -204,7 +204,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
                 importance = SparkNpPermutationImportanceEstimator()
 
-                # TODO: SPARK-LAMA would it work here with SparkNpPermutationImportanceEstimator?
                 extra_selector = NpIterativeFeatureSelector(
                     selection_feats,
                     selection_gbm,

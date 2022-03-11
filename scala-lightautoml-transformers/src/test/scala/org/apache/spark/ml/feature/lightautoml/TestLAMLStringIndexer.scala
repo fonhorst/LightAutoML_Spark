@@ -51,7 +51,7 @@ object TestLAMLStringIndexer extends App {
 
 //  println(s"[${indexer.uid} - ${model.uid}] // [${lamaIndexer.uid} - ${lamaModel.uid}]")
 
-  lamaModel.save("/tmp/LAMLStringIndexerModel")
+  lamaModel.write.overwrite().save("/tmp/LAMLStringIndexerModel")
   val pipelineModel = LAMLStringIndexerModel.load("/tmp/LAMLStringIndexerModel")
   pipelineModel.transform(testDf)
 

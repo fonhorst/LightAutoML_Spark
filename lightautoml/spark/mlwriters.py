@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from typing import Union
 
+from pyspark import SparkContext
+from pyspark.ml.common import inherit_doc
 from pyspark.ml.util import DefaultParamsReader
 from pyspark.ml.util import MLReadable
 from pyspark.ml.util import MLReader
@@ -14,8 +16,6 @@ from pyspark.ml.util import MLWritable
 from pyspark.ml.util import MLWriter
 from synapse.ml.lightgbm import LightGBMClassificationModel
 from synapse.ml.lightgbm import LightGBMRegressionModel
-
-from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
 
 
 logger = logging.getLogger(__name__)
@@ -155,7 +155,8 @@ class SparkLabelEncoderTransformerMLReader(MLReader):
         with open(os.path.join(path, "transformer_class_instance.pickle"), 'rb') as handle:
             instance = pickle.load(handle)
 
-        indexer_model = LAMLStringIndexerModel.read().load(os.path.join(path, "indexer_model"))
+        from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
+        indexer_model = LAMLStringIndexerModel.load(os.path.join(path, "indexer_model"))
         instance.indexer_model = indexer_model
 
         return instance
@@ -245,3 +246,63 @@ class LightGBMModelWrapperMLReader(MLReader):
         model_wrapper.model.setPredictionCol(metadata["paramMap"]["predictionCol"])
 
         return model_wrapper
+
+
+@inherit_doc
+class LAMLStringIndexerModelJavaMLReadable(MLReadable):
+    """
+    (Private) Mixin for instances that provide JavaMLReader.
+    """
+
+    @classmethod
+    def read(cls):
+        """Returns an MLReader instance for this class."""
+        return LAMLStringIndexerModelJavaMLReader(cls)
+
+
+def _jvm():
+    """
+    Returns the JVM view associated with SparkContext. Must be called
+    after SparkContext is initialized.
+    """
+    jvm = SparkContext._jvm
+    if jvm:
+        return jvm
+    else:
+        raise AttributeError("Cannot load _jvm from SparkContext. Is SparkContext initialized?")
+
+
+@inherit_doc
+class LAMLStringIndexerModelJavaMLReader(MLReader):
+    """
+    (Private) Specialization of :py:class:`MLReader` for :py:class:`JavaParams` types
+    """
+
+    def __init__(self, clazz):
+        super(LAMLStringIndexerModelJavaMLReader, self).__init__()
+        self._clazz = clazz
+        self._jread = self._load_java_obj(clazz).read()
+
+    def load(self, path):
+        """Load the ML instance from the input path."""
+        if not isinstance(path, str):
+            raise TypeError("path should be a string, got type %s" % type(path))
+        java_obj = self._jread.load(path)
+        if not hasattr(self._clazz, "_from_java"):
+            raise NotImplementedError("This Java ML type cannot be loaded into Python currently: %r"
+                                      % self._clazz)
+        return self._clazz._from_java(java_obj)
+
+    def session(self, sparkSession):
+        """Sets the Spark Session to use for loading."""
+        self._jread.session(sparkSession._jsparkSession)
+        return self
+
+    @classmethod
+    def _load_java_obj(cls, clazz):
+        """Load the peer Java object of the ML instance."""
+        java_class = "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel"
+        java_obj = _jvm()
+        for name in java_class.split("."):
+            java_obj = getattr(java_obj, name)
+        return java_obj
