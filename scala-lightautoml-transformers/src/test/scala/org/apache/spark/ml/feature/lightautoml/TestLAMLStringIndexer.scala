@@ -7,8 +7,8 @@ import org.apache.spark.ml.feature.lightautoml.{LAMLStringIndexer, LAMLStringInd
 
 object TestLAMLStringIndexer extends App {
 
-  val file = "file:///D:\\Projects\\Sber\\LAMA\\Sber-LAMA-Stuff\\stringindexer-data\\data.json"
-  val testFile = "file:///D:\\Projects\\Sber\\LAMA\\Sber-LAMA-Stuff\\stringindexer-data\\test_data.json"
+  val file = "resources/data.json"
+  val testFile = "resources/test_data.json"
   val spark = SparkSession
           .builder()
           .appName("test")
