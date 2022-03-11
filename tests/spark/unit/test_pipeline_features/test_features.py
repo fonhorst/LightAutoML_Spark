@@ -30,14 +30,12 @@ from ..dataset_utils import get_test_datasets, prepared_datasets, load_dump_if_e
 spark = spark_sess
 
 # DATASETS_ARG = {"setting": "reg+binary"}
-# DATASETS_ARG = {"dataset": "lama_test_dataset"}
-# DATASETS_ARG = {"dataset": "ailerons_dataset"}
-# DATASETS_ARG = {"setting": "multiclass"}
-# DATASETS_ARG = {"dataset": "gesture_segmentation"}
-DATASETS_ARG = {"dataset": "ipums_97"}
-# DATASETS_ARG = {"dataset": "used_cars_dataset"}
+DATASETS_ARG = {"dataset": "lama_test_dataset"}
 
 CV = 5
+
+# otherwise holdout is used
+USE_FOLDS_VALIDATION = True
 
 ml_alg_kwargs = {
     'auto_unique_co': 10,
@@ -202,7 +200,6 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     if not ml_kwargs_spark:
         ml_kwargs_spark = dict()
 
-    # # TODO: SPARK-LAMA temporary commenting this section to make smoke test
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
     train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
     test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
@@ -214,7 +211,9 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     lama_feats = lama_pipeline.fit_transform(train_ds)
     lama_test_feats = lama_pipeline.transform(test_ds)
     lama_feats = lama_feats if ml_algo_lama_clazz == BoostLGBM else lama_feats.to_numpy()
-    train_valid = FoldsIterator(lama_feats.to_numpy()).convert_to_holdout_iterator()
+    train_valid = FoldsIterator(lama_feats.to_numpy())
+    if not USE_FOLDS_VALIDATION:
+        train_valid = train_valid.convert_to_holdout_iterator()
     ml_algo = ml_algo_lama_clazz(**ml_kwargs_lama)
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     assert ml_algo is not None
@@ -224,11 +223,9 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     lama_oof_metric = score(oof_pred)
     lama_test_metric = score(test_pred)
 
-    sdf = dumped_train_ds.data.replace(float('nan'), 0.0, subset=[
-        f for f in dumped_train_ds.features if f.startswith("ord_")
-    ])
-
-    train_valid = SparkFoldsIterator(dumped_train_ds).convert_to_holdout_iterator()
+    train_valid = SparkFoldsIterator(dumped_train_ds)
+    if not USE_FOLDS_VALIDATION:
+        train_valid = train_valid.convert_to_holdout_iterator()
     ml_algo = ml_algo_spark_clazz(cacher_key='test', **ml_kwargs_spark)
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     ml_algo = cast(SparkTabularMLAlgo, ml_algo)
@@ -291,9 +288,9 @@ def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any],
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkLinearLBFGS, 'linear_features',
-                               ml_alg_kwargs)
-                               # ml_kwargs_lama={"default_params": {"cs": [1e-5]}},
-                               # ml_kwargs_spark={"default_params": {"regParam": [1e-5]}})
+                               ml_alg_kwargs,
+                               ml_kwargs_lama={"default_params": {"cs": [1e-5]}},
+                               ml_kwargs_spark={"default_params": {"regParam": [1e-5]}})
 
 
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])

@@ -75,6 +75,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         self._ohe = None
         self._assembler = None
 
+        self._raw_prediction_col_name = "raw_prediction"
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
 
@@ -110,7 +111,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
                 model = LogisticRegression(featuresCol=self._assembler.getOutputCol(),
                                            labelCol=train.target_column,
                                            probabilityCol=fold_prediction_column,
-                                           rawPredictionCol=self._probability_col_name,
+                                           rawPredictionCol=self._raw_prediction_col_name,
                                            predictionCol=self._prediction_col_name,
                                            **instance_params)
             elif self.task.name == "reg":
@@ -206,7 +207,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         avr = self._build_averaging_transformer()
         models = [el for m in self.models for el in [m, DropColumnsTransformer(
             remove_cols=[],
-            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name, self._raw_prediction_col_name]
         )]]
         averaging_model = PipelineModel(stages=[self._ohe, self._assembler] + models + [avr])
         return averaging_model
