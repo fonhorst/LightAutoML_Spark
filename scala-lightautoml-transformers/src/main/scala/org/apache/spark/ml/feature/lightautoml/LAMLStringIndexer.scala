@@ -10,7 +10,7 @@ import org.apache.spark.ml.param._
 import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.util._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.catalyst.expressions.{If, Literal}
+import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, If, Literal}
 import org.apache.spark.sql.functions.{collect_set, udf}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, Encoders}
@@ -522,7 +522,9 @@ object LAMLStringIndexerModel extends MLReadable[LAMLStringIndexerModel] {
         val data = sparkSession.read.parquet(dataPath)
                 .select("labelsArray")
                 .head()
-        data.getSeq[scala.collection.Seq[(String, Long)]](0).map(_.toArray).toArray
+
+        val res = data.getSeq[scala.collection.Seq[GenericRowWithSchema]](0)
+        res.map(_.map(x => (x.getAs[String](0), x.getAs[Long](1))).toArray).toArray
       }
       val model = new LAMLStringIndexerModel(metadata.uid, labelsArray)
       metadata.getAndSetParams(model)

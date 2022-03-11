@@ -55,7 +55,7 @@ object TestLAMLStringIndexer extends App {
   val pipelineModel = LAMLStringIndexerModel.load("/tmp/LAMLStringIndexerModel")
   pipelineModel.transform(testDf)
 
-  while (args(0).toBoolean) {
-    Thread.sleep(1000)
-  }
+//  while (args(0).toBoolean) {
+//    Thread.sleep(1000)
+//  }
 }
