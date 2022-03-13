@@ -30,9 +30,9 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
     _name: str = "LinearL2"
 
     _default_params = {
-        "tol": 1e-4,
+        "tol": 1e-6,
         "maxIter": 100,
-        "aggregationDepth": 4,
+        "aggregationDepth": 2,
         "elasticNetParam": 0.7,
         "regParam":
         [
@@ -72,9 +72,10 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         self._prediction_col = f"prediction_{self._name}"
         self.task = None
         self._timer = timer
-        self._ohe = None
+        # self._ohe = None
         self._assembler = None
 
+        self._raw_prediction_col_name = "raw_prediction"
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
 
@@ -99,11 +100,18 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         def build_pipeline(reg_param: int):
             instance_params = copy(params)
             instance_params["regParam"] = reg_param
-            if self.task.name in ["binary", "multiclass"]:
+            if self.task.name == "binary":
                 model = LogisticRegression(featuresCol=self._assembler.getOutputCol(),
                                            labelCol=train.target_column,
                                            probabilityCol=self._probability_col_name,
                                            rawPredictionCol=fold_prediction_column,
+                                           predictionCol=self._prediction_col_name,
+                                           **instance_params)
+            elif self.task.name == "multiclass":
+                model = LogisticRegression(featuresCol=self._assembler.getOutputCol(),
+                                           labelCol=train.target_column,
+                                           probabilityCol=fold_prediction_column,
+                                           rawPredictionCol=self._raw_prediction_col_name,
                                            predictionCol=self._prediction_col_name,
                                            **instance_params)
             elif self.task.name == "reg":
@@ -111,7 +119,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
                                          labelCol=train.target_column,
                                          predictionCol=fold_prediction_column,
                                          **instance_params)
-                model.setSolver("l-bfgs")
+                model = model.setSolver("l-bfgs")
             else:
                 raise ValueError("Task not supported")
 
@@ -158,7 +166,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         best_val_pred: Optional[SparkDataFrame] = None
         for rp, model in estimators:
             logger.debug(f"Fitting estimators with regParam {rp}")
-            pipeline = Pipeline(stages=[self._ohe, self._assembler, model])
+            pipeline = Pipeline(stages=[self._assembler, model])
             ml_model = pipeline.fit(train_sdf)
             val_pred = ml_model.transform(val_sdf)
             preds_to_score = val_pred.select(
@@ -199,9 +207,9 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         avr = self._build_averaging_transformer()
         models = [el for m in self.models for el in [m, DropColumnsTransformer(
             remove_cols=[],
-            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name, self._raw_prediction_col_name]
         )]]
-        averaging_model = PipelineModel(stages=[self._ohe, self._assembler] + models + [avr])
+        averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
         return averaging_model
 
     def _build_averaging_transformer(self) -> Transformer:
@@ -209,7 +217,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             self.task.name,
             input_cols=self._models_prediction_columns,
             output_col=self.prediction_feature,
-            remove_cols=self._ohe.getOutputCols() + [self._assembler.getOutputCol()] + self._models_prediction_columns,
+            remove_cols=[self._assembler.getOutputCol()] + self._models_prediction_columns,
             convert_to_array_first=not (self.task.name == "reg"),
             dim_num=self.n_classes
         )
@@ -234,12 +242,12 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
         self.input_roles = train_valid_iterator.input_roles
         cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name == "Category"]
-        self._ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_{self._name}_ohe" for f in cat_feats])
-        self._ohe = self._ohe.fit(train_valid_iterator.train.data)
+        # self._ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_{self._name}_ohe" for f in cat_feats])
+        # self._ohe = self._ohe.fit(train_valid_iterator.train.data)
 
         non_cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name != "Category"]
         self._assembler = VectorAssembler(
-            inputCols=non_cat_feats + self._ohe.getOutputCols(),
+            inputCols=non_cat_feats + cat_feats, #self._ohe.getOutputCols(),
             outputCol=f"{self._name}_vassembler_features"
         )
 
