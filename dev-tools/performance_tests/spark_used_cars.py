@@ -34,21 +34,23 @@ DUMP_DATA_NAME = "data.parquet"
 @contextmanager
 def open_spark_session() -> SparkSession:
     if os.environ.get("SCRIPT_ENV", None) == "cluster":
-        return SparkSession.builder.getOrCreate()
+        spark_sess = SparkSession.builder.getOrCreate()
+    else:
+        spark_sess = (
+            SparkSession
+            .builder
+            .master("local[*]")
+            .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
+            .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
+            .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+            .config("spark.sql.shuffle.partitions", "16")
+            .config("spark.driver.memory", "12g")
+            .config("spark.executor.memory", "12g")
+            .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+            .getOrCreate()
+        )
 
-    spark_sess = (
-        SparkSession
-        .builder
-        .master("local[*]")
-        .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
-        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
-        .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-        .config("spark.sql.shuffle.partitions", "16")
-        .config("spark.driver.memory", "12g")
-        .config("spark.executor.memory", "12g")
-        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-        .getOrCreate()
-    )
+    spark_sess.sparkContext.setLogLevel("WARN")
 
     try:
         yield spark_sess
