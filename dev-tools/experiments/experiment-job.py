@@ -15,7 +15,8 @@ from tqdm import tqdm
 
 from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 
-JOB_SUBMITTER_EXE = "./dev-tools/bin/test-job-run.sh"
+# JOB_SUBMITTER_EXE = "./dev-tools/bin/test-job-run.sh"
+JOB_SUBMITTER_EXE = "./bin/slamactl.sh"
 # JOB_SUBMITTER_EXE = "./dev-tools/bin/test-sleep-job.sh"
 MARKER = "EXP-RESULT:"
 
@@ -169,8 +170,13 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
 
         outfile = os.path.abspath(f"{results_path}/Results_{instance_id}.log")
 
+        str(launch_script_name)
+
+        confs = [f'{setting}={value}' for setting, value in exp_instance['params']['spark_config'].items()]
+        conf_args = [el for c in confs for el in ['--conf', c]]
+
         p = subprocess.Popen(
-            [JOB_SUBMITTER_EXE, jobname, str(launch_script_name), outfile],
+            ["spark-submit", '--deploy-mode', 'cluster',  *conf_args]
         )
 
         logger.info(f"Started process with instance id {instance_id} and args {p.args}")
