@@ -13,6 +13,12 @@ then
   echo "REPO var is not defined"
 fi
 
+if [[ -z "${IMAGE_TAG}" ]]
+then
+  IMAGE_TAG="lama-v3.2.0-nikolay"
+fi
+
+
 APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 
 function build_jars() {
@@ -41,13 +47,13 @@ function build_pyspark_images() {
     && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
 
   # create images with names:
-  # - ${REPO}/spark:lama-v3.2.0
-  # - ${REPO}/spark-py:lama-v3.2.0
-  ./spark/bin/docker-image-tool.sh -r "${REPO}" -t lama-v3.2.0 \
+  # - ${REPO}/spark:${IMAGE_TAG}
+  # - ${REPO}/spark-py:${IMAGE_TAG}
+  ./spark/bin/docker-image-tool.sh -r "${REPO}" -t ${IMAGE_TAG} \
     -p spark/kubernetes/dockerfiles/spark/bindings/python/Dockerfile \
     build
 
-  ./spark/bin/docker-image-tool.sh -r "${REPO}" -t lama-v3.2.0 push
+  ./spark/bin/docker-image-tool.sh -r "${REPO}" -t ${IMAGE_TAG} push
 }
 
 function build_lama_image() {
@@ -56,11 +62,11 @@ function build_lama_image() {
   poetry build
 
   docker build \
-    -t ${REPO}/spark-py-lama:lama-v3.2.0 \
+    -t ${REPO}/spark-py-lama:${IMAGE_TAG} \
     -f docker/spark-lama/spark-py-lama.dockerfile \
     .
 
-  docker push ${REPO}/spark-py-lama:lama-v3.2.0
+  docker push ${REPO}/spark-py-lama:${IMAGE_TAG}
 
   rm -rf dist
 }
@@ -79,7 +85,7 @@ function submit_job() {
   spark-submit \
     --master k8s://${APISERVER} \
     --deploy-mode cluster \
-    --conf "spark.kubernetes.container.image=${REPO}/spark-py-lama:lama-v3.2.0" \
+    --conf "spark.kubernetes.container.image=${REPO}/spark-py-lama:${IMAGE_TAG}" \
     --conf 'spark.kubernetes.namespace='${KUBE_NAMESPACE} \
     --conf 'spark.kubernetes.authenticate.driver.serviceAccountName=spark' \
     --conf 'spark.kubernetes.memoryOverheadFactor=0.4' \
