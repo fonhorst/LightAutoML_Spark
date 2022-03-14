@@ -1,4 +1,5 @@
 import datetime
+import glob
 import itertools
 import json
 import logging
@@ -15,9 +16,9 @@ from tqdm import tqdm
 
 from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 
-# JOB_SUBMITTER_EXE = "./dev-tools/bin/test-job-run.sh"
-JOB_SUBMITTER_EXE = "./bin/slamactl.sh"
-# JOB_SUBMITTER_EXE = "./dev-tools/bin/test-sleep-job.sh"
+
+DEFAULT_SPARK_CONFIG_SETTINGS = "dev-tools/config/experiments/default-spark-conf.yaml"
+EXP_PY_FILES_DIR = "dev-tools/performance_tests/"
 MARKER = "EXP-RESULT:"
 
 
@@ -91,6 +92,9 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
 
     existing_exp_instances_ids = process_state_file(config_data)
 
+    with open(DEFAULT_SPARK_CONFIG_SETTINGS, "r") as f:
+        default_spark_config = yaml.safe_load(f)['default_spark_config']
+
     exp_instances = []
     for experiment in experiments:
         name = experiment["name"]
@@ -108,7 +112,7 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
 
             spark_configs = []
             for spark_params in spark_param_sets:
-                spark_config = copy(config_data["default_spark_config"])
+                spark_config = copy(default_spark_config)
                 spark_config.update(spark_params)
                 spark_config['spark.cores.max'] = \
                     int(spark_config['spark.executor.cores']) * int(spark_config['spark.executor.instances'])
@@ -165,18 +169,25 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
         instance_id = exp_instance["instance_id"]
         launch_script_name = exp_instance["calculation_script"]
         jobname = instance_id[:50].strip('-')
-        with open(f"/tmp/{jobname}-config.yaml", "w+") as outfile:
-            yaml.dump(exp_instance["params"], outfile, default_flow_style=False)
+        instance_config_path = f"/tmp/{jobname}-config.yaml"
+
+        py_files = glob.glob(os.path.join(EXP_PY_FILES_DIR, '*.py'))
+        py_files = ','.join(py_files)
+
+        with open(instance_config_path, "w+") as f:
+            yaml.dump(exp_instance["params"], f, default_flow_style=False)
 
         outfile = os.path.abspath(f"{results_path}/Results_{instance_id}.log")
 
-        str(launch_script_name)
-
         confs = [f'{setting}={value}' for setting, value in exp_instance['params']['spark_config'].items()]
         conf_args = [el for c in confs for el in ['--conf', c]]
+        conf_args.extend([
+            '--py-files', py_files,
+            '--files', instance_config_path
+        ])
 
         p = subprocess.Popen(
-            ["spark-submit", '--deploy-mode', 'cluster',  *conf_args]
+            ["spark-submit", '--deploy-mode', 'cluster',  *conf_args, str(launch_script_name)]
         )
 
         logger.info(f"Started process with instance id {instance_id} and args {p.args}")
