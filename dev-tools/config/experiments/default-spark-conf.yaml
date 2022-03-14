@@ -1,6 +1,7 @@
 ---
 default_spark_config: {
-  spark.kubernetes.container.image: node2.bdcl:5000/spark-py-lama:lama-v3.2.0,
+  spark.master: k8s://https://node2.bdcl:6443,
+  spark.kubernetes.container.image: node2.bdcl:5000/spark-py-lama:lama-v3.2.0-nikolay,
   spark.kubernetes.namespace: spark-lama-exps,
   spark.kubernetes.authenticate.driver.serviceAccountName: spark,
   spark.kubernetes.memoryOverheadFactor: 0.4,

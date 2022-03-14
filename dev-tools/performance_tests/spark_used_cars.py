@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from typing import Dict, Any, Optional, Tuple, cast
 
 import yaml
+from pyspark import SparkFiles
 from pyspark.sql import functions as F, SparkSession
 
 from dataset_utils import datasets
@@ -125,58 +126,60 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[Sp
     return train_data, test_data
 
 
-def calculate_automl(path: str,
-                     task_type: str,
-                     metric_name: str,
-                     seed: int = 42,
-                     cv: int = 5,
-                     use_algos = ("lgb", "linear_l2"),
-                     roles: Optional[Dict] = None,
-                     **_) -> Dict[str, Any]:
+def calculate_automl(
+        spark: SparkSession,
+        path: str,
+        task_type: str,
+        metric_name: str,
+        seed: int = 42,
+        cv: int = 5,
+        use_algos = ("lgb", "linear_l2"),
+        roles: Optional[Dict] = None,
+        **_) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-    with open_spark_session() as spark:
-        with log_exec_timer("spark-lama training") as train_timer:
-            task = SparkTask(task_type)
-            train_data, test_data = prepare_test_and_train(spark, path, seed)
-            test_data_dropped = test_data
+    with log_exec_timer("spark-lama training") as train_timer:
+        task = SparkTask(task_type)
+        train_data, test_data = prepare_test_and_train(spark, path, seed)
+        test_data_dropped = test_data
 
-            automl = SparkTabularAutoML(
-                spark=spark,
-                task=task,
-                general_params={"use_algos": use_algos},
-                reader_params={"cv": cv, "advanced_roles": False},
-                tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
-            )
+        automl = SparkTabularAutoML(
+            spark=spark,
+            task=task,
+            general_params={"use_algos": use_algos},
+            reader_params={"cv": cv, "advanced_roles": False},
+            tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
+        )
 
-            oof_predictions = automl.fit_predict(
-                train_data,
-                roles=roles
-            )
+        oof_predictions = automl.fit_predict(
+            train_data,
+            roles=roles
+        )
 
-        logger.info("Predicting on out of fold")
+    logger.info("Predicting on out of fold")
+
+    score = task.get_dataset_metric()
+    metric_value = score(oof_predictions)
+
+    logger.info(f"{metric_name} score for out-of-fold predictions: {metric_value}")
+
+    with log_exec_timer("spark-lama predicting on test") as predict_timer:
+        te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
 
         score = task.get_dataset_metric()
-        metric_value = score(oof_predictions)
+        test_metric_value = score(te_pred)
 
-        logger.info(f"{metric_name} score for out-of-fold predictions: {metric_value}")
+        logger.info(f"{metric_name} score for test predictions: {test_metric_value}")
 
-        with log_exec_timer("spark-lama predicting on test") as predict_timer:
-            te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
+    logger.info("Predicting is finished")
 
-            score = task.get_dataset_metric()
-            test_metric_value = score(te_pred)
-
-            logger.info(f"{metric_name} score for test predictions: {test_metric_value}")
-
-        logger.info("Predicting is finished")
-
-        return {"metric_value": metric_value, "test_metric_value": test_metric_value,
-                "train_duration_secs": train_timer.duration,
-                "predict_duration_secs": predict_timer.duration}
+    return {"metric_value": metric_value, "test_metric_value": test_metric_value,
+            "train_duration_secs": train_timer.duration,
+            "predict_duration_secs": predict_timer.duration}
 
 
 def calculate_lgbadv_boostlgb(
+        spark: SparkSession,
         path: str,
         task_type: str,
         seed: int = 42,
@@ -186,43 +189,47 @@ def calculate_lgbadv_boostlgb(
         **_) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-    with open_spark_session() as spark:
-        with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
-            # chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
-            chkp = None
-            if not chkp:
-                task = SparkTask(task_type)
-                train_data, test_data = prepare_test_and_train(spark, path, seed)
+    with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
+        # chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
+        chkp = None
+        if not chkp:
+            task = SparkTask(task_type)
+            train_data, test_data = prepare_test_and_train(spark, path, seed)
 
-                sreader = SparkToSparkReader(task=task, cv=3, advanced_roles=False)
-                sdataset = sreader.fit_read(train_data, roles=roles)
+            sreader = SparkToSparkReader(task=task, cv=3, advanced_roles=False)
+            sdataset = sreader.fit_read(train_data, roles=roles)
 
-                ml_alg_kwargs = {
-                    'auto_unique_co': 10,
-                    'max_intersection_depth': 3,
-                    'multiclass_te_co': 3,
-                    'output_categories': True,
-                    'top_intersections': 4
-                }
+            ml_alg_kwargs = {
+                'auto_unique_co': 10,
+                'max_intersection_depth': 3,
+                'multiclass_te_co': 3,
+                'output_categories': True,
+                'top_intersections': 4
+            }
 
-                iterator = SparkFoldsIterator(sdataset, n_folds=cv)
-                lgb_features = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
+            iterator = SparkFoldsIterator(sdataset, n_folds=cv)
+            lgb_features = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
 
-                # # Process features and train the model
-                iterator = iterator.apply_feature_pipeline(lgb_features)
+            # # Process features and train the model
+            iterator = iterator.apply_feature_pipeline(lgb_features)
 
-                if checkpoint_path is not None:
-                    ds = cast(SparkDataset, iterator.train)
-                    dump_data(checkpoint_path, ds, iterator_input_roles=iterator.input_roles)
-            else:
-                chkp_ds, metadata = chkp
-                iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
-                iterator.input_roles = metadata['iterator_input_roles']
+            if checkpoint_path is not None:
+                ds = cast(SparkDataset, iterator.train)
+                dump_data(checkpoint_path, ds, iterator_input_roles=iterator.input_roles)
+        else:
+            chkp_ds, metadata = chkp
+            iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
+            iterator.input_roles = metadata['iterator_input_roles']
 
-            spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', freeze_defaults=False)
-            spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', freeze_defaults=False)
+        spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
-        return {pipe_timer.name: pipe_timer.duration}
+    return {pipe_timer.name: pipe_timer.duration}
+
+
+def test_calculate(spark: SparkSession, **_):
+    logger.info("Success")
+    return {"result": "success"}
 
 
 if __name__ == "__main__":
@@ -230,22 +237,27 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
     logger = logging.getLogger(__name__)
 
-    # Read values from config file
-    with open("config.yaml", "r") as stream:
-        config_data = yaml.safe_load(stream)
+    with open_spark_session() as spark:
+        config_path = SparkFiles.get('config.yaml')
 
-    func_name = config_data['func']
-    ds_cfg = datasets()[config_data['dataset']]
-    ds_cfg.update(config_data)
+        # Read values from config file
+        with open(config_path, "r") as stream:
+            config_data = yaml.safe_load(stream)
 
-    if func_name == "calculate_automl":
-        func = calculate_automl
-    elif func_name == "calculate_lgbadv_boostlgb":
-        func = calculate_lgbadv_boostlgb
-    else:
-        raise ValueError(f"Incorrect func name: {func_name}. "
-                         f"Only the following are supported: "
-                         f"{['calculate_automl', 'calculate_lgbadv_boostlgb']}")
+        func_name = config_data['func']
+        ds_cfg = datasets()[config_data['dataset']]
+        ds_cfg.update(config_data)
 
-    result = func(**ds_cfg)
-    print(f"EXP-RESULT: {result}")
+        if func_name == "calculate_automl":
+            func = calculate_automl
+        elif func_name == "calculate_lgbadv_boostlgb":
+            func = calculate_lgbadv_boostlgb
+        elif func_name == 'test_calculate':
+            func = test_calculate
+        else:
+            raise ValueError(f"Incorrect func name: {func_name}. "
+                             f"Only the following are supported: "
+                             f"{['calculate_automl', 'calculate_lgbadv_boostlgb']}")
+
+        result = func(spark=spark, **ds_cfg)
+        print(f"EXP-RESULT: {result}")

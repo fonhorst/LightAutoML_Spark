@@ -24,7 +24,8 @@ MARKER = "EXP-RESULT:"
 
 statefile_path = "/tmp/exp-job"
 results_path = "/tmp/exp-job"
-cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster.yaml"
+cfg_path = "./dev-tools/config/experiments/experiment-config-spark-test.yaml"
+# cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster.yaml"
 # cfg_path = "./dev-tools/config/experiments/experiment-config-spark-only.yaml"
 # cfg_path = "./dev-tools/config/experiments/experiment-config-lama-only.yaml"
 # cfg_path = "./dev-tools/config/experiments/experiment-config-advlgb-boostgb-spark-cluster.yaml"
@@ -169,7 +170,11 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
         instance_id = exp_instance["instance_id"]
         launch_script_name = exp_instance["calculation_script"]
         jobname = instance_id[:50].strip('-')
-        instance_config_path = f"/tmp/{jobname}-config.yaml"
+
+        instance_config_path = f"/tmp/{jobname}/config.yaml"
+        os.makedirs(os.path.dirname(instance_config_path), exist_ok=True)
+
+        spark_master = exp_instance['params']['spark_config']['spark.master']
 
         py_files = glob.glob(os.path.join(EXP_PY_FILES_DIR, '*.py'))
         py_files = ','.join(py_files)
@@ -188,9 +193,12 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
             '--files', instance_config_path
         ])
 
+        custom_env = os.environ.copy()
+        custom_env["PYSPARK_PYTHON"] = "python3"
         p = subprocess.Popen(
-            ["spark-submit", '--deploy-mode', 'cluster',  *conf_args, str(launch_script_name)],
-            stdout=subprocess.DEVNULL
+            ["spark-submit", '--master', spark_master, '--deploy-mode', 'cluster',  *conf_args, launch_script_name, "config.yaml"],
+            env=custom_env
+            # stdout=subprocess.DEVNULL
         )
 
         logger.info(f"Started process with instance id {instance_id} and args {p.args}")

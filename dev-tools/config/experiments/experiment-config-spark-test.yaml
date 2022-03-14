@@ -1,0 +1,22 @@
+---
+experiment_type: spark_quality
+calculation_scripts:
+  spark: dev-tools/performance_tests/spark_used_cars.py
+  lama: dev-tools/performance_tests/lama_used_cars.py
+state_file: 'delete'
+
+experiments:
+  - name: "cmp-all-1"
+    library: [ "spark" ]
+    repeat_rate: 1
+    params:
+      func: [ "test_calculate" ]
+      dataset: [ "lama_test_dataset" ]
+      seed: [ 42 ]
+      cv: [ 5 ]
+      use_algos:
+        - [ [ "lgb"] ]
+    spark_config:
+      spark.executor.instances: [ '4' ]
+      spark.executor.cores: [ '4' ]
+      spark.executor.memory: [ '16g' ]
