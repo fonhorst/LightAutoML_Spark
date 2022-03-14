@@ -182,12 +182,15 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
         confs = [f'{setting}={value}' for setting, value in exp_instance['params']['spark_config'].items()]
         conf_args = [el for c in confs for el in ['--conf', c]]
         conf_args.extend([
+            '--conf', f'spark.kubernetes.driver.label.appname={instance_id}',
+            '--conf', f'spark.kubernetes.executor.label.appname={instance_id}',
             '--py-files', py_files,
             '--files', instance_config_path
         ])
 
         p = subprocess.Popen(
-            ["spark-submit", '--deploy-mode', 'cluster',  *conf_args, str(launch_script_name)]
+            ["spark-submit", '--deploy-mode', 'cluster',  *conf_args, str(launch_script_name)],
+            stdout=subprocess.DEVNULL
         )
 
         logger.info(f"Started process with instance id {instance_id} and args {p.args}")
@@ -291,6 +294,16 @@ def register_results(exp_procs: Iterator[ExpInstanceProc], total: int):
         # Mark exp_instance as completed in the state file
         instance_id = exp_proc.exp_instance['instance_id']
         logger.info(f"Registering finished process with instance id: {instance_id}")
+
+        # kubectl -n spark-lama-exps logs -l spark-role=driver,spark-app-selector=spark-ba10619fe245432d9153bc0fcd96abae
+        kube_ns = exp_proc.exp_instance['params']['spark_config']['spark.kubernetes.namespace']
+        with open(exp_proc.outfile, 'w') as f:
+            logs_fetcher = subprocess.Popen(
+                ['kubectl', '-n', kube_ns, 'logs', '-l', f'spark-role=driver,appname={instance_id}'],
+                stdout=f,
+                stderr=f
+            )
+            logs_fetcher.wait()
 
         process_outfile(exp_proc.exp_instance, exp_proc.outfile, all_results_path)
 
