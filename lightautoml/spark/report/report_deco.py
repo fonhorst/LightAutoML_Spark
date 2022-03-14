@@ -20,6 +20,7 @@ from jinja2 import FileSystemLoader
 from json2html import json2html
 from pyspark import RDD
 from pyspark.mllib.linalg import DenseMatrix
+from pyspark.sql import SparkSession
 
 from pyspark.sql.dataframe import DataFrame
 from pyspark.mllib.evaluation import BinaryClassificationMetrics, RegressionMetrics, MulticlassMetrics
@@ -42,7 +43,6 @@ from sklearn.metrics import roc_auc_score
 from sklearn.metrics import roc_curve
 
 
-from lightautoml.spark
 
 from lightautoml.addons.uplift import metrics as uplift_metrics
 from lightautoml.addons.uplift.metalearners import TLearner
@@ -51,6 +51,7 @@ from lightautoml.addons.uplift.utils import _get_treatment_role
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.automl.presets.tabular_presets import ReadableIntoSparkDf
 from lightautoml.spark.report.handy_spark_utils import call2
+from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
 
 logger = logging.getLogger(__name__)
 
@@ -815,17 +816,23 @@ class ReportDeco:
             f_weighted,
         ]
 
-    def _collect_data(self, preds: SparkDataset, sample) -> DataFrame:
-        predict_column = preds.features[0]
+    def _collect_data(self,
+                      preds: SparkDataset,
+                      sample,
+                      true_values_col_name,
+                      raw_predictions_col_name,
+                      predicted_labels_col_name) -> DataFrame:
+        # predict_column = preds.features[0]
         data = preds.data.join(
             sample,  # sample.select(F.col(SparkDataset.ID_COLUMN), F.col(self._target)),
             on=SparkDataset.ID_COLUMN
         ).select(
             F.col(SparkDataset.ID_COLUMN),
-            F.col(self._target).alias("y_true"),
-            F.col(predict_column).alias("y_pred")
+            F.col(self._target).alias(true_values_col_name),
+            F.col(raw_predictions_col_name).alias(raw_predictions_col_name),
+            F.col(predicted_labels_col_name).alias(predicted_labels_col_name)
         ).where(
-            (~F.isnan(F.col("y_pred"))) & (F.col("y_pred").isNotNull())
+            (~F.isnan(F.col(predicted_labels_col_name))) & (F.col(predicted_labels_col_name).isNotNull())
         )
         # TODO SPARK-LAMA: Create an UDF to map values for multiclass task
 
@@ -858,15 +865,29 @@ class ReportDeco:
         # TODO: parameters parsing in general case
 
         preds: SparkDataset = self._model.fit_predict(*args, **kwargs)
+
+        csv_df = pd.read_csv("/mnt/hgfs/Projects/Sber/LAMA/Sber-LAMA-Stuff/dumps/labels_preds.csv")
+        csv_df = csv_df[["y_true", "y_pred", "label"]]
+        csv_df.columns = ["y_true", "raw", "label"]
+        preds = SparkSession.builder.getOrCreate().createDataFrame(csv_df)
+
+        true_values_col_name = "y_true"
+        scores_col_name = "raw"
+        predictions_col_name = "label"
+
         train_data: DataFrame = kwargs["train_data"] if "train_data" in kwargs else args[0]
         input_roles = kwargs["roles"] if "roles" in kwargs else args[1]
         self._target = input_roles["target"]
         valid_data: Optional[DataFrame] = kwargs.get("valid_data", None)
 
         if valid_data is None:
-            data = self._collect_data(preds, train_data)
+            data = self._collect_data(
+                preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
+            )
         else:
-            data = self._collect_data(preds, valid_data)
+            data = self._collect_data(
+                preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name
+            )
 
         self._inference_content = {}
         if self.task == "binary":
@@ -882,9 +903,9 @@ class ReportDeco:
             auc_score, prec, rec, F1 = self._binary_classification_details(
                 data,
                 positive_rate,
-                true_labels_col_name="y_true",
-                scores_col_name="raw",
-                predicted_labels_col_name="label"
+                true_labels_col_name=true_values_col_name,
+                scores_col_name=scores_col_name,
+                predicted_labels_col_name=predictions_col_name
             )
             # update model section
             evaluation_parameters = ["AUC-score", "Precision", "Recall", "F1-score"]
@@ -900,7 +921,7 @@ class ReportDeco:
             self._inference_content["error_hist"] = "valid_error_hist.png"
             self._inference_content["scatter_plot"] = "valid_scatter_plot.png"
             # graphics and metrics
-            mean_ae, median_ae, mse, r2, evs = self._regression_details(data)
+            mean_ae, median_ae, mse, r2, evs = self._regression_details(data, true_values_col_name, predictions_col_name)
             # model section
             evaluation_parameters = [
                 "Mean absolute error",
@@ -922,7 +943,7 @@ class ReportDeco:
             index_names = np.array([["Precision", "Recall", "F1-score"], ["micro", "macro", "weighted"]])
             index = pd.MultiIndex.from_product(index_names, names=["Evaluation metric", "Average"])
 
-            summary = self._multiclass_details(data)
+            summary = self._multiclass_details(data, predictions_col_name, true_values_col_name)
             self._model_summary = pd.DataFrame({"Validation sample": summary}, index=index)
 
         self._inference_content["title"] = "Results on validation sample"
@@ -936,10 +957,12 @@ class ReportDeco:
         self._generate_train_set_section()
         # generate fit_predict section
         self._generate_inference_section()
+
         # generate feature importance and interpretation sections
-        self._generate_fi_section(valid_data)
-        if self.interpretation:
-            self._generate_interpretation_section(valid_data)
+        # self._generate_fi_section(valid_data)
+
+        # if self.interpretation:
+        #     self._generate_interpretation_section(valid_data)
 
         self.generate_report()
         return preds
@@ -1036,11 +1059,13 @@ class ReportDeco:
         self.generate_report()
         return test_preds
 
-    def _generate_fi_section(self, valid_data):
+    # TODO SPARK-LAMA: Required method _model.get_feature_scores is not implemented for Spark.
+    def _generate_fi_section(self, valid_data: Optional[DataFrame]):
+        total_count = valid_data.count()
         if (
             self.fi_params["method"] == "accurate"
             and valid_data is not None
-            and valid_data.shape[0] > self.fi_params["n_sample"]
+            and total_count > self.fi_params["n_sample"]
         ):
             valid_data = valid_data.sample(n=self.fi_params["n_sample"])
             print(
@@ -1073,6 +1098,7 @@ class ReportDeco:
         fi_section = env.get_template(self._fi_section_path).render(fi_content)
         self._sections["fi"] = fi_section
 
+    # TODO SPARK-LAMA: Required method _model.get_individual_pdp is not implemented for Spark.
     def _generate_interpretation_content(self, test_data):
         self._interpretation_content = {}
         if test_data is None:
@@ -1316,21 +1342,28 @@ class ReportDeco:
             ).toPandas()
             # dropped_nan_ratio = train_data[dropped_list].isna().sum() / train_data.shape[0]
             dropped_most_occured = pd.Series(np.nan, index=dropped_list)
-            fff.
-            dropped_most_occured = train_data.select(
-                *[
-                    (
-                        # F.countDistinct(F.col(col_name)) / total_count
-                        F.co
-                    ).alias(col_name)
-                    for col_name in dropped_list
-                ]
+
+            indexer = LAMLStringIndexer(
+                inputCols=dropped_list,
+                outputCols=[f"{col}_out" for col in dropped_list],
+                minFreqs=[0 for _ in dropped_list],
+                handleInvalid="keep",
+                defaultValue=0.,
+                freqLabel=True
             )
 
-            for col in dropped_list:
-                col_most_occured = train_data[col].value_counts(normalize=True).values
-                if len(col_most_occured) > 0:
-                    dropped_most_occured[col] = col_most_occured[0]
+            indexer_model: LAMLStringIndexerModel = indexer.fit(train_data)
+
+            encodings = indexer_model.labelsArray  # list of string tuples ('key', 'count'), example: ('key', '11')
+            dropped_most_occured = [
+                int(sorted(enc, key=lambda x: int(x[1]), reverse=True)[0][1]) / total_count
+                for enc in encodings
+            ]
+
+            # for col in dropped_list:
+            #     col_most_occured = train_data[col].value_counts(normalize=True).values
+            #     if len(col_most_occured) > 0:
+            #         dropped_most_occured[col] = col_most_occured[0]
             dropped_features_table = pd.DataFrame(
                 {"nan_rate": dropped_nan_ratio, "constant_rate": dropped_most_occured}
             )
