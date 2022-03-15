@@ -19,7 +19,7 @@ from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 
 
 DEFAULT_SPARK_CONFIG_SETTINGS = "dev-tools/config/experiments/default-spark-conf.yaml"
-EXP_PY_FILES_DIR = "dev-tools/performance_tests/"
+EXP_PY_FILES_DIR = "dev-tools/experiments/"
 MARKER = "EXP-RESULT:"
 
 
