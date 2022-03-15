@@ -138,12 +138,24 @@ function port_forward() {
   kubectl -n spark-lama-exps port-forward svc/${svc_name} 9040:4040
 }
 
-function port_forward_by_appname() {
-  appname=$1
+function port_forward_by_expname() {
+  expname=$1
   port=$2
-  spark_app_selector=$(kubectl -n spark-lama-exps get pod -l appname=${appname} -l spark-role=driver -o jsonpath='{.items[0].metadata.labels.spark-app-selector}')
+  spark_app_selector=$(kubectl -n spark-lama-exps get pod -l spark-role=driver,expname=${expname} -o jsonpath='{.items[0].metadata.labels.spark-app-selector}')
   svc_name=$(kubectl -n ${KUBE_NAMESPACE} get svc -l spark-app-selector=${spark_app_selector} -o jsonpath='{.items[0].metadata.name}')
   kubectl -n spark-lama-exps port-forward svc/${svc_name} ${port}:4040
+}
+
+function logs_by_expname() {
+  expname=$1
+
+  kubectl -n spark-lama-exps logs -l spark-role=driver,expname=${expname}
+}
+
+function logs_ex_by_expname() {
+  expname=$1
+
+  kubectl -n spark-lama-exps logs -l spark-role=executor,expname=${expname}
 }
 
 function help() {
@@ -210,8 +222,16 @@ function main () {
         port_forward "${@}"
         ;;
 
-    "port-forward-by-appname")
-        port_forward_by_appname "${@}"
+    "port-forward-by-expname")
+        port_forward_by_expname "${@}"
+        ;;
+
+    "logs-by-expname")
+        logs_by_expname "${@}"
+        ;;
+
+    "logs-ex-by-expname")
+        logs_ex_by_expname "${@}"
         ;;
 
     "help")

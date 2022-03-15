@@ -168,6 +168,7 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
         -> Iterator[ExpInstanceProc]:
     logger.info(f"Starting to run experiments. Experiments count: {len(experiments_configs)}")
     for exp_instance in experiments_configs:
+        exp_name = exp_instance["exp_name"]
         instance_id = exp_instance["instance_id"]
         launch_script_name = exp_instance["calculation_script"]
         jobname = instance_id[:50].strip('-')
@@ -190,6 +191,8 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
         conf_args.extend([
             '--conf', f'spark.kubernetes.driver.label.appname={instance_id}',
             '--conf', f'spark.kubernetes.executor.label.appname={instance_id}',
+            '--conf', f'spark.kubernetes.driver.label.expname={exp_name}',
+            '--conf', f'spark.kubernetes.executor.label.expname={exp_name}',
             '--py-files', py_files,
             '--files', instance_config_path
         ])
