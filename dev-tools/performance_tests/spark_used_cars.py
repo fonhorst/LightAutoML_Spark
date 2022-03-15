@@ -19,6 +19,7 @@ from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
@@ -79,7 +80,10 @@ def dump_data(path: str, ds: SparkDataset, **meta_kwargs):
     with open(metadata_file, 'wb') as f:
         pickle.dump(metadata, f)
 
-    ds.data.write.parquet(data_file)
+    sdf = ds.data
+    cols = [F.col(c).alias(c.replace('(', '[').replace(')', ']')) for c in sdf.columns]
+    sdf = sdf.select(*cols)
+    sdf.write.mode('overwrite').parquet(data_file)
 
 
 def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDataset, Dict]]:
@@ -92,7 +96,9 @@ def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDa
     with open(metadata_file, "rb") as f:
         metadata = pickle.load(f)
 
-    df = spark.read.parquet(data_file).repartition(16).cache()
+    df = spark.read.parquet(data_file)
+    cols = [F.col(c).alias(c.replace('[', '(').replace(']', ')')) for c in df.columns]
+    df = df.select(*cols).repartition(16).cache()
     df.write.mode('overwrite').format('noop').save()
 
     ds = SparkDataset(
@@ -193,6 +199,8 @@ def calculate_lgbadv_boostlgb(
         # chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
         chkp = None
         if not chkp:
+            logger.info(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
+
             task = SparkTask(task_type)
             train_data, test_data = prepare_test_and_train(spark, path, seed)
 
@@ -207,24 +215,43 @@ def calculate_lgbadv_boostlgb(
                 'top_intersections': 4
             }
 
-            iterator = SparkFoldsIterator(sdataset, n_folds=cv)
             lgb_features = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
+            lgb_features.input_roles = sdataset.roles
+            sdataset = lgb_features.fit_transform(sdataset)
 
-            # # Process features and train the model
-            iterator = iterator.apply_feature_pipeline(lgb_features)
+            iterator = SparkFoldsIterator(sdataset, n_folds=cv)
+            iterator.input_roles = lgb_features.output_roles
+
+            # stest = sreader.read(test_data, add_array_attrs=True)
+            # stest = lgb_features.transform(stest)
 
             if checkpoint_path is not None:
-                ds = cast(SparkDataset, iterator.train)
-                dump_data(checkpoint_path, ds, iterator_input_roles=iterator.input_roles)
+                dump_data(checkpoint_path, iterator.train, iterator_input_roles=iterator.input_roles)
         else:
+            logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
             chkp_ds, metadata = chkp
             iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
             iterator.input_roles = metadata['iterator_input_roles']
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', freeze_defaults=False)
-        spark_ml_algo, _ = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+        iterator = iterator.convert_to_holdout_iterator()
 
-    return {pipe_timer.name: pipe_timer.duration}
+        score = task.get_dataset_metric()
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', freeze_defaults=False)
+        spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+
+        assert spark_ml_algo is not None
+        assert oof_preds is not None
+
+        spark_ml_algo = cast(SparkTabularMLAlgo, spark_ml_algo)
+        oof_preds = cast(SparkDataset, oof_preds)
+        oof_preds_sdf = oof_preds.data.select(
+            SparkDataset.ID_COLUMN,
+            F.col(oof_preds.target_column).alias('target'),
+            F.col(spark_ml_algo.prediction_feature).alias("prediction")
+        )
+        oof_score = score(oof_preds_sdf)
+
+    return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score}
 
 
 def test_calculate(spark: SparkSession, **_):
@@ -235,7 +262,6 @@ def test_calculate(spark: SparkSession, **_):
 if __name__ == "__main__":
     logging.config.dictConfig(logging_config(level=logging.INFO, log_filename="/tmp/lama.log"))
     logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
-    logger = logging.getLogger(__name__)
 
     with open_spark_session() as spark:
         config_path = SparkFiles.get('config.yaml')
