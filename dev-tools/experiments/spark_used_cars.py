@@ -9,6 +9,7 @@ import pickle
 import shutil
 import time
 from contextlib import contextmanager
+from copy import copy
 from typing import Dict, Any, Optional, Tuple, cast
 
 import yaml
@@ -104,6 +105,7 @@ def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDa
     df = spark.read.parquet(data_file)
     cols = [F.col(c).alias(c.replace('[', '(').replace(']', ')')) for c in df.columns]
     df = df.select(*cols).repartition(16).cache()
+
     df.write.mode('overwrite').format('noop').save()
 
     ds = SparkDataset(
@@ -242,7 +244,11 @@ def calculate_lgbadv_boostlgb(
         iterator = iterator.convert_to_holdout_iterator()
 
         score = task.get_dataset_metric()
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', freeze_defaults=False)
+        # params = copy(SparkBoostLGBM._default_params)
+        # params['numLeaves'] = 32
+        # params["learningRate"] = 0.01
+        # # params['earlyStoppingRound'] = 4000
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=False)
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None
