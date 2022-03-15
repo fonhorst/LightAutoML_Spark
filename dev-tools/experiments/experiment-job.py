@@ -140,10 +140,12 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
             use_algos = '__'.join(['_'.join(layer) for layer in params['use_algos']]) \
                 if 'use_algos' in params else 'noalg'
 
-            instance_id = f"{name}-{library}-n{repeat_seq_id}-{params['dataset'].replace('_', '-')}" \
-                          f"-{use_algos.replace('_', '-')}-" \
-                          f"cv{params['cv']}-seed{params['seed']}-" \
-                          f"ei{spark_config['spark.executor.instances'] if spark_config else ''}"
+            # instance_id = f"{name}-{library}-n{repeat_seq_id}-{params['dataset'].replace('_', '-')}" \
+            #               f"-{use_algos.replace('_', '-')}-" \
+            #               f"cv{params['cv']}-seed{params['seed']}-" \
+            #               f"ei{spark_config['spark.executor.instances'] if spark_config else ''}"
+
+            instance_id = f"{name}-{uuid.uuid4()}"[:50]
 
             if instance_id in existing_exp_instances_ids:
                 continue

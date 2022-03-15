@@ -7,6 +7,7 @@ import logging.config
 import os
 import pickle
 import shutil
+import time
 from contextlib import contextmanager
 from typing import Dict, Any, Optional, Tuple, cast
 
@@ -57,7 +58,11 @@ def open_spark_session() -> SparkSession:
     try:
         yield spark_sess
     finally:
+        # wait_secs = 120
+        # time.sleep(wait_secs)
+        # logger.info(f"Sleeping {wait_secs} secs before stopping")
         spark_sess.stop()
+        logger.info("Stopped spark session")
 
 
 def dump_data(path: str, ds: SparkDataset, **meta_kwargs):
