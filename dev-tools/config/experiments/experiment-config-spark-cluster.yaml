@@ -1,32 +1,18 @@
 ---
 experiment_type: spark_quality
 calculation_scripts:
-  spark: spark_used_cars.py
-  lama: lama_used_cars.py
+  spark: dev-tools/performance_tests/spark_used_cars.py
+  lama: dev-tools/performance_tests/lama_used_cars.py
 state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip experiments in state file, ignore - don`t skip experiments, delete - delete experiments in state file
 
 # Unique set of parameters for each experiment
 
 experiments:
-#  - name: "cmp-all-0"
-#    library: [ "spark" ]
-#    repeat_rate: 1
-#    params:
-#      func: [ "calculate_automl" ]
-#      dataset: [ "used_cars_dataset_0125x"]
-#      seed: [ 42 ]
-#      cv: [ 5 ]
-#      use_algos:
-#        - [ [ "lgb" ] ]
-#    spark_config:
-#      spark.executor.instances: [ '5' ]
-#      spark.executor.cores: [ '4' ]
-#      spark.executor.memory: [ '16g' ]
   - name: "cmp-all-1"
     library: [ "spark" ]
     repeat_rate: 1
     params:
-      func: [ "calculate_pure_boostlgb" ]
+      func: [ "calculate_lgbadv_boostlgb" ]
       dataset: [ "lama_test_dataset" ]
       seed: [ 42 ]
       cv: [ 5 ]
@@ -34,14 +20,5 @@ experiments:
         - [ [ "lgb"] ]
     spark_config:
       spark.executor.instances: [ '4' ]
-      spark.executor.cores: [ '8' ]
-      spark.executor.memory: [ '32g' ]
-#  - name: "cmp-all-2"
-#    library: [ "lama" ]
-#    repeat_rate: 1
-#    params:
-#      dataset: [ "used_cars_dataset_0125x" ]
-#      seed: [ 42 ]
-#      cv: [ 5 ]
-#      use_algos:
-#        - [ [ "lgb" ] ]
+      spark.executor.cores: [ '4' ]
+      spark.executor.memory: [ '16g' ]
