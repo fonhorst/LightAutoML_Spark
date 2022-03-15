@@ -356,6 +356,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
             train_data = train_data.where(val_filter_cond)
 
+        train_data = train_data.where((F.col(self.validation_column) == 0) | (F.col(full.target_column) <= 429000))
+        # valid_data = valid.data
+        valid_data = valid.data.where((F.col(full.target_column) <= 429000))
+
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
@@ -373,7 +377,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         ml_model = lgbm.fit(self._assembler.transform(train_data))
 
-        val_pred = ml_model.transform(self._assembler.transform(valid.data))
+        val_pred = ml_model.transform(self._assembler.transform(valid_data))
         val_pred = DropColumnsTransformer(
             remove_cols=[],
             optional_remove_cols=[self._prediction_col_name, self._probability_col_name]

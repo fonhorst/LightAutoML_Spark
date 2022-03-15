@@ -248,7 +248,7 @@ def calculate_lgbadv_boostlgb(
         # params['numLeaves'] = 32
         # params["learningRate"] = 0.01
         # # params['earlyStoppingRound'] = 4000
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=False)
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True)
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None
@@ -265,10 +265,10 @@ def calculate_lgbadv_boostlgb(
 
     return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score}
 
-
-def test_calculate(spark: SparkSession, **_):
-    logger.info("Success")
-    return {"result": "success"}
+#
+# def test_calculate(spark: SparkSession, **_):
+#     logger.info("Success")
+#     return {"result": "success"}
 
 
 if __name__ == "__main__":
@@ -276,7 +276,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
 
     with open_spark_session() as spark:
-        config_path = SparkFiles.get('config.yaml')
+        # config_path = SparkFiles.get('config.yaml')
+        config_path = '/tmp/config.yaml'
 
         # Read values from config file
         with open(config_path, "r") as stream:
