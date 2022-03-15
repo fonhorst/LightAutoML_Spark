@@ -27,7 +27,7 @@ from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.validation.iterators import SparkFoldsIterator
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 
 DUMP_METADATA_NAME = "metadata.pickle"
 DUMP_DATA_NAME = "data.parquet"
@@ -201,7 +201,7 @@ def calculate_lgbadv_boostlgb(
         task = SparkTask(task_type)
 
         if not chkp:
-            logger.warning(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
+            logger.info(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
 
             train_data, test_data = prepare_test_and_train(spark, path, seed)
 
@@ -229,7 +229,7 @@ def calculate_lgbadv_boostlgb(
             if checkpoint_path is not None:
                 dump_data(checkpoint_path, iterator.train, iterator_input_roles=iterator.input_roles)
         else:
-            logger.warning(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
+            logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
             chkp_ds, metadata = chkp
             iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
             iterator.input_roles = metadata['iterator_input_roles']
