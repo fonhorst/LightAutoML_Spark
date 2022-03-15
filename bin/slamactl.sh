@@ -138,6 +138,14 @@ function port_forward() {
   kubectl -n spark-lama-exps port-forward svc/${svc_name} 9040:4040
 }
 
+function port_forward_by_appname() {
+  appname=$1
+  port=$2
+  spark_app_selector=$(kubectl -n spark-lama-exps get pod -l appname=${appname} -l spark-role=driver -o jsonpath='{.items[0].metadata.labels.spark-app-selector}')
+  svc_name=$(kubectl -n ${KUBE_NAMESPACE} get svc -l spark-app-selector=${spark_app_selector} -o jsonpath='{.items[0].metadata.name}')
+  kubectl -n spark-lama-exps port-forward svc/${svc_name} ${port}:4040
+}
+
 function help() {
   echo "
   Required env variables:
@@ -200,6 +208,10 @@ function main () {
 
     "port-forward")
         port_forward "${@}"
+        ;;
+
+    "port-forward-by-appname")
+        port_forward_by_appname "${@}"
         ;;
 
     "help")

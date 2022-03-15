@@ -196,12 +196,13 @@ def calculate_lgbadv_boostlgb(
     roles = roles if roles else {}
 
     with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
-        # chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
-        chkp = None
-        if not chkp:
-            logger.info(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
+        chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
+        # chkp = None
+        task = SparkTask(task_type)
 
-            task = SparkTask(task_type)
+        if not chkp:
+            logger.warning(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
+
             train_data, test_data = prepare_test_and_train(spark, path, seed)
 
             sreader = SparkToSparkReader(task=task, cv=3, advanced_roles=False)
@@ -228,7 +229,7 @@ def calculate_lgbadv_boostlgb(
             if checkpoint_path is not None:
                 dump_data(checkpoint_path, iterator.train, iterator_input_roles=iterator.input_roles)
         else:
-            logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
+            logger.warning(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
             chkp_ds, metadata = chkp
             iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
             iterator.input_roles = metadata['iterator_input_roles']

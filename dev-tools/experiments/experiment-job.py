@@ -4,6 +4,7 @@ import itertools
 import json
 import logging
 import os
+import random
 import subprocess
 import time
 import uuid
@@ -196,12 +197,27 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
         custom_env = os.environ.copy()
         custom_env["PYSPARK_PYTHON"] = "python3"
         p = subprocess.Popen(
-            ["spark-submit", '--master', spark_master, '--deploy-mode', 'cluster',  *conf_args, launch_script_name, "config.yaml"],
-            env=custom_env
-            # stdout=subprocess.DEVNULL
+            ["spark-submit", '--master', spark_master, '--deploy-mode', 'cluster',  *conf_args, launch_script_name],
+            env=custom_env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         )
 
-        logger.info(f"Started process with instance id {instance_id} and args {p.args}")
+        # wait_time = 5
+        # logger.info(f"Waiting for the main process to start for {wait_time} seconds")
+        # time.sleep(wait_time)
+
+        # kube_ns = exp_instance['params']['spark_config']['spark.kubernetes.namespace']
+        # custom_env = os.environ.copy()
+        # custom_env["KUBE_NAMESPACE"] = kube_ns
+        # port = random.randint(25000, 35000)
+        # port_forward_proc = subprocess.Popen(
+        #     ['./bin/slamactl.sh', 'port-forward-by-appname', instance_id, str(port)],
+        #     env=custom_env
+        # )
+
+        logger.info(f"Started process with instance id {instance_id} and args {p.args}. ")
+                    # f"\033[1mForwarding Spark WebUi to port {port}\033[0m")
 
         yield ExpInstanceProc(exp_instance=exp_instance, p=p, outfile=outfile)
 

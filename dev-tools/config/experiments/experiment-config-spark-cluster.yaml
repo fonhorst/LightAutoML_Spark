@@ -20,6 +20,6 @@ experiments:
         - [ [ "lgb"] ]
       checkpoint_path: ["/tmp/results/lgb_chkp_cmp_all_1/lgb_adv_fp.dump"]
     spark_config:
-      spark.executor.instances: [ '4' ]
+      spark.executor.instances: [ '1' ]
       spark.executor.cores: [ '4' ]
       spark.executor.memory: [ '16g' ]
