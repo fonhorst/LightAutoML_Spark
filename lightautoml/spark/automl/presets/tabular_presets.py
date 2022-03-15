@@ -545,7 +545,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
             # infer via transformer
             preds = model.transform(sdf)
-            preds.show(truncate=False)
+            # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
+            prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
             preds = np.array(preds.select(prediction_col).collect())
             ys.append(preds)
         return grid, ys, counts
@@ -578,6 +579,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         for i in tqdm(grid):
             sdf = df.select(*[c for c in df.columns if c != feature_name], F.lit(i).alias(feature_name))
             preds = model.transform(sdf)
+            # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
+            prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
             preds = np.array(preds.select(prediction_col).collect())
             ys.append(preds)
         if len(feature_cnt) > n_top_cats:
@@ -656,7 +659,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             feature_col = replace_date_element_udf(F.col(feature_name), F.lit(i)).alias(feature_name)
             sdf = df.select(*all_columns_except_feature, feature_col)
             preds = model.transform(sdf)
-            preds.show(truncate=False)
+            # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
+            prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
             preds = np.array(preds.select(prediction_col).collect())
             ys.append(preds)
 
