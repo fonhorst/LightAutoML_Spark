@@ -19,7 +19,7 @@ from lightautoml.pipelines.selection.permutation_importance_based import NpItera
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from lightautoml.spark.automl.blend import SparkWeightedBlender, SparkBestModelSelector
 from lightautoml.spark.automl.presets.base import SparkAutoMLPreset
-from lightautoml.spark.automl.presets.utils import replace_dayofweek_in_date, replace_month_in_date, replace_year_in_date
+from lightautoml.spark.automl.presets.utils import calc_feats_permutation_imps, replace_dayofweek_in_date, replace_month_in_date, replace_year_in_date
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
@@ -479,7 +479,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                    data: ReadableIntoSparkDf,
                    features_names: Optional[Sequence[str]] = None,
                    read_csv_params: Optional[dict] = None) -> Tuple[SparkDataFrame, Optional[RolesDict]]:
-        """Get :class:`~pandas.DataFrame` from different data formats.
+        """Get :class:`~pyspark.sql.DataFrame` from different data formats.
 
           Note:
               Supported now data formats:
@@ -518,6 +518,53 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 raise ValueError(f"Unsupported data format: {os.path.splitext(path)[1]}")
 
         raise ValueError("Input data format is not supported")
+
+    def get_feature_scores(
+        self,
+        calc_method: str = "fast",
+        data: Optional[ReadableIntoSparkDf] = None,
+        features_names: Optional[Sequence[str]] = None,
+        silent: bool = True,
+    ):
+        if calc_method == "fast":
+            for level in self.levels:
+                for pipe in level:
+                    fi = pipe.pre_selection.get_features_score()
+                    if fi is not None:
+                        used_feats = set(self.collect_used_feats())
+                        fi = fi.reset_index()
+                        fi.columns = ["Feature", "Importance"]
+                        return fi[fi["Feature"].map(lambda x: x in used_feats)]
+
+            else:
+                if not silent:
+                    logger.info2("No feature importances to show. Please use another calculation method")
+                return None
+
+        if calc_method != "accurate":
+            if not silent:
+                logger.info2(
+                    "Unknown calc_method. "
+                    + "Currently supported methods for feature importances calculation are 'fast' and 'accurate'."
+                )
+            return None
+
+        if data is None:
+            if not silent:
+                logger.info2("Data parameter is not setup for accurate calculation method. Aborting...")
+            return None
+
+        read_csv_params = self._get_read_csv_params()
+        data, _ = self._read_data(data, features_names, read_csv_params)
+        used_feats = self.collect_used_feats()
+        fi = calc_feats_permutation_imps(
+            self,
+            used_feats,
+            data,
+            self.task.get_dataset_metric(),
+            silent=silent,
+        )
+        return fi
 
     @staticmethod
     def get_histogram(data: SparkDataFrame, column: str, n_bins: int) -> Tuple[List, np.ndarray]:
