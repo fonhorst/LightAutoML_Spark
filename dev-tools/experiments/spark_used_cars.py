@@ -43,7 +43,7 @@ def open_spark_session() -> SparkSession:
         spark_sess = (
             SparkSession
             .builder
-            .master("local[*]")
+            .master("local[4]")
             .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
@@ -51,6 +51,8 @@ def open_spark_session() -> SparkSession:
             .config("spark.driver.memory", "12g")
             .config("spark.executor.memory", "12g")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+            .config("spark.eventLog.enabled", "true")
+            .config("spark.eventLog.dir", "file:///tmp/spark_logs")
             .getOrCreate()
         )
 
@@ -248,7 +250,7 @@ def calculate_lgbadv_boostlgb(
         # params['numLeaves'] = 32
         # params["learningRate"] = 0.01
         # # params['earlyStoppingRound'] = 4000
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True)
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=False)
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None
@@ -265,10 +267,10 @@ def calculate_lgbadv_boostlgb(
 
     return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score}
 
-#
-# def test_calculate(spark: SparkSession, **_):
-#     logger.info("Success")
-#     return {"result": "success"}
+
+def empty_calculate(spark: SparkSession, **_):
+    logger.info("Success")
+    return {"result": "success"}
 
 
 if __name__ == "__main__":
@@ -276,8 +278,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
 
     with open_spark_session() as spark:
-        # config_path = SparkFiles.get('config.yaml')
-        config_path = '/tmp/config.yaml'
+        config_path = SparkFiles.get('config.yaml')
+        # config_path = '/tmp/config.yaml'
 
         # Read values from config file
         with open(config_path, "r") as stream:
@@ -292,7 +294,7 @@ if __name__ == "__main__":
         elif func_name == "calculate_lgbadv_boostlgb":
             func = calculate_lgbadv_boostlgb
         elif func_name == 'test_calculate':
-            func = test_calculate
+            func = empty_calculate
         else:
             raise ValueError(f"Incorrect func name: {func_name}. "
                              f"Only the following are supported: "
