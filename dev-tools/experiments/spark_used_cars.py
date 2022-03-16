@@ -205,11 +205,18 @@ def calculate_lgbadv_boostlgb(
     roles = roles if roles else {}
 
     with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
-        chkp = load_dump_if_exist(spark, checkpoint_path) if checkpoint_path else None
-        # chkp = None
+        if checkpoint_path is not None:
+            train_checkpoint_path = os.path.join(checkpoint_path, 'train.dump')
+            test_checkpoint_path = os.path.join(checkpoint_path, 'test.dump')
+            train_chkp = load_dump_if_exist(spark, train_checkpoint_path)
+            test_chkp = load_dump_if_exist(spark, test_checkpoint_path)
+        else:
+            train_checkpoint_path = None
+            test_checkpoint_path = None
+
         task = SparkTask(task_type)
 
-        if not chkp:
+        if not train_chkp or not test_chkp:
             logger.info(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
 
             train_data, test_data = prepare_test_and_train(spark, path, seed)
@@ -232,24 +239,25 @@ def calculate_lgbadv_boostlgb(
             iterator = SparkFoldsIterator(sdataset, n_folds=cv)
             iterator.input_roles = lgb_features.output_roles
 
-            # stest = sreader.read(test_data, add_array_attrs=True)
-            # stest = lgb_features.transform(stest)
+            stest = sreader.read(test_data, add_array_attrs=True)
+            stest = cast(SparkDataset, lgb_features.transform(stest))
 
             if checkpoint_path is not None:
-                dump_data(checkpoint_path, iterator.train, iterator_input_roles=iterator.input_roles)
+                dump_data(train_checkpoint_path, iterator.train, iterator_input_roles=iterator.input_roles)
+                dump_data(test_checkpoint_path, stest, iterator_input_roles=iterator.input_roles)
         else:
             logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
-            chkp_ds, metadata = chkp
-            iterator = SparkFoldsIterator(chkp_ds, n_folds=cv)
+
+            train_chkp_ds, metadata = train_chkp
+            iterator = SparkFoldsIterator(train_chkp_ds, n_folds=cv)
             iterator.input_roles = metadata['iterator_input_roles']
+
+            stest, _ = test_chkp
 
         iterator = iterator.convert_to_holdout_iterator()
 
         score = task.get_dataset_metric()
-        # params = copy(SparkBoostLGBM._default_params)
-        # params['numLeaves'] = 32
-        # params["learningRate"] = 0.01
-        # # params['earlyStoppingRound'] = 4000
+
         spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=False)
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
@@ -265,7 +273,15 @@ def calculate_lgbadv_boostlgb(
         )
         oof_score = score(oof_preds_sdf)
 
-    return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score}
+        test_preds = spark_ml_algo.predict(stest)
+        test_preds_sdf = test_preds.data.select(
+            SparkDataset.ID_COLUMN,
+            F.col(test_preds.target_column).alias('target'),
+            F.col(spark_ml_algo.prediction_feature).alias("prediction")
+        )
+        test_score = score(test_preds_sdf)
+
+    return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score, 'test_score': test_score}
 
 
 def empty_calculate(spark: SparkSession, **_):
