@@ -379,7 +379,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             verbosity=verbose_eval,
             useSingleDatasetMode=self._use_single_dataset_mode,
             isProvideTrainingMetric=True,
-            chunkSize=1_000_000
+            chunkSize=1_000_000,
+            # parallelism='voting_parallel'
         )
 
         logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
