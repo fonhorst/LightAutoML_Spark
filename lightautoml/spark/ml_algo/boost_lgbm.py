@@ -8,13 +8,15 @@ import pandas as pd
 import pyspark.sql.functions as F
 from pandas import Series
 from pyspark.ml import Transformer, PipelineModel
+from pyspark.ml.util import MLWritable, MLReadable, MLWriter
 from pyspark.ml.feature import VectorAssembler
-from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
+from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor, LightGBMRegressionModel, LightGBMClassificationModel
 
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
+from lightautoml.spark.mlwriters import LightGBMModelWrapperMLReader, LightGBMModelWrapperMLWriter
 from lightautoml.spark.transformers.base import DropColumnsTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
@@ -22,6 +24,24 @@ from lightautoml.validation.base import TrainValidIterator
 
 logger = logging.getLogger(__name__)
 
+
+class LightGBMModelWrapper(Transformer, MLWritable, MLReadable):
+
+    def __init__(self, model: Union[LightGBMRegressionModel, LightGBMClassificationModel] = None) -> None:
+        super().__init__()
+        self.model = model
+
+    def write(self) -> MLWriter:
+        return LightGBMModelWrapperMLWriter(self)
+
+    @classmethod
+    def read(cls):
+        """Returns an MLReader instance for this class."""
+        return LightGBMModelWrapperMLReader()
+
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
+        return self.model.transform(dataset)
+ 
 
 class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
@@ -331,10 +351,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             rest_cols = list(train_data.columns)
             rest_cols.remove(self.validation_column)
 
-            replace_col = F.when(F.rand(self._seed) < (float(max_val_size) / valid_size), F.lit(1)).otherwise(F.lit(0))
-            reduced_val_col = F.when(F.col(self.validation_column) == 1, replace_col).otherwise(F.col(self.validation_column))
+            replace_col = F.when(F.rand(self._seed) < max_val_size / valid_size, F.lit(True)).otherwise(F.lit(False))
+            val_filter_cond = F.when(F.col(self.validation_column) == 1, replace_col).otherwise(F.lit(True))
 
-            train_data = train_data.select(*rest_cols,  reduced_val_col.alias(self.validation_column))
+            train_data = train_data.where(val_filter_cond)
 
         lgbm = LGBMBooster(
             **params,
@@ -376,7 +396,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        models = [el for m in self.models for el in [m, DropColumnsTransformer(
+        wrapped_models = [LightGBMModelWrapper(m) for m in self.models]
+        models = [el for m in wrapped_models for el in [m, DropColumnsTransformer(
             remove_cols=[],
             optional_remove_cols=[self._prediction_col_name, self._probability_col_name, self._raw_prediction_col_name]
         )]]
