@@ -356,9 +356,13 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
             train_data = train_data.where(val_filter_cond)
 
-        train_data = train_data.where((F.col(self.validation_column) == 0) | (F.col(full.target_column) <= 429000))
-        # valid_data = valid.data
-        valid_data = valid.data.where((F.col(full.target_column) <= 429000))
+        valid_data = valid.data
+
+        logger.warning(f"\033[1mVal size before max cleaning: {valid_data.count()}\033[0m")
+        max_val, = train_data.where(F.col(self.validation_column) == 0).select(F.max(full.target_column)).first()
+        train_data = train_data.where((F.col(self.validation_column) == 0) | (F.col(full.target_column) <= max_val))
+        valid_data = valid_data.where((F.col(full.target_column) <= max_val))
+        logger.warning(f"\033[1mVal size after max cleaning: {valid_data.count()}\033[0m")
 
         lgbm = LGBMBooster(
             **params,
