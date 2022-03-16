@@ -259,7 +259,7 @@ def calculate_lgbadv_boostlgb(
 
         score = task.get_dataset_metric()
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True, max_validation_size=9_900)
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True)#, max_validation_size=9_900)
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None

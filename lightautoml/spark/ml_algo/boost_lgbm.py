@@ -58,7 +58,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         "maxBin": 255,
         "minDataInLeaf": 5,
         # e.g. num trees
-        "numIterations": 3000,
+        "numIterations": 500,
         "earlyStoppingRound": 50,
         # for regression
         "alpha": 1.0,
@@ -358,12 +358,13 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         valid_data = valid.data
 
+        params["numThreads"] = 1
         # TODO: SPARK-LAMA for debug, remove it later
-        logger.warning(f"\033[1mVal size before max cleaning: {valid_data.count()}\033[0m")
-        max_val, = train_data.where(F.col(self.validation_column) == 0).select(F.max(full.target_column)).first()
-        train_data = train_data.where((F.col(self.validation_column) == 0) | (F.col(full.target_column) <= max_val))
-        valid_data = valid_data.where((F.col(full.target_column) <= max_val))
-        logger.warning(f"\033[1mVal size after max cleaning: {valid_data.count()}\033[0m")
+        # logger.warning(f"\033[1mVal size before max cleaning: {valid_data.count()}\033[0m")
+        # max_val, = train_data.where(F.col(self.validation_column) == 0).select(F.max(full.target_column)).first()
+        # train_data = train_data.where((F.col(self.validation_column) == 0) | (F.col(full.target_column) <= max_val))
+        # valid_data = valid_data.where((F.col(full.target_column) <= max_val))
+        # logger.warning(f"\033[1mVal size after max cleaning: {valid_data.count()}\033[0m")
 
         # cols = [F.col(c).alias(c.replace('(', '[').replace(')', ']')) for c in valid_data.columns]
         # train_data.select(*cols).write.mode('overwrite').parquet("/tmp/results/dump.parquet")
@@ -375,10 +376,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
-            # validationIndicatorCol=self.validation_column,
+            validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
             useSingleDatasetMode=self._use_single_dataset_mode,
-            isProvideTrainingMetric=True
+            isProvideTrainingMetric=True,
+            chunkSize=1_000_000
         )
 
         logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
