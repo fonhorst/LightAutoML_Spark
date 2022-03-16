@@ -27,7 +27,7 @@ from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPi
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
-from lightautoml.spark.validation.iterators import SparkFoldsIterator
+from lightautoml.spark.validation.iterators import SparkFoldsIterator, SparkDummyIterator
 
 logger = logging.getLogger()
 
@@ -255,10 +255,11 @@ def calculate_lgbadv_boostlgb(
             stest, _ = test_chkp
 
         iterator = iterator.convert_to_holdout_iterator()
+        # iterator = SparkDummyIterator(iterator.train, iterator.input_roles)
 
         score = task.get_dataset_metric()
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True, max_validation_size=9_875)
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True, max_validation_size=9_900)
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None

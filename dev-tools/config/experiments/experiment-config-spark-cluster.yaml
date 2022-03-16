@@ -66,5 +66,5 @@ experiments:
       checkpoint_path: [ "/tmp/results/lgb_chkp_cmp_all/lgb_adv_fp_used_cars_dataset_head70k/" ]
     spark_config:
       spark.executor.instances: [ '1' ]
-      spark.executor.cores: [ '4' ]
+      spark.executor.cores: [ '8' ]
       spark.executor.memory: [ '32g' ]
