@@ -20,7 +20,7 @@ from jinja2 import FileSystemLoader
 from json2html import json2html
 from pyspark import RDD
 from pyspark.mllib.linalg import DenseMatrix
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Column
 
 from pyspark.sql.dataframe import DataFrame
 from pyspark.mllib.evaluation import BinaryClassificationMetrics, RegressionMetrics, MulticlassMetrics
@@ -43,13 +43,13 @@ from sklearn.metrics import roc_auc_score
 from sklearn.metrics import roc_curve
 
 
-
+from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.addons.uplift import metrics as uplift_metrics
 from lightautoml.addons.uplift.metalearners import TLearner
 from lightautoml.addons.uplift.metalearners import XLearner
 from lightautoml.addons.uplift.utils import _get_treatment_role
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.automl.presets.tabular_presets import ReadableIntoSparkDf
+from lightautoml.spark.automl.presets.tabular_presets import ReadableIntoSparkDf, SparkTabularAutoML
 from lightautoml.spark.report.handy_spark_utils import call2
 from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
 
@@ -76,10 +76,10 @@ def extract_params(input_struct):
     return params
 
 
-def get_data_for_roc_and_pr_curve(input_data, scores_col_name="raw", true_labels_col_name="labels"):
+def get_data_for_roc_and_pr_curve(input_data, scores_col_name, true_labels_col_name):
     data = round_score_col(input_data=input_data,
-                           min_co=0.001,
-                           max_co=0.999,
+                           min_co=0.000,
+                           max_co=1.000,
                            step=0.001,
                            scores_col_name=scores_col_name,
                            true_labels_col_name=true_labels_col_name)
@@ -91,9 +91,9 @@ def get_data_for_roc_and_pr_curve(input_data, scores_col_name="raw", true_labels
         ).rdd
     )
 
-    thresholds = call2(metrics, "thresholds").collect()
-    roc = call2(metrics, "roc").collect()
-    pr = call2(metrics, "pr").collect()
+    thresholds = metrics.call("thresholds").collect()
+    roc = call2(metrics, "roc").collect()[1:-1]
+    pr = call2(metrics, "pr").collect()[1:-1]
 
     df = pd.DataFrame(
         list(
@@ -116,8 +116,8 @@ def plot_curves(input_data, scores_col_name, positive_rate, true_labels_col_name
     return auc_score, ap_score, rounded_data
 
 
-def round_score_col(input_data, min_co=0.01, max_co=0.99, step=0.01,
-                    scores_col_name="raw", true_labels_col_name="labels"):
+def round_score_col(input_data, scores_col_name, true_labels_col_name, min_co=0.01, max_co=0.99, step=0.01):
+
     scores = F.col(scores_col_name)
     _id_col = F.col(SparkDataset.ID_COLUMN)
     true_labels = F.col(true_labels_col_name)
@@ -222,16 +222,17 @@ def plot_preds_distribution_by_bins(data, path):
 def plot_distribution_of_logits(input_data, path, scores_col_name, true_labels_col_name):
 
     prep_data = round_score_col(input_data=input_data,
-                           min_co=0.001,
-                           max_co=0.999,
-                           step=0.001,
-                           scores_col_name=scores_col_name,
-                           true_labels_col_name=true_labels_col_name)
+                                min_co=0.000,
+                                max_co=1.000,
+                                step=0.001,
+                                scores_col_name=scores_col_name,
+                                true_labels_col_name=true_labels_col_name)
 
     logits_col_name = f"{scores_col_name}_rounded"
     logits_col = F.col(logits_col_name)
+    true_labels_col = F.col(true_labels_col_name)
 
-    data = prep_data.select(logits_col).groupby(logits_col).count().toPandas()
+    data = prep_data.select(true_labels_col, logits_col).groupby(true_labels_col, logits_col).count().toPandas()
 
     sns.set(style="whitegrid", font_scale=1.5)
     fig, axs = plt.subplots(figsize=(16, 10))
@@ -312,11 +313,12 @@ def plot_pie_f1_metric(data: RDD, path):
     return prec, rec, F1
 
 
-def f1_score_w_co(input_data, min_co=0.01, max_co=0.99, step=0.01,
-                  true_labels_col_name="labels", scores_col_name="raw"):
+def f1_score_w_co(input_data, true_labels_col_name, scores_col_name, min_co=0.01, max_co=0.99, step=0.01):
 
     true_labels = F.col(true_labels_col_name)
     scores = F.col(scores_col_name)
+    rounded_scores_col_name = f"{scores_col_name}_rounded"
+    rounded_scores = F.col(rounded_scores_col_name)
 
     data = round_score_col(input_data=input_data,
                            min_co=min_co,
@@ -325,7 +327,7 @@ def f1_score_w_co(input_data, min_co=0.01, max_co=0.99, step=0.01,
                            true_labels_col_name=true_labels_col_name,
                            scores_col_name=scores_col_name)
 
-    _grp = data.groupby(scores).agg(
+    _grp = data.groupby(rounded_scores).agg(
         F.sum(true_labels).alias("sum"),
         F.count(true_labels).alias("count")
     ).toPandas()
@@ -334,7 +336,7 @@ def f1_score_w_co(input_data, min_co=0.01, max_co=0.99, step=0.01,
 
     positive_rate = pos / _grp["count"].sum()
 
-    grp = _grp.groupby("y_pred").agg(sum=("sum", "sum"), count=("count", "sum"))
+    grp = _grp.groupby(rounded_scores_col_name).agg(sum=("sum", "sum"), count=("count", "sum"))
     grp.sort_index(inplace=True)
 
     grp["fp"] = grp["sum"].cumsum()
@@ -400,30 +402,13 @@ def plot_target_distribution_1(data, path):
     plt.close()
 
 
-def plot_target_distribution_2(data, path):
-    sns.set(style="whitegrid", font_scale=1.5)
-    fig, axs = plt.subplots(figsize=(16, 10))
-
-    sns.kdeplot(data["y_true"], shade=True, color="g", label="y_true", ax=axs)
-    sns.kdeplot(data["y_pred"], shade=True, color="r", label="y_pred", ax=axs)
-    axs.set_xlabel("Target value")
-    axs.set_ylabel("Density")
-    axs.set_title("Target distribution")
-
-    fig.savefig(path, bbox_inches="tight")
-    plt.close()
-
-
 def plot_target_distribution(data, path):
-    data_pred = pd.DataFrame({"Target value": data["y_pred"]})
-    data_pred["source"] = "y_pred"
-    data_true = pd.DataFrame({"Target value": data["y_true"]})
-    data_true["source"] = "y_true"
-    data = pd.concat([data_pred, data_true], ignore_index=True)
 
     sns.set(style="whitegrid", font_scale=1.5)
     g = sns.displot(
         data,
+        bins=100,
+        weights="count",
         x="Target value",
         row="source",
         height=9,
@@ -444,7 +429,7 @@ def plot_error_hist(data, path):
     sns.set(style="whitegrid", font_scale=1.5)
     fig, ax = plt.subplots(figsize=(16, 10))
 
-    sns.kdeplot(data["y_pred"] - data["y_true"], shade=True, color="m", ax=ax)
+    sns.kdeplot(data["err"], shade=True, color="m", ax=ax, weights=data["count"])
     ax.set_xlabel("Error = y_pred - y_true")
     ax.set_ylabel("Density")
     ax.set_title("Error histogram")
@@ -463,6 +448,7 @@ def plot_reg_scatter(data, path):
         truncate=False,
         color="m",
         height=14,
+        weights="count"
     )
     g.fig.suptitle("Scatter plot")
     g.fig.tight_layout()
@@ -675,20 +661,62 @@ class ReportDeco:
         return auc_score, prec, rec, F1
 
     def _regression_details(self, data, true_values_col_name, predictions_col_name):
-        # graphics
-        # TODO
-        # plot_target_distribution(
-        #     data,
-        #     path=os.path.join(self.output_path, self._inference_content["target_distribution"]),
-        # )
-        # plot_error_hist(
-        #     data,
-        #     path=os.path.join(self.output_path, self._inference_content["error_hist"]),
-        # )
+
+        true_col = F.col(true_values_col_name)
+        pred_col = F.col(predictions_col_name)
+
+        true_max, pred_max = data.select(
+            F.max(F.abs(true_col)),
+            F.max(F.abs(pred_col))
+        ).first()
+
+        _data = data.select(
+            (F.round(true_col / float(true_max), 3) * true_max).alias(true_values_col_name),
+            (F.round(pred_col / float(pred_max), 3) * pred_max).alias(predictions_col_name)
+        ).cache()
+
+        _pred = _data.groupBy(pred_col).count().toPandas()
+        _true = _data.groupBy(true_col).count().toPandas()
+
+        pred_data = pd.DataFrame(
+            {"Target value": _pred[predictions_col_name], "count": _pred["count"]}
+        )
+        pred_data["source"] = "y_pred"
+
+        true_data = pd.DataFrame(
+            {"Target value": _true[true_values_col_name], "count": _true["count"]}
+        )
+        true_data["source"] = "y_true"
+
+        target_distribution_data = pd.concat([pred_data, true_data], ignore_index=True)
+
+        plot_target_distribution(
+            target_distribution_data,
+            path=os.path.join(self.output_path, self._inference_content["target_distribution"]),
+        )
+
+        errs = data.select(
+            (pred_col - true_col).alias("err")
+        )
+
+        err_max, err_min = errs.select(F.max(F.col("err")), F.min(F.col("err"))).first()
+
+        val = err_max if abs(err_max) > abs(err_min) else err_min
+
+        err_data = errs.select(
+            (F.round(F.col("err") / val, 3) * val).alias("err")
+        ).groupBy(F.col("err")).count().toPandas()
+
+        plot_error_hist(
+            err_data,
+            path=os.path.join(self.output_path, self._inference_content["error_hist"]),
+        )
+
         # plot_reg_scatter(
         #     data,
         #     path=os.path.join(self.output_path, self._inference_content["scatter_plot"]),
         # )
+
         # metrics
         metrics = RegressionMetrics(
             predictionAndObservations=data.select(
@@ -733,8 +761,10 @@ class ReportDeco:
         )
 
         # tn, fp, fn, tp = metrics.confusionMatrix().values
-        labels_counts = data.select(true_labels_col).groupby(true_labels_col).count().toPandas()
-        total_labels_count = labels_counts["count"].sum()
+        labels_counts: pd.DataFrame = data.select(true_labels_col).groupby(true_labels_col).count().toPandas()
+        labels_counts.sort_values(by=[true_labels_col_name], ascending=True, inplace=True)
+
+        total_labels_number = len(labels_counts["count"])
 
         # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html
 
@@ -742,21 +772,21 @@ class ReportDeco:
         p_macro_sum = 0.
         for label in labels_counts[true_labels_col_name]:
             p_macro_sum += metrics.precision(float(label))
-        p_macro = p_macro_sum / total_labels_count
+        p_macro = p_macro_sum / total_labels_number
         p_weighted = metrics.weightedPrecision
 
         r_micro = metrics.accuracy  # TODO: ???
         r_macro_sum = 0.
         for label in labels_counts[true_labels_col_name]:
             r_macro_sum += metrics.recall(float(label))
-        r_macro = r_macro_sum / total_labels_count
+        r_macro = r_macro_sum / total_labels_number
         r_weighted = metrics.weightedRecall
 
         f_micro = metrics.accuracy  # TODO: ???
         f_macro_sum = 0.
         for label in labels_counts[true_labels_col_name]:
             f_macro_sum += metrics.fMeasure(float(label))
-        f_macro = f_macro_sum / total_labels_count
+        f_macro = f_macro_sum / total_labels_number
         f_weighted = metrics.weightedFMeasure()
 
         # y_true = data["y_true"]
@@ -780,9 +810,9 @@ class ReportDeco:
         else:
             classes = np.arange(self._N_classes)
 
-        p = [metrics.precision(label) for label in labels_counts[true_labels_col_name]]
-        r = [metrics.recall(label) for label in labels_counts[true_labels_col_name]]
-        f = [metrics.fMeasure(label) for label in labels_counts[true_labels_col_name]]
+        p = [metrics.precision(float(label)) for label in labels_counts[true_labels_col_name]]
+        r = [metrics.recall(float(label)) for label in labels_counts[true_labels_col_name]]
+        f = [metrics.fMeasure(float(label)) for label in labels_counts[true_labels_col_name]]
         s = list(labels_counts["count"])
 
         # p, r, f, s = precision_recall_fscore_support(y_true, y_pred)
@@ -865,11 +895,11 @@ class ReportDeco:
         # TODO: parameters parsing in general case
 
         preds: SparkDataset = self._model.fit_predict(*args, **kwargs)
-
+        #
         csv_df = pd.read_csv("/mnt/hgfs/Projects/Sber/LAMA/Sber-LAMA-Stuff/dumps/labels_preds.csv")
         csv_df = csv_df[["y_true", "y_pred", "label"]]
         csv_df.columns = ["y_true", "raw", "label"]
-        preds = SparkSession.builder.getOrCreate().createDataFrame(csv_df)
+        csv_df["_id"] = range(1, len(csv_df)+1)
 
         true_values_col_name = "y_true"
         scores_col_name = "raw"
@@ -881,9 +911,10 @@ class ReportDeco:
         valid_data: Optional[DataFrame] = kwargs.get("valid_data", None)
 
         if valid_data is None:
-            data = self._collect_data(
-                preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
-            )
+            data = SparkSession.builder.getOrCreate().createDataFrame(csv_df)
+            # data = self._collect_data(
+            #     preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
+            # )
         else:
             data = self._collect_data(
                 preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name
@@ -899,7 +930,11 @@ class ReportDeco:
             self._inference_content["preds_distribution_by_bins"] = "valid_preds_distribution_by_bins.png"
             self._inference_content["distribution_of_logits"] = "valid_distribution_of_logits.png"
             # graphics and metrics
-            _, self._F1_thresh, positive_rate = f1_score_w_co(data)
+            _, self._F1_thresh, positive_rate = f1_score_w_co(
+                data,
+                true_labels_col_name=true_values_col_name,
+                scores_col_name=scores_col_name
+            )
             auc_score, prec, rec, F1 = self._binary_classification_details(
                 data,
                 positive_rate,
@@ -921,6 +956,11 @@ class ReportDeco:
             self._inference_content["error_hist"] = "valid_error_hist.png"
             self._inference_content["scatter_plot"] = "valid_scatter_plot.png"
             # graphics and metrics
+
+            # JUST FOR TEST
+            # REMOVE AFTER THE DEBUGGING
+            predictions_col_name = scores_col_name
+
             mean_ae, median_ae, mse, r2, evs = self._regression_details(data, true_values_col_name, predictions_col_name)
             # model section
             evaluation_parameters = [
@@ -937,7 +977,8 @@ class ReportDeco:
                 }
             )
         elif self.task == "multiclass":
-            self._N_classes = len(train_data[self._target].drop_duplicates())
+            self._N_classes = train_data.select(F.count_distinct(F.col(self._target))).first()[0]
+
             self._inference_content["confusion_matrix"] = "valid_confusion_matrix.png"
 
             index_names = np.array([["Precision", "Recall", "F1-score"], ["micro", "macro", "weighted"]])
@@ -955,6 +996,7 @@ class ReportDeco:
         self._describe_roles(train_data)
         self._describe_dropped_features(train_data)
         self._generate_train_set_section()
+
         # generate fit_predict section
         self._generate_inference_section()
 
@@ -1214,6 +1256,41 @@ class ReportDeco:
         # general_info.loc[5] = ("Number of negative cases", np.sum(data[self._target] == 0))
         return general_info.to_html(index=False, justify="left")
 
+    def _get_column_nan_ratio(self, column: Column, column_name: str, total_count: int) -> Column:
+        return (F.sum(
+            F.when(
+                F.isnan(column), 1
+            ).otherwise(
+                F.when(
+                    F.isnull(column), 1
+                ).otherwise(0)
+            )
+        ) / total_count).alias(f"nanratio_{column_name}")  # column._jc.toString()
+
+    def _exclude_nan_values(self, column: Column) -> Column:
+        return F.when(F.isnan(column), None).otherwise(column)
+
+    def _get_column_min(self, column: Column, column_name: str, astype: Optional[str] = None) -> Column:
+        if astype:
+            column = column.astype(astype)
+        return F.min(column).alias(f"min_{column_name}")
+
+    def _get_column_percentile(self, column: Column, column_name: str, percentile: float,
+                               astype: Optional[str] = None) -> Column:
+        if astype:
+            column = column.astype(astype)
+        return F.percentile_approx(column, percentile).alias(f"perc{percentile}_{column_name}")
+
+    def _get_column_avg(self, column: Column, column_name: str, astype: Optional[str] = None) -> Column:
+        if astype:
+            column = column.astype(astype)
+        return F.avg(column).alias(f"avg_{column_name}")
+
+    def _get_column_max(self, column: Column, column_name: str, astype: Optional[str] = None) -> Column:
+        if astype:
+            column = column.astype(astype)
+        return F.max(column).alias(f"max_{column_name}")
+
     def _describe_roles(self, train_data):
 
         # detect feature roles
@@ -1223,95 +1300,104 @@ class ReportDeco:
         datetime_features = [feat_name for feat_name in roles if roles[feat_name].name == "Datetime"]
 
         total_count = train_data.count()
-
         # numerical roles
         numerical_features_df = []
+
+        columns_to_select = list()
+
         for feature_name in numerical_features:
-            current_column = F.col(feature_name)  # current_column
+            column = F.col(feature_name)
+            columns_to_select.append(self._get_column_nan_ratio(column, feature_name, total_count))
+
+            filtered_column = self._exclude_nan_values(column)
+            columns_to_select.append(self._get_column_min(filtered_column, feature_name, astype="double"))
+            columns_to_select.append(self._get_column_percentile(filtered_column, feature_name, 0.25, astype="double"))
+            columns_to_select.append(self._get_column_avg(filtered_column, feature_name, astype="double"))
+            columns_to_select.append(self._get_column_percentile(filtered_column, feature_name, 0.5, astype="double"))
+            columns_to_select.append(self._get_column_percentile(filtered_column, feature_name, 0.75, astype="double"))
+            columns_to_select.append(self._get_column_max(filtered_column, feature_name, astype="double"))
+
+        for feature_name in categorical_features:
+            columns_to_select.append(self._get_column_nan_ratio(F.col(feature_name), feature_name, total_count))
+
+        for feature_name in datetime_features:
+            column = F.col(feature_name)
+            columns_to_select.append(self._get_column_nan_ratio(column, feature_name, total_count))
+
+            filtered_column = self._exclude_nan_values(column)
+            columns_to_select.append(self._get_column_min(filtered_column, feature_name))
+            columns_to_select.append(self._get_column_max(filtered_column, feature_name))
+
+        stat_data: pd.DataFrame = train_data.select(*columns_to_select).toPandas()
+        # +-----------------+------------+-----+------------+------------+
+        # | nanratio_<col1> | min_<col1> | ... | avg_<colN> | max_<colN> |
+        # +-----------------+------------+-----+------------+------------+
+        # |             0.0 |      162.0 | ... |    113.274 |      999.0 |
+        # +-----------------+------------+-----+------------+------------+
+
+        for feature_name in numerical_features:
             item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(
-                train_data.select(current_column).where(
-                    F.isnan(current_column) | F.isnull(current_column)
-                ).count()
-                / total_count
-            )
-            values: DataFrame = train_data.where(~F.isnan(current_column) & ~F.isnull(current_column))
-
-            stat_data: list = values.select(
-                F.min(current_column),
-                F.percentile_approx(current_column, 0.25),
-                F.avg(current_column),
-                F.percentile_approx(current_column, 0.5),
-                F.percentile_approx(current_column, 0.75),
-                F.max(current_column)
-            ).first()
-
-            item["min"] = stat_data[0]
-            item["quantile_25"] = stat_data[1]
-            item["average"] = stat_data[2]
-            item["median"] = stat_data[3]
-            item["quantile_75"] = stat_data[4]
-            item["max"] = stat_data[5]
+            item["NaN ratio"] = "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0])
+            item["min"] = stat_data[f"min_{feature_name}"][0]
+            item["quantile_25"] = stat_data[f"perc0.25_{feature_name}"][0]
+            item["average"] = stat_data[f"avg_{feature_name}"][0]
+            item["median"] = stat_data[f"perc0.5_{feature_name}"][0]
+            item["quantile_75"] = stat_data[f"perc0.75_{feature_name}"][0]
+            item["max"] = stat_data[f"max_{feature_name}"][0]
             numerical_features_df.append(item)
-        if numerical_features_df == []:
+        if len(numerical_features_df) == 0:
             self._numerical_features_table = None
         else:
             self._numerical_features_table = pd.DataFrame(numerical_features_df).to_html(
                 index=False, float_format="{:.2f}".format, justify="left"
             )
 
+        indexer = LAMLStringIndexer(
+            inputCols=categorical_features,
+            outputCols=[f"{col}_out" for col in categorical_features],
+            minFreqs=[0 for _ in categorical_features],
+            handleInvalid="skip",
+            defaultValue=0.,
+            freqLabel=True
+        )
+
+        indexer_model: LAMLStringIndexerModel = indexer.fit(train_data)
+
+        encodings = indexer_model.labelsArray
+
         # categorical roles
         categorical_features_df = []
-        for feature_name in categorical_features:
-            current_column = F.col(feature_name)
+        for feature_name, enc in zip(categorical_features, encodings):
+            sorted_enc: list = [
+                pair for pair in sorted(enc, key=lambda x: int(x[1]), reverse=True)
+                if pair[0] is not None and pair[0] != "None"
+            ]
+
             item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(
-                train_data.select(current_column).where(
-                    F.isnan(current_column) | F.isnull(current_column)
-                ).count()
-                / total_count
-            )
-            value_counts = train_data.select(current_column).groupby(current_column).count().select(
-                current_column,
-                F.col("count") / total_count  # normalization
-            ).toPandas()
-            values = value_counts[feature_name]
-            counts = value_counts["count"]
-            item["Number of unique values"] = len(counts)
-            item["Most frequent value"] = values[0]
-            item["Occurance of most frequent"] = "{:.1f}%".format(100 * counts[0])
-            item["Least frequent value"] = values[-1]
-            item["Occurance of least frequent"] = "{:.1f}%".format(100 * counts[-1])
+            item["NaN ratio"] = "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0])
+            item["Number of unique values"] = len(sorted_enc)
+            item["Most frequent value"] = sorted_enc[0][0]
+            item["Occurance of most frequent"] = "{:.1f}%".format(100 * (int(sorted_enc[0][1]) / float(total_count)))
+            item["Least frequent value"] = sorted_enc[-1][0]
+            item["Occurance of least frequent"] = "{:.1f}%".format(100 * (int(sorted_enc[-1][1]) / float(total_count)))
             categorical_features_df.append(item)
-        if categorical_features_df == []:
+        if len(categorical_features_df) == 0:
             self._categorical_features_table = None
         else:
             self._categorical_features_table = pd.DataFrame(categorical_features_df).to_html(
                 index=False, justify="left"
             )
+
         # datetime roles
         datetime_features_df = []
         for feature_name in datetime_features:
-            current_column = F.col(feature_name)
             item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(
-                train_data.select(current_column).where(
-                    F.isnan(current_column) | F.isnull(current_column)
-                ).count()
-                / total_count
-            )
-            values = train_data.where(~F.isnan(current_column) & ~F.isnull(current_column))
-
-            stat_data = values.select(
-                F.min(current_column),
-                F.max(current_column)
-            ).first()
-
-            item["min"] = stat_data[0]
-            item["max"] = stat_data[1]
+            item["NaN ratio"] = "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0])
+            item["min"] = stat_data[f"min_{feature_name}"][0]
+            item["min"] = stat_data[f"max_{feature_name}"][0]
             item["base_date"] = self._model.reader._roles[feature_name].base_date
             datetime_features_df.append(item)
-        if datetime_features_df == []:
+        if len(datetime_features_df) == 0:
             self._datetime_features_table = None
         else:
             self._datetime_features_table = pd.DataFrame(datetime_features_df).to_html(index=False, justify="left")
@@ -1323,7 +1409,7 @@ class ReportDeco:
         self._features_dropped_list = self._model.reader._dropped_features
         # dropped features table
         dropped_list = [col for col in self._features_dropped_list if col != self._target]
-        if dropped_list == []:
+        if len(dropped_list) == 0:
             self._dropped_features_table = None
         else:
             dropped_nan_ratio = train_data.select(
@@ -1340,14 +1426,12 @@ class ReportDeco:
                     for col_name in dropped_list
                 ]
             ).toPandas()
-            # dropped_nan_ratio = train_data[dropped_list].isna().sum() / train_data.shape[0]
-            dropped_most_occured = pd.Series(np.nan, index=dropped_list)
 
             indexer = LAMLStringIndexer(
                 inputCols=dropped_list,
                 outputCols=[f"{col}_out" for col in dropped_list],
                 minFreqs=[0 for _ in dropped_list],
-                handleInvalid="keep",
+                handleInvalid="skip",
                 defaultValue=0.,
                 freqLabel=True
             )
@@ -1356,20 +1440,15 @@ class ReportDeco:
 
             encodings = indexer_model.labelsArray  # list of string tuples ('key', 'count'), example: ('key', '11')
             dropped_most_occured = [
-                int(sorted(enc, key=lambda x: int(x[1]), reverse=True)[0][1]) / total_count
+                int(sorted(enc, key=lambda x: int(x[1]), reverse=True)[0][1]) / float(total_count)
                 for enc in encodings
             ]
 
-            # for col in dropped_list:
-            #     col_most_occured = train_data[col].value_counts(normalize=True).values
-            #     if len(col_most_occured) > 0:
-            #         dropped_most_occured[col] = col_most_occured[0]
             dropped_features_table = pd.DataFrame(
-                {"nan_rate": dropped_nan_ratio, "constant_rate": dropped_most_occured}
+                [{"Название переменной": var_name, "nan_rate": nan_ratio, "constant_rate": most_occured} for var_name, nan_ratio, most_occured in zip(dropped_nan_ratio, dropped_nan_ratio.iloc[0], dropped_most_occured)]
             )
             self._dropped_features_table = (
-                dropped_features_table.reset_index()
-                .rename(columns={"index": "Название переменной"})
+                dropped_features_table
                 .to_html(index=False, justify="left")
             )
 
