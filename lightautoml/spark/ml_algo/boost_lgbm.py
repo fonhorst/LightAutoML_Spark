@@ -365,6 +365,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         valid_data = valid_data.where((F.col(full.target_column) <= max_val))
         logger.warning(f"\033[1mVal size after max cleaning: {valid_data.count()}\033[0m")
 
+        # cols = [F.col(c).alias(c.replace('(', ']').replace(')', ']')) for c in valid_data.columns]
+        # train_data.select(*cols).write.mode('overwrite').parquet("/tmp/results/dump.parquet")
+
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
