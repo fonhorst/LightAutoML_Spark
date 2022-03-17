@@ -26,6 +26,42 @@ def datasets() -> Dict[str, Any]:
             }
         },
 
+        "used_cars_dataset_cats_only": {
+            "path": "/opt/spark_data/small_used_cars_data.csv",
+            "task_type": "reg",
+            "metric_name": "mse",
+            "target_col": "price",
+            "roles": {
+                "target": "price",
+                "drop": [
+                    'back_legroom', 'listed_date', 'seller_rating', 'major_options',
+                    'exterior_color', 'model_name', 'combine_fuel_economy', 'front_legroom',
+                    'width', 'horsepower', 'city', 'trim_name', 'height', 'length',
+                    'bed_length', 'wheelbase', 'daysonmarket', 'latitude', 'power',
+                    'year', 'maximum_seating', 'savings_amount', 'highway_fuel_economy',
+                    'owner_count', 'mileage', 'description', 'engine_displacement',
+                    'torque', 'main_picture_url', 'trimId', 'vin', 'vehicle_damage_category',
+                    'sp_name', 'dealer_zip', 'listing_id', 'longitude', 'bed_height',
+                    'fuel_tank_volume', 'interior_color', 'is_certified', 'sp_id',
+                    'city_fuel_economy'
+                ],
+                "category": [
+                    'is_cpo', 'franchise_make', 'transmission_display', 'theft_title',
+                    'isCab', 'franchise_dealer', 'transmission', 'wheel_system',
+                    'make_name', 'cabin', 'bed', 'engine_type', 'listing_color',
+                    'is_new', 'has_accidents', 'frame_damaged', 'fuel_type',
+                    'wheel_system_display', 'salvage', 'fleet', 'body_type',
+                    'is_oemcpo', 'engine_cylinders'
+                ]
+            },
+            "dtype": {
+                'fleet': 'str', 'frame_damaged': 'str',
+                'has_accidents': 'str', 'isCab': 'str',
+                'is_cpo': 'str', 'is_new': 'str',
+                'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+            }
+        },
+
         "tiny_used_cars_dataset": {
             "path": "/opt/spark_data/tiny_used_cars_data_cleaned.csv",
             "task_type": "reg",

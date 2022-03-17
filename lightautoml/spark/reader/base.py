@@ -293,7 +293,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                     flg_default_params = feat in roles["category"] if "category" in roles else False
 
                     inferred_dtype = next(dtyp for fname, dtyp in subsample.dtypes if fname == feat)
-                    inferred_dtype = np.dtype(inferred_dtype)
+                    inferred_dtype = np.dtype(stype2dtype[inferred_dtype])
 
                     if (
                         flg_default_params

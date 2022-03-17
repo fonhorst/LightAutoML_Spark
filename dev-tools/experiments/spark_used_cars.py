@@ -37,9 +37,10 @@ DUMP_DATA_NAME = "data.parquet"
 
 
 @contextmanager
-def open_spark_session() -> SparkSession:
+def open_spark_session() -> Tuple[SparkSession, str]:
     if os.environ.get("SCRIPT_ENV", None) == "cluster":
         spark_sess = SparkSession.builder.getOrCreate()
+        config_path = SparkFiles.get('config.yaml')
     else:
         spark_sess = (
             SparkSession
@@ -56,11 +57,12 @@ def open_spark_session() -> SparkSession:
             .config("spark.eventLog.dir", "file:///tmp/spark_logs")
             .getOrCreate()
         )
+        config_path = '/tmp/config.yaml'
 
     spark_sess.sparkContext.setLogLevel("WARN")
 
     try:
-        yield spark_sess
+        yield spark_sess, config_path
     finally:
         # wait_secs = 120
         # time.sleep(wait_secs)
@@ -334,10 +336,10 @@ def calculate_le(
             input_roles=sdataset.roles
         )
 
-        estimator.fit(data)
+        transformer = estimator.fit(data)
 
     with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
-        df = estimator.transform(data)
+        df = transformer.transform(data)
         df.write.mode('overwrite').format('noop').save()
 
     return {
@@ -429,10 +431,7 @@ if __name__ == "__main__":
     logging.config.dictConfig(logging_config(level=logging.INFO, log_filename="/tmp/lama.log"))
     logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
 
-    with open_spark_session() as spark:
-        config_path = SparkFiles.get('config.yaml')
-        # config_path = '/tmp/config.yaml'
-
+    with open_spark_session() as (spark, config_path):
         # Read values from config file
         with open(config_path, "r") as stream:
             config_data = yaml.safe_load(stream)
