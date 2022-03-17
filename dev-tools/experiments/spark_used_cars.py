@@ -392,7 +392,7 @@ def calculate_te(
             transformer = estimator.fit(sdataset.data)
 
         with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
-            df = transformer.transform(sdataset.data)
+            df = transformer.transform(sdataset.data).cache()
             df.write.mode('overwrite').format('noop').save()
 
         df = df.select(
@@ -425,13 +425,21 @@ def calculate_te(
         df = te_transformer.transform(le_ds.data)
         df.write.mode('overwrite').format('noop').save()
 
-    return {
-        "reader_time": reader_timer.duration,
-        "le_fit_time": le_timer.duration,
-        "le_transform_time": le_transform_timer.duration,
-        "te_fit_time": te_timer.duration,
-        "te_transform_time": te_transform_timer.duration
-    }
+    if not chkp:
+        res = {
+            "reader_time": reader_timer.duration,
+            "le_fit_time": le_timer.duration,
+            "le_transform_time": le_transform_timer.duration,
+            "te_fit_time": te_timer.duration,
+            "te_transform_time": te_transform_timer.duration
+        }
+    else:
+        res = {
+            "te_fit_time": te_timer.duration,
+            "te_transform_time": te_transform_timer.duration
+        }
+
+    return res
 
 
 def empty_calculate(spark: SparkSession, **_):
