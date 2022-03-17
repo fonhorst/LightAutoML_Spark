@@ -25,7 +25,7 @@ experiments:
     repeat_rate: 1
     params:
       func: [ "calculate_le" ]
-      dataset: [ "used_cars_dataset_cats_only" ]
+      dataset: [ "used_cars_dataset_4x_cats_only" ]
       seed: [ 42 ]
       cv: [ 5 ]
     spark_config:

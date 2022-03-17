@@ -104,12 +104,15 @@ def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDa
     metadata_file = os.path.join(path, DUMP_METADATA_NAME)
     data_file = os.path.join(path, DUMP_DATA_NAME)
 
+    ex_instances = int(spark.conf.get('spark.executor.instances'))
+    ex_cores = int(spark.conf.get('spark.executor.cores'))
+
     with open(metadata_file, "rb") as f:
         metadata = pickle.load(f)
 
     df = spark.read.parquet(data_file)
     cols = [F.col(c).alias(c.replace('[', '(').replace(']', ')')) for c in df.columns]
-    df = df.select(*cols).repartition(16).cache()
+    df = df.select(*cols).repartition(ex_instances * ex_cores).cache()
 
     df.write.mode('overwrite').format('noop').save()
 
@@ -129,13 +132,16 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int, test_propor
 
     train_proportion = 1.0 - test_proportion
 
-    data = spark.read.csv(path, header=True, escape="\"")  # .repartition(4)
+    data = spark.read.csv(path, header=True, escape="\"")
+
+    ex_instances = int(spark.conf.get('spark.executor.instances'))
+    ex_cores = int(spark.conf.get('spark.executor.cores'))
 
     data = data.select(
         '*',
         F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN),
         F.rand(seed).alias('is_test')
-    ).cache()
+    ).repartition(ex_instances * ex_cores).cache()
     data.write.mode('overwrite').format('noop').save()
     # train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
 
