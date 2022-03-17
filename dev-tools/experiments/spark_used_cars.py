@@ -389,12 +389,18 @@ def calculate_te(
                 input_roles=sdataset.roles
             )
 
-            transformer = estimator.fit(data)
+            transformer = estimator.fit(sdataset.data)
 
         with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
-            df = transformer.transform(data)
+            df = transformer.transform(sdataset.data)
             df.write.mode('overwrite').format('noop').save()
 
+        df = df.select(
+            SparkDataset.ID_COLUMN,
+            sdataset.folds_column,
+            sdataset.target_column,
+            *estimator.getOutputCols()
+        )
         le_ds = sdataset.empty()
         le_ds.set_data(df, estimator.getOutputCols(), estimator.getOutputRoles())
 
