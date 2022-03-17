@@ -762,7 +762,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                                       datetime_level,
                                                       self.reader)
         else:
-            raise NotImplementedError("Supported only Numeric, Category or Datetime feature")
+            raise ValueError("Supported only Numeric, Category or Datetime feature")
 
 
     def plot_pdp(
