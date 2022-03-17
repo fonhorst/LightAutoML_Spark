@@ -595,6 +595,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
             prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
             preds = np.array(preds.select(prediction_col).collect())
+            # when preds.shape is (n, 1, k)
+            if len(preds.shape) == 3:
+                preds = np.squeeze(preds, axis=1)
             ys.append(preds)
         return grid, ys, counts
 
@@ -629,6 +632,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
             prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
             preds = np.array(preds.select(prediction_col).collect())
+            # when preds.shape is (n, 1, k)
+            if len(preds.shape) == 3:
+                preds = np.squeeze(preds, axis=1)
             ys.append(preds)
         if len(feature_cnt) > n_top_cats:
 
@@ -648,7 +654,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
             def get_category_by_row_num(row_num):
                 if (remainder := row_num % max_row_num) == 0:
-                    key = row_num
+                    key = max_row_num
                 else:
                     key = remainder
                 return other_categories_dict[key]
@@ -665,6 +671,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
             preds = model.transform(sdf)
             preds = np.array(preds.select(prediction_col).collect())
+            # when preds.shape is (n, 1, k)
+            if len(preds.shape) == 3:
+                preds = np.squeeze(preds, axis=1)
 
             grid.append("<OTHER>")
             ys.append(preds)
@@ -677,8 +686,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                     feature_name: str,
                                     model: PipelineModel,
                                     prediction_col: str,
-                                    datetime_level: str) -> Tuple[List, List, List]:
-        # test_data_read = self.reader.read(df)
+                                    datetime_level: str,
+                                    reader) -> Tuple[List, List, List]:
+        df = reader.read(df).data
         if datetime_level == "year":
             feature_cnt = df.groupBy(F.year(feature_name).alias("year")).count().orderBy(F.asc("year")).collect()
             grid = [x["year"] for x in feature_cnt]
@@ -709,6 +719,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
             prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
             preds = np.array(preds.select(prediction_col).collect())
+            # when preds.shape is (n, 1, k)
+            if len(preds.shape) == 3:
+                preds = np.squeeze(preds, axis=1)
             ys.append(preds)
 
         return grid, ys, counts
@@ -746,9 +759,10 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                                       feature_name,
                                                       pipeline_model,
                                                       "prediction",
-                                                      datetime_level)
+                                                      datetime_level,
+                                                      self.reader)
         else:
-            raise NotImplementedError("Supported only Numeric, Category or Datetime feature")
+            raise ValueError("Supported only Numeric, Category or Datetime feature")
 
 
     def plot_pdp(
@@ -768,6 +782,10 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             top_n_categories=top_n_categories,
             datetime_level=datetime_level,
         )
+        if self.reader._roles[feature_name].name == "Numeric":
+            test_data = test_data.select(F.col(feature_name).cast("double")).toPandas()
+        else:
+            test_data = test_data.select(feature_name).toPandas()
         plot_pdp_with_distribution(
             test_data,
             grid,
