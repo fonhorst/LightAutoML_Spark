@@ -26,6 +26,7 @@ from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
+from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkTargetEncoderEstimator
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.validation.iterators import SparkFoldsIterator, SparkDummyIterator
 
@@ -121,7 +122,11 @@ def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDa
     return ds, metadata
 
 
-def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
+def prepare_test_and_train(spark: SparkSession, path:str, seed: int, test_proportion: float = 0.2) -> Tuple[SparkDataFrame, SparkDataFrame]:
+    assert 0.0 <= test_proportion <= 1.0
+
+    train_proportion = 1.0 - test_proportion
+
     data = spark.read.csv(path, header=True, escape="\"")  # .repartition(4)
 
     data = data.select(
@@ -132,8 +137,8 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[Sp
     data.write.mode('overwrite').format('noop').save()
     # train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
 
-    train_data = data.where(F.col('is_test') < 0.8).drop('is_test').cache()
-    test_data = data.where(F.col('is_test') >= 0.8).drop('is_test').cache()
+    train_data = data.where(F.col('is_test') < train_proportion).drop('is_test').cache()
+    test_data = data.where(F.col('is_test') >= train_proportion).drop('is_test').cache()
 
     train_data.write.mode('overwrite').format('noop').save()
     test_data.write.mode('overwrite').format('noop').save()
@@ -285,6 +290,136 @@ def calculate_lgbadv_boostlgb(
     return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score, 'test_score': test_score}
 
 
+def calculate_reader(
+        spark: SparkSession,
+        path: str,
+        task_type: str,
+        seed: int = 42,
+        cv: int = 5,
+        roles: Optional[Dict] = None,
+        **_):
+
+    data, _ = prepare_test_and_train(spark, path, seed, test_proportion=0.0)
+
+    task = SparkTask(task_type)
+
+    with log_exec_timer("Reader") as reader_timer:
+        sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
+        sdataset = sreader.fit_read(data, roles=roles)
+        sdataset.data.write.mode('overwrite').format('noop').save()
+
+    return {"reader_time": reader_timer.duration}
+
+
+def calculate_le(
+        spark: SparkSession,
+        path: str,
+        task_type: str,
+        seed: int = 42,
+        cv: int = 5,
+        roles: Optional[Dict] = None,
+        **_):
+
+    data, _ = prepare_test_and_train(spark, path, seed, test_proportion=0.0)
+
+    task = SparkTask(task_type)
+
+    with log_exec_timer("Reader") as reader_timer:
+        sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
+        sdataset = sreader.fit_read(data, roles=roles)
+
+    with log_exec_timer("SparkLabelEncoder") as le_timer:
+        estimator = SparkLabelEncoderEstimator(
+            input_cols=sdataset.features,
+            input_roles=sdataset.roles
+        )
+
+        estimator.fit(data)
+
+    with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
+        df = estimator.transform(data)
+        df.write.mode('overwrite').format('noop').save()
+
+    return {
+        "reader_time": reader_timer.duration,
+        "le_fit_time": le_timer.duration,
+        "le_transform_time": le_transform_timer.duration
+    }
+
+
+def calculate_te(
+        spark: SparkSession,
+        path: str,
+        task_type: str,
+        seed: int = 42,
+        cv: int = 5,
+        roles: Optional[Dict] = None,
+        checkpoint_path: Optional[str] = None,
+        **_):
+
+    if checkpoint_path is not None:
+        checkpoint_path = os.path.join(checkpoint_path, 'data.dump')
+        chkp = load_dump_if_exist(spark, checkpoint_path)
+    else:
+        checkpoint_path = None
+        chkp = None
+
+    task = SparkTask(task_type)
+
+    if not chkp:
+        data, _ = prepare_test_and_train(spark, path, seed, test_proportion=0.0)
+
+        task = SparkTask(task_type)
+
+        with log_exec_timer("Reader") as reader_timer:
+            sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
+            sdataset = sreader.fit_read(data, roles=roles)
+
+        with log_exec_timer("SparkLabelEncoder") as le_timer:
+            estimator = SparkLabelEncoderEstimator(
+                input_cols=sdataset.features,
+                input_roles=sdataset.roles
+            )
+
+            transformer = estimator.fit(data)
+
+        with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
+            df = transformer.transform(data)
+            df.write.mode('overwrite').format('noop').save()
+
+        le_ds = sdataset.empty()
+        le_ds.set_data(df, estimator.getOutputCols(), estimator.getOutputRoles())
+
+        if checkpoint_path is not None:
+            dump_data(checkpoint_path, le_ds)
+    else:
+        logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
+        le_ds, _ = chkp
+
+    with log_exec_timer("TargetEncoder") as te_timer:
+        te_estimator = SparkTargetEncoderEstimator(
+            input_cols=le_ds.features,
+            input_roles=le_ds.roles,
+            task_name=task.name,
+            folds_column=le_ds.folds_column,
+            target_column=le_ds.target_column
+        )
+
+        te_transformer = te_estimator.fit(le_ds.data)
+
+    with log_exec_timer("TargetEncoder transform") as te_transform_timer:
+        df = te_transformer.transform(le_ds.data)
+        df.write.mode('overwrite').format('noop').save()
+
+    return {
+        "reader_time": reader_timer.duration,
+        "le_fit_time": le_timer.duration,
+        "le_transform_time": le_transform_timer.duration,
+        "te_fit_time": te_timer.duration,
+        "te_transform_time": te_transform_timer.duration
+    }
+
+
 def empty_calculate(spark: SparkSession, **_):
     logger.info("Success")
     return {"result": "success"}
@@ -303,15 +438,26 @@ if __name__ == "__main__":
             config_data = yaml.safe_load(stream)
 
         func_name = config_data['func']
-        ds_cfg = datasets()[config_data['dataset']]
+
+        if 'dataset' in config_data:
+            ds_cfg = datasets()[config_data['dataset']]
+        else:
+            ds_cfg = dict()
+
         ds_cfg.update(config_data)
 
         if func_name == "calculate_automl":
             func = calculate_automl
         elif func_name == "calculate_lgbadv_boostlgb":
             func = calculate_lgbadv_boostlgb
-        elif func_name == 'test_calculate':
+        elif func_name == 'empty_calculate':
             func = empty_calculate
+        elif func_name == 'calculate_reader':
+            func = calculate_reader
+        elif func_name == 'calculate_le':
+            func = calculate_le
+        elif func_name == 'calculate_te':
+            func = calculate_te
         else:
             raise ValueError(f"Incorrect func name: {func_name}. "
                              f"Only the following are supported: "
