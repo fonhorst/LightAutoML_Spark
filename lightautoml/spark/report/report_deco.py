@@ -553,7 +553,7 @@ class ReportDeco:
             "top_n_features": 5,
             "top_n_categories": 10,
             "ton_n_classes": 10,
-            "n_bins": 30,
+            "n_bins": 5,
             "datetime_level": "year",
             "n_sample": 100_000,
         }
@@ -910,15 +910,15 @@ class ReportDeco:
         self._target = input_roles["target"]
         valid_data: Optional[DataFrame] = kwargs.get("valid_data", None)
 
-        if valid_data is None:
+        # if valid_data is None:
             data = SparkSession.builder.getOrCreate().createDataFrame(csv_df)
-            # data = self._collect_data(
-            #     preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
-            # )
-        else:
-            data = self._collect_data(
-                preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name
-            )
+        #     # data = self._collect_data(
+        #     #     preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
+        #     # )
+        # else:
+        #     data = self._collect_data(
+        #         preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name
+        #     )
 
         self._inference_content = {}
         if self.task == "binary":
@@ -1001,10 +1001,10 @@ class ReportDeco:
         self._generate_inference_section()
 
         # generate feature importance and interpretation sections
-        # self._generate_fi_section(valid_data)
+        self._generate_fi_section(valid_data)
 
-        # if self.interpretation:
-        #     self._generate_interpretation_section(valid_data)
+        if self.interpretation:
+            self._generate_interpretation_section(valid_data)
 
         self.generate_report()
         return preds
@@ -1172,8 +1172,8 @@ class ReportDeco:
             print(f"Interpretation info for {feature_name} appended")
         self._interpretation_content["interpretation_top"] = self._interpretation_top
 
-    def _generate_interpretation_section(self, test_data):
-        if test_data is not None and test_data.shape[0] > self.interpretation_params["n_sample"]:
+    def _generate_interpretation_section(self, test_data: DataFrame):
+        if test_data is not None and test_data.count() > self.interpretation_params["n_sample"]:
             test_data = test_data.sample(n=self.interpretation_params["n_sample"])
         self._generate_interpretation_content(test_data)
         env = Environment(loader=FileSystemLoader(searchpath=self.template_path))
@@ -1193,6 +1193,12 @@ class ReportDeco:
             top_n_categories=self.interpretation_params["top_n_categories"],
             datetime_level=self.interpretation_params["datetime_level"],
         )
+
+        if self._model.reader._roles[feature_name].name == "Numeric":
+            test_data = test_data.select(F.col(feature_name).cast("double")).toPandas()
+        else:
+            test_data = test_data.select(feature_name).toPandas()
+
         # II. Plot pdp
         sns.set(style="whitegrid", font_scale=1.5)
         fig, axs = plt.subplots(2, 1, figsize=(16, 12), gridspec_kw={"height_ratios": [3, 1]})
