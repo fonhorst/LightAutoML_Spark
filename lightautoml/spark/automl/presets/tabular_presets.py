@@ -622,7 +622,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             `ys` is list of predictions by category,
             `counts` is numbers of values by category
         """
-        feature_cnt = df.groupBy(feature_name).count().orderBy(F.desc("count")).collect()
+        feature_cnt = df.where(F.col(feature_name).isNotNull()).groupBy(feature_name).count().orderBy(F.desc("count")).collect()
         grid = [row[feature_name] for row in feature_cnt[:n_top_cats]]
         counts = [row["count"] for row in feature_cnt[:n_top_cats]]
         ys = []
