@@ -1,0 +1,22 @@
+---
+experiment_type: spark_quality
+calculation_scripts:
+  spark: dev-tools/experiments/spark_used_cars.py
+  lama: dev-tools/experiments/lama_used_cars.py
+state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip experiments in state file, ignore - don`t skip experiments, delete - delete experiments in state file
+
+# Unique set of parameters for each experiment
+
+experiments:
+  - name: "cmp-broadcast"
+    library: [ "spark" ]
+    repeat_rate: 1
+    params:
+      func: [ "calculate_broadcast" ]
+      dataset: [ "used_cars_dataset_10x_cats_only" ]
+    spark_config:
+      spark.executor.instances: [ '1' ]
+      spark.executor.cores: [ '4' ]
+      spark.executor.memory: [ '16g' ]
+      # for debug purposes
+      spark.kubernetes.driverEnv.PYTHONUNBUFFERED: [ 1 ]

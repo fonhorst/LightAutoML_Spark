@@ -6,6 +6,7 @@ Simple example for binary classification on tabular data.
 import logging.config
 import os
 import pickle
+import random
 import shutil
 import time
 from contextlib import contextmanager
@@ -15,6 +16,7 @@ from typing import Dict, Any, Optional, Tuple, cast
 import yaml
 from pyspark import SparkFiles
 from pyspark.sql import functions as F, SparkSession
+from pyspark.sql.pandas.functions import pandas_udf
 
 from dataset_utils import datasets
 from lightautoml.ml_algo.tuning.base import DefaultTuner
@@ -29,6 +31,8 @@ from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkTargetEncoderEstimator
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.validation.iterators import SparkFoldsIterator, SparkDummyIterator
+
+import pandas as pd
 
 logger = logging.getLogger()
 
@@ -447,6 +451,50 @@ def empty_calculate(spark: SparkSession, **_):
     return {"result": "success"}
 
 
+def calculate_broadcast(spark: SparkSession, **_):
+    data = [
+        {"a": i, "b": i * 10, "c": i * 100}
+        for i in range(100)
+    ]
+
+    df = spark.createDataFrame(data)
+    df = df.cache()
+    df.write.mode('overwrite').format('noop').save()
+
+    with log_exec_timer("a") as gen_arr:
+        mapping_size = 10_000_000
+        bdata = {i: random.randint(0, 1000) for i in range(mapping_size)}
+
+    print(f"Gen arr time: {gen_arr.duration}")
+
+    with log_exec_timer("b") as bcast_timer:
+        bval = spark.sparkContext.broadcast(bdata)
+
+    print(f"Bcast time: {bcast_timer.duration}")
+
+    @pandas_udf('int')
+    def func1(col: pd.Series) -> pd.Series:
+        mapping = bval.value
+        msize = len(mapping)
+
+        return col.apply(lambda x: x + mapping[x] if x in mapping else 0.0)
+
+    df_1 = df.select([func1(c).alias(c) for c in df.columns])
+    df_1 = df_1.cache()
+    df_1.write.mode('overwrite').format('noop').save()
+
+    @pandas_udf('int')
+    def func2(col: pd.Series) -> pd.Series:
+        return col.apply(lambda x: x - 10)
+
+    df_2 = df_1.select([func2(c).alias(c) for c in df_1.columns])
+    df_2 = df_2.cache()
+    df_2.write.mode('overwrite').format('noop').save()
+
+    print("Finished")
+    time.sleep(600)
+
+
 if __name__ == "__main__":
     logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename="/tmp/lama.log"))
     logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -477,6 +525,8 @@ if __name__ == "__main__":
             func = calculate_le
         elif func_name == 'calculate_te':
             func = calculate_te
+        elif func_name == 'calculate_broadcast':
+            func = calculate_broadcast
         else:
             raise ValueError(f"Incorrect func name: {func_name}. "
                              f"Only the following are supported: "
