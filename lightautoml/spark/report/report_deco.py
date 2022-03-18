@@ -1001,10 +1001,10 @@ class ReportDeco:
         self._generate_inference_section()
 
         # generate feature importance and interpretation sections
-        # self._generate_fi_section(valid_data)
+        self._generate_fi_section(valid_data)
 
-        # if self.interpretation:
-        #     self._generate_interpretation_section(valid_data)
+        if self.interpretation:
+            self._generate_interpretation_section(valid_data)
 
         self.generate_report()
         return preds
@@ -1103,18 +1103,18 @@ class ReportDeco:
 
     # TODO SPARK-LAMA: Required method _model.get_feature_scores is not implemented for Spark.
     def _generate_fi_section(self, valid_data: Optional[DataFrame]):
-        total_count = valid_data.count()
-        if (
-            self.fi_params["method"] == "accurate"
-            and valid_data is not None
-            and total_count > self.fi_params["n_sample"]
-        ):
-            valid_data = valid_data.sample(n=self.fi_params["n_sample"])
-            print(
-                "valid_data was sampled for feature importance calculation: n_sample = {}".format(
-                    self.fi_params["n_sample"]
-                )
-            )
+        # total_count = valid_data.count()
+        # if (
+        #     self.fi_params["method"] == "accurate"
+        #     and valid_data is not None
+        #     and total_count > self.fi_params["n_sample"]
+        # ):
+        #     valid_data = valid_data.sample(n=self.fi_params["n_sample"])
+        #     print(
+        #         "valid_data was sampled for feature importance calculation: n_sample = {}".format(
+        #             self.fi_params["n_sample"]
+        #         )
+        #     )
 
         if self.fi_params["method"] == "accurate" and valid_data is None:
             # raise ValueError("You must set valid_data with accurate feature importance method")
@@ -1173,8 +1173,8 @@ class ReportDeco:
         self._interpretation_content["interpretation_top"] = self._interpretation_top
 
     def _generate_interpretation_section(self, test_data):
-        if test_data is not None and test_data.shape[0] > self.interpretation_params["n_sample"]:
-            test_data = test_data.sample(n=self.interpretation_params["n_sample"])
+        # if test_data is not None and test_data.shape[0] > self.interpretation_params["n_sample"]:
+        #     test_data = test_data.sample(n=self.interpretation_params["n_sample"])
         self._generate_interpretation_content(test_data)
         env = Environment(loader=FileSystemLoader(searchpath=self.template_path))
         interpretation_section = env.get_template(self._interpretation_section_path).render(
@@ -1441,6 +1441,7 @@ class ReportDeco:
             encodings = indexer_model.labelsArray  # list of string tuples ('key', 'count'), example: ('key', '11')
             dropped_most_occured = [
                 int(sorted(enc, key=lambda x: int(x[1]), reverse=True)[0][1]) / float(total_count)
+                if len(enc) > 0 else 0.
                 for enc in encodings
             ]
 

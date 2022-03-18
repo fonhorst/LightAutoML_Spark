@@ -42,8 +42,8 @@ def get_spark_session():
     spark_sess = (
         SparkSession
         .builder
-        .master("local[*]")
-        .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
+        .master("local[8]")
+        .config("spark.jars", "/mnt/hgfs/Projects/Sber/LAMA/Sber-LAMA/jars/spark-lightautoml_2.12-0.1.jar")
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.sql.shuffle.partitions", "16")
@@ -61,8 +61,8 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 2
-    use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
+    use_algos = [["linear_l2"]]  # [["lgb", "linear_l2"], ["lgb"]]
+    path = "/opt/spark_data/small_used_cars_data.csv"
     task_type = "reg"
     roles = {
         "target": "price",
@@ -102,5 +102,5 @@ if __name__ == "__main__":
 
     logger.info(f"score for out-of-fold predictions: {metric_value}")
 
-    feature_scores = automl.get_feature_scores(calc_method="accurate", data=test_data_dropped, silent=False)
+    feature_scores = automl.get_feature_scores(calc_method="fast", data=test_data_dropped, silent=False)
     print(feature_scores)
