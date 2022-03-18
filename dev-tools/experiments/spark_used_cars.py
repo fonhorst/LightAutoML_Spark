@@ -452,6 +452,8 @@ def empty_calculate(spark: SparkSession, **_):
 
 
 def calculate_broadcast(spark: SparkSession, **_):
+    spark.sparkContext.setCheckpointDir("/tmp/chkp")
+
     data = [
         {"a": i, "b": i * 10, "c": i * 100}
         for i in range(100)
@@ -475,20 +477,34 @@ def calculate_broadcast(spark: SparkSession, **_):
     @pandas_udf('int')
     def func1(col: pd.Series) -> pd.Series:
         mapping = bval.value
-        msize = len(mapping)
+        # mapping = bdata
 
         return col.apply(lambda x: x + mapping[x] if x in mapping else 0.0)
+        # return col.apply(lambda x: x + 10.0)
 
     df_1 = df.select([func1(c).alias(c) for c in df.columns])
     df_1 = df_1.cache()
     df_1.write.mode('overwrite').format('noop').save()
 
+    df_1 = df_1.localCheckpoint(eager=True)
+
+    bval.destroy()
+
+    # df_1 = spark.createDataFrame(df_1.rdd, schema=df_1.schema, verifySchema=False)
+
+    # df_1 = spark.createDataFrame(df_1.rdd)
+
+    # with log_exec_timer("b") as chkp_timer:
+    #     df_1 = df_1.checkpoint(eager=True)
+    #
+    # print(f"checkpoint time: {chkp_timer.duration}")
+
     @pandas_udf('int')
     def func2(col: pd.Series) -> pd.Series:
         return col.apply(lambda x: x - 10)
 
-    df_2 = df_1.select([func2(c).alias(c) for c in df_1.columns])
-    df_2 = df_2.cache()
+    df_2 = df_1#df_1.select([func2(c).alias(c) for c in df_1.columns])
+    # df_2 = df_2.cache()
     df_2.write.mode('overwrite').format('noop').save()
 
     print("Finished")
