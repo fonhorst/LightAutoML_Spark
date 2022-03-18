@@ -625,6 +625,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         _fc = F.col(self._folds_column)
         _tc = F.col(self._target_column)
 
+        logger.debug("Calculating totals (TE)")
         n_folds, prior, total_target_sum, total_count = sdf.select(
             F.max(_fc) + 1,
             F.mean(_tc.cast("double")),
@@ -632,6 +633,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             F.count(_tc)
         ).first()
 
+        logger.debug("Calculating folds priors (TE)")
         folds_prior_pdf = sdf.groupBy(_fc).agg(
             ((total_target_sum - F.sum(_tc)) / (total_count - F.count(_tc))).alias("_folds_prior")
         ).collect()
@@ -642,7 +644,11 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         def reg_score(col_name: str):
             return F.mean(F.pow((_tc - F.col(col_name)), F.lit(2))).alias(col_name)
 
-        for feature in self.getInputCols():
+        logger.debug("Starting processing features")
+        feature_count = len(self.getInputCols())
+        for i, feature in enumerate(self.getInputCols()):
+            logger.debug(f"Processing feature {feature}({i}/{feature_count})")
+
             _cur_col = F.col(feature)
             dim_size, = sdf.select((F.max(_cur_col) + 1).alias("dim_size")).first()
 
@@ -651,7 +657,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
             oof_df = (
                 f_df
-                    .select(
+                .select(
                     _cur_col,
                     _fc,
                     (F.sum('f_sum').over(windowSpec) - F.col("f_sum")).alias("oof_sum"),
@@ -659,19 +665,22 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
                 )
             )
 
+            logger.debug(f"Creating maps column for fold priors (size={len(folds_prior_pdf)}) (TE)")
             mapping = {row[self._folds_column]: row["_folds_prior"] for row in folds_prior_pdf}
             folds_prior_exp = F.create_map(*[F.lit(x) for x in itertools.chain(*mapping.items())])
 
+            logger.debug(f"Creating candidate columns (count={len(self.alphas)}) (TE)")
             candidates_cols = [
                 ((F.col('oof_sum') + F.lit(alpha) * folds_prior_exp[_fc]) / (F.col('oof_count') + F.lit(alpha))).cast(
                     "double").alias(f"candidate_{i}")
                 for i, alpha in enumerate(self.alphas)
             ]
 
-            candidates_df = oof_df.select(_cur_col, _fc, *candidates_cols)
+            candidates_df = oof_df.select(_cur_col, _fc, *candidates_cols).cache()
 
             score_func = binary_score if self._task_name == "binary" else reg_score
 
+            logger.debug("Calculating scores (TE)")
             scores = (
                 sdf
                 .join(candidates_df, on=[feature, self._folds_column])
@@ -679,20 +688,28 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
                 .first()
                 .asDict()
             )
+            logger.debug(f"Scores have been calculated (size={len(scores)}) (TE)")
 
             seq_scores = [scores[f"candidate_{i}"] for i, alpha in enumerate(self.alphas)]
             best_alpha_idx = np.argmin(seq_scores)
             best_alpha = self.alphas[best_alpha_idx]
 
+            logger.debug("Collecting encodings (TE)")
             encoding = f_df.groupby(_cur_col).agg(
                 ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding")).collect()
+            logger.debug(f"Encodings have been collected (size={len(encoding)}) (TE)")
             f_df.unpersist()
 
             encoding = {row[feature]: row['encoding'] for row in encoding}
 
             self.encodings[feature] = encoding
 
+            logger.debug("Collecting oof_feats (TE)")
             oof_feats = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding")).collect()
+            logger.debug(f"oof_feats have been collected (size={len(oof_feats)}) (TE)")
+
+            candidates_df.unpersist()
+
             oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
                 row[self._folds_column] * dim_size + row[feature]: row['encoding'] for row in oof_feats
             })

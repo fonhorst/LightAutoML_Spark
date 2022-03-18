@@ -68,3 +68,5 @@ experiments:
       spark.executor.instances: [ '1' ]
       spark.executor.cores: [ '16' ]
       spark.executor.memory: [ '64g' ]
+      # for debug purposes
+      spark.kubernetes.driverEnv.PYTHONUNBUFFERED: [1]

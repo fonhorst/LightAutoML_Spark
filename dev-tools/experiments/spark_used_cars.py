@@ -448,8 +448,8 @@ def empty_calculate(spark: SparkSession, **_):
 
 
 if __name__ == "__main__":
-    logging.config.dictConfig(logging_config(level=logging.INFO, log_filename="/tmp/lama.log"))
-    logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
+    logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename="/tmp/lama.log"))
+    logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 
     with open_spark_session() as (spark, config_path):
         # Read values from config file
