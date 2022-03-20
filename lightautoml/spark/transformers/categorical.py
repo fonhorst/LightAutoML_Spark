@@ -705,7 +705,6 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             f_df.unpersist()
 
             encoding = {row[feature]: row['encoding'] for row in encoding}
-
             self.encodings[feature] = encoding
 
             logger.debug("Collecting oof_feats (TE)")

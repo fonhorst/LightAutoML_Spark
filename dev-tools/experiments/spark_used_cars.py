@@ -64,6 +64,7 @@ def open_spark_session() -> Tuple[SparkSession, str]:
         config_path = '/tmp/config.yaml'
 
     spark_sess.sparkContext.setLogLevel("DEBUG")
+    spark_sess.sparkContext.setCheckpointDir("/tmp/chkp")
 
     try:
         yield spark_sess, config_path
