@@ -57,8 +57,8 @@ def open_spark_session() -> Tuple[SparkSession, str]:
             .config("spark.driver.memory", "12g")
             .config("spark.executor.memory", "12g")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-            .config("spark.eventLog.enabled", "true")
-            .config("spark.eventLog.dir", "file:///tmp/spark_logs")
+            # .config("spark.eventLog.enabled", "true")
+            # .config("spark.eventLog.dir", "file:///tmp/spark_logs")
             .getOrCreate()
         )
         config_path = '/tmp/config.yaml'
@@ -68,9 +68,9 @@ def open_spark_session() -> Tuple[SparkSession, str]:
     try:
         yield spark_sess, config_path
     finally:
-        wait_secs = 600
-        logger.info(f"Sleeping {wait_secs} secs before stopping")
-        time.sleep(wait_secs)
+        # wait_secs = 600
+        # logger.info(f"Sleeping {wait_secs} secs before stopping")
+        # time.sleep(wait_secs)
         spark_sess.stop()
         logger.info("Stopped spark session")
 
@@ -510,7 +510,7 @@ def calculate_broadcast(spark: SparkSession, **_):
     df_2.write.mode('overwrite').format('noop').save()
 
     print("Finished")
-    time.sleep(600)
+    # time.sleep(600)
 
 
 if __name__ == "__main__":

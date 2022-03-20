@@ -409,6 +409,8 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
 
     def _fit(self, df: SparkDataFrame) -> Transformer:
         logger.info(f"[{type(self)} (CI)] fit is started")
+        logger.debug(f"Calculating (CI) for input columns: {self.getInputCols()}")
+
         inter_df = self._build_df(df, self.intersections)
 
         super()._fit(inter_df)
