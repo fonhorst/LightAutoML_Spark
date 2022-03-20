@@ -63,14 +63,14 @@ def open_spark_session() -> Tuple[SparkSession, str]:
         )
         config_path = '/tmp/config.yaml'
 
-    spark_sess.sparkContext.setLogLevel("WARN")
+    spark_sess.sparkContext.setLogLevel("DEBUG")
 
     try:
         yield spark_sess, config_path
     finally:
-        # wait_secs = 120
-        # time.sleep(wait_secs)
-        # logger.info(f"Sleeping {wait_secs} secs before stopping")
+        wait_secs = 600
+        logger.info(f"Sleeping {wait_secs} secs before stopping")
+        time.sleep(wait_secs)
         spark_sess.stop()
         logger.info("Stopped spark session")
 
@@ -368,6 +368,8 @@ def calculate_te(
         roles: Optional[Dict] = None,
         checkpoint_path: Optional[str] = None,
         **_):
+
+    checkpoint_path = None
 
     if checkpoint_path is not None:
         checkpoint_path = os.path.join(checkpoint_path, 'data.dump')

@@ -37,10 +37,10 @@ experiments:
     repeat_rate: 1
     params:
       func: [ "calculate_te" ]
-      dataset: [ "used_cars_dataset_10x_cats_only" ]
+      dataset: [ "used_cars_dataset_4x_cats_only" ]
       seed: [ 42 ]
       cv: [ 5 ]
-      checkpoint_path: [ "/tmp/results/te_chkp_cmp/te_used_cars_dataset_10x_cats_only/" ]
+      checkpoint_path: [ "/tmp/results/te_chkp_cmp/te_used_cars_dataset_4x_cats_only/" ]
     spark_config:
       spark.executor.instances: [ '4' ]
       spark.executor.cores: [ '4' ]

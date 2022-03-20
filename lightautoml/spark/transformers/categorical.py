@@ -652,6 +652,8 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             _cur_col = F.col(feature)
             dim_size, = sdf.select((F.max(_cur_col) + 1).alias("dim_size")).first()
 
+            logger.debug(f"Dim size of feature {feature}: {dim_size}")
+
             windowSpec = Window.partitionBy(_cur_col)
             f_df = sdf.groupBy(_cur_col, _fc).agg(F.sum(_tc).alias("f_sum"), F.count(_tc).alias("f_count")).cache()
 
