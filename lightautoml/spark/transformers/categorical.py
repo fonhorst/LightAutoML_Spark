@@ -43,7 +43,9 @@ class OOfFeatsMapping:
     # category may be represented:
     # - cat (plain category)
     # - dim_size * folds_num + cat
-    mapping: Dict[int, float]
+    # mapping: Dict[int, float]
+    mapping: np.array
+
 
 class TypesHelper:
     _ad_hoc_types_mapper = defaultdict(
@@ -88,6 +90,20 @@ def pandas_dict_udf(broadcasted_dict):
     def f(s: Series) -> Series:
         values_dict = broadcasted_dict.value
         return s.map(values_dict)
+    return F.pandas_udf(f, "double")
+
+
+def pandas_1d_mapping_udf(broadcasted_arr):
+    def f(s: Series) -> Series:
+        np_arr = broadcasted_arr.value
+        return pd.Series(np_arr[s])
+    return F.pandas_udf(f, "double")
+
+
+def pandas_folds_cat_mapping_udf(broadcasted_arr):
+    def f(folds: Series, cat: Series) -> Series:
+        np_arr = broadcasted_arr.value
+        return pd.Series(np_arr[folds, cat])
     return F.pandas_udf(f, "double")
 
 
@@ -711,29 +727,35 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             logger.debug(f"Encodings have been collected (size={len(encoding)}) (TE)")
             f_df.unpersist()
 
-            np_arr = np.zeros(encoding.shape[0], dtype=np.float64)
-            np.add.at(np_arr, encoding[feature].astype(np.int32).to_numpy(), encoding['encoding'])
-            self.encodings[feature] = np_arr
+            mapping = np.zeros(encoding.shape[0], dtype=np.float64)
+            np.add.at(mapping, encoding[feature].astype(np.int32).to_numpy(), encoding['encoding'])
+            self.encodings[feature] = mapping
 
             logger.debug("Collecting oof_feats (TE)")
             oof_feats_df = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding")).cache()
-            # oof_feats_df.write.mode('overwrite').format('noop').save()
-            # logger.debug("Test saving of oof_feats")
-            # oof_feats = oof_feats_df.limit(10).collect()
             oof_feats = oof_feats_df.toPandas()
             logger.debug(f"oof_feats have been collected (size={len(oof_feats)}) (TE)")
 
             candidates_df.unpersist()
 
-            np_arr = np.zeros(oof_feats.shape[0], dtype=np.float64)
-            np.add.at(np_arr, oof_feats[feature].astype(np.int32).to_numpy(), oof_feats['encoding'])
+            mapping = np.zeros((n_folds, oof_feats.shape[0]), dtype=np.float64)
+            np.add.at(
+                mapping,
+                (
+                    oof_feats[self._folds_column].astype(np.int32).to_numpy(),
+                    oof_feats[feature].astype(np.int32).to_numpy()
+                ),
+                oof_feats['encoding']
+            )
+
+            oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping=mapping)
 
             # oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
             #     row[self._folds_column] * dim_size + row[feature]: row['encoding'] for _, row in oof_feats.iterrows()
             # })
-            oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
-                row[self._folds_column] * dim_size + row[feature]: row['encoding'] for _, row in dict()
-            })
+            # oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
+            #     row[self._folds_column] * dim_size + row[feature]: row['encoding'] for _, row in dict()
+            # })
             oof_feats_encoding[feature] = oof_feats
 
             logger.debug(f"[{type(self)} (TE)] Encodings have been calculated")
@@ -758,7 +780,7 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable
     _fname_prefix = "oof"
 
     def __init__(self,
-                 encodings: Dict[str, Dict[int, float]],
+                 encodings: Dict[str, np.array],
                  input_cols: List[str],
                  output_cols: List[str],
                  input_roles: RolesDict,
@@ -791,13 +813,14 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable
                 # e.g. during pipeline fitting
                 values = sc.broadcast(oof_feats.mapping)
                 cols_to_select.append(
-                    pandas_dict_udf(values)(_fc * F.lit(oof_feats.dim_size) + _cur_col).alias(out_name)
+                    pandas_folds_cat_mapping_udf(values)(_fc.astype('int'), _cur_col.astype('int'))
+                    .alias(out_name)
                 )
             else:
                 logger.debug(
                     f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._encodings[col_name])}")
                 values = sc.broadcast(self._encodings[col_name])
-                cols_to_select.append(pandas_dict_udf(values)(_cur_col).alias(out_name))
+                cols_to_select.append(pandas_1d_mapping_udf(values)(_cur_col).alias(out_name))
 
         output = self._make_output_df(dataset, cols_to_select)
 
