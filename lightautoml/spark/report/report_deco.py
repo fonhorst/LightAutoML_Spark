@@ -1048,7 +1048,15 @@ class ReportDeco:
                 predicted_labels_col_name=predictions_col_name
             )
 
-            self._model_summary["Test sample"] = [auc_score, prec, rec, F1]
+            if self._n_test_sample >= 2:
+                self._model_summary["Test sample {}".format(self._n_test_sample)] = [
+                    auc_score,
+                    prec,
+                    rec,
+                    F1,
+                ]
+            else:
+                self._model_summary["Test sample"] = [auc_score, prec, rec, F1]
 
         elif self.task == "reg":
             # filling for html
