@@ -19,6 +19,7 @@ from pyspark.sql import functions as F, SparkSession
 from pyspark.sql.pandas.functions import pandas_udf
 
 from dataset_utils import datasets
+from lightautoml.dataset.roles import CategoryRole
 from lightautoml.ml_algo.tuning.base import DefaultTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
@@ -63,7 +64,7 @@ def open_spark_session() -> Tuple[SparkSession, str]:
         )
         config_path = '/tmp/config.yaml'
 
-    spark_sess.sparkContext.setLogLevel("DEBUG")
+    spark_sess.sparkContext.setLogLevel("WARN")
     spark_sess.sparkContext.setCheckpointDir("/tmp/chkp")
 
     try:
@@ -139,14 +140,15 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int, test_propor
 
     data = spark.read.csv(path, header=True, escape="\"")
 
-    ex_instances = int(spark.conf.get('spark.executor.instances'))
-    ex_cores = int(spark.conf.get('spark.executor.cores'))
+    # ex_instances = int(spark.conf.get('spark.executor.instances'))
+    # ex_cores = int(spark.conf.get('spark.executor.cores'))
 
     data = data.select(
         '*',
         F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN),
         F.rand(seed).alias('is_test')
-    ).repartition(ex_instances * ex_cores).cache()
+    ).cache()
+    # ).repartition(ex_instances * ex_cores).cache()
     data.write.mode('overwrite').format('noop').save()
     # train_data, test_data = data.randomSplit([0.8, 0.2], seed=seed)
 
@@ -222,6 +224,8 @@ def calculate_lgbadv_boostlgb(
         **_) -> Dict[str, Any]:
     roles = roles if roles else {}
 
+    checkpoint_path = None
+
     with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
         if checkpoint_path is not None:
             train_checkpoint_path = os.path.join(checkpoint_path, 'train.dump')
@@ -231,6 +235,8 @@ def calculate_lgbadv_boostlgb(
         else:
             train_checkpoint_path = None
             test_checkpoint_path = None
+            train_chkp = None
+            test_chkp = None
 
         task = SparkTask(task_type)
 
@@ -341,10 +347,12 @@ def calculate_le(
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
         sdataset = sreader.fit_read(data, roles=roles)
 
+    cat_roles = {feat: role for feat, role in sdataset.roles.items() if isinstance(role, CategoryRole)}
+
     with log_exec_timer("SparkLabelEncoder") as le_timer:
         estimator = SparkLabelEncoderEstimator(
-            input_cols=sdataset.features,
-            input_roles=sdataset.roles
+            input_cols=list(cat_roles.keys()),
+            input_roles=cat_roles
         )
 
         transformer = estimator.fit(data)
@@ -390,10 +398,12 @@ def calculate_te(
             sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
             sdataset = sreader.fit_read(data, roles=roles)
 
+        cat_roles = {feat: role for feat, role in sdataset.roles.items() if isinstance(role, CategoryRole)}
+
         with log_exec_timer("SparkLabelEncoder") as le_timer:
             estimator = SparkLabelEncoderEstimator(
-                input_cols=sdataset.features,
-                input_roles=sdataset.roles
+                input_cols=list(cat_roles.keys()),
+                input_roles=cat_roles
             )
 
             transformer = estimator.fit(sdataset.data)
