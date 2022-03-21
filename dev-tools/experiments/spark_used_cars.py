@@ -29,7 +29,8 @@ from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
-from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkTargetEncoderEstimator
+from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkTargetEncoderEstimator, \
+    SparkCatIntersectionsEstimator
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.validation.iterators import SparkFoldsIterator, SparkDummyIterator
 
@@ -459,6 +460,97 @@ def calculate_te(
     return res
 
 
+def calculate_cat_te(
+        spark: SparkSession,
+        path: str,
+        task_type: str,
+        seed: int = 42,
+        cv: int = 5,
+        roles: Optional[Dict] = None,
+        checkpoint_path: Optional[str] = None,
+        **_):
+
+    checkpoint_path = None
+
+    if checkpoint_path is not None:
+        checkpoint_path = os.path.join(checkpoint_path, 'data.dump')
+        chkp = load_dump_if_exist(spark, checkpoint_path)
+    else:
+        checkpoint_path = None
+        chkp = None
+
+    task = SparkTask(task_type)
+
+    if not chkp:
+        data, _ = prepare_test_and_train(spark, path, seed, test_proportion=0.0)
+
+        task = SparkTask(task_type)
+
+        with log_exec_timer("Reader") as reader_timer:
+            sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
+            sdataset = sreader.fit_read(data, roles=roles)
+
+        cat_roles = {feat: role for feat, role in sdataset.roles.items() if feat in ['vin', 'city', 'power', 'torque']}
+
+        with log_exec_timer("SparkLabelEncoder") as ci_timer:
+            estimator = SparkCatIntersectionsEstimator(
+                input_cols=list(cat_roles.keys()),
+                input_roles=cat_roles
+            )
+
+            transformer = estimator.fit(sdataset.data)
+
+        with log_exec_timer("SparkLabelEncoder transform") as ci_transform_timer:
+            df = transformer.transform(sdataset.data).cache()
+            df.write.mode('overwrite').format('noop').save()
+
+        df = df.select(
+            SparkDataset.ID_COLUMN,
+            sdataset.folds_column,
+            sdataset.target_column,
+            *estimator.getOutputCols()
+        )
+        le_ds = sdataset.empty()
+        le_ds.set_data(df, estimator.getOutputCols(), estimator.getOutputRoles())
+
+        if checkpoint_path is not None:
+            dump_data(checkpoint_path, le_ds)
+    else:
+        logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
+        le_ds, _ = chkp
+
+    with log_exec_timer("TargetEncoder") as te_timer:
+        te_estimator = SparkTargetEncoderEstimator(
+            input_cols=le_ds.features,
+            input_roles=le_ds.roles,
+            task_name=task.name,
+            folds_column=le_ds.folds_column,
+            target_column=le_ds.target_column
+        )
+
+        te_transformer = te_estimator.fit(le_ds.data)
+
+    with log_exec_timer("TargetEncoder transform") as te_transform_timer:
+        df = te_transformer.transform(le_ds.data)
+        df.write.mode('overwrite').format('noop').save()
+
+    if not chkp:
+        res = {
+            "reader_time": reader_timer.duration,
+            "cat_fit_time": ci_timer.duration,
+            "cat_transform_time": ci_transform_timer.duration,
+            "te_fit_time": te_timer.duration,
+            "te_transform_time": te_transform_timer.duration
+        }
+    else:
+        res = {
+            "te_fit_time": te_timer.duration,
+            "te_transform_time": te_transform_timer.duration
+        }
+
+    return res
+
+
 def empty_calculate(spark: SparkSession, **_):
     logger.info("Success")
     return {"result": "success"}
@@ -554,6 +646,8 @@ if __name__ == "__main__":
             func = calculate_le
         elif func_name == 'calculate_te':
             func = calculate_te
+        elif func_name == 'calculate_cat_te':
+            func = calculate_cat_te
         elif func_name == 'calculate_broadcast':
             func = calculate_broadcast
         else:
