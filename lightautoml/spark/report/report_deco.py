@@ -382,26 +382,6 @@ def get_bins_table(data: DataFrame, n_bins=20):
 
 
 # Regression plots:
-
-
-def plot_target_distribution_1(data, path):
-    sns.set(style="whitegrid", font_scale=1.5)
-    fig, axs = plt.subplots(2, 1, figsize=(16, 20))
-
-    sns.kdeplot(data["y_true"], shade=True, color="g", ax=axs[0])
-    axs[0].set_xlabel("Target value")
-    axs[0].set_ylabel("Density")
-    axs[0].set_title("Target distribution (y_true)")
-
-    sns.kdeplot(data["y_pred"], shade=True, color="r", ax=axs[1])
-    axs[1].set_xlabel("Target value")
-    axs[1].set_ylabel("Density")
-    axs[1].set_title("Target distribution (y_pred)")
-
-    fig.savefig(path, bbox_inches="tight")
-    plt.close()
-
-
 def plot_target_distribution(data, path):
 
     sns.set(style="whitegrid", font_scale=1.5)
@@ -478,8 +458,6 @@ def plot_confusion_matrix(data: DenseMatrix, path):
 
 
 # Feature importance
-
-
 def plot_feature_importance(feat_imp, path, features_max=100):
     sns.set(style="whitegrid", font_scale=1.5)
     fig, axs = plt.subplots(figsize=(16, features_max / 2.5))
@@ -552,7 +530,7 @@ class ReportDeco:
         self.interpretation_params = {
             "top_n_features": 5,
             "top_n_categories": 10,
-            "ton_n_classes": 10,
+            "top_n_classes": 10,
             "n_bins": 5,
             "datetime_level": "year",
             "n_sample": 100_000,
@@ -851,7 +829,7 @@ class ReportDeco:
                       sample,
                       true_values_col_name,
                       raw_predictions_col_name,
-                      predicted_labels_col_name) -> DataFrame:
+                      predictions_col_name) -> DataFrame:
         # predict_column = preds.features[0]
         data = preds.data.join(
             sample,  # sample.select(F.col(SparkDataset.ID_COLUMN), F.col(self._target)),
@@ -860,9 +838,9 @@ class ReportDeco:
             F.col(SparkDataset.ID_COLUMN),
             F.col(self._target).alias(true_values_col_name),
             F.col(raw_predictions_col_name).alias(raw_predictions_col_name),
-            F.col(predicted_labels_col_name).alias(predicted_labels_col_name)
+            F.col(predictions_col_name).alias(predictions_col_name)
         ).where(
-            (~F.isnan(F.col(predicted_labels_col_name))) & (F.col(predicted_labels_col_name).isNotNull())
+            (~F.isnan(F.col(predictions_col_name))) & (F.col(predictions_col_name).isNotNull())
         )
         # TODO SPARK-LAMA: Create an UDF to map values for multiclass task
 
@@ -879,6 +857,13 @@ class ReportDeco:
         #     data = data[~data["y_pred"].isnull()]
         return data
 
+    def _get_mock_data(self):
+        csv_df = pd.read_csv("/mnt/hgfs/Projects/Sber/LAMA/Sber-LAMA-Stuff/dumps/labels_preds.csv")
+        csv_df = csv_df[["y_true", "y_pred", "label"]]
+        csv_df.columns = ["y_true", "raw", "label"]
+        csv_df["_id"] = range(1, len(csv_df)+1)
+        return SparkSession.builder.getOrCreate().createDataFrame(csv_df)
+
     def fit_predict(self, *args, **kwargs):
         """Wrapped ``automl.fit_predict`` method.
 
@@ -894,12 +879,9 @@ class ReportDeco:
         """
         # TODO: parameters parsing in general case
 
+        valid_data: Optional[DataFrame] = kwargs.pop("_valid_data", None)
+
         preds: SparkDataset = self._model.fit_predict(*args, **kwargs)
-        #
-        csv_df = pd.read_csv("/mnt/hgfs/Projects/Sber/LAMA/Sber-LAMA-Stuff/dumps/labels_preds.csv")
-        csv_df = csv_df[["y_true", "y_pred", "label"]]
-        csv_df.columns = ["y_true", "raw", "label"]
-        csv_df["_id"] = range(1, len(csv_df)+1)
 
         true_values_col_name = "y_true"
         scores_col_name = "raw"
@@ -908,13 +890,12 @@ class ReportDeco:
         train_data: DataFrame = kwargs["train_data"] if "train_data" in kwargs else args[0]
         input_roles = kwargs["roles"] if "roles" in kwargs else args[1]
         self._target = input_roles["target"]
-        valid_data: Optional[DataFrame] = kwargs.get("valid_data", None)
 
+        data = self._get_mock_data()
         # if valid_data is None:
-            data = SparkSession.builder.getOrCreate().createDataFrame(csv_df)
-        #     # data = self._collect_data(
-        #     #     preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
-        #     # )
+        #     data = self._collect_data(
+        #         preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
+        #     )
         # else:
         #     data = self._collect_data(
         #         preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name
@@ -1026,8 +1007,21 @@ class ReportDeco:
         # get predictions
         test_preds = self._model.predict(*args, **kwargs)
 
+        true_values_col_name = "y_true"
+        raw_predictions_col_name = "raw"
+        predictions_col_name = "label"
+
+
         test_data = kwargs["test"] if "test" in kwargs else args[0]
-        data = self._collect_data(test_preds, test_data)
+
+        data = self._get_mock_data()
+        # data = self._collect_data(
+        #     test_preds,
+        #     test_data,
+        #     true_values_col_name=true_values_col_name,
+        #     raw_predictions_col_name=raw_predictions_col_name,
+        #     predictions_col_name=predictions_col_name
+        # )
 
         if self.task == "binary":
             # filling for html
@@ -1043,18 +1037,18 @@ class ReportDeco:
                 self._n_test_sample
             )
             # graphics and metrics
-            # positive_rate = data.where()
-            auc_score, prec, rec, F1 = self._binary_classification_details(data)
+            true_values_col = F.col(true_values_col_name)
 
-            if self._n_test_sample >= 2:
-                self._model_summary["Test sample {}".format(self._n_test_sample)] = [
-                    auc_score,
-                    prec,
-                    rec,
-                    F1,
-                ]
-            else:
-                self._model_summary["Test sample"] = [auc_score, prec, rec, F1]
+            positive_rate = data.select(F.sum(true_values_col) / F.count(true_values_col)).first()[0]
+            auc_score, prec, rec, F1 = self._binary_classification_details(
+                data,
+                positive_rate=positive_rate,
+                true_labels_col_name=true_values_col_name,
+                scores_col_name=raw_predictions_col_name,
+                predicted_labels_col_name=predictions_col_name
+            )
+
+            self._model_summary["Test sample"] = [auc_score, prec, rec, F1]
 
         elif self.task == "reg":
             # filling for html
@@ -1065,7 +1059,11 @@ class ReportDeco:
             self._inference_content["error_hist"] = "test_error_hist_{}.png".format(self._n_test_sample)
             self._inference_content["scatter_plot"] = "test_scatter_plot_{}.png".format(self._n_test_sample)
             # graphics
-            mean_ae, median_ae, mse, r2, evs = self._regression_details(data)
+            mean_ae, median_ae, mse, r2, evs = self._regression_details(
+                data,
+                true_values_col_name,
+                predictions_col_name
+            )
             # update model section
             if self._n_test_sample >= 2:
                 self._model_summary["Test sample {}".format(self._n_test_sample)] = [
@@ -1080,7 +1078,11 @@ class ReportDeco:
 
         elif self.task == "multiclass":
             self._inference_content["confusion_matrix"] = "test_confusion_matrix_{}.png".format(self._n_test_sample)
-            test_summary = self._multiclass_details(data)
+            test_summary = self._multiclass_details(
+                data,
+                predicted_labels_col_name=predictions_col_name,
+                true_labels_col_name=true_values_col_name
+            )
             if self._n_test_sample >= 2:
                 self._model_summary["Test sample {}".format(self._n_test_sample)] = test_summary
             else:
@@ -1103,18 +1105,18 @@ class ReportDeco:
 
     # TODO SPARK-LAMA: Required method _model.get_feature_scores is not implemented for Spark.
     def _generate_fi_section(self, valid_data: Optional[DataFrame]):
-        total_count = valid_data.count()
-        if (
-            self.fi_params["method"] == "accurate"
-            and valid_data is not None
-            and total_count > self.fi_params["n_sample"]
-        ):
-            valid_data = valid_data.sample(n=self.fi_params["n_sample"])
-            print(
-                "valid_data was sampled for feature importance calculation: n_sample = {}".format(
-                    self.fi_params["n_sample"]
-                )
-            )
+        # total_count = valid_data.count()
+        # if (
+        #     self.fi_params["method"] == "accurate"
+        #     and valid_data is not None
+        #     and total_count > self.fi_params["n_sample"]
+        # ):
+        #     valid_data = valid_data.sample(n=self.fi_params["n_sample"])
+        #     print(
+        #         "valid_data was sampled for feature importance calculation: n_sample = {}".format(
+        #             self.fi_params["n_sample"]
+        #         )
+        #     )
 
         if self.fi_params["method"] == "accurate" and valid_data is None:
             # raise ValueError("You must set valid_data with accurate feature importance method")
@@ -1173,8 +1175,8 @@ class ReportDeco:
         self._interpretation_content["interpretation_top"] = self._interpretation_top
 
     def _generate_interpretation_section(self, test_data: DataFrame):
-        if test_data is not None and test_data.count() > self.interpretation_params["n_sample"]:
-            test_data = test_data.sample(n=self.interpretation_params["n_sample"])
+        # if test_data is not None and test_data.count() > self.interpretation_params["n_sample"]:
+        #     test_data = test_data.sample(n=self.interpretation_params["n_sample"])
         self._generate_interpretation_content(test_data)
         env = Environment(loader=FileSystemLoader(searchpath=self.template_path))
         interpretation_section = env.get_template(self._interpretation_section_path).render(
@@ -1182,7 +1184,7 @@ class ReportDeco:
         )
         self._sections["interpretation"] = interpretation_section
 
-    def _plot_pdp(self, test_data, feature_name, path):
+    def _plot_pdp(self, test_data: DataFrame, feature_name, path):
         feature_role = self._model.reader._roles[feature_name].name
         # I. Count interpretation
         print("Calculating interpretation for {}:".format(feature_name))
@@ -1195,9 +1197,9 @@ class ReportDeco:
         )
 
         if self._model.reader._roles[feature_name].name == "Numeric":
-            test_data = test_data.select(F.col(feature_name).cast("double")).toPandas()
+            test_data: pd.DataFrame = test_data.select(F.col(feature_name).cast("double")).toPandas()
         else:
-            test_data = test_data.select(feature_name).toPandas()
+            test_data: pd.DataFrame = test_data.select(feature_name).toPandas()
 
         # II. Plot pdp
         sns.set(style="whitegrid", font_scale=1.5)
