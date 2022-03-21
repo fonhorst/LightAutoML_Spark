@@ -532,8 +532,9 @@ def calculate_cat_te(
         te_transformer = te_estimator.fit(le_ds.data)
 
     with log_exec_timer("TargetEncoder transform") as te_transform_timer:
-        df = te_transformer.transform(le_ds.data)
-        df.write.mode('overwrite').format('noop').save()
+        pass
+        # df = te_transformer.transform(le_ds.data)
+        # df.write.mode('overwrite').format('noop').save()
 
     if not chkp:
         res = {

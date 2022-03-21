@@ -55,6 +55,6 @@ experiments:
       cv: [ 5 ]
       checkpoint_path: [ "/tmp/results/te_chkp_cmp/cat_te_used_cars_dataset_4x/" ]
     spark_config:
-      spark.executor.instances: [ '4' ]
-      spark.executor.cores: [ '16' ]
+      spark.executor.instances: [ '1' ]
+      spark.executor.cores: [ '8' ]
       spark.executor.memory: [ '32g' ]

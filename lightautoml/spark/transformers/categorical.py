@@ -707,25 +707,32 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             # encoding_df.write.mode('overwrite').format('noop').save()
             # logger.debug("Test saving of encodings")
             # encoding = encoding_df.limit(10_000).collect()
-            encoding = encoding_df.collect()
+            encoding = encoding_df.toPandas()
             logger.debug(f"Encodings have been collected (size={len(encoding)}) (TE)")
             f_df.unpersist()
 
-            encoding = {row[feature]: row['encoding'] for row in encoding}
-            self.encodings[feature] = encoding
+            np_arr = np.zeros(encoding.shape[0], dtype=np.float64)
+            np.add.at(np_arr, encoding[feature].astype(np.int32).to_numpy(), encoding['encoding'])
+            self.encodings[feature] = np_arr
 
             logger.debug("Collecting oof_feats (TE)")
             oof_feats_df = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding")).cache()
             # oof_feats_df.write.mode('overwrite').format('noop').save()
             # logger.debug("Test saving of oof_feats")
             # oof_feats = oof_feats_df.limit(10).collect()
-            oof_feats = oof_feats_df.collect()
+            oof_feats = oof_feats_df.toPandas()
             logger.debug(f"oof_feats have been collected (size={len(oof_feats)}) (TE)")
 
             candidates_df.unpersist()
 
+            np_arr = np.zeros(oof_feats.shape[0], dtype=np.float64)
+            np.add.at(np_arr, oof_feats[feature].astype(np.int32).to_numpy(), oof_feats['encoding'])
+
+            # oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
+            #     row[self._folds_column] * dim_size + row[feature]: row['encoding'] for _, row in oof_feats.iterrows()
+            # })
             oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
-                row[self._folds_column] * dim_size + row[feature]: row['encoding'] for row in oof_feats
+                row[self._folds_column] * dim_size + row[feature]: row['encoding'] for _, row in dict()
             })
             oof_feats_encoding[feature] = oof_feats
 
