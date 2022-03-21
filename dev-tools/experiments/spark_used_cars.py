@@ -503,7 +503,9 @@ def calculate_cat_te(
 
         with log_exec_timer("SparkLabelEncoder transform") as ci_transform_timer:
             df = transformer.transform(sdataset.data).cache()
-            df.write.mode('overwrite').format('noop').save()
+            # df.write.mode('overwrite').format('noop').save()
+            df = cast(SparkDataFrame, df)
+            df = df.localCheckpoint(eager=True)
 
         df = df.select(
             SparkDataset.ID_COLUMN,
