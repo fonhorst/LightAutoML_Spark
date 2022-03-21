@@ -671,7 +671,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             logger.debug(f"Processing feature {feature}({i}/{feature_count})")
 
             _cur_col = F.col(feature)
-            dim_size, = sdf.select((F.max(_cur_col) + 1).alias("dim_size")).first()
+            dim_size, = sdf.select((F.max(_cur_col) + 1).astype('int').alias("dim_size")).first()
 
             logger.debug(f"Dim size of feature {feature}: {dim_size}")
 
