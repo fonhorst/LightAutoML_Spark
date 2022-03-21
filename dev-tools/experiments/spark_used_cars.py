@@ -470,8 +470,6 @@ def calculate_cat_te(
         checkpoint_path: Optional[str] = None,
         **_):
 
-    checkpoint_path = None
-
     if checkpoint_path is not None:
         checkpoint_path = os.path.join(checkpoint_path, 'data.dump')
         chkp = load_dump_if_exist(spark, checkpoint_path)

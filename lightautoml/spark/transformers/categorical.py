@@ -649,6 +649,9 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         logger.debug("Starting processing features")
         feature_count = len(self.getInputCols())
         for i, feature in enumerate(self.getInputCols()):
+            # TODO: SPARK-LAMA change for debug. Remove it later.
+            if feature != 'inter__(city__power)':
+                continue
             logger.debug(f"Processing feature {feature}({i}/{feature_count})")
 
             _cur_col = F.col(feature)
@@ -700,10 +703,10 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
             logger.debug("Collecting encodings (TE)")
             encoding_df = f_df.groupby(_cur_col).agg(
-                ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding"))
+                ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding")).cache()
             # encoding_df.write.mode('overwrite').format('noop').save()
             # logger.debug("Test saving of encodings")
-            # encoding = encoding_df.limit(10).collect()
+            # encoding = encoding_df.limit(10_000).collect()
             encoding = encoding_df.collect()
             logger.debug(f"Encodings have been collected (size={len(encoding)}) (TE)")
             f_df.unpersist()
@@ -712,7 +715,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             self.encodings[feature] = encoding
 
             logger.debug("Collecting oof_feats (TE)")
-            oof_feats_df = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding"))
+            oof_feats_df = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding")).cache()
             # oof_feats_df.write.mode('overwrite').format('noop').save()
             # logger.debug("Test saving of oof_feats")
             # oof_feats = oof_feats_df.limit(10).collect()
