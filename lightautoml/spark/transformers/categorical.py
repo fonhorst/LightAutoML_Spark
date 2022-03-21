@@ -665,9 +665,9 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         logger.debug("Starting processing features")
         feature_count = len(self.getInputCols())
         for i, feature in enumerate(self.getInputCols()):
-            # TODO: SPARK-LAMA change for debug. Remove it later.
-            if feature != 'inter__(city__power)':
-                continue
+            # # TODO: SPARK-LAMA change for debug. Remove it later.
+            # if feature != 'inter__(city__power)':
+            #     continue
             logger.debug(f"Processing feature {feature}({i}/{feature_count})")
 
             _cur_col = F.col(feature)
@@ -727,7 +727,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             logger.debug(f"Encodings have been collected (size={len(encoding)}) (TE)")
             f_df.unpersist()
 
-            mapping = np.zeros(encoding.shape[0], dtype=np.float64)
+            mapping = np.zeros(dim_size, dtype=np.float64)
             np.add.at(mapping, encoding[feature].astype(np.int32).to_numpy(), encoding['encoding'])
             self.encodings[feature] = mapping
 
@@ -738,7 +738,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
             candidates_df.unpersist()
 
-            mapping = np.zeros((n_folds, oof_feats.shape[0]), dtype=np.float64)
+            mapping = np.zeros((n_folds, dim_size), dtype=np.float64)
             np.add.at(
                 mapping,
                 (
