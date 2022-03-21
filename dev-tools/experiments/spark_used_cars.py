@@ -495,7 +495,8 @@ def calculate_cat_te(
         with log_exec_timer("SparkLabelEncoder") as ci_timer:
             estimator = SparkCatIntersectionsEstimator(
                 input_cols=list(cat_roles.keys()),
-                input_roles=cat_roles
+                input_roles=cat_roles,
+                max_depth=3
             )
 
             transformer = estimator.fit(sdataset.data)
