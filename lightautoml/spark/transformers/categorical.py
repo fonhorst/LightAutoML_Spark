@@ -701,9 +701,10 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             logger.debug("Collecting encodings (TE)")
             encoding_df = f_df.groupby(_cur_col).agg(
                 ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding"))
-            encoding_df.write.mode('overwrite').format('noop').save()
-            logger.debug("Test saving of encodings")
-            encoding = encoding_df.limit(10).collect()
+            # encoding_df.write.mode('overwrite').format('noop').save()
+            # logger.debug("Test saving of encodings")
+            # encoding = encoding_df.limit(10).collect()
+            encoding = encoding_df.collect()
             logger.debug(f"Encodings have been collected (size={len(encoding)}) (TE)")
             f_df.unpersist()
 
@@ -712,9 +713,10 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
             logger.debug("Collecting oof_feats (TE)")
             oof_feats_df = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding"))
-            oof_feats_df.write.mode('overwrite').format('noop').save()
-            logger.debug("Test saving of oof_feats")
-            oof_feats = oof_feats_df.limit(10).collect()
+            # oof_feats_df.write.mode('overwrite').format('noop').save()
+            # logger.debug("Test saving of oof_feats")
+            # oof_feats = oof_feats_df.limit(10).collect()
+            oof_feats = oof_feats_df.collect()
             logger.debug(f"oof_feats have been collected (size={len(oof_feats)}) (TE)")
 
             candidates_df.unpersist()
