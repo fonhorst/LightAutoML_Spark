@@ -95,8 +95,12 @@ def pandas_dict_udf(broadcasted_dict):
 
 def pandas_1d_mapping_udf(broadcasted_arr):
     def f(s: Series) -> Series:
+        s_na = s.isna()
+        s_fna = s.fillna(0).astype('int32')
         np_arr = broadcasted_arr.value
-        return pd.Series(np_arr[s])
+        res = pd.Series(np_arr[s_fna])
+        res[s_na] = np.nan
+        return res
     return F.pandas_udf(f, "double")
 
 
@@ -820,13 +824,16 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable
                 logger.debug(
                     f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._encodings[col_name])}")
                 values = sc.broadcast(self._encodings[col_name])
-                cols_to_select.append(
-                    F.when(F.isnan(_cur_col), _cur_col)
-                    .otherwise(pandas_1d_mapping_udf(values)(_cur_col))
-                    .alias(out_name)
-                )
+                cols_to_select.append(pandas_1d_mapping_udf(values)(_cur_col).alias(out_name))
 
         output = self._make_output_df(dataset, cols_to_select)
+
+        out_cols = [
+            F.when(F.isnull(out_col), float('nan')).otherwise(F.col(out_col)).alias(out_col)
+            for out_col in self.getOutputCols()
+        ]
+        rest_cols = [c for c in output.columns if c not in self.getOutputCols()]
+        output = output.select(*rest_cols, *out_cols)
 
         self._oof_feats_encoding = None
 
