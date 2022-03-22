@@ -58,15 +58,15 @@ experiments:
     repeat_rate: 1
     params:
       func: [ "calculate_lgbadv_boostlgb" ]
-      dataset: [ "used_cars_dataset_4x" ]
+      dataset: [ "used_cars_dataset_1x" ]
       seed: [ 42 ]
       cv: [ 5 ]
       use_algos:
         - [ [ "lgb" ] ]
-      checkpoint_path: [ "/tmp/results/lgb_chkp_cmp_all/lgb_adv_fp_used_cars_dataset_4x/" ]
+      checkpoint_path: [ "/tmp/results/lgb_chkp_cmp_all/lgb_adv_fp_used_cars_dataset_1x/" ]
     spark_config:
-      spark.executor.instances: [ '1' ]
-      spark.executor.cores: [ '16' ]
-      spark.executor.memory: [ '64g' ]
+      spark.executor.instances: [ '8' ]
+      spark.executor.cores: [ '8' ]
+      spark.executor.memory: [ '32g' ]
       # for debug purposes
       spark.kubernetes.driverEnv.PYTHONUNBUFFERED: [1]

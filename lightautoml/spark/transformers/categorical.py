@@ -820,7 +820,11 @@ class SparkTargetEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable
                 logger.debug(
                     f"[{type(self)} (TE)] transform map size for column {col_name}: {len(self._encodings[col_name])}")
                 values = sc.broadcast(self._encodings[col_name])
-                cols_to_select.append(pandas_1d_mapping_udf(values)(_cur_col).alias(out_name))
+                cols_to_select.append(
+                    F.when(F.isnan(_cur_col), _cur_col)
+                    .otherwise(pandas_1d_mapping_udf(values)(_cur_col))
+                    .alias(out_name)
+                )
 
         output = self._make_output_df(dataset, cols_to_select)
 
