@@ -53,54 +53,54 @@ experiments:
 #      spark.executor.instances: [ '1' ]
 #      spark.executor.cores: [ '8' ]
 #      spark.executor.memory: [ '16g' ]
-#  - name: "cmp-all-0125x"
-#    library: [ "spark" ]
-#    repeat_rate: 1
-#    params:
-#      func: [ "calculate_lgbadv_boostlgb" ]
-#      dataset: [ "used_cars_dataset_1x" ]
-#      seed: [ 42 ]
-#      cv: [ 5 ]
-#      use_algos:
-#        - [ [ "lgb" ] ]
-#      checkpoint_path: [ "/tmp/results/lgb_chkp_cmp_all/lgb_adv_fp_used_cars_dataset_1x/" ]
-#    spark_config:
-#      spark.executor.instances: [ '1' ]
-#      spark.executor.cores: [ '4' ]
-#      spark.executor.memory: [ '32g' ]
-#      # for debug purposes
+  - name: "cmp-all-0125x"
+    library: [ "spark" ]
+    repeat_rate: 1
+    params:
+      func: [ "calculate_lgbadv_boostlgb" ]
+      dataset: [ "used_cars_dataset_4x" ]
+      seed: [ 42 ]
+      cv: [ 5 ]
+      use_algos:
+        - [ [ "lgb" ] ]
+      checkpoint_path: [ "/tmp/results/lgb_chkp_cmp_all/lgb_adv_fp_used_cars_dataset_4x/" ]
+    spark_config:
+      spark.executor.instances: [ '1' ]
+      spark.executor.cores: [ '8' ]
+      spark.executor.memory: [ '32g' ]
+      # for debug purposes
 #      spark.kubernetes.driverEnv.PYTHONUNBUFFERED: [1]
 #  - name: "cmp-all-0125x"
 #    library: [ "spark" ]
 #    repeat_rate: 1
 #    params:
 #      func: [ "calculate_linear_l2" ]
-#      dataset: [ "used_cars_dataset_05x" ]
+#      dataset: [ "used_cars_dataset_1x" ]
 #      seed: [ 42 ]
 #      cv: [ 5 ]
 #      use_algos:
 #        - [ [ "lgb" ] ]
-#      checkpoint_path: [ "/tmp/results/linear_chkp_cmp_all/linear_fp_used_cars_dataset_05x/" ]
+#      checkpoint_path: [ "/tmp/results/linear_chkp_cmp_all/linear_fp_used_cars_dataset_1x/" ]
 #    spark_config:
 #      spark.executor.instances: [ '1' ]
 #      spark.executor.cores: [ '4' ]
 #      spark.executor.memory: [ '16g' ]
 #      # for debug purposes
 #      spark.kubernetes.driverEnv.PYTHONUNBUFFERED: [1]
-  - name: "cmp-all-0125x"
-    library: [ "spark" ]
-    repeat_rate: 1
-    params:
-      func: [ "calculate_automl" ]
-      dataset: [ "used_cars_dataset_1x" ]
-      seed: [ 42 ]
-      cv: [ 5 ]
-      use_algos:
-        - [ [ "lgb" ] ]
-#      checkpoint_path: [ "/tmp/results/linear_chkp_cmp_all/linear_fp_used_cars_dataset_1x/" ]
-    spark_config:
-      spark.executor.instances: [ '4' ]
-      spark.executor.cores: [ '8' ]
-      spark.executor.memory: [ '32g' ]
+#  - name: "cmp-all-0125x"
+#    library: [ "spark" ]
+#    repeat_rate: 1
+#    params:
+#      func: [ "calculate_automl" ]
+#      dataset: [ "used_cars_dataset_1x" ]
+#      seed: [ 42 ]
+#      cv: [ 5 ]
+#      use_algos:
+#        - [ [ "lgb" ] ]
+##      checkpoint_path: [ "/tmp/results/linear_chkp_cmp_all/linear_fp_used_cars_dataset_1x/" ]
+#    spark_config:
+#      spark.executor.instances: [ '1' ]
+#      spark.executor.cores: [ '8' ]
+#      spark.executor.memory: [ '32g' ]
       # for debug purposes
 #      spark.kubernetes.driverEnv.PYTHONUNBUFFERED: [1]

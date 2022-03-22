@@ -29,8 +29,8 @@ class Event:
 
     @staticmethod
     def parse_line(line: str) -> datetime.datetime:
-        date, time = line.split(' ')
-        dt = datetime.datetime.strptime(f"{date} {time}", format='%Y-%m-%d %H:%M:%S,%f')
+        date, time, *_ = line.split(' ')
+        dt = datetime.datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M:%S,%f')
         return dt
 
     def check(self, line: str) -> Optional[EventStartOrEnd]:
@@ -57,7 +57,7 @@ class EventInstance:
         return (self.end.time - self.start.time).total_seconds()
 
     def __repr__(self) -> str:
-        return f"Event {self.event.name}: {self.duration()} ({self.start} / {self.end})"
+        return f"Event {self.event.name}: {self.duration()} ({self.start.time} / {self.end.time if self.end else None})"
 
 
 def make_events(start_and_ends: Iterable[EventStartOrEnd]) -> List[EventInstance]:
@@ -96,6 +96,7 @@ events = [
     Event("LinearLBGFS", "Starting LinearLGBFS", "LinearLGBFS is finished"),
     Event("LinearLBGFS single fold", "fit_predict single fold in LinearLBGFS",
           "fit_predict single fold finished in LinearLBGFS"),
+    Event("LGBM", "Starting LGBM fit", "Finished LGBM fit")
 ]
 
 

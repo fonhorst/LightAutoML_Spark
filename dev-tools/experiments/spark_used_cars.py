@@ -227,7 +227,7 @@ def calculate_lgbadv_boostlgb(
         **_) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-    checkpoint_path = None
+    # checkpoint_path = None
 
     with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
         if checkpoint_path is not None:
@@ -242,6 +242,8 @@ def calculate_lgbadv_boostlgb(
             test_chkp = None
 
         task = SparkTask(task_type)
+
+        # train_chkp = None
 
         if not train_chkp or not test_chkp:
             logger.info(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
@@ -286,7 +288,7 @@ def calculate_lgbadv_boostlgb(
 
         score = task.get_dataset_metric()
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True)#, max_validation_size=9_900)
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True, max_validation_size=900_000)
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None

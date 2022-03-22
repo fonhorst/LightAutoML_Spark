@@ -375,12 +375,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
-            validationIndicatorCol=self.validation_column,
+            # validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
             useSingleDatasetMode=self._use_single_dataset_mode,
             isProvideTrainingMetric=True,
-            chunkSize=1_000_000,
-            # parallelism='voting_parallel'
+            chunkSize=1_000_000
         )
 
         logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
@@ -399,7 +398,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return ml_model, val_pred, fold_prediction_column
 
     def fit(self, train_valid: SparkBaseTrainValidIterator):
+        logger.info("Starting LGBM fit")
         self.fit_predict(train_valid)
+        logger.info("Finished LGBM fit")
 
     def get_features_score(self) -> Series:
         imp = 0
@@ -447,8 +448,12 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             Dataset with predicted values.
 
         """
+        logger.info("Starting LGBM fit")
         self.timer.start()
 
         self.input_roles = train_valid_iterator.input_roles
         
-        return super().fit_predict(train_valid_iterator)
+        res = super().fit_predict(train_valid_iterator)
+
+        logger.info("Finished LGBM fit")
+        return res
