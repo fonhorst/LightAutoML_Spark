@@ -530,6 +530,8 @@ class ReportDeco:
             "n_bins": 5,
             "datetime_level": "year",
             "n_sample": 100_000,
+            "ice_fraction": 1.0,
+            "ice_fraction_seed": 42
         }
 
         fi_input_params = kwargs.get("fi_params", {})
@@ -1213,7 +1215,15 @@ class ReportDeco:
             n_bins=self.interpretation_params["n_bins"],
             top_n_categories=self.interpretation_params["top_n_categories"],
             datetime_level=self.interpretation_params["datetime_level"],
+            ice_fraction=self.interpretation_params["ice_fraction"],
+            ice_fraction_seed=self.interpretation_params["ice_fraction_seed"]
         )
+
+        HISTOGRAM_DATA_ROWS_LIMIT = 2000
+        rows_count = test_data.count()
+        if rows_count > HISTOGRAM_DATA_ROWS_LIMIT:
+            fraction = HISTOGRAM_DATA_ROWS_LIMIT/rows_count
+            test_data = test_data.sample(fraction=fraction)
 
         if self._model.reader._roles[feature_name].name == "Numeric":
             test_data: pd.DataFrame = test_data.select(F.col(feature_name).cast("double")).toPandas()
