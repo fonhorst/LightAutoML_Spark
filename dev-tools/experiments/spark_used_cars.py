@@ -26,7 +26,9 @@ from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
+from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline
+from lightautoml.spark.pipelines.features.linear_pipeline import SparkLinearFeatures
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
 from lightautoml.spark.transformers.categorical import SparkLabelEncoderEstimator, SparkTargetEncoderEstimator, \
@@ -285,6 +287,102 @@ def calculate_lgbadv_boostlgb(
         score = task.get_dataset_metric()
 
         spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True)#, max_validation_size=9_900)
+        spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+
+        assert spark_ml_algo is not None
+        assert oof_preds is not None
+
+        spark_ml_algo = cast(SparkTabularMLAlgo, spark_ml_algo)
+        oof_preds = cast(SparkDataset, oof_preds)
+        oof_preds_sdf = oof_preds.data.select(
+            SparkDataset.ID_COLUMN,
+            F.col(oof_preds.target_column).alias('target'),
+            F.col(spark_ml_algo.prediction_feature).alias("prediction")
+        )
+        oof_score = score(oof_preds_sdf)
+
+        test_preds = spark_ml_algo.predict(stest)
+        test_preds_sdf = test_preds.data.select(
+            SparkDataset.ID_COLUMN,
+            F.col(test_preds.target_column).alias('target'),
+            F.col(spark_ml_algo.prediction_feature).alias("prediction")
+        )
+        test_score = score(test_preds_sdf)
+
+    return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score, 'test_score': test_score}
+
+
+def calculate_linear_l2(
+        spark: SparkSession,
+        path: str,
+        task_type: str,
+        seed: int = 42,
+        cv: int = 5,
+        roles: Optional[Dict] = None,
+        checkpoint_path: Optional[str] = None,
+        **_) -> Dict[str, Any]:
+    roles = roles if roles else {}
+
+    checkpoint_path = None
+
+    with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
+        if checkpoint_path is not None:
+            train_checkpoint_path = os.path.join(checkpoint_path, 'train.dump')
+            test_checkpoint_path = os.path.join(checkpoint_path, 'test.dump')
+            train_chkp = load_dump_if_exist(spark, train_checkpoint_path)
+            test_chkp = load_dump_if_exist(spark, test_checkpoint_path)
+        else:
+            train_checkpoint_path = None
+            test_checkpoint_path = None
+            train_chkp = None
+            test_chkp = None
+
+        task = SparkTask(task_type)
+
+        if not train_chkp or not test_chkp:
+            logger.info(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
+
+            train_data, test_data = prepare_test_and_train(spark, path, seed)
+
+            sreader = SparkToSparkReader(task=task, cv=3, advanced_roles=False)
+            sdataset = sreader.fit_read(train_data, roles=roles)
+
+            ml_alg_kwargs = {
+                'auto_unique_co': 10,
+                'max_intersection_depth': 3,
+                'multiclass_te_co': 3,
+                'output_categories': True,
+                'top_intersections': 4
+            }
+
+            features = SparkLinearFeatures(**ml_alg_kwargs)
+            features.input_roles = sdataset.roles
+            sdataset = features.fit_transform(sdataset)
+
+            iterator = SparkFoldsIterator(sdataset, n_folds=cv)
+            iterator.input_roles = features.output_roles
+
+            stest = sreader.read(test_data, add_array_attrs=True)
+            stest = cast(SparkDataset, features.transform(stest))
+
+            if checkpoint_path is not None:
+                dump_data(train_checkpoint_path, iterator.train, iterator_input_roles=iterator.input_roles)
+                dump_data(test_checkpoint_path, stest, iterator_input_roles=iterator.input_roles)
+        else:
+            logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
+
+            train_chkp_ds, metadata = train_chkp
+            iterator = SparkFoldsIterator(train_chkp_ds, n_folds=cv)
+            iterator.input_roles = metadata['iterator_input_roles']
+
+            stest, _ = test_chkp
+
+        iterator = iterator.convert_to_holdout_iterator()
+        # iterator = SparkDummyIterator(iterator.train, iterator.input_roles)
+
+        score = task.get_dataset_metric()
+
+        spark_ml_algo = SparkLinearLBFGS(cacher_key='main_cache')
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None
@@ -639,6 +737,8 @@ if __name__ == "__main__":
             func = calculate_automl
         elif func_name == "calculate_lgbadv_boostlgb":
             func = calculate_lgbadv_boostlgb
+        elif func_name == "calculate_linear_l2":
+            func = calculate_linear_l2
         elif func_name == 'empty_calculate':
             func = empty_calculate
         elif func_name == 'calculate_reader':

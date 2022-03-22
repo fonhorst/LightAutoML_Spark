@@ -216,6 +216,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             Dataset with selected features.
 
         """
+        logger.info("Reader starting fit_read")
         logger.info(f"\x1b[1mTrain data columns: {train_data.columns}\x1b[0m\n")
 
         train_data = self._create_unique_ids(train_data, cacher_key=self._cacher_key)
@@ -358,6 +359,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 task=self.task,
                 **kwargs
             )
+
+        logger.info("Reader finished fit_read")
 
         return dataset
 
