@@ -83,7 +83,6 @@ if __name__ == "__main__":
         automl = SparkTabularAutoML(
             spark=spark,
             task=task,
-            lgb_params={'use_single_dataset_mode': True},
             linear_l2_params={"default_params": {"regParam": [1]}},
             general_params={"use_algos": use_algos},
             reader_params={"cv": cv, "advanced_roles": False},

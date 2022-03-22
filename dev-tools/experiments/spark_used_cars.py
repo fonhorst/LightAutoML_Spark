@@ -185,6 +185,8 @@ def calculate_automl(
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
+            lgb_params={'use_single_dataset_mode': True, "default_params": {"numIterations": 500}, "freeze_defaults": True},
+            linear_l2_params={"default_params": {"regParam": [1]}},
             reader_params={"cv": cv, "advanced_roles": False},
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
         )
@@ -288,7 +290,7 @@ def calculate_lgbadv_boostlgb(
 
         score = task.get_dataset_metric()
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True, max_validation_size=900_000)
+        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True, max_validation_size=10_000)
         spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None

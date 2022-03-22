@@ -188,10 +188,11 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
 
-        if iterator_len > 1:
-            single_pred_ds = self._make_single_prediction_dataset(pred_ds)
-            logger.info(
-                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(single_pred_ds)}\x1b[0m")
+        # TODO: SPARk-LAMA temporary remove
+        # if iterator_len > 1:
+        #     single_pred_ds = self._make_single_prediction_dataset(pred_ds)
+        #     logger.info(
+        #         f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(single_pred_ds)}\x1b[0m")
 
         if iterator_len > 1 or "Tuned" not in self._name:
             logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))

@@ -90,7 +90,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {},
                  use_single_dataset_mode: bool = True,
-                 max_validation_size: int = 1_000_000,
+                 max_validation_size: int = 10_000, #1_000_000,
                  seed: int = 42):
         SparkTabularMLAlgo.__init__(self, cacher_key, default_params, freeze_defaults, timer, optimization_search_space)
         self._probability_col_name = "probability"
@@ -375,7 +375,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
-            # validationIndicatorCol=self.validation_column,
+            validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
             useSingleDatasetMode=self._use_single_dataset_mode,
             isProvideTrainingMetric=True,
