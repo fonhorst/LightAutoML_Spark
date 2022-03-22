@@ -366,9 +366,6 @@ def get_bins_table(data: DataFrame, n_bins=20):
     total_count = df["count"].sum()
     bin_size = math.ceil(total_count / n_bins)
 
-
-
-
     bins_table = data.groupby("bin").agg({"y_true": [len, np.mean], "y_pred": [np.min, np.mean, np.max]}).reset_index()
     bins_table.columns = [
         "Bin number",
@@ -427,10 +424,9 @@ def plot_reg_scatter(data, path):
         kind="reg",
         truncate=False,
         color="m",
-        height=14,
-        weights="count"
+        height=14
     )
-    g.fig.suptitle("Scatter plot")
+    g.fig.suptitle("Scatter plot by subsample (2000 points)")
     g.fig.tight_layout()
     g.fig.subplots_adjust(top=0.95)
 
@@ -690,10 +686,20 @@ class ReportDeco:
             path=os.path.join(self.output_path, self._inference_content["error_hist"]),
         )
 
-        # plot_reg_scatter(
-        #     data,
-        #     path=os.path.join(self.output_path, self._inference_content["scatter_plot"]),
-        # )
+        plot_reg_scatter(
+            pd.DataFrame(
+                data.select(
+                    true_col.alias("y_true"),
+                    pred_col.alias("y_pred")
+                ).rdd.takeSample(
+                    withReplacement=False,
+                    num=2000,
+                    seed=42
+                ),
+                columns=["y_true", "y_pred"]
+            ),
+            path=os.path.join(self.output_path, self._inference_content["scatter_plot"]),
+        )
 
         # metrics
         metrics = RegressionMetrics(
@@ -1008,7 +1014,7 @@ class ReportDeco:
         test_preds = self._model.predict(*args, **kwargs)
 
         true_values_col_name = "y_true"
-        raw_predictions_col_name = "raw"
+        scores_col_name = "raw"
         predictions_col_name = "label"
 
 
@@ -1044,7 +1050,7 @@ class ReportDeco:
                 data,
                 positive_rate=positive_rate,
                 true_labels_col_name=true_values_col_name,
-                scores_col_name=raw_predictions_col_name,
+                scores_col_name=scores_col_name,
                 predicted_labels_col_name=predictions_col_name
             )
 
@@ -1060,6 +1066,11 @@ class ReportDeco:
 
         elif self.task == "reg":
             # filling for html
+
+            # JUST FOR TEST
+            # REMOVE AFTER THE DEBUGGING
+            predictions_col_name = scores_col_name
+
             self._inference_content = {}
             self._inference_content["target_distribution"] = "test_target_distribution_{}.png".format(
                 self._n_test_sample
