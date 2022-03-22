@@ -583,27 +583,31 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                     model: PipelineModel,
                                     prediction_col: str,
                                     n_bins: int,
-                                    preds_fraction: float = 1.0,
-                                    fraction_seed: int = 42) -> Tuple[List, List, List]:
+                                    ice_fraction: float = 1.0,
+                                    ice_fraction_seed: int = 42) -> Tuple[List, List, List]:
         counts, bin_edges = SparkTabularAutoML.get_histogram(df, feature_name, n_bins)
         grid = (bin_edges[:-1] + bin_edges[1:]) / 2
         ys = []
+        sample_df = df.select(*[c for c in df.columns if c != feature_name]) \
+                        .sample(fraction=ice_fraction, seed=ice_fraction_seed) \
+                        .cache()
         for i in tqdm(grid):
             # replace feature column values with constant
-            sdf = df.select(*[c for c in df.columns if c != feature_name], F.lit(i).alias(feature_name))
+            sdf = sample_df.select('*', F.lit(i).alias(feature_name))
 
             # infer via transformer
             preds = model.transform(sdf)
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
             prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
-            # reduce number of rows in DataFrame with predictions
-            preds = preds.sample(fraction=preds_fraction, seed=fraction_seed)
             preds = np.array(preds.select(prediction_col).collect())
             # when preds.shape is (n, 1, k) we change it to (n, k),
             # where n is number of rows and k is number of classes
             if len(preds.shape) == 3:
                 preds = np.squeeze(preds, axis=1)
             ys.append(preds)
+
+        sample_df.unpersist()
+
         return grid, ys, counts
 
     @staticmethod
@@ -612,8 +616,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                          model: PipelineModel,
                                          prediction_col: str,
                                          n_top_cats: int,
-                                         preds_fraction: float = 1.0,
-                                         fraction_seed: int = 42) -> Tuple[List, List, List]:
+                                         ice_fraction: float = 1.0,
+                                         ice_fraction_seed: int = 42) -> Tuple[List, List, List]:
         """Returns grid, ys, counts to plot PDP
 
         Args:
@@ -629,14 +633,20 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             `ys` is list of predictions by category,
             `counts` is numbers of values by category
         """
-        feature_cnt = df.where(F.col(feature_name).isNotNull()).groupBy(feature_name).count().orderBy(F.desc("count")).collect()
+        feature_cnt = df.where(F.col(feature_name).isNotNull()) \
+                        .groupBy(feature_name) \
+                        .count() \
+                        .orderBy(F.desc("count")) \
+                        .collect()
         grid = [row[feature_name] for row in feature_cnt[:n_top_cats]]
         counts = [row["count"] for row in feature_cnt[:n_top_cats]]
         ys = []
+        sample_df = df.select(*[c for c in df.columns if c != feature_name]) \
+                        .sample(fraction=ice_fraction, seed=ice_fraction_seed) \
+                        .cache()
         for i in tqdm(grid):
-            sdf = df.select(*[c for c in df.columns if c != feature_name], F.lit(i).alias(feature_name))
+            sdf = sample_df.select('*', F.lit(i).alias(feature_name))
             preds = model.transform(sdf)
-            preds = preds.sample(fraction=preds_fraction, seed=fraction_seed)
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
             prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
             preds = np.array(preds.select(prediction_col).collect())
@@ -670,7 +680,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             get_category_udf = F.udf(get_category_by_row_num, SparkTypes.StringType())
 
             # add row number to main dataframe and exclude feature_name column
-            sdf = df.select(F.row_number().over(w).alias("row_num"), *[f for f in df.columns if f != feature_name])
+            sdf = sample_df.select('*', F.row_number().over(w).alias("row_num"))
 
             all_columns_except_row_num = [f for f in sdf.columns if f != "row_num"]
             feature_col = get_category_udf(F.col("row_num")).alias(feature_name)
@@ -679,7 +689,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             sdf = sdf.select(*all_columns_except_row_num, feature_col)
 
             preds = model.transform(sdf)
-            preds = preds.sample(fraction=preds_fraction, seed=fraction_seed)
             preds = np.array(preds.select(prediction_col).collect())
             # when preds.shape is (n, 1, k) we change it to (n, k),
             # where n is number of rows and k is number of classes
@@ -690,6 +699,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             ys.append(preds)
             counts.append(sum([row["count"] for row in feature_cnt[n_top_cats:]]))
 
+        sample_df.unpersist()
+
         return grid, ys, counts
 
     @staticmethod
@@ -699,8 +710,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                       prediction_col: str,
                                       datetime_level: str,
                                       reader,
-                                      preds_fraction: float = 1.0,
-                                      fraction_seed: int = 42) -> Tuple[List, List, List]:
+                                      ice_fraction: float = 1.0,
+                                      ice_fraction_seed: int = 42) -> Tuple[List, List, List]:
         df = reader.read(df).data
         if datetime_level == "year":
             feature_cnt = df.groupBy(F.year(feature_name).alias("year")).count().orderBy(F.asc("year")).collect()
@@ -724,12 +735,13 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 counts[row["dayofweek"]-1] = row["count"]
             replace_date_element_udf = F.udf(replace_dayofweek_in_date, SparkTypes.DateType())
         ys = []
+        sample_df = df.select(*[c for c in df.columns if c != feature_name]) \
+                        .sample(fraction=ice_fraction, seed=ice_fraction_seed) \
+                        .cache()
         for i in tqdm(grid):
-            all_columns_except_feature = [c for c in df.columns if c != feature_name]
             feature_col = replace_date_element_udf(F.col(feature_name), F.lit(i)).alias(feature_name)
-            sdf = df.select(*all_columns_except_feature, feature_col)
+            sdf = sample_df.select('*', feature_col)
             preds = model.transform(sdf)
-            preds = preds.sample(fraction=preds_fraction, seed=fraction_seed)
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
             prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
             preds = np.array(preds.select(prediction_col).collect())
@@ -748,12 +760,12 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             n_bins: Optional[int] = 30,
             top_n_categories: Optional[int] = 10,
             datetime_level: Optional[str] = "year",
-            preds_fraction: float = 1.0,
-            fraction_seed: int = 42
+            ice_fraction: float = 1.0,
+            ice_fraction_seed: int = 42
     ):
         assert feature_name in self.reader._roles
         assert datetime_level in ["year", "month", "dayofweek"]
-        assert preds_fraction > 0 and preds_fraction <= 1.0
+        assert ice_fraction > 0 and ice_fraction <= 1.0
 
         pipeline_model = self.make_transformer()
 
@@ -764,8 +776,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                                      pipeline_model,
                                                      "prediction",
                                                      n_bins,
-                                                     preds_fraction,
-                                                     fraction_seed)
+                                                     ice_fraction,
+                                                     ice_fraction_seed)
         # Categorical features
         elif self.reader._roles[feature_name].name == "Category":
             return self.get_pdp_data_categorical_feature(test_data,
@@ -773,8 +785,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                                          pipeline_model,
                                                          "prediction",
                                                          top_n_categories,
-                                                         preds_fraction,
-                                                         fraction_seed)
+                                                         ice_fraction,
+                                                         ice_fraction_seed)
         # Datetime Features
         elif self.reader._roles[feature_name].name == "Datetime":
             return self.get_pdp_data_datetime_feature(test_data,
@@ -783,8 +795,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                                                       "prediction",
                                                       datetime_level,
                                                       self.reader,
-                                                      preds_fraction,
-                                                      fraction_seed)
+                                                      ice_fraction,
+                                                      ice_fraction_seed)
         else:
             raise ValueError("Supported only Numeric, Category or Datetime feature")
 
@@ -798,8 +810,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             top_n_categories: Optional[int] = 10,
             top_n_classes: Optional[int] = 10,
             datetime_level: Optional[str] = "year",
-            preds_fraction: float = 1.0,
-            fraction_seed: int = 42
+            ice_fraction: float = 1.0,
+            ice_fraction_seed: int = 42
     ):
         grid, ys, counts = self.get_individual_pdp(
             test_data=test_data,
@@ -807,15 +819,15 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             n_bins=n_bins,
             top_n_categories=top_n_categories,
             datetime_level=datetime_level,
-            preds_fraction=preds_fraction,
-            fraction_seed=fraction_seed
+            ice_fraction=ice_fraction,
+            ice_fraction_seed=ice_fraction_seed
         )
 
         HISTOGRAM_DATA_ROWS_LIMIT = 2000
         rows_count = test_data.count()
         if rows_count > HISTOGRAM_DATA_ROWS_LIMIT:
             fraction = HISTOGRAM_DATA_ROWS_LIMIT/rows_count
-            test_data = test_data.sample(fraction=fraction, seed=42)
+            test_data = test_data.sample(fraction=fraction)
         if self.reader._roles[feature_name].name == "Numeric":
             test_data = test_data.select(F.col(feature_name).cast("double")).toPandas()
         else:
