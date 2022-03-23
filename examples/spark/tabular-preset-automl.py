@@ -60,7 +60,7 @@ if __name__ == "__main__":
     spark = get_spark_session()
 
     seed = 42
-    cv = 5
+    cv = 2
     use_algos = [["lgb", "linear_l2"], ["lgb"]]
     path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
     task_type = "reg"
@@ -83,10 +83,10 @@ if __name__ == "__main__":
         automl = SparkTabularAutoML(
             spark=spark,
             task=task,
-            linear_l2_params={"default_params": {"regParam": [1]}},
             general_params={"use_algos": use_algos},
-            reader_params={"cv": cv, "advanced_roles": False},
-            tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
+            lgb_params={'use_single_dataset_mode': True, "default_params": {"numIterations": 500}, "freeze_defaults": True},
+            linear_l2_params={"default_params": {"regParam": [1]}},
+            reader_params={"cv": cv, "advanced_roles": False}
         )
 
         oof_predictions = automl.fit_predict(
