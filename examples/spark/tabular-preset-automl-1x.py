@@ -61,7 +61,6 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 2
-    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
     use_algos = [["lgb"], ["linear_l2"]]
     path = "/opt/spark_data/derivative_datasets/1x_dataset.csv"
     task_type = "reg"
