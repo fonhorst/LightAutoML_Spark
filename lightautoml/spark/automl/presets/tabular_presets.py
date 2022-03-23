@@ -735,12 +735,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 counts[row["dayofweek"]-1] = row["count"]
             replace_date_element_udf = F.udf(replace_dayofweek_in_date, SparkTypes.DateType())
         ys = []
-        sample_df = df.select(*[c for c in df.columns if c != feature_name]) \
-                        .sample(fraction=ice_fraction, seed=ice_fraction_seed) \
-                        .cache()
+        sample_df = df.sample(fraction=ice_fraction, seed=ice_fraction_seed) \
+                      .cache()
         for i in tqdm(grid):
             feature_col = replace_date_element_udf(F.col(feature_name), F.lit(i)).alias(feature_name)
-            sdf = sample_df.select('*', feature_col)
+            sdf = sample_df.select(*[c for c in sample_df.columns if c != feature_name], feature_col)
             preds = model.transform(sdf)
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter 
             prediction_col = next(c for c in preds.columns if c.startswith('prediction'))
