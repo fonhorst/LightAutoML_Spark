@@ -103,8 +103,8 @@ experiments:
         - [ [ "lgb" ] ]
 #      checkpoint_path: [ "/tmp/results/linear_chkp_cmp_all/linear_fp_used_cars_dataset_1x/" ]
     spark_config:
-      spark.executor.instances: [ '8', '4', '2', '1' ]
-      spark.executor.cores: [ '8' ]
+      spark.executor.instances: [ '1' ]
+      spark.executor.cores: [ '4' ]
       spark.executor.memory: [ '32g' ]
 #       for debug purposes
 #      spark.kubernetes.driverEnv.PYTHONUNBUFFERED: [1]

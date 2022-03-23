@@ -358,23 +358,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         valid_data = valid.data
 
-        # TODO: SPARK-LAMA for debug, remove it later
-        # logger.warning(f"\033[1mVal size before max cleaning: {valid_data.count()}\033[0m")
-        # max_val, = train_data.where(F.col(self.validation_column) == 0).select(F.max(full.target_column)).first()
-        # train_data = train_data.where((F.col(self.validation_column) == 0) | (F.col(full.target_column) <= max_val))
-        # valid_data = valid_data.where((F.col(full.target_column) <= max_val))
-        # logger.warning(f"\033[1mVal size after max cleaning: {valid_data.count()}\033[0m")
-
-        # cols = [F.col(c).alias(c.replace('(', '[').replace(')', ']')) for c in valid_data.columns]
-        # train_data.select(*cols).write.mode('overwrite').parquet("/tmp/results/dump.parquet")
-
-        # train_data = train_data.where(F.col('_id') != 8589941240)
-        # valid_data = valid_data.where(F.col('_id') != 8589941240)
-
-        # TODO: SPARK-LAMA for debug, remove later
-        params["numIterations"] = 500
-        params["earlyStoppingRound"] = 5000
-
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
