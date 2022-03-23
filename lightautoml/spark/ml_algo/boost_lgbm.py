@@ -371,6 +371,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         # train_data = train_data.where(F.col('_id') != 8589941240)
         # valid_data = valid_data.where(F.col('_id') != 8589941240)
 
+        # TODO: SPARK-LAMA for debug, remove later
+        params["numIterations"] = 500
+        params["earlyStoppingRound"] = 5000
+
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
