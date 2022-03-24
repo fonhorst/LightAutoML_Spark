@@ -37,21 +37,23 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[Sp
 
 def get_spark_session():
     if os.environ.get("SCRIPT_ENV", None) == "cluster":
-        return SparkSession.builder.getOrCreate()
+        spark_sess = SparkSession.builder.getOrCreate()
+    else:
+        spark_sess = (
+            SparkSession
+            .builder
+            .master("local[*]")
+            .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
+            .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
+            .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+            .config("spark.sql.shuffle.partitions", "16")
+            .config("spark.driver.memory", "12g")
+            .config("spark.executor.memory", "12g")
+            .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+            .getOrCreate()
+        )
 
-    spark_sess = (
-        SparkSession
-        .builder
-        .master("local[*]")
-        .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
-        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
-        .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-        .config("spark.sql.shuffle.partitions", "16")
-        .config("spark.driver.memory", "12g")
-        .config("spark.executor.memory", "12g")
-        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-        .getOrCreate()
-    )
+    spark_sess.sparkContext.setLogLevel("WARN")
 
     return spark_sess
 
@@ -61,7 +63,9 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 2
-    use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    use_algos = [["lgb"]]
+    # use_algos = [["lgb", "linear_l2"]]
     path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
     task_type = "reg"
     roles = {
@@ -84,6 +88,7 @@ if __name__ == "__main__":
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
+            # lgb_params={'use_single_dataset_mode': True},
             lgb_params={'use_single_dataset_mode': True, "default_params": {"numIterations": 500}, "freeze_defaults": True},
             linear_l2_params={"default_params": {"regParam": [1]}},
             reader_params={"cv": cv, "advanced_roles": False}
@@ -91,7 +96,8 @@ if __name__ == "__main__":
 
         oof_predictions = automl.fit_predict(
             train_data,
-            roles=roles
+            roles=roles,
+            valid_data=test_data_dropped
         )
 
     logger.info("Predicting on out of fold")

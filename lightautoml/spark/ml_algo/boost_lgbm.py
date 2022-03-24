@@ -358,6 +358,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         valid_data = valid.data
 
+        val_size = train_data.where(F.col(self.validation_column) == 1).count()
+        logger.info(f"Validation data size: {val_size}")
+
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
