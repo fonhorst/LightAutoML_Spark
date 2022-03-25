@@ -6,8 +6,10 @@ import time
 
 from pathlib import Path
 from typing import Union
+from collections import namedtuple
 
 from pyspark import SparkContext
+from pyspark.sql import SQLContext
 from pyspark.ml.common import inherit_doc
 from pyspark.ml.util import DefaultParamsReader
 from pyspark.ml.util import MLReadable
@@ -49,9 +51,12 @@ class СommonPickleMLWriter(MLWriter):
 
         СommonPickleMLWriter.saveMetadata(self.instance, path, self.sc)
 
-        Path(path).mkdir(parents=True, exist_ok=True)
-        with open(os.path.join(path, "transformer_class_instance.pickle"), 'wb') as handle:
-            pickle.dump(self.instance, handle)
+        pickled_instance = pickle.dumps(self.instance)
+        Record = namedtuple("Record", ["pipeline"])
+        rdd = self.sc.parallelize([Record(pickled_instance)])
+        instance_df = rdd.map(lambda rec: Record(bytearray(rec.pipeline))).toDF()
+        instance_df.write.mode('overwrite').parquet(os.path.join(path, "transformer_class_instance"))
+
 
     @staticmethod
     def saveMetadata(instance, path, sc):
@@ -103,8 +108,9 @@ class СommonPickleMLReader(MLReader):
     def load(self, path):
         """Load the ML instance from the input path."""
 
-        with open(os.path.join(path, "transformer_class_instance.pickle"), 'rb') as handle:
-            instance = pickle.load(handle)
+        df = SQLContext(self.sc).read.parquet(os.path.join(path, "transformer_class_instance"))
+        pickled_instance = df.rdd.map(lambda row: bytes(row.pipeline)).first()
+        instance = pickle.loads(pickled_instance)
 
         return instance
 
@@ -137,12 +143,14 @@ class SparkLabelEncoderTransformerMLWriter(MLWriter):
 
         СommonPickleMLWriter.saveMetadata(self.instance, path, self.sc)
 
-        Path(path).mkdir(parents=True, exist_ok=True)
-        with open(os.path.join(path, "transformer_class_instance.pickle"), 'wb') as handle:
-            indexer_model = self.instance.indexer_model
-            self.instance.indexer_model = None
-            pickle.dump(self.instance, handle)
-            self.instance.indexer_model = indexer_model
+        indexer_model = self.instance.indexer_model
+        self.instance.indexer_model = None
+        pickled_instance = pickle.dumps(self.instance)
+        self.instance.indexer_model = indexer_model
+        Record = namedtuple("Record", ["pipeline"])
+        rdd = self.sc.parallelize([Record(pickled_instance)])
+        instance_df = rdd.map(lambda rec: Record(bytearray(rec.pipeline))).toDF()
+        instance_df.write.mode('overwrite').parquet(os.path.join(path, "transformer_class_instance"))
 
         self.instance.indexer_model.write().overwrite().save(os.path.join(path, "indexer_model"))
 
@@ -152,8 +160,9 @@ class SparkLabelEncoderTransformerMLReader(MLReader):
     def load(self, path):
         """Load the ML instance from the input path."""
 
-        with open(os.path.join(path, "transformer_class_instance.pickle"), 'rb') as handle:
-            instance = pickle.load(handle)
+        df = SQLContext(self.sc).read.parquet(os.path.join(path, "transformer_class_instance"))
+        pickled_instance = df.rdd.map(lambda row: bytes(row.pipeline)).first()
+        instance = pickle.loads(pickled_instance)
 
         from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
         indexer_model = LAMLStringIndexerModel.load(os.path.join(path, "indexer_model"))
