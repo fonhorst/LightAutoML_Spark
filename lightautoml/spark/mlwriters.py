@@ -228,6 +228,7 @@ class LightGBMModelWrapperMLWriter(MLWriter):
             probabilityCol = instance.model.getProbabilityCol()
         else:
             rawPredictionCol = None
+            probabilityCol = None
         basicMetadata = {"class": cls, "timestamp": int(round(time.time() * 1000)),
                          "sparkVersion": sc.version, "uid": uid, "paramMap":
                          {"featuresCol": instance.model.getFeaturesCol(),
