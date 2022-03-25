@@ -225,13 +225,15 @@ class LightGBMModelWrapperMLWriter(MLWriter):
 
         if isinstance(instance.model, LightGBMClassificationModel):
             rawPredictionCol = instance.model.getRawPredictionCol()
+            probabilityCol = instance.model.getProbabilityCol()
         else:
             rawPredictionCol = None
         basicMetadata = {"class": cls, "timestamp": int(round(time.time() * 1000)),
                          "sparkVersion": sc.version, "uid": uid, "paramMap":
                          {"featuresCol": instance.model.getFeaturesCol(),
                           "predictionCol": instance.model.getPredictionCol(),
-                          "rawPredictionCol": rawPredictionCol
+                          "rawPredictionCol": rawPredictionCol,
+                          "probabilityCol": probabilityCol
                          },
                          "defaultParamMap": None, "modelClass": model_cls}
 
@@ -262,6 +264,9 @@ class LightGBMModelWrapperMLReader(MLReader):
         model_wrapper.model.setPredictionCol(metadata["paramMap"]["predictionCol"])
         if metadata["paramMap"]["rawPredictionCol"]:
             model_wrapper.model.setRawPredictionCol(metadata["paramMap"]["rawPredictionCol"])
+        if metadata["paramMap"]["probabilityCol"]:
+            model_wrapper.model.setProbabilityCol(metadata["paramMap"]["probabilityCol"])
+            
 
         return model_wrapper
 
