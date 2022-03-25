@@ -126,6 +126,9 @@ if __name__ == "__main__":
 
         logger.info(f"score for test predictions: {test_metric_value}")
 
+        expected_predictions_sum = te_pred.select(F.sum(pred_column).alias("sum")).collect()[0]["sum"]
+        logger.info(f"expected predictions sum: {expected_predictions_sum}")
+
     with log_exec_timer("spark-lama predicting on test (#3 way)") as predict_timer_3:
         pipeline_model = PipelineModel.load("hdfs://node21.bdcl:9000/automl_pipeline")
         te_pred = pipeline_model.transform(test_data_dropped)
@@ -139,6 +142,9 @@ if __name__ == "__main__":
         ))
 
         logger.info(f"score for test predictions via loaded pipeline: {test_metric_value}")
+
+        actual_predictions_sum = te_pred.select(F.sum(pred_column).alias("sum")).collect()[0]["sum"]
+        logger.info(f"actual predictions sum: {actual_predictions_sum}")
 
     logger.info("Predicting is finished")
 
