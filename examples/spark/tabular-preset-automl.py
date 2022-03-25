@@ -103,7 +103,7 @@ if __name__ == "__main__":
     logger.info(f"score for out-of-fold predictions: {metric_value}")
 
     transformer = automl.make_transformer()
-    transformer.write().overwrite().save("/tmp/automl_pipeline")
+    transformer.write().overwrite().save("hdfs://node21.bdcl:9000/automl_pipeline")
 
     with log_exec_timer("spark-lama predicting on test (#1 way)") as predict_timer:
         te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         logger.info(f"score for test predictions: {test_metric_value}")
 
     with log_exec_timer("spark-lama predicting on test (#3 way)") as predict_timer_3:
-        pipeline_model = PipelineModel.load("/tmp/automl_pipeline")
+        pipeline_model = PipelineModel.load("hdfs://node21.bdcl:9000/automl_pipeline")
         te_pred = pipeline_model.transform(test_data_dropped)
 
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
