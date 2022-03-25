@@ -95,6 +95,7 @@ if __name__ == "__main__":
             reader_params={"cv": cv, "advanced_roles": False}
         )
 
+        # TODO: SPARK-LAMA remove valid_data=test_data_dropped
         oof_predictions = automl.fit_predict(
             train_data,
             roles=roles,
