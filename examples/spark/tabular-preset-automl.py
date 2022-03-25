@@ -165,5 +165,5 @@ if __name__ == "__main__":
 
     automl.release_cache()
 
-    time.sleep(600)
+    # time.sleep(600)
     spark.stop()

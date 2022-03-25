@@ -361,16 +361,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         val_size = train_data.where(F.col(self.validation_column) == 1).count()
         logger.info(f"Validation data size: {val_size}")
 
-        # TODO: SPARK-LAMA for debug. Remove it later.
-        replace_col = F.when(F.rand(self._seed) <= 1.0, F.lit(1)).otherwise(F.lit(0))
-        repalce_expr = F.when(F.col(self.validation_column) == 1, replace_col).otherwise(F.lit(0)).alias(self.validation_column)
-        cols = list(train_data.columns)
-        cols.remove(self.validation_column)
-        train_data = train_data.select(*cols, repalce_expr)
-
-        val_size = train_data.where(F.col(self.validation_column) == 1).count()
-        logger.info(f"Validation data size after replacement: {val_size}")
-
         lgbm = LGBMBooster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
