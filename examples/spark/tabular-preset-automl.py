@@ -1,5 +1,6 @@
 import logging.config
 import os
+import time
 from typing import Tuple
 
 import pyspark.sql.functions as F
@@ -108,7 +109,9 @@ if __name__ == "__main__":
     logger.info(f"score for out-of-fold predictions: {metric_value}")
 
     transformer = automl.make_transformer()
-    transformer.write().overwrite().save("/tmp/automl_pipeline")
+
+    with log_exec_timer("saving model") as saving_timer:
+        transformer.write().overwrite().save("/tmp/automl_pipeline")
 
     with log_exec_timer("spark-lama predicting on test (#1 way)") as predict_timer:
         te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
@@ -131,8 +134,10 @@ if __name__ == "__main__":
 
         logger.info(f"score for test predictions: {test_metric_value}")
 
-    with log_exec_timer("spark-lama predicting on test (#3 way)") as predict_timer_3:
+    with log_exec_timer("Loading model time") as loading_timer:
         pipeline_model = PipelineModel.load("/tmp/automl_pipeline")
+
+    with log_exec_timer("spark-lama predicting on test (#3 way)") as predict_timer_3:
         te_pred = pipeline_model.transform(test_data_dropped)
 
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
@@ -151,11 +156,14 @@ if __name__ == "__main__":
         "metric_value": metric_value,
         "test_metric_value": test_metric_value,
         "train_duration_secs": train_timer.duration,
-        "predict_duration_secs": predict_timer.duration
+        "predict_duration_secs": predict_timer.duration,
+        "saving_duration_secs": saving_timer.duration,
+        "loading_duration_secs": loading_timer.duration
     }
 
     print(f"EXP-RESULT: {result}")
 
     automl.release_cache()
 
+    time.sleep(600)
     spark.stop()
