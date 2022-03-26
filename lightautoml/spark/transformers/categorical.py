@@ -669,9 +669,6 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         logger.debug("Starting processing features")
         feature_count = len(self.getInputCols())
         for i, feature in enumerate(self.getInputCols()):
-            # # TODO: SPARK-LAMA change for debug. Remove it later.
-            # if feature != 'inter__(city__power)':
-            #     continue
             logger.debug(f"Processing feature {feature}({i}/{feature_count})")
 
             _cur_col = F.col(feature)
@@ -724,9 +721,6 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             logger.debug("Collecting encodings (TE)")
             encoding_df = f_df.groupby(_cur_col).agg(
                 ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding")).cache()
-            # encoding_df.write.mode('overwrite').format('noop').save()
-            # logger.debug("Test saving of encodings")
-            # encoding = encoding_df.limit(10_000).collect()
             encoding = encoding_df.toPandas()
             logger.debug(f"Encodings have been collected (size={len(encoding)}) (TE)")
             f_df.unpersist()
@@ -754,12 +748,6 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
             oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping=mapping)
 
-            # oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
-            #     row[self._folds_column] * dim_size + row[feature]: row['encoding'] for _, row in oof_feats.iterrows()
-            # })
-            # oof_feats = OOfFeatsMapping(folds_column=self._folds_column, dim_size=dim_size, mapping={
-            #     row[self._folds_column] * dim_size + row[feature]: row['encoding'] for _, row in dict()
-            # })
             oof_feats_encoding[feature] = oof_feats
 
             logger.debug(f"[{type(self)} (TE)] Encodings have been calculated")

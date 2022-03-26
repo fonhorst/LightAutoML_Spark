@@ -58,7 +58,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         "maxBin": 255,
         "minDataInLeaf": 5,
         # e.g. num trees
-        "numIterations": 500,
+        "numIterations": 3000,
         "earlyStoppingRound": 50,
         # for regression
         "alpha": 1.0,
@@ -90,7 +90,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                  timer: Optional[TaskTimer] = None,
                  optimization_search_space: Optional[dict] = {},
                  use_single_dataset_mode: bool = True,
-                 max_validation_size: int = 10_000, #1_000_000,
+                 max_validation_size: int = 10_000,
                  seed: int = 42):
         SparkTabularMLAlgo.__init__(self, cacher_key, default_params, freeze_defaults, timer, optimization_search_space)
         self._probability_col_name = "probability"
@@ -357,9 +357,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             train_data = train_data.where(val_filter_cond)
 
         valid_data = valid.data
-
-        val_size = train_data.where(F.col(self.validation_column) == 1).count()
-        logger.info(f"Validation data size: {val_size}")
 
         lgbm = LGBMBooster(
             **params,
