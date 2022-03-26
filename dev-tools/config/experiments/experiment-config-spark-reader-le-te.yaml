@@ -6,45 +6,7 @@ calculation_scripts:
 state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip experiments in state file, ignore - don`t skip experiments, delete - delete experiments in state file
 
 # Unique set of parameters for each experiment
-
 experiments:
-#  - name: "cmp-reader"
-#    library: [ "spark" ]
-#    repeat_rate: 1
-#    params:
-#      func: [ "calculate_reader" ]
-#      dataset: [ "used_cars_dataset_1x_cats_only", "used_cars_dataset_4x_cats_only" ]
-#      seed: [ 42 ]
-#      cv: [ 5 ]
-#    spark_config:
-#      spark.executor.instances: [ '2' ]
-#      spark.executor.cores: [ '4' ]
-#      spark.executor.memory: [ '16g' ]
-#  - name: "cmp-le"
-#    library: [ "spark" ]
-#    repeat_rate: 1
-#    params:
-#      func: [ "calculate_le" ]
-#      dataset: [ "used_cars_dataset_4x_cats_only" ]
-#      seed: [ 42 ]
-#      cv: [ 5 ]
-#    spark_config:
-#      spark.executor.instances: [ '1' ]
-#      spark.executor.cores: [ '4' ]
-#      spark.executor.memory: [ '16g' ]
-#  - name: "cmp-te"
-#    library: [ "spark" ]
-#    repeat_rate: 1
-#    params:
-#      func: [ "calculate_te" ]
-#      dataset: [ "used_cars_dataset_4x_cats_only" ]
-#      seed: [ 42 ]
-#      cv: [ 5 ]
-#      checkpoint_path: [ "/tmp/results/te_chkp_cmp/te_used_cars_dataset_4x_cats_only/" ]
-#    spark_config:
-#      spark.executor.instances: [ '4' ]
-#      spark.executor.cores: [ '4' ]
-#      spark.executor.memory: [ '16g' ]
   - name: "cmp-cat-te"
     library: [ "spark" ]
     repeat_rate: 1
@@ -53,7 +15,7 @@ experiments:
       dataset: [ "used_cars_dataset_4x" ]
       seed: [ 42 ]
       cv: [ 5 ]
-#      checkpoint_path: [ "/tmp/results/te_chkp_cmp/cat_te_used_cars_dataset_4x/" ]
+      checkpoint_path: [ "/tmp/results/te_chkp_cmp/cat_te_used_cars_dataset_4x/" ]
     spark_config:
       spark.executor.instances: [ '8' ]
       spark.executor.cores: [ '8' ]
