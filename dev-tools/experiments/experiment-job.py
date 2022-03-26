@@ -133,14 +133,6 @@ def generate_experiments(config_data: Dict) -> List[ExpInstanceConfig]:
             params = copy(params)
             spark_config = copy(spark_config)
 
-            use_algos = '__'.join(['_'.join(layer) for layer in params['use_algos']]) \
-                if 'use_algos' in params else 'noalg'
-
-            # instance_id = f"{name}-{library}-n{repeat_seq_id}-{params['dataset'].replace('_', '-')}" \
-            #               f"-{use_algos.replace('_', '-')}-" \
-            #               f"cv{params['cv']}-seed{params['seed']}-" \
-            #               f"ei{spark_config['spark.executor.instances'] if spark_config else ''}"
-
             instance_id = f"{name}-{uuid.uuid4()}"[:50]
 
             if instance_id in existing_exp_instances_ids:
@@ -204,21 +196,7 @@ def run_experiments(experiments_configs: List[ExpInstanceConfig]) \
             stderr=subprocess.DEVNULL
         )
 
-        # wait_time = 5
-        # logger.info(f"Waiting for the main process to start for {wait_time} seconds")
-        # time.sleep(wait_time)
-
-        # kube_ns = exp_instance['params']['spark_config']['spark.kubernetes.namespace']
-        # custom_env = os.environ.copy()
-        # custom_env["KUBE_NAMESPACE"] = kube_ns
-        # port = random.randint(25000, 35000)
-        # port_forward_proc = subprocess.Popen(
-        #     ['./bin/slamactl.sh', 'port-forward-by-appname', instance_id, str(port)],
-        #     env=custom_env
-        # )
-
         logger.info(f"Started process with instance id {instance_id} and args {p.args}. ")
-                    # f"\033[1mForwarding Spark WebUi to port {port}\033[0m")
 
         yield ExpInstanceProc(exp_instance=exp_instance, p=p, outfile=outfile)
 
@@ -253,8 +231,6 @@ def limit_procs(it: Iterator[ExpInstanceProc],
 
     for el in it:
         exp_procs.add(el)
-
-        # logger.info(f"Uid: {el.id}, instance id {el.exp_instance['instance_id']}")
 
         while len(exp_procs) >= max_parallel_ops:
             exp_proc = try_to_remove_finished()
