@@ -19,7 +19,7 @@ from lightautoml.spark.utils import logging_config
 
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
-logging.basicConfig(level=logging.ERROR, format=VERBOSE_LOGGING_FORMAT)
+logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
