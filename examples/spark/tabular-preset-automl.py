@@ -64,8 +64,8 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 2
-    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["lgb"]]
+    use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    # use_algos = [["lgb"]]
     # use_algos = [["lgb", "linear_l2"]]
     path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
     task_type = "reg"
@@ -89,17 +89,14 @@ if __name__ == "__main__":
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
-            # lgb_params={'use_single_dataset_mode': True},
-            lgb_params={'use_single_dataset_mode': True, "default_params": {"numIterations": 500}, "freeze_defaults": True},
+            lgb_params={'use_single_dataset_mode': True, "default_params": {"numIterations": 500}},
             linear_l2_params={"default_params": {"regParam": [1]}},
             reader_params={"cv": cv, "advanced_roles": False}
         )
 
-        # TODO: SPARK-LAMA remove valid_data=test_data_dropped
         oof_predictions = automl.fit_predict(
             train_data,
-            roles=roles,
-            valid_data=test_data_dropped
+            roles=roles
         )
 
     logger.info("Predicting on out of fold")
@@ -166,5 +163,4 @@ if __name__ == "__main__":
 
     automl.release_cache()
 
-    # time.sleep(600)
     spark.stop()
