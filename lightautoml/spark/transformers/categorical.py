@@ -720,7 +720,8 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
             logger.debug("Collecting encodings (TE)")
             encoding_df = f_df.groupby(_cur_col).agg(
-                ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding")).cache()
+                ((F.sum("f_sum") + best_alpha * prior) / (F.sum('f_count') + best_alpha)).alias("encoding")
+            )
             encoding = encoding_df.toPandas()
             logger.debug(f"Encodings have been collected (size={len(encoding)}) (TE)")
             f_df.unpersist()
@@ -730,7 +731,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
             self.encodings[feature] = mapping
 
             logger.debug("Collecting oof_feats (TE)")
-            oof_feats_df = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding")).cache()
+            oof_feats_df = candidates_df.select(_cur_col, _fc, F.col(f"candidate_{best_alpha_idx}").alias("encoding"))
             oof_feats = oof_feats_df.toPandas()
             logger.debug(f"oof_feats have been collected (size={len(oof_feats)}) (TE)")
 
