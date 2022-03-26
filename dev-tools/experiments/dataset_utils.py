@@ -13,7 +13,6 @@ def datasets() -> Dict[str, Any]:
                      'sp_id', 'sp_name', 'trimId',
                      'trim_name', 'major_options', 'main_picture_url',
                      'interior_color', 'exterior_color'],
-            # "numeric": ['latitude', 'longitude', 'mileage']
             "numeric": ['longitude', 'mileage']
         },
         "dtype": {
