@@ -77,7 +77,6 @@ if __name__ == "__main__":
     task_type = "reg"
     roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
 
-
     DATASET_DIR = '/tmp/'
     DATASET_NAME = 'sampled_app_train.csv'
     DATASET_FULLNAME = os.path.join(DATASET_DIR, DATASET_NAME)
@@ -104,7 +103,7 @@ if __name__ == "__main__":
         automl = SparkTabularAutoML(
             spark=spark,
             task=task,
-            lgb_params={'use_single_dataset_mode': False},
+            lgb_params={'use_single_dataset_mode': True, "default_params": {"numIterations": 500}},
             linear_l2_params={"default_params": {"regParam": [1]}},
             general_params={"use_algos": use_algos},
             reader_params={"cv": cv, "advanced_roles": False, 'random_state': seed}

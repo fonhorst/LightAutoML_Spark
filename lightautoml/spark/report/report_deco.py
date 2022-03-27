@@ -576,7 +576,7 @@ class ReportDeco:
             self._interpretation_top = []
         else:
             self.sections_order = ["intro", "model", "train_set", "fi", "results"]
-        self._sections = {}
+        self._sections = dict()
         self._sections["intro"] = "<p>This report was generated automatically.</p>"
         self._model_results = []
 
@@ -590,7 +590,7 @@ class ReportDeco:
         self._model_parameters = json2html.convert(extract_params(model))
         self._model_summary = None
 
-        self._sections = {}
+        self._sections = dict()
         self._sections["intro"] = "<p>This report was generated automatically.</p>"
         self._model_results = []
         self._n_test_sample = 0
@@ -646,6 +646,7 @@ class ReportDeco:
             F.max(F.abs(pred_col))
         ).first()
 
+        # TODO: SPARK-LAMA very strange normalization
         _data = data.select(
             (F.round(true_col / float(true_max), 3) * true_max).alias(true_values_col_name),
             (F.round(pred_col / float(pred_max), 3) * pred_max).alias(predictions_col_name)
@@ -679,6 +680,7 @@ class ReportDeco:
 
         val = err_max if abs(err_max) > abs(err_min) else err_min
 
+        # TODO: SPARK-LAMA very strange normalization
         err_data = errs.select(
             (F.round(F.col("err") / val, 3) * val).alias("err")
         ).groupBy(F.col("err")).count().toPandas()
@@ -754,6 +756,7 @@ class ReportDeco:
 
         # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html
 
+        # TODO: SPARK-LAMA check one more time correstness of calculating
         p_micro = metrics.accuracy  # TODO: ???
         p_macro_sum = 0.
         for label in labels_counts[true_labels_col_name]:
@@ -912,7 +915,7 @@ class ReportDeco:
         self._inference_content = {}
         if self.task == "binary":
             # filling for html
-            self._inference_content = {}
+            self._inference_content = dict()
             self._inference_content["roc_curve"] = "valid_roc_curve.png"
             self._inference_content["pr_curve"] = "valid_pr_curve.png"
             self._inference_content["pie_f1_metric"] = "valid_pie_f1_metric.png"
@@ -1176,7 +1179,7 @@ class ReportDeco:
         else:
             interpretation_feat_list = self.feat_imp["Feature"].values[: self.interpretation_params["top_n_features"]]
         for feature_name in interpretation_feat_list:
-            interpretaton_subsection = {}
+            interpretaton_subsection = dict()
             interpretaton_subsection["feature_name"] = feature_name
             interpretaton_subsection["feature_interpretation_plot"] = feature_name + "_interpretation.png"
             self._plot_pdp(
