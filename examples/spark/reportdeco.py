@@ -109,6 +109,7 @@ if __name__ == "__main__":
             reader_params={"cv": cv, "advanced_roles": False, 'random_state': seed}
         )
 
-        report_automl = ReportDeco(output_path="/tmp/", report_file_name="spark_lama_report.html", interpretation=True)(automl)
+        # report_automl = ReportDeco(output_path="/tmp/", report_file_name="spark_lama_report.html", interpretation=True)(automl)
+        report_automl = automl
 
         report_automl.fit_predict(train_data, roles=roles, valid_data=test_data)
