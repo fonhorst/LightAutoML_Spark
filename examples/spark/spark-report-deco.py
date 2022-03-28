@@ -11,7 +11,7 @@ from pyspark.sql import functions as F
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataFrame
 from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.report import ReportDeco
+from lightautoml.spark.report import SparkReportDeco
 from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.utils import log_exec_timer
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     spark.sparkContext.setLogLevel("ERROR")
 
     seed = 42
-    cv = 5
+    cv = 2
 
     use_algos = [["lgb"]]
     task_type = "binary"
@@ -105,7 +105,7 @@ if __name__ == "__main__":
             reader_params={"cv": cv, "advanced_roles": False, 'random_state': seed}
         )
 
-        report_automl = ReportDeco(
+        report_automl = SparkReportDeco(
             output_path="/tmp/spark",
             report_file_name="spark_lama_report.html",
             interpretation=True

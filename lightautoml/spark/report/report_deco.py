@@ -4,54 +4,26 @@ import logging
 import math
 import os
 import warnings
-
-from copy import copy
-from copy import deepcopy
 from operator import itemgetter
 from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pyspark.sql.functions as F
 import seaborn as sns
-
 from jinja2 import Environment
 from jinja2 import FileSystemLoader
 from json2html import json2html
 from pyspark import RDD
 from pyspark.ml.functions import vector_to_array
+from pyspark.mllib.evaluation import BinaryClassificationMetrics, RegressionMetrics, MulticlassMetrics
 from pyspark.mllib.linalg import DenseMatrix
 from pyspark.sql import SparkSession, Column
-
 from pyspark.sql.dataframe import DataFrame
-from pyspark.mllib.evaluation import BinaryClassificationMetrics, RegressionMetrics, MulticlassMetrics
-from pyspark.mllib.stat import KernelDensity
-import pyspark.sql.functions as F
 from pyspark.sql.pandas.functions import pandas_udf
 
-from sklearn.metrics import average_precision_score
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import explained_variance_score
-from sklearn.metrics import f1_score
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import median_absolute_error
-from sklearn.metrics import precision_recall_curve
-from sklearn.metrics import precision_recall_fscore_support
-from sklearn.metrics import precision_score
-from sklearn.metrics import r2_score
-from sklearn.metrics import recall_score
-from sklearn.metrics import roc_auc_score
-from sklearn.metrics import roc_curve
-
-
-from lightautoml.spark.tasks.base import SparkTask
-from lightautoml.addons.uplift import metrics as uplift_metrics
-from lightautoml.addons.uplift.metalearners import TLearner
-from lightautoml.addons.uplift.metalearners import XLearner
-from lightautoml.addons.uplift.utils import _get_treatment_role
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
-from lightautoml.spark.automl.presets.tabular_presets import ReadableIntoSparkDf, SparkTabularAutoML
 from lightautoml.spark.report.handy_spark_utils import call2
 from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
 
@@ -464,13 +436,13 @@ def plot_feature_importance(feat_imp, path, features_max=100):
     plt.close()
 
 
-class ReportDeco:
+class SparkReportDeco:
     """
     Decorator to wrap :class:`~lightautoml.automl.base.AutoML` class to generate html report on ``fit_predict`` and ``predict``.
 
     Example:
 
-        >>> report_automl = ReportDeco(output_path="output_path", report_file_name="report_file_name")(automl).
+        >>> report_automl = SparkReportDeco(output_path="output_path", report_file_name="report_file_name")(automl).
         >>> report_automl.fit_predict(train_data)
         >>> report_automl.predict(test_data)
 
@@ -603,13 +575,6 @@ class ReportDeco:
 
     def _binary_classification_details(self, data, positive_rate,
                                        true_labels_col_name, scores_col_name, predicted_labels_col_name):
-        # self._inference_content["sample_bins_table"] = get_bins_table(data)
-        # plot_preds_distribution_by_bins(
-        #     data,
-        #     path=os.path.join(self.output_path, self._inference_content["preds_distribution_by_bins"]),
-        # )
-
-        # Done
         prec, rec, F1 = plot_pie_f1_metric(
             data.select(
                 F.col(predicted_labels_col_name).astype("double"),
@@ -648,7 +613,6 @@ class ReportDeco:
             F.max(F.abs(pred_col))
         ).first()
 
-        # TODO: SPARK-LAMA very strange normalization
         _data = data.select(
             (F.round(true_col / float(true_max), 3) * true_max).alias(true_values_col_name),
             (F.round(pred_col / float(pred_max), 3) * pred_max).alias(predictions_col_name)
@@ -682,7 +646,6 @@ class ReportDeco:
 
         val = err_max if abs(err_max) > abs(err_min) else err_min
 
-        # TODO: SPARK-LAMA very strange normalization
         err_data = errs.select(
             (F.round(F.col("err") / val, 3) * val).alias("err")
         ).groupBy(F.col("err")).count().toPandas()
@@ -716,7 +679,6 @@ class ReportDeco:
         )
 
         mean_ae = metrics.meanAbsoluteError
-        # mean_ae = mean_absolute_error(data["y_true"], data["y_pred"])
 
         median_ae = data.select(
             F.percentile_approx(
@@ -726,16 +688,12 @@ class ReportDeco:
                 0.5
             )
         ).first()[0]
-        # median_ae = median_absolute_error(data["y_true"], data["y_pred"])
 
         mse = metrics.meanSquaredError
-        # mse = mean_squared_error(data["y_true"], data["y_pred"])
 
         r2 = metrics.r2
-        # r2 = r2_score(data["y_true"], data["y_pred"])
 
         evs = metrics.explainedVariance
-        # evs = explained_variance_score(data["y_true"], data["y_pred"])
 
         return mean_ae, median_ae, mse, r2, evs
 
@@ -757,43 +715,26 @@ class ReportDeco:
         total_labels_number = len(labels_counts["count"])
 
         # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html
-
-        # TODO: SPARK-LAMA check one more time correstness of calculating
-        p_micro = metrics.accuracy  # TODO: ???
+        p_micro = metrics.accuracy
         p_macro_sum = 0.
         for label in labels_counts[true_labels_col_name]:
             p_macro_sum += metrics.precision(float(label))
         p_macro = p_macro_sum / total_labels_number
         p_weighted = metrics.weightedPrecision
 
-        r_micro = metrics.accuracy  # TODO: ???
+        r_micro = metrics.accuracy
         r_macro_sum = 0.
         for label in labels_counts[true_labels_col_name]:
             r_macro_sum += metrics.recall(float(label))
         r_macro = r_macro_sum / total_labels_number
         r_weighted = metrics.weightedRecall
 
-        f_micro = metrics.accuracy  # TODO: ???
+        f_micro = metrics.accuracy
         f_macro_sum = 0.
         for label in labels_counts[true_labels_col_name]:
             f_macro_sum += metrics.fMeasure(float(label))
         f_macro = f_macro_sum / total_labels_number
         f_weighted = metrics.weightedFMeasure()
-
-        # y_true = data["y_true"]
-        # y_pred = data["y_pred"]
-        # precision
-        # p_micro = precision_score(y_true, y_pred, average="micro")
-        # p_macro = precision_score(y_true, y_pred, average="macro")
-        # p_weighted = precision_score(y_true, y_pred, average="weighted")
-        # recall
-        # r_micro = recall_score(y_true, y_pred, average="micro")
-        # r_macro = recall_score(y_true, y_pred, average="macro")
-        # r_weighted = recall_score(y_true, y_pred, average="weighted")
-        # f1-score
-        # f_micro = f1_score(y_true, y_pred, average="micro")
-        # f_macro = f1_score(y_true, y_pred, average="macro")
-        # f_weighted = f1_score(y_true, y_pred, average="weighted")
 
         # classification report for features
         if self.mapping:
@@ -872,34 +813,6 @@ class ReportDeco:
         )
 
         return df
-
-        # predict_column = preds.features[0]
-        # data = preds.data.join(
-        #     sample,  # sample.select(F.col(SparkDataset.ID_COLUMN), F.col(self._target)),
-        #     on=SparkDataset.ID_COLUMN
-        # ).select(
-        #     F.col(SparkDataset.ID_COLUMN),
-        #     F.col(self._target).alias(true_values_col_name),
-        #     F.col(raw_predictions_col_name).alias(raw_predictions_col_name),
-        #     F.col(predictions_col_name).alias(predictions_col_name)
-        # ).where(
-        #     (~F.isnan(F.col(predictions_col_name))) & (F.col(predictions_col_name).isNotNull())
-        # )
-        # TODO SPARK-LAMA: Create an UDF to map values for multiclass task
-        # TODO: SPARK-LAMA could we create 'bin' without sorting?
-
-        # data = pd.DataFrame({"y_true": sample[self._target].values})
-        # if self.task in "multiclass":
-        #     if self.mapping is not None:
-        #         data["y_true"] = np.array([self.mapping[y] for y in data["y_true"].values])
-        #     data["y_pred"] = preds._data.argmax(axis=1)
-        #     data = data[~np.isnan(preds._data).any(axis=1)]
-        # else:
-        #     data["y_pred"] = preds._data[:, 0]
-        #     data.sort_values("y_pred", ascending=False, inplace=True)
-        #     data["bin"] = (np.arange(data.shape[0]) / data.shape[0] * self.n_bins).astype(int)
-        #     data = data[~data["y_pred"].isnull()]
-        # return data
 
     def _get_mock_data(self):
         csv_df = pd.read_csv("/mnt/hgfs/Projects/Sber/LAMA/Sber-LAMA-Stuff/dumps/labels_preds.csv")
@@ -982,8 +895,6 @@ class ReportDeco:
             self._inference_content["scatter_plot"] = "valid_scatter_plot.png"
             # graphics and metrics
 
-            # JUST FOR TEST
-            # REMOVE AFTER THE DEBUGGING
             predictions_col_name = scores_col_name
 
             mean_ae, median_ae, mse, r2, evs = self._regression_details(data, true_values_col_name, predictions_col_name)
@@ -1055,10 +966,8 @@ class ReportDeco:
         scores_col_name = "raw"
         predictions_col_name = "label"
 
-
         test_data = kwargs["test"] if "test" in kwargs else args[0]
 
-        # data = self._get_mock_data()
         data = self._collect_data(
             test_preds,
             test_data,
@@ -1105,8 +1014,6 @@ class ReportDeco:
         elif self.task == "reg":
             # filling for html
 
-            # JUST FOR TEST
-            # REMOVE AFTER THE DEBUGGING
             predictions_col_name = scores_col_name
 
             self._inference_content = {}
@@ -1160,23 +1067,8 @@ class ReportDeco:
         self.generate_report()
         return test_preds
 
-    # TODO SPARK-LAMA: Required method _model.get_feature_scores is not implemented for Spark.
     def _generate_fi_section(self, valid_data: Optional[DataFrame]):
-        # total_count = valid_data.count()
-        # if (
-        #     self.fi_params["method"] == "accurate"
-        #     and valid_data is not None
-        #     and total_count > self.fi_params["n_sample"]
-        # ):
-        #     valid_data = valid_data.sample(n=self.fi_params["n_sample"])
-        #     print(
-        #         "valid_data was sampled for feature importance calculation: n_sample = {}".format(
-        #             self.fi_params["n_sample"]
-        #         )
-        #     )
-
         if self.fi_params["method"] == "accurate" and valid_data is None:
-            # raise ValueError("You must set valid_data with accurate feature importance method")
             self.fi_params["method"] = "fast"
             warnings.warn(
                 "You must set valid_data with 'accurate' feature importance method. Changed to 'fast' automatically."
@@ -1199,7 +1091,6 @@ class ReportDeco:
         fi_section = env.get_template(self._fi_section_path).render(fi_content)
         self._sections["fi"] = fi_section
 
-    # TODO SPARK-LAMA: Required method _model.get_individual_pdp is not implemented for Spark.
     def _generate_interpretation_content(self, test_data):
         self._interpretation_content = {}
         if test_data is None:
@@ -1232,8 +1123,6 @@ class ReportDeco:
         self._interpretation_content["interpretation_top"] = self._interpretation_top
 
     def _generate_interpretation_section(self, test_data: DataFrame):
-        # if test_data is not None and test_data.count() > self.interpretation_params["n_sample"]:
-        #     test_data = test_data.sample(n=self.interpretation_params["n_sample"])
         self._generate_interpretation_content(test_data)
         env = Environment(loader=FileSystemLoader(searchpath=self.template_path))
         interpretation_section = env.get_template(self._interpretation_section_path).render(
