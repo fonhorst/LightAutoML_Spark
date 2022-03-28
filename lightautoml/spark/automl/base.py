@@ -202,23 +202,30 @@ class SparkAutoML:
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
 
         # for pycharm)
-        level_predictions = self._merge_train_and_valid_datasets(train_dataset, valid_dataset)
+        # level_predictions = self._merge_train_and_valid_datasets(train_dataset, valid_dataset)
+        train_valid = self._create_validation_iterator(train_dataset, valid_dataset, None, cv_iter=cv_iter)
+        # level_predictions = self._merge_train_and_valid_datasets(train_dataset, valid_dataset)
+        current_level_roles = train_valid.train.roles
         pipes: List[SparkMLPipeline] = []
         self.levels = []
         for leven_number, level in enumerate(self._levels, 1):
             pipes = []
             flg_last_level = leven_number == len(self._levels)
-            initial_level_roles = level_predictions.roles
+            # initial_level_roles = level_predictions.roles
+            initial_level_roles = current_level_roles
 
             logger.info(
                 f"Layer \x1b[1m{leven_number}\x1b[0m train process start. Time left {self.timer.time_left:.2f} secs"
             )
 
             for k, ml_pipe in enumerate(level):
-                train_valid = self._create_validation_iterator(level_predictions, None, None, cv_iter=cv_iter)
+                # train_valid = self._create_validation_iterator(level_predictions, None, None, cv_iter=cv_iter)
                 train_valid.input_roles = initial_level_roles
                 level_predictions = ml_pipe.fit_predict(train_valid)
                 level_predictions = self._break_plan(level_predictions)
+
+                train_valid = self._create_validation_iterator(level_predictions, None, None, cv_iter=cv_iter)
+                current_level_roles = level_predictions.roles
 
                 pipes.append(ml_pipe)
 
