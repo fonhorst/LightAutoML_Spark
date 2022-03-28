@@ -29,9 +29,13 @@ from ..dataset_utils import get_test_datasets, prepared_datasets, load_dump_if_e
 
 spark = spark_sess
 
-DATASETS_ARG = {"dataset": "lama_test_dataset"}
+# DATASETS_ARG = {"dataset": "lama_test_dataset"}
+# DATASETS_ARG = {"dataset": "used_cars_dataset"}
+# DATASETS_ARG = {"dataset": "buzz_dataset"}
+DATASETS_ARG = {"setting": "all-tasks"}
 
 CV = 5
+seed = 100
 
 # otherwise holdout is used
 USE_FOLDS_VALIDATION = False
@@ -89,13 +93,14 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
     train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
     test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
     # train_pdf, test_pdf = train_test_split(pdf, test_size=0.2, random_state=100)
-    reader = PandasToPandasReader(task=Task(train_valid.train.task.name), cv=cv, advanced_roles=False)
+    reader = PandasToPandasReader(task=Task(train_valid.train.task.name), cv=cv, advanced_roles=False, random_state=seed)
     train_ds = reader.fit_read(train_pdf, roles=config['roles'])
     test_ds = reader.read(test_pdf, add_array_attrs=True)
     lama_pipeline = fp_lama_clazz(**ml_alg_kwargs)
     lama_feats = lama_pipeline.fit_transform(train_ds)
     lama_test_feats = lama_pipeline.transform(test_ds)
     lama_feats = lama_feats if ml_algo_lama_clazz == BoostLGBM else lama_feats.to_numpy()
+
     train_valid = FoldsIterator(lama_feats.to_numpy())
     ml_algo = ml_algo_lama_clazz()
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
@@ -295,7 +300,7 @@ def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any],
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_mlalgo_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM, SparkBoostLGBM, 'lgbadv_features',
-                               ml_alg_kwargs)
+                               ml_alg_kwargs, ml_kwargs_lama={'seed': seed}, ml_kwargs_spark={'seed': seed})
 
 
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])

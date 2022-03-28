@@ -35,7 +35,7 @@ def spark() -> SparkSession:
         SparkSession
         .builder
         .appName("LAMA-test-app")
-        .master("local[4]")
+        .master("local[*]")
         .config("spark.driver.memory", "8g")
         .config("spark.jars", JAR_PATH)
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
