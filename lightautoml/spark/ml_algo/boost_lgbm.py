@@ -327,6 +327,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             params['rawPredictionCol'] = self._raw_prediction_col_name
             params['probabilityCol'] = fold_prediction_column
             params['predictionCol'] = self._prediction_col_name
+            # TODO: SPARK-LAMA better to determine it beforehand
+            params['isUnbalance'] = True
         else:
             params['predictionCol'] = fold_prediction_column
 
@@ -356,7 +358,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         lgbm = LGBMBooster(
             **params,
-            isUnbalance=True,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
             validationIndicatorCol=self.validation_column,
