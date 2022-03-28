@@ -19,6 +19,7 @@ from jinja2 import Environment
 from jinja2 import FileSystemLoader
 from json2html import json2html
 from pyspark import RDD
+from pyspark.ml.functions import vector_to_array
 from pyspark.mllib.linalg import DenseMatrix
 from pyspark.sql import SparkSession, Column
 
@@ -26,6 +27,7 @@ from pyspark.sql.dataframe import DataFrame
 from pyspark.mllib.evaluation import BinaryClassificationMetrics, RegressionMetrics, MulticlassMetrics
 from pyspark.mllib.stat import KernelDensity
 import pyspark.sql.functions as F
+from pyspark.sql.pandas.functions import pandas_udf
 
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import confusion_matrix
@@ -48,7 +50,7 @@ from lightautoml.addons.uplift import metrics as uplift_metrics
 from lightautoml.addons.uplift.metalearners import TLearner
 from lightautoml.addons.uplift.metalearners import XLearner
 from lightautoml.addons.uplift.utils import _get_treatment_role
-from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.automl.presets.tabular_presets import ReadableIntoSparkDf, SparkTabularAutoML
 from lightautoml.spark.report.handy_spark_utils import call2
 from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
@@ -840,19 +842,49 @@ class ReportDeco:
                       sample,
                       true_values_col_name,
                       raw_predictions_col_name,
-                      predictions_col_name) -> DataFrame:
-        # predict_column = preds.features[0]
-        data = preds.data.join(
-            sample,  # sample.select(F.col(SparkDataset.ID_COLUMN), F.col(self._target)),
-            on=SparkDataset.ID_COLUMN
-        ).select(
-            F.col(SparkDataset.ID_COLUMN),
-            F.col(self._target).alias(true_values_col_name),
-            F.col(raw_predictions_col_name).alias(raw_predictions_col_name),
-            F.col(predictions_col_name).alias(predictions_col_name)
-        ).where(
-            (~F.isnan(F.col(predictions_col_name))) & (F.col(predictions_col_name).isNotNull())
+                      predictions_col_name) -> SparkDataFrame:
+        # TODO: SPARK-LAMA hack, replace it later.
+        raw_pred_col = next(c for c in preds.data.columns if c.startswith('prediction'))
+
+        @pandas_udf('double')
+        def argmax(s: pd.Series) -> pd.Series:
+            return s.map(np.argmax)
+
+        if preds.task.name == "multiclass":
+            raw_prediction_col = vector_to_array(raw_pred_col).alias(raw_predictions_col_name)
+            prediction_col = argmax(vector_to_array(raw_pred_col)).alias(predictions_col_name)
+        elif preds.task.name == "binary":
+            raw_prediction_col = vector_to_array(raw_pred_col).getItem(0).alias(raw_predictions_col_name)
+            prediction_col = argmax(vector_to_array(raw_pred_col)).alias(predictions_col_name)
+        else:
+            raw_prediction_col = F.col(raw_pred_col).alias(raw_predictions_col_name)
+            prediction_col = F.col(raw_pred_col).alias(predictions_col_name)
+
+        df = (
+            preds.data
+            .where(~F.isnull(raw_pred_col))
+            .select(
+                F.col(SparkDataset.ID_COLUMN),
+                F.col(preds.target_column).alias(true_values_col_name),
+                raw_prediction_col,
+                prediction_col
+            )
         )
+
+        return df
+
+        # predict_column = preds.features[0]
+        # data = preds.data.join(
+        #     sample,  # sample.select(F.col(SparkDataset.ID_COLUMN), F.col(self._target)),
+        #     on=SparkDataset.ID_COLUMN
+        # ).select(
+        #     F.col(SparkDataset.ID_COLUMN),
+        #     F.col(self._target).alias(true_values_col_name),
+        #     F.col(raw_predictions_col_name).alias(raw_predictions_col_name),
+        #     F.col(predictions_col_name).alias(predictions_col_name)
+        # ).where(
+        #     (~F.isnan(F.col(predictions_col_name))) & (F.col(predictions_col_name).isNotNull())
+        # )
         # TODO SPARK-LAMA: Create an UDF to map values for multiclass task
         # TODO: SPARK-LAMA could we create 'bin' without sorting?
 
@@ -867,7 +899,7 @@ class ReportDeco:
         #     data.sort_values("y_pred", ascending=False, inplace=True)
         #     data["bin"] = (np.arange(data.shape[0]) / data.shape[0] * self.n_bins).astype(int)
         #     data = data[~data["y_pred"].isnull()]
-        return data
+        # return data
 
     def _get_mock_data(self):
         csv_df = pd.read_csv("/mnt/hgfs/Projects/Sber/LAMA/Sber-LAMA-Stuff/dumps/labels_preds.csv")
@@ -903,15 +935,15 @@ class ReportDeco:
         input_roles = kwargs["roles"] if "roles" in kwargs else args[1]
         self._target = input_roles["target"]
 
-        data = self._get_mock_data()
-        # if valid_data is None:
-        #     data = self._collect_data(
-        #         preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
-        #     )
-        # else:
-        #     data = self._collect_data(
-        #         preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name
-        #     )
+        # data = self._get_mock_data()
+        if valid_data is None:
+            data = self._collect_data(
+                preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
+            )
+        else:
+            data = self._collect_data(
+                preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name
+            )
 
         self._inference_content = {}
         if self.task == "binary":
