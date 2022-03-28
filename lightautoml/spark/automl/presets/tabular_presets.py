@@ -799,7 +799,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         else:
             raise ValueError("Supported only Numeric, Category or Datetime feature")
 
-
     def plot_pdp(
             self,
             test_data: ReadableToDf,

@@ -854,6 +854,7 @@ class ReportDeco:
             (~F.isnan(F.col(predictions_col_name))) & (F.col(predictions_col_name).isNotNull())
         )
         # TODO SPARK-LAMA: Create an UDF to map values for multiclass task
+        # TODO: SPARK-LAMA could we create 'bin' without sorting?
 
         # data = pd.DataFrame({"y_true": sample[self._target].values})
         # if self.task in "multiclass":
