@@ -515,9 +515,9 @@ class SparkReportDeco:
         self.interpretation = kwargs.get("interpretation", False)
 
         self.n_bins = kwargs.get("n_bins", 20)
-        self.template_path = kwargs.get("template_path", os.path.join(base_dir, "lama_report_templates/"))
-        self.output_path = kwargs.get("output_path", "lama_report/")
-        self.report_file_name = kwargs.get("report_file_name", "lama_interactive_report.html")
+        self.template_path = kwargs.get("template_path", os.path.join(base_dir, "spark_report_templates/"))
+        self.output_path = kwargs.get("output_path", "sparklama_report/")
+        self.report_file_name = kwargs.get("report_file_name", "sparklama_interactive_report.html")
         self.pdf_file_name = kwargs.get("pdf_file_name", None)
 
         if not os.path.exists(self.output_path):
@@ -608,9 +608,10 @@ class SparkReportDeco:
         true_col = F.col(true_values_col_name)
         pred_col = F.col(predictions_col_name)
 
-        true_max, pred_max = data.select(
+        true_max, pred_max, variance_y_true = data.select(
             F.max(F.abs(true_col)),
-            F.max(F.abs(pred_col))
+            F.max(F.abs(pred_col)),
+            F.var_pop(true_col)
         ).first()
 
         _data = data.select(
@@ -693,9 +694,15 @@ class SparkReportDeco:
 
         r2 = metrics.r2
 
-        evs = metrics.explainedVariance
+        # Due to Spark returns not a fraction but an absolute value, we have to calculate
+        # explained variance score by ourselves.
+        # evs = metrics.explainedVariance
 
-        return mean_ae, median_ae, mse, r2, evs
+        # Fraction of variance explained (FVE) = 1 - Fraction of variance unexplained (FVU).
+        # FVU = MSE / Variance[Y] [https://en.wikipedia.org/wiki/Fraction_of_variance_unexplained]
+        fve = 1 - (mse / variance_y_true)
+
+        return mean_ae, median_ae, mse, r2, fve
 
     def _multiclass_details(self, data, predicted_labels_col_name, true_labels_col_name):
 
@@ -836,8 +843,6 @@ class SparkReportDeco:
         """
         # TODO: parameters parsing in general case
 
-        valid_data: Optional[DataFrame] = kwargs.pop("_valid_data", None)
-
         preds: SparkDataset = self._model.fit_predict(*args, **kwargs)
 
         true_values_col_name = "y_true"
@@ -845,6 +850,7 @@ class SparkReportDeco:
         predictions_col_name = "label"
 
         train_data: DataFrame = kwargs["train_data"] if "train_data" in kwargs else args[0]
+        valid_data: Optional[DataFrame] = kwargs.get("valid_data", None)
         input_roles = kwargs["roles"] if "roles" in kwargs else args[1]
         self._target = input_roles["target"]
 
@@ -865,7 +871,6 @@ class SparkReportDeco:
             self._inference_content["roc_curve"] = "valid_roc_curve.png"
             self._inference_content["pr_curve"] = "valid_pr_curve.png"
             self._inference_content["pie_f1_metric"] = "valid_pie_f1_metric.png"
-            self._inference_content["preds_distribution_by_bins"] = "valid_preds_distribution_by_bins.png"
             self._inference_content["distribution_of_logits"] = "valid_distribution_of_logits.png"
             # graphics and metrics
             _, self._F1_thresh, positive_rate = f1_score_w_co(
@@ -894,8 +899,6 @@ class SparkReportDeco:
             self._inference_content["error_hist"] = "valid_error_hist.png"
             self._inference_content["scatter_plot"] = "valid_scatter_plot.png"
             # graphics and metrics
-
-            predictions_col_name = scores_col_name
 
             mean_ae, median_ae, mse, r2, evs = self._regression_details(data, true_values_col_name, predictions_col_name)
             # model section
