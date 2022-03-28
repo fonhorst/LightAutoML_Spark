@@ -64,20 +64,32 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 2
-    use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    # use_algos = [["lgb"]]
-    # use_algos = [["lgb", "linear_l2"]]
-    path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
-    task_type = "reg"
-    roles = {
-        "target": "price",
-        "drop": ["dealer_zip", "description", "listed_date",
-                 "year", 'Unnamed: 0', '_c0',
-                 'sp_id', 'sp_name', 'trimId',
-                 'trim_name', 'major_options', 'main_picture_url',
-                 'interior_color', 'exterior_color'],
-        "numeric": ['latitude', 'longitude', 'mileage']
-    }
+    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    use_algos = [["lgb"]]
+
+    # path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
+    # task_type = "reg"
+    # roles = {
+    #     "target": "price",
+    #     "drop": ["dealer_zip", "description", "listed_date",
+    #              "year", 'Unnamed: 0', '_c0',
+    #              'sp_id', 'sp_name', 'trimId',
+    #              'trim_name', 'major_options', 'main_picture_url',
+    #              'interior_color', 'exterior_color'],
+    #     "numeric": ['latitude', 'longitude', 'mileage']
+    # }
+
+    # path = "/opt/spark_data/internet_usage.csv"
+    # task_type = "multiclass"
+    # roles = {"target": "Actual_Time"}
+
+    # path = "/opt/spark_data/ipums_97.csv"
+    # task_type = "multiclass"
+    # roles = {"target": "movedin"}
+
+    path = "/opt/spark_data/gesture_segmentation.csv"
+    task_type = "multiclass"
+    roles = {"target": "Phase"}
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
