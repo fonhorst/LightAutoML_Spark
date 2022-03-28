@@ -10,6 +10,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
 from lightautoml.automl.presets.tabular_presets import TabularAutoML
+from lightautoml.report import ReportDeco
 from lightautoml.tasks import Task
 
 
@@ -21,9 +22,13 @@ train_data, test_data = train_test_split(data, test_size=0.2, stratify=data["TAR
 if __name__ == "__main__":
     task = Task("binary")
 
-    automl = TabularAutoML(task=task, general_params={"use_algos": ["lgb", "linear_l2"]})
+    automl = TabularAutoML(task=task, general_params={"use_algos": [["lgb"]]})
+    automl = ReportDeco(output_path="/tmp/", report_file_name="lama_report.html")(automl)
 
-    oof_predictions = automl.fit_predict(train_data, roles={"target": "TARGET", "drop": ["SK_ID_CURR"]})
+    oof_predictions = automl.fit_predict(
+        train_data,
+        roles={"target": "TARGET", "drop": ["SK_ID_CURR"]}
+    )
     te_pred = automl.predict(test_data)
 
     # calculate scores

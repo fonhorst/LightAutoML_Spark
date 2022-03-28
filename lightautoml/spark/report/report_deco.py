@@ -854,7 +854,7 @@ class ReportDeco:
             raw_prediction_col = vector_to_array(raw_pred_col).alias(raw_predictions_col_name)
             prediction_col = argmax(vector_to_array(raw_pred_col)).alias(predictions_col_name)
         elif preds.task.name == "binary":
-            raw_prediction_col = vector_to_array(raw_pred_col).getItem(0).alias(raw_predictions_col_name)
+            raw_prediction_col = vector_to_array(raw_pred_col).getItem(1).alias(raw_predictions_col_name)
             prediction_col = argmax(vector_to_array(raw_pred_col)).alias(predictions_col_name)
         else:
             raw_prediction_col = F.col(raw_pred_col).alias(raw_predictions_col_name)
@@ -1058,14 +1058,14 @@ class ReportDeco:
 
         test_data = kwargs["test"] if "test" in kwargs else args[0]
 
-        data = self._get_mock_data()
-        # data = self._collect_data(
-        #     test_preds,
-        #     test_data,
-        #     true_values_col_name=true_values_col_name,
-        #     raw_predictions_col_name=raw_predictions_col_name,
-        #     predictions_col_name=predictions_col_name
-        # )
+        # data = self._get_mock_data()
+        data = self._collect_data(
+            test_preds,
+            test_data,
+            true_values_col_name=true_values_col_name,
+            raw_predictions_col_name=scores_col_name,
+            predictions_col_name=predictions_col_name
+        )
 
         if self.task == "binary":
             # filling for html

@@ -176,7 +176,15 @@ with log_exec_timer("spark-lama training") as train_timer:
     )
 
     c_automl = SparkCachingTabularMLWrapper(automl)
-    c_automl.fit_predict(train_data, roles=roles, valid_data=test_data)
+    oof_preds = c_automl.fit_predict(train_data, roles=roles, valid_data=test_data)
+
+    pred_col = next(c for c in oof_preds.data.columns if c.startswith('prediction'))
+    score = task.get_dataset_metric()(oof_preds.data.select(
+        SparkDataset.ID_COLUMN,
+        F.col(oof_preds.target_column).alias('target'),
+        F.col(pred_col).alias('prediction')
+    ))
+    print(f"Score: {score}")
 
     report_automl = ReportDeco(
         output_path="/tmp/",
@@ -184,4 +192,5 @@ with log_exec_timer("spark-lama training") as train_timer:
         interpretation=True
     )(c_automl)
 
-    report_automl.fit_predict(train_data, roles=roles, valid_data=test_data)
+    report_automl.fit_predict(train_data, roles=roles)
+    report_automl.predict(test_data, add_reader_attrs=True)
