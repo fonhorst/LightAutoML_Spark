@@ -87,9 +87,13 @@ if __name__ == "__main__":
     # task_type = "multiclass"
     # roles = {"target": "movedin"}
 
-    path = "/opt/spark_data/gesture_segmentation.csv"
-    task_type = "multiclass"
-    roles = {"target": "Phase"}
+    # path = "/opt/spark_data/gesture_segmentation.csv"
+    # task_type = "multiclass"
+    # roles = {"target": "Phase"}
+
+    path = "/opt/spark_data/sampled_app_train.csv"
+    task_type = "binary"
+    roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
