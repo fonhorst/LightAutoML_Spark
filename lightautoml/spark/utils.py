@@ -214,6 +214,13 @@ class Cacher(Estimator):
     def get_dataset_by_key(cls, key: str) -> Optional[SparkDataFrame]:
         return cls._cacher_dict.get(key, None)
 
+    @classmethod
+    def release_cache_by_key(cls, key: str) -> Optional[SparkDataFrame]:
+        df = cls._cacher_dict.pop(key, None)
+        if df is not None:
+            df.unpersist()
+        return df
+
     @property
     def dataset(self) -> SparkDataFrame:
         """Returns chached dataframe"""
@@ -225,13 +232,13 @@ class Cacher(Estimator):
         self._dataset: Optional[SparkDataFrame] = None
 
     def _fit(self, dataset):
-        logger.info(f"Cacher {self._key}. Starting to materialize data.")
+        logger.info(f"Cacher {self._key} (RDD Id: {dataset.rdd.id()}). Starting to materialize data.")
         ds = dataset.localCheckpoint(eager=True)
-        logger.info(f"Cacher {self._key}. Finished data materialization.")
+        logger.info(f"Cacher {self._key} (RDD Id: {ds.rdd.id()}). Finished data materialization.")
 
         previous_ds = self._cacher_dict.get(self._key, None)
         if previous_ds is not None:
-            logger.info(f"Removing cache for key: {self._key}.")
+            logger.info(f"Removing cache for key: {self._key} (RDD Id: {previous_ds.rdd.id()}).")
             previous_ds.unpersist()
 
         self._cacher_dict[self._key] = ds

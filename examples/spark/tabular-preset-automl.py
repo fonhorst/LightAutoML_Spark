@@ -46,12 +46,17 @@ def get_spark_session():
             .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+            .config("spark.cleaner.referenceTracking.cleanCheckpoints", "true")
+            .config("spark.cleaner.referenceTracking", "true")
+            .config("spark.cleaner.periodicGC.interval", "1min")
             .config("spark.sql.shuffle.partitions", "16")
             .config("spark.driver.memory", "12g")
             .config("spark.executor.memory", "12g")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
             .getOrCreate()
         )
+
+    spark_sess.sparkContext.setCheckpointDir("/tmp/spark_checkpoints")
 
     spark_sess.sparkContext.setLogLevel("WARN")
 
@@ -63,7 +68,8 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 5
-    use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    use_algos = [["lgb"]]
 
     path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
     task_type = "reg"
@@ -160,5 +166,8 @@ if __name__ == "__main__":
     print(f"EXP-RESULT: {result}")
 
     automl.release_cache()
+
+    import time
+    time.sleep(600)
 
     spark.stop()
