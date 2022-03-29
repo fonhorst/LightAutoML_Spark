@@ -58,13 +58,17 @@ The utility provides a command to make port forwording for the running example.
 The driver's 4040 port will be forwarded to http://localhost:9040.
 
 #### Run on local Hadoop YARN
-Copy lama wheel file from 'dist/LightAutoML-0.3.0-py3-none-any.whl' to 'docker-hadoop/nodemanager/LightAutoML-0.3.0-py3-none-any.whl'
+Next it will be shown how to run the "examples/spark/tabular-preset-automl.py" script for execution on local Hadoop YARN.
+First, make sure that in the project in the "dist" directory there is a wheel assembly and in the "jars" directory there is a jar file.
+Copy lama wheel file from "dist/LightAutoML-0.3.0-py3-none-any.whl" to "docker-hadoop/nodemanager/LightAutoML-0.3.0-py3-none-any.whl".
 ```
 cp dist/LightAutoML-0.3.0-py3-none-any.whl docker-hadoop/nodemanager/LightAutoML-0.3.0-py3-none-any.whl
 ```
-Go to 'docker-hadoop' and configure docker-compose.yml. Add setting to mount directory with datasets to nodemanager1 service.
+Open "docker-hadoop/docker-compose.yml" and configure services. Add setting to mount directory with datasets to "nodemanager1" service.
 ```
 cd docker-hadoop
+
+nano docker-compose.yml
 
 # see line with '- /opt/spark_data:/opt/spark_data' as example
 ```
@@ -77,6 +81,13 @@ Start Hadoop YARN services
 ```
 docker-compose up
 ```
+or same in detached mode
+```
+docker-compose up -d
+```
+Next, go to http://127.0.0.1:8088 and make sure hadoop works. Here you can monitor hadoop applications and view their logs.
+Web interface of hdfs is available at http://127.0.0.1:9870. Here you can browse your files in hdfs http://127.0.0.1:9870/explorer.html.
+
 Send job to cluster via `spark-submit` container
 ```
 docker exec -ti spark-submit bash -c "./bin/slamactl.sh submit-job-yarn examples/spark/tabular-preset-automl.py"
