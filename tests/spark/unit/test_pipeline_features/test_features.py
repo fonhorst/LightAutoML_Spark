@@ -219,7 +219,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     train_valid = FoldsIterator(lama_feats.to_numpy())
     if not USE_FOLDS_VALIDATION:
         train_valid = train_valid.convert_to_holdout_iterator()
-    ml_algo = ml_algo_lama_clazz(**ml_kwargs_lama)
+    ml_algo = ml_algo_lama_clazz(freeze_defaults=False, **ml_kwargs_lama)
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     assert ml_algo is not None
     test_pred = ml_algo.predict(lama_test_feats)
@@ -228,10 +228,10 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     lama_oof_metric = score(oof_pred)
     lama_test_metric = score(test_pred)
 
-    train_valid = SparkFoldsIterator(dumped_train_ds)
+    train_valid = SparkFoldsIterator(dumped_train_ds, n_folds=cv, seed=seed)
     if not USE_FOLDS_VALIDATION:
         train_valid = train_valid.convert_to_holdout_iterator()
-    ml_algo = ml_algo_spark_clazz(cacher_key='test', **ml_kwargs_spark)
+    ml_algo = ml_algo_spark_clazz(cacher_key='test', freeze_defaults=False, **ml_kwargs_spark)
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     ml_algo = cast(SparkTabularMLAlgo, ml_algo)
     assert ml_algo is not None
