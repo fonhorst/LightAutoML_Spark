@@ -19,7 +19,6 @@ then
 fi
 
 
-APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 
 function build_jars() {
   cur_dir=$(pwd)
@@ -78,6 +77,8 @@ function build_dist() {
 }
 
 function submit_job() {
+  APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+
   script_path=$1
 
   filename=$(echo ${script_path} | python -c 'import os; path = input(); print(os.path.splitext(os.path.basename(path))[0]);')
@@ -158,6 +159,35 @@ function logs_ex_by_expname() {
   kubectl -n spark-lama-exps logs -l spark-role=executor,expname=${expname}
 }
 
+function submit_job_yarn() {
+  script_path=$1
+
+  filename=$(echo ${script_path} | python -c 'import os; path = input(); print(os.path.splitext(os.path.basename(path))[0]);')
+
+  spark-submit \
+    --master yarn \
+    --deploy-mode cluster \
+    --conf 'spark.jars.packages=com.microsoft.azure:synapseml_2.12:0.9.5' \
+    --conf 'spark.jars.repositories=https://mmlspark.azureedge.net/maven' \
+    --conf 'spark.yarn.appMasterEnv.SCRIPT_ENV=cluster' \
+    --conf 'spark.kryoserializer.buffer.max=512m' \
+    --conf 'spark.driver.cores=4' \
+    --conf 'spark.driver.memory=5g' \
+    --conf 'spark.executor.instances=8' \
+    --conf 'spark.executor.cores=8' \
+    --conf 'spark.executor.memory=6g' \
+    --conf 'spark.cores.max=8' \
+    --conf 'spark.memory.fraction=0.6' \
+    --conf 'spark.memory.storageFraction=0.5' \
+    --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
+    --conf 'spark.sql.execution.arrow.pyspark.enabled=true' \
+    --conf 'spark.kryoserializer.buffer.max=512m' \
+    --conf 'spark.scheduler.minRegisteredResourcesRatio=1.0' \
+    --conf 'spark.scheduler.maxRegisteredResourcesWaitingTime=180s' \
+    --jars jars/spark-lightautoml_2.12-0.1.jar \
+    --py-files dist/LightAutoML-0.3.0.tar.gz ${script_path}
+}
+
 function help() {
   echo "
   Required env variables:
@@ -216,6 +246,10 @@ function main () {
 
     "submit-job")
         submit_job "${@}"
+        ;;
+
+    "submit-job-yarn")
+        submit_job_yarn "${@}"
         ;;
 
     "port-forward")

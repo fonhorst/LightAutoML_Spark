@@ -56,3 +56,28 @@ The utility provides a command to make port forwording for the running example.
 ./bin/slamactl.sh port-forward ./examples/spark/tabular-preset-automl.py
 ```
 The driver's 4040 port will be forwarded to http://localhost:9040.
+
+#### Run on local Hadoop YARN
+Copy lama wheel file from 'dist/LightAutoML-0.3.0-py3-none-any.whl' to 'docker-hadoop/nodemanager/LightAutoML-0.3.0-py3-none-any.whl'
+```
+cp dist/LightAutoML-0.3.0-py3-none-any.whl docker-hadoop/nodemanager/LightAutoML-0.3.0-py3-none-any.whl
+```
+Go to 'docker-hadoop' and configure docker-compose.yml. Add setting to mount directory with datasets to nodemanager1 service.
+```
+cd docker-hadoop
+
+# see line with '- /opt/spark_data:/opt/spark_data' as example
+```
+Build image for 'nodemanager' service and 'spark-submit'.
+```
+make build-nodemanager-with-python
+make build-image-to-spark-submit
+```
+Start Hadoop YARN services
+```
+docker-compose up
+```
+Send job to cluster via `spark-submit` container
+```
+docker exec -ti spark-submit bash -c "./bin/slamactl.sh submit-job-yarn examples/spark/tabular-preset-automl.py"
+```

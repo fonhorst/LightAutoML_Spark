@@ -66,7 +66,7 @@ if __name__ == "__main__":
     use_algos = [["lgb", "linear_l2"], ["lgb"]]
     # use_algos = [["lgb"]]
     # use_algos = [["lgb", "linear_l2"]]
-    path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
+    path = "file:///opt/spark_data/small_used_cars_data_cleaned.csv"
     task_type = "reg"
     roles = {
         "target": "price",
@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     transformer = automl.make_transformer()
     with log_exec_timer("saving model") as saving_timer:
-        transformer.write().overwrite().save("hdfs://node21.bdcl:9000/automl_pipeline")
+        transformer.write().overwrite().save("hdfs://namenode:9000/automl_pipeline")
 
     with log_exec_timer("spark-lama predicting on test (#1 way)") as predict_timer:
         te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
@@ -134,7 +134,7 @@ if __name__ == "__main__":
         logger.info(f"expected predictions sum: {expected_predictions_sum}")
 
     with log_exec_timer("Loading model time") as loading_timer:
-        pipeline_model = PipelineModel.load("hdfs://node21.bdcl:9000/automl_pipeline")
+        pipeline_model = PipelineModel.load("hdfs://namenode:9000/automl_pipeline")
 
     with log_exec_timer("spark-lama predicting on test (#3 way)") as predict_timer_3:
         te_pred = pipeline_model.transform(test_data_dropped)
