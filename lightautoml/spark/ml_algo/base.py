@@ -185,7 +185,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         cacher = Cacher(key=self._cacher_key)
         cacher.fit(full_preds_df)
         full_preds_df = cacher.dataset
-        #.transform(full_preds_df)
 
         # create Spark MLlib Transformer and save to property var
         self._transformer = self._build_transformer()

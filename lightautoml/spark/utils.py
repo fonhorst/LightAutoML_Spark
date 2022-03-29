@@ -231,8 +231,8 @@ class Cacher(Estimator):
 
         previous_ds = self._cacher_dict.get(self._key, None)
         if previous_ds is not None:
-            import traceback
-            logger.info(f"Removing cache for key: {self._key}. \n {traceback.format_stack()}")
+            logger.info(f"Removing cache for key: {self._key}.")
+            previous_ds.unpersist()
 
         self._cacher_dict[self._key] = ds
 
