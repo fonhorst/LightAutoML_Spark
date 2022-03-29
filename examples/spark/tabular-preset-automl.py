@@ -1,11 +1,10 @@
 import logging.config
 import os
-import time
 from typing import Tuple
 
 import pyspark.sql.functions as F
-from pyspark.sql import SparkSession
 from pyspark.ml import PipelineModel
+from pyspark.sql import SparkSession
 
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
@@ -63,37 +62,20 @@ if __name__ == "__main__":
     spark = get_spark_session()
 
     seed = 42
-    cv = 2
-    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["lgb"]]
+    cv = 5
+    use_algos = [["lgb", "linear_l2"], ["lgb"]]
 
-    # path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
-    # task_type = "reg"
-    # roles = {
-    #     "target": "price",
-    #     "drop": ["dealer_zip", "description", "listed_date",
-    #              "year", 'Unnamed: 0', '_c0',
-    #              'sp_id', 'sp_name', 'trimId',
-    #              'trim_name', 'major_options', 'main_picture_url',
-    #              'interior_color', 'exterior_color'],
-    #     "numeric": ['latitude', 'longitude', 'mileage']
-    # }
-
-    # path = "/opt/spark_data/internet_usage.csv"
-    # task_type = "multiclass"
-    # roles = {"target": "Actual_Time"}
-
-    # path = "/opt/spark_data/ipums_97.csv"
-    # task_type = "multiclass"
-    # roles = {"target": "movedin"}
-
-    # path = "/opt/spark_data/gesture_segmentation.csv"
-    # task_type = "multiclass"
-    # roles = {"target": "Phase"}
-
-    path = "/opt/spark_data/sampled_app_train.csv"
-    task_type = "binary"
-    roles = {"target": "TARGET", "drop": ["SK_ID_CURR"]}
+    path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
+    task_type = "reg"
+    roles = {
+        "target": "price",
+        "drop": ["dealer_zip", "description", "listed_date",
+                 "year", 'Unnamed: 0', '_c0',
+                 'sp_id', 'sp_name', 'trimId',
+                 'trim_name', 'major_options', 'main_picture_url',
+                 'interior_color', 'exterior_color'],
+        "numeric": ['latitude', 'longitude', 'mileage']
+    }
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
@@ -105,7 +87,7 @@ if __name__ == "__main__":
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
-            lgb_params={'use_single_dataset_mode': True, "default_params": {"numIterations": 500}},
+            lgb_params={'use_single_dataset_mode': True},
             linear_l2_params={"default_params": {"regParam": [1]}},
             reader_params={"cv": cv, "advanced_roles": False}
         )
@@ -148,9 +130,6 @@ if __name__ == "__main__":
 
         logger.info(f"score for test predictions: {test_metric_value}")
 
-        expected_predictions_sum = te_pred.select(F.sum(pred_column).alias("sum")).collect()[0]["sum"]
-        logger.info(f"expected predictions sum: {expected_predictions_sum}")
-
     with log_exec_timer("Loading model time") as loading_timer:
         pipeline_model = PipelineModel.load("/tmp/automl_pipeline")
 
@@ -166,9 +145,6 @@ if __name__ == "__main__":
         ))
 
         logger.info(f"score for test predictions via loaded pipeline: {test_metric_value}")
-
-        actual_predictions_sum = te_pred.select(F.sum(pred_column).alias("sum")).collect()[0]["sum"]
-        logger.info(f"actual predictions sum: {actual_predictions_sum}")
 
     logger.info("Predicting is finished")
 
