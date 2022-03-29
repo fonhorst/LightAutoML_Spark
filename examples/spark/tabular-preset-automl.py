@@ -32,6 +32,8 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[Sp
     train_data.write.mode('overwrite').format('noop').save()
     test_data.write.mode('overwrite').format('noop').save()
 
+    data.unpersist()
+
     return train_data, test_data
 
 
@@ -68,8 +70,7 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 5
-    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["lgb"]]
+    use_algos = [["lgb", "linear_l2"], ["lgb"]]
 
     path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
     task_type = "reg"
@@ -111,6 +112,11 @@ if __name__ == "__main__":
     logger.info(f"score for out-of-fold predictions: {metric_value}")
 
     transformer = automl.make_transformer()
+
+    # we delete this variable to make garbage collection of a local checkpoint
+    # used to produce Spark DataFrame with predictions possible
+    del oof_predictions
+    automl.release_cache()
 
     with log_exec_timer("saving model") as saving_timer:
         transformer.write().overwrite().save("/tmp/automl_pipeline")
@@ -165,9 +171,7 @@ if __name__ == "__main__":
 
     print(f"EXP-RESULT: {result}")
 
-    automl.release_cache()
-
-    import time
-    time.sleep(600)
+    train_data.unpersist()
+    test_data.unpersist()
 
     spark.stop()

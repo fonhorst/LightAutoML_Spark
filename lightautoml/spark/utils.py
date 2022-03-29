@@ -215,11 +215,11 @@ class Cacher(Estimator):
         return cls._cacher_dict.get(key, None)
 
     @classmethod
-    def release_cache_by_key(cls, key: str) -> Optional[SparkDataFrame]:
+    def release_cache_by_key(cls, key: str):
         df = cls._cacher_dict.pop(key, None)
         if df is not None:
             df.unpersist()
-        return df
+            del df
 
     @property
     def dataset(self) -> SparkDataFrame:
@@ -240,6 +240,7 @@ class Cacher(Estimator):
         if previous_ds is not None:
             logger.info(f"Removing cache for key: {self._key} (RDD Id: {previous_ds.rdd.id()}).")
             previous_ds.unpersist()
+            del previous_ds
 
         self._cacher_dict[self._key] = ds
 
