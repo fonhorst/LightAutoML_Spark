@@ -29,14 +29,11 @@ from ..dataset_utils import get_test_datasets, prepared_datasets, load_dump_if_e
 
 spark = spark_sess
 
-# DATASETS_ARG = {"dataset": "lama_test_dataset"}
-# DATASETS_ARG = {"dataset": "used_cars_dataset"}
-# DATASETS_ARG = {"dataset": "buzz_dataset"}
-# DATASETS_ARG = {"setting": "all-tasks"}
-DATASETS_ARG = {"setting": "multiclass"}
+DATASETS_ARG = {"setting": "all-tasks"}
+
 
 CV = 5
-seed = 42
+seed = 100
 
 # otherwise holdout is used
 USE_FOLDS_VALIDATION = True
