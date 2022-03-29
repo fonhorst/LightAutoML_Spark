@@ -70,7 +70,7 @@ if __name__ == "__main__":
     cv = 2
     use_algos = [["lgb"]]
     task_type = "multiclass"
-    path = "/opt/spark_data/ipums_97.csv"
+    path = "file:///opt/spark_data/ipums_97.csv"
     metric_name = "crossentropy"
     roles = {"target": "movedin"}
 
