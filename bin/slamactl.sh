@@ -175,13 +175,12 @@ function submit_job_yarn() {
     --conf 'spark.driver.memory=5g' \
     --conf 'spark.executor.instances=8' \
     --conf 'spark.executor.cores=8' \
-    --conf 'spark.executor.memory=6g' \
+    --conf 'spark.executor.memory=5g' \
     --conf 'spark.cores.max=8' \
     --conf 'spark.memory.fraction=0.6' \
     --conf 'spark.memory.storageFraction=0.5' \
     --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
     --conf 'spark.sql.execution.arrow.pyspark.enabled=true' \
-    --conf 'spark.kryoserializer.buffer.max=512m' \
     --conf 'spark.scheduler.minRegisteredResourcesRatio=1.0' \
     --conf 'spark.scheduler.maxRegisteredResourcesWaitingTime=180s' \
     --jars jars/spark-lightautoml_2.12-0.1.jar \
