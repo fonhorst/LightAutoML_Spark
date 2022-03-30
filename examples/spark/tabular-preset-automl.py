@@ -11,6 +11,8 @@ from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
+import pandas as pd
+
 
 DATASETS = {
     "used_cars_dataset": {
@@ -126,12 +128,10 @@ def get_spark_session():
     return spark_sess
 
 
-if __name__ == "__main__":
+def main(dataset_name: str, seed: int):
     spark = get_spark_session()
 
-    seed = 42
     cv = 5
-    dataset_name = "used_cars_dataset"
 
     # Algos and layers to be used during automl:
     # For example:
@@ -219,7 +219,9 @@ if __name__ == "__main__":
     logger.info("Predicting is finished")
 
     result = {
-        "metric_value": metric_value,
+        "seed": seed,
+        "dataset": dataset_name,
+        "used_algo": str(use_algos),
         "test_metric_value": test_metric_value,
         "train_duration_secs": train_timer.duration,
         "predict_duration_secs": predict_timer.duration,
@@ -233,3 +235,24 @@ if __name__ == "__main__":
     test_data.unpersist()
 
     spark.stop()
+
+    return result
+
+
+def multirun(dataset_name: str):
+    seeds = [ 1, 5, 10, 42, 100, 777, 1000, 10000, 100000, 1000000]
+    results = [main(dataset_name, seed) for seed in seeds]
+
+    df = pd.DataFrame(results)
+
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+        print(df)
+
+    df.to_csv(f"spark-lama_results_{dataset_name}.csv")
+
+
+if __name__ == "__main__":
+    # One can run:
+    # 1. main(dataset_name="used_cars_dataset", seed=42)
+    # 2. multirun(dataset_name="used_cars_dataset")
+    multirun(dataset_name="used_cars_dataset")
