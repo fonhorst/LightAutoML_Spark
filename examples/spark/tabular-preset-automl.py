@@ -210,6 +210,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
         "seed": seed,
         "dataset": dataset_name,
         "used_algo": str(use_algos),
+        "metric_value": metric_value,
         "test_metric_value": test_metric_value,
         "train_duration_secs": train_timer.duration,
         "predict_duration_secs": predict_timer.duration,
@@ -242,6 +243,6 @@ if __name__ == "__main__":
     # One can run:
     # 1. main(dataset_name="used_cars_dataset", seed=42)
     # 2. multirun(dataset_name="used_cars_dataset")
-    multirun(spark_sess, dataset_name="used_cars_dataset")
+    main(dataset_name="used_cars_dataset", seed=42)
 
     spark_sess.stop()

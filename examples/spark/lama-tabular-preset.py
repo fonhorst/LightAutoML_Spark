@@ -151,5 +151,5 @@ if __name__ == "__main__":
     # One can run:
     # 1. main(dataset_name="used_cars_dataset", seed=42)
     # 2. multirun(dataset_name="used_cars_dataset")
-    multirun(dataset_name="lama_test_dataset")
+    main(dataset_name="used_cars_dataset", seed=42)
 
