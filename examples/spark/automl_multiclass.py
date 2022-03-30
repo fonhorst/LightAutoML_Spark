@@ -91,7 +91,7 @@ if __name__ == "__main__":
         preds = automl.fit_predict(train_data, roles)
 
     transformer = automl.make_transformer()
-    transformer.write().overwrite().save("hdfs://node21.bdcl:9000/automl_multiclass")
+    transformer.write().overwrite().save("hdfs://namenode:9000/automl_multiclass")
 
     with log_exec_timer("spark-lama predicting on test") as predict_timer_2:
         te_pred = transformer.transform(test_data)
@@ -107,7 +107,7 @@ if __name__ == "__main__":
         logger.info(f"score for test predictions: {expected_metric_value}")
 
     with log_exec_timer("spark-lama predicting on test via loaded pipeline") as predict_timer_3:
-        pipeline_model = PipelineModel.load("hdfs://node21.bdcl:9000/automl_multiclass")
+        pipeline_model = PipelineModel.load("hdfs://namenode:9000/automl_multiclass")
         te_pred = pipeline_model.transform(test_data)
 
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
