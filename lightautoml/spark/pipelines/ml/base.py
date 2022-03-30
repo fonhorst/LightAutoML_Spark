@@ -1,25 +1,19 @@
 """Base classes for MLPipeline."""
-import functools
 import uuid
 from copy import copy
 from typing import List, cast, Sequence, Union, Tuple, Optional
 
-from numpy import format_parser
 from pyspark.ml import Transformer, PipelineModel
 
-from lightautoml.validation.base import TrainValidIterator
-from ..base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from ..features.base import SparkFeaturesPipeline, SelectTransformer, SparkEmptyFeaturePipeline
-from ...dataset.roles import NumericVectorOrArrayRole
-from ...transformers.base import ColumnsSelectorTransformer
-from ...utils import Cacher, NoOpTransformer
-from ...dataset.base import LAMLDataset, SparkDataset, SparkDataFrame
+from ..base import OutputFeaturesAndRoles
+from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
+from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
+from ...transformers.base import ColumnsSelectorTransformer
+from ...utils import Cacher
 from ...validation.base import SparkBaseTrainValidIterator
-from ....dataset.base import RolesDict
 from ....ml_algo.tuning.base import ParamsTuner
 from ....ml_algo.utils import tune_and_fit_predict
-from ....pipelines.features.base import FeaturesPipeline
 from ....pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from ....pipelines.selection.base import SelectionPipeline
 
@@ -82,13 +76,14 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         # with cast(SparkDataset, train_valid.train).applying_temporary_caching():
         train_valid = train_valid.apply_selector(self.post_selection)
 
+        preds: Optional[SparkDataset] = None
         for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
             ml_algo = cast(SparkTabularMLAlgo, ml_algo)
-            ml_algo, preds = tune_and_fit_predict(ml_algo, param_tuner, train_valid, force_calc)
-            train_valid.train = preds
+            ml_algo, curr_preds = tune_and_fit_predict(ml_algo, param_tuner, train_valid, force_calc)
             if ml_algo is not None:
                 self.ml_algos.append(ml_algo)
-                # preds = cast(SparkDataset, preds)
+                preds = curr_preds
+                train_valid.train = preds
             else:
                 # TODO: warning
                 pass
@@ -122,18 +117,20 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         ml_algo_transformers = PipelineModel(stages=[ml_algo.transformer for ml_algo in self.ml_algos])
         self._transformer = PipelineModel(stages=[fp.transformer, ml_algo_transformers, select_transformer])
 
-        # val_preds = [ml_algo_transformers.transform(valid_ds.data) for _, full_ds, valid_ds in train_valid]
         val_preds = [preds.data]
-        val_preds_df = train_valid.combine_val_preds(val_preds, include_train=True)
+        val_preds_df = train_valid.combine_val_preds(val_preds, include_train=False)
         val_preds_df = val_preds_df.select(
             SparkDataset.ID_COLUMN,
             train_valid.train.target_column,
             train_valid.train.folds_column,
             *list(out_roles.keys())
         )
-        val_preds_df = Cacher(key=self._cacher_key).fit(val_preds_df).transform(val_preds_df)
+
+        cacher = Cacher(key=self._cacher_key)
+        cacher.fit(val_preds_df)
+        val_preds_df = cacher.dataset
         val_preds_ds = train_valid.train.empty()
-        val_preds_ds.set_data(val_preds_df, None, out_roles)
+        val_preds_ds.set_data(val_preds_df, list(out_roles.keys()), out_roles)
 
         return val_preds_ds
 
