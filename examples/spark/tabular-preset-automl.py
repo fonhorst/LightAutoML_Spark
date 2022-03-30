@@ -2,6 +2,7 @@ import logging.config
 import os
 from typing import Tuple
 
+import pandas as pd
 import pyspark.sql.functions as F
 from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
@@ -11,7 +12,9 @@ from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
-import pandas as pd
+logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
+logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
+logger = logging.getLogger(__name__)
 
 
 DATASETS = {
@@ -74,24 +77,11 @@ def get_dataset_attrs(name: str):
     )
 
 
-logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
-logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
-logger = logging.getLogger(__name__)
-
-
 def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
-    data = spark.read.csv(path, header=True, escape="\"")
-
-    data = data.select(
-        '*',
-        F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN),
-        F.rand(seed).alias('is_test')
-    ).cache()
+    data = spark.read.csv(path, header=True, escape="\"").cache()
     data.write.mode('overwrite').format('noop').save()
 
-    train_data = data.where(F.col('is_test') < 0.8).drop('is_test').cache()
-    test_data = data.where(F.col('is_test') >= 0.8).drop('is_test').cache()
-
+    train_data, test_data = data.randomSplit([0.8, 0.2], seed)
     train_data.write.mode('overwrite').format('noop').save()
     test_data.write.mode('overwrite').format('noop').save()
 
@@ -107,7 +97,7 @@ def get_spark_session():
         spark_sess = (
             SparkSession
             .builder
-            .master("local[*]")
+            .master("local[4]")
             .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
@@ -128,9 +118,7 @@ def get_spark_session():
     return spark_sess
 
 
-def main(dataset_name: str, seed: int):
-    spark = get_spark_session()
-
+def main(spark: SparkSession, dataset_name: str, seed: int):
     cv = 5
 
     # Algos and layers to be used during automl:
@@ -234,14 +222,12 @@ def main(dataset_name: str, seed: int):
     train_data.unpersist()
     test_data.unpersist()
 
-    spark.stop()
-
     return result
 
 
-def multirun(dataset_name: str):
-    seeds = [ 1, 5, 10, 42, 100, 777, 1000, 10000, 100000, 1000000]
-    results = [main(dataset_name, seed) for seed in seeds]
+def multirun(spark: SparkSession, dataset_name: str):
+    seeds = [ 1, 5, 42, 100, 777]
+    results = [main(spark, dataset_name, seed) for seed in seeds]
 
     df = pd.DataFrame(results)
 
@@ -252,7 +238,10 @@ def multirun(dataset_name: str):
 
 
 if __name__ == "__main__":
+    spark_sess = get_spark_session()
     # One can run:
     # 1. main(dataset_name="used_cars_dataset", seed=42)
     # 2. multirun(dataset_name="used_cars_dataset")
-    multirun(dataset_name="used_cars_dataset")
+    multirun(spark_sess, dataset_name="used_cars_dataset")
+
+    spark_sess.stop()
