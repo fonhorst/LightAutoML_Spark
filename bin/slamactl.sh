@@ -55,6 +55,12 @@ function build_pyspark_images() {
   ./spark/bin/docker-image-tool.sh -r "${REPO}" -t ${IMAGE_TAG} push
 }
 
+function build_lama_dist() {
+  # shellcheck disable=SC2094
+  poetry export -f requirements.txt > requirements.txt
+  poetry build
+}
+
 function build_lama_image() {
   # shellcheck disable=SC2094
   poetry export -f requirements.txt > requirements.txt
@@ -233,6 +239,10 @@ function main () {
 
     "build-pyspark-images")
         build_pyspark_images
+        ;;
+
+    "build-lama-dist")
+        build_lama_dist
         ;;
 
     "build-lama-image")
