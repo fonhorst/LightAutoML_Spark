@@ -11,6 +11,67 @@ from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
+
+DATASETS = {
+    "used_cars_dataset": {
+            "path": "/opt/spark_data/small_used_cars_data.csv",
+            "task_type": "reg",
+            "roles": {
+                "target": "price",
+                "drop": ["dealer_zip", "description", "listed_date",
+                         "year", 'Unnamed: 0', '_c0',
+                         'sp_id', 'sp_name', 'trimId',
+                         'trim_name', 'major_options', 'main_picture_url',
+                         'interior_color', 'exterior_color'],
+                "numeric": ['latitude', 'longitude', 'mileage']
+            },
+            "dtype": {
+                'fleet': 'str', 'frame_damaged': 'str',
+                'has_accidents': 'str', 'isCab': 'str',
+                'is_cpo': 'str', 'is_new': 'str',
+                'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+            }
+    },
+
+    # https://www.openml.org/d/4549
+    "buzz_dataset": {
+        "path": "/opt/spark_data/Buzzinsocialmedia_Twitter_25k.csv",
+        "task_type": "reg",
+        "roles": {"target": "Annotation"},
+    },
+
+    "lama_test_dataset": {
+        "path": "/opt/spark_data/sampled_app_train.csv",
+        "task_type": "binary",
+        "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
+    },
+
+    # https://www.openml.org/d/734
+    "ailerons_dataset": {
+        "path": "/opt/spark_data/ailerons.csv",
+        "task_type": "binary",
+        "roles": {"target": "binaryClass"},
+    },
+
+    # https://www.openml.org/d/382
+    "ipums_97": {
+        "path": "/opt/spark_data/ipums_97.csv",
+        "task_type": "multiclass",
+        "roles": {"target": "movedin"},
+    }
+}
+
+
+def get_dataset_attrs(name: str):
+    return (
+        DATASETS[name]['path'],
+        DATASETS[name]['task_type'],
+        DATASETS[name]['roles'],
+        # to assure that LAMA correctly interprets certain columns as categorical
+        DATASETS[name].get('dtype', dict()),
+    )
+
+
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
@@ -70,19 +131,16 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 5
-    use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    dataset_name = "used_cars_dataset"
 
-    path = "/opt/spark_data/small_used_cars_data_cleaned.csv"
-    task_type = "reg"
-    roles = {
-        "target": "price",
-        "drop": ["dealer_zip", "description", "listed_date",
-                 "year", 'Unnamed: 0', '_c0',
-                 'sp_id', 'sp_name', 'trimId',
-                 'trim_name', 'major_options', 'main_picture_url',
-                 'interior_color', 'exterior_color'],
-        "numeric": ['latitude', 'longitude', 'mileage']
-    }
+    # Algos and layers to be used during automl:
+    # For example:
+    # 1. use_algos = [["lgb"]]
+    # 2. use_algos = [["linear_l2"]]
+    # 3. use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    use_algos = [["lgb"]]
+
+    path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
