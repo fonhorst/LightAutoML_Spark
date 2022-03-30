@@ -1,14 +1,13 @@
 import logging.config
-import os
-from typing import Tuple
 
 import pandas as pd
 import pyspark.sql.functions as F
 from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
+from examples_utils import get_dataset_attrs, prepare_test_and_train, get_spark_session
 from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
-from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.tasks.base import SparkTask
 from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
@@ -17,117 +16,14 @@ logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 
-DATASETS = {
-    "used_cars_dataset": {
-            "path": "/opt/spark_data/small_used_cars_data.csv",
-            "task_type": "reg",
-            "roles": {
-                "target": "price",
-                "drop": ["dealer_zip", "description", "listed_date",
-                         "year", 'Unnamed: 0', '_c0',
-                         'sp_id', 'sp_name', 'trimId',
-                         'trim_name', 'major_options', 'main_picture_url',
-                         'interior_color', 'exterior_color'],
-                "numeric": ['latitude', 'longitude', 'mileage']
-            },
-            "dtype": {
-                'fleet': 'str', 'frame_damaged': 'str',
-                'has_accidents': 'str', 'isCab': 'str',
-                'is_cpo': 'str', 'is_new': 'str',
-                'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
-            }
-    },
-
-    # https://www.openml.org/d/4549
-    "buzz_dataset": {
-        "path": "/opt/spark_data/Buzzinsocialmedia_Twitter_25k.csv",
-        "task_type": "reg",
-        "roles": {"target": "Annotation"},
-    },
-
-    "lama_test_dataset": {
-        "path": "/opt/spark_data/sampled_app_train.csv",
-        "task_type": "binary",
-        "roles": {"target": "TARGET", "drop": ["SK_ID_CURR"]},
-    },
-
-    # https://www.openml.org/d/734
-    "ailerons_dataset": {
-        "path": "/opt/spark_data/ailerons.csv",
-        "task_type": "binary",
-        "roles": {"target": "binaryClass"},
-    },
-
-    # https://www.openml.org/d/382
-    "ipums_97": {
-        "path": "/opt/spark_data/ipums_97.csv",
-        "task_type": "multiclass",
-        "roles": {"target": "movedin"},
-    }
-}
-
-
-def get_dataset_attrs(name: str):
-    return (
-        DATASETS[name]['path'],
-        DATASETS[name]['task_type'],
-        DATASETS[name]['roles'],
-        # to assure that LAMA correctly interprets certain columns as categorical
-        DATASETS[name].get('dtype', dict()),
-    )
-
-
-def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
-    data = spark.read.csv(path, header=True, escape="\"").cache()
-    data.write.mode('overwrite').format('noop').save()
-
-    train_data, test_data = data.randomSplit([0.8, 0.2], seed)
-    train_data.write.mode('overwrite').format('noop').save()
-    test_data.write.mode('overwrite').format('noop').save()
-
-    data.unpersist()
-
-    return train_data, test_data
-
-
-def get_spark_session():
-    if os.environ.get("SCRIPT_ENV", None) == "cluster":
-        spark_sess = SparkSession.builder.getOrCreate()
-    else:
-        spark_sess = (
-            SparkSession
-            .builder
-            .master("local[4]")
-            .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
-            .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
-            .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-            .config("spark.cleaner.referenceTracking.cleanCheckpoints", "true")
-            .config("spark.cleaner.referenceTracking", "true")
-            .config("spark.cleaner.periodicGC.interval", "1min")
-            .config("spark.sql.shuffle.partitions", "16")
-            .config("spark.driver.memory", "12g")
-            .config("spark.executor.memory", "12g")
-            .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-            .getOrCreate()
-        )
-
-    spark_sess.sparkContext.setCheckpointDir("/tmp/spark_checkpoints")
-
-    spark_sess.sparkContext.setLogLevel("WARN")
-
-    return spark_sess
-
-
 def main(spark: SparkSession, dataset_name: str, seed: int):
-    cv = 5
-
     # Algos and layers to be used during automl:
     # For example:
     # 1. use_algos = [["lgb"]]
     # 2. use_algos = [["linear_l2"]]
     # 3. use_algos = [["lgb", "linear_l2"], ["lgb"]]
     use_algos = [["lgb"]]
-
+    cv = 5
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     with log_exec_timer("spark-lama training") as train_timer:
@@ -175,7 +71,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
         logger.info(f"score for test predictions: {test_metric_value}")
 
-    with log_exec_timer("spark-lama predicting on test (#2 way)") as predict_timer_2:
+    with log_exec_timer("spark-lama predicting on test (#2 way)"):
         te_pred = automl.make_transformer().transform(test_data_dropped)
 
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
@@ -191,7 +87,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     with log_exec_timer("Loading model time") as loading_timer:
         pipeline_model = PipelineModel.load("/tmp/automl_pipeline")
 
-    with log_exec_timer("spark-lama predicting on test (#3 way)") as predict_timer_3:
+    with log_exec_timer("spark-lama predicting on test (#3 way)"):
         te_pred = pipeline_model.transform(test_data_dropped)
 
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
@@ -227,7 +123,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
 
 def multirun(spark: SparkSession, dataset_name: str):
-    seeds = [ 1, 5, 42, 100, 777]
+    seeds = [1, 5, 42, 100, 777]
     results = [main(spark, dataset_name, seed) for seed in seeds]
 
     df = pd.DataFrame(results)
@@ -243,6 +139,6 @@ if __name__ == "__main__":
     # One can run:
     # 1. main(dataset_name="used_cars_dataset", seed=42)
     # 2. multirun(dataset_name="used_cars_dataset")
-    main(dataset_name="used_cars_dataset", seed=42)
+    main(spark_sess, dataset_name="used_cars_dataset", seed=42)
 
     spark_sess.stop()
