@@ -37,6 +37,7 @@ from lightautoml.spark.utils import log_exec_timer, logging_config, VERBOSE_LOGG
 from lightautoml.spark.validation.iterators import SparkFoldsIterator, SparkDummyIterator
 
 import pandas as pd
+import numpy as np
 
 logger = logging.getLogger()
 
@@ -724,6 +725,29 @@ def calculate_broadcast(spark: SparkSession, **_):
     # time.sleep(600)
 
 
+def calculate_le_scaling(spark: SparkSession, path: str, **_):
+    # /mnt/ess_storage/DN_1/storage/sber_LAMA/data_for_LE_TE_tests/
+
+    df = spark.read.json(path).cache()
+    df.write.mode('overwrite').format('noop').save()
+
+    cat_roles = {
+       c: CategoryRole(dtype=np.float32) for c in df.columns
+    }
+
+    with log_exec_timer("SparkLabelEncoder") as le_timer:
+        estimator = SparkLabelEncoderEstimator(
+            input_cols=list(cat_roles.keys()),
+            input_roles=cat_roles
+        )
+
+        transformer = estimator.fit(df)
+
+    with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
+        df = transformer.transform(df).cache()
+        df.write.mode('overwrite').format('noop').save()
+
+
 if __name__ == "__main__":
     logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename="/tmp/lama.log"))
     logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -760,10 +784,10 @@ if __name__ == "__main__":
             func = calculate_cat_te
         elif func_name == 'calculate_broadcast':
             func = calculate_broadcast
+        elif func_name == 'calculate_le_scaling':
+            func = calculate_le_scaling
         else:
-            raise ValueError(f"Incorrect func name: {func_name}. "
-                             f"Only the following are supported: "
-                             f"{['calculate_automl', 'calculate_lgbadv_boostlgb']}")
+            raise ValueError(f"Incorrect func name: {func_name}. ")
 
         result = func(spark=spark, **ds_cfg)
         print(f"EXP-RESULT: {result}")
