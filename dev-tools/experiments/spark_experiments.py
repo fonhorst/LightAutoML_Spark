@@ -727,8 +727,10 @@ def calculate_broadcast(spark: SparkSession, **_):
 
 def calculate_le_scaling(spark: SparkSession, path: str, **_):
     # /mnt/ess_storage/DN_1/storage/sber_LAMA/data_for_LE_TE_tests/
+    execs = int(spark.conf.get('spark.executor.instances'))
+    cores = int(spark.conf.get('spark.executor.cores'))
 
-    df = spark.read.json(path).cache()
+    df = spark.read.json(path).repartition(execs * cores).cache()
     df.write.mode('overwrite').format('noop').save()
 
     cat_roles = {
@@ -743,9 +745,16 @@ def calculate_le_scaling(spark: SparkSession, path: str, **_):
 
         transformer = estimator.fit(df)
 
-    with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
-        df = transformer.transform(df).cache()
-        df.write.mode('overwrite').format('noop').save()
+    # with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
+    #     df = transformer.transform(df).cache()
+    #     df.write.mode('overwrite').format('noop').save()
+    import time
+    time.sleep(600)
+
+    return {
+        "le_fit": le_timer.duration,
+        # "le_transform": le_transform_timer.duration
+    }
 
 
 if __name__ == "__main__":
