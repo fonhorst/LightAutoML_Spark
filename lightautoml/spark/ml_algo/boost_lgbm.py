@@ -11,13 +11,17 @@ from pyspark.ml import Transformer, PipelineModel
 from pyspark.ml.util import MLWritable, MLReadable, MLWriter
 from pyspark.ml.feature import VectorAssembler
 from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor, LightGBMRegressionModel, LightGBMClassificationModel
+from synapse.ml.onnx import ONNXModel
+import lightgbm as lgb
+from lightgbm import Booster, LGBMClassifier
+
 
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
-from lightautoml.spark.mlwriters import LightGBMModelWrapperMLReader, LightGBMModelWrapperMLWriter
-from lightautoml.spark.transformers.base import DropColumnsTransformer
+from lightautoml.spark.mlwriters import LightGBMModelWrapperMLReader, LightGBMModelWrapperMLWriter, ONNXModelWrapperMLReader, ONNXModelWrapperMLWriter
+from lightautoml.spark.transformers.base import DropColumnsTransformer, ProbabilityColsTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.validation.base import TrainValidIterator
@@ -38,6 +42,24 @@ class LightGBMModelWrapper(Transformer, MLWritable, MLReadable):
     def read(cls):
         """Returns an MLReader instance for this class."""
         return LightGBMModelWrapperMLReader()
+
+    def _transform(self, dataset: SparkDataset) -> SparkDataset:
+        return self.model.transform(dataset)
+
+
+class ONNXModelWrapper(Transformer, MLWritable, MLReadable):
+
+    def __init__(self, model: ONNXModel = None) -> None:
+        super().__init__()
+        self.model = model
+
+    def write(self) -> MLWriter:
+        return ONNXModelWrapperMLWriter(self)
+
+    @classmethod
+    def read(cls):
+        """Returns an MLReader instance for this class."""
+        return ONNXModelWrapperMLReader()
 
     def _transform(self, dataset: SparkDataset) -> SparkDataset:
         return self.model.transform(dataset)
@@ -101,6 +123,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self._use_single_dataset_mode = use_single_dataset_mode
         self._max_validation_size = max_validation_size
         self._seed = seed
+        self._models_feature_impotances = []
 
     def _infer_params(self) -> Tuple[dict, int]:
         """Infer all parameters in lightgbm format.
@@ -380,6 +403,27 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
         ).transform(val_pred)
 
+        logger.info("------Model convert is started------")
+        # # TODO: Remove this code when synapse.ml developers fix problem with infer LGBMClassifier model
+        booster_model_str = ml_model.getLightGBMBooster().modelStr().get()
+        booster = lgb.Booster(model_str=booster_model_str)
+        model_payload_ml = self._convertModel(booster, len(full.data.columns) - 1)
+
+        onnx_ml = ONNXModel().setModelPayload(model_payload_ml)
+        onnx_ml = (
+        onnx_ml
+            .setDeviceType("CPU")
+            .setFeedDict({"input": f"{self._name}_vassembler_features"})
+            .setFetchDict({ml_model.getProbabilityCol(): "probabilities", ml_model.getPredictionCol(): "label"}) # getPredictionCol() getLabelCol() getRawPredictionCol
+            .setMiniBatchSize(1)
+        )
+
+        self._models_feature_impotances.append(ml_model.getFeatureImportances(importance_type='gain'))
+
+        ml_model = onnx_ml
+        logger.info("------Model convert is ended------")
+        # ======================================
+
         return ml_model, val_pred, fold_prediction_column
 
     def fit(self, train_valid: SparkBaseTrainValidIterator):
@@ -389,21 +433,37 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     def get_features_score(self) -> Series:
         imp = 0
-        for model in self.models:
-            imp = imp + pd.Series(model.getFeatureImportances(importance_type='gain'))
+        for model_feature_impotances in self._models_feature_impotances:
+            imp = imp + pd.Series(model_feature_impotances)
+        # for model in self.models:
+        #     imp = imp + pd.Series(model.getFeatureImportances(importance_type='gain'))
 
-        imp = imp / len(self.models)
+        imp = imp / len(self._models_feature_impotances)
 
         result = Series(list(imp), index=self.features).sort_values(ascending=False)
         return result
 
+    @staticmethod
+    def _convertModel(lgbm_model: LGBMClassifier or Booster, input_size: int) -> bytes:
+        from onnxmltools.convert import convert_lightgbm
+        from onnxconverter_common.data_types import FloatTensorType
+        initial_types = [("input", FloatTensorType([-1, input_size]))] # FloatTensorType([-1, input_size]
+        onnx_model = convert_lightgbm(lgbm_model, initial_types=initial_types, target_opset=9)
+        return onnx_model.SerializeToString()
+
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        wrapped_models = [LightGBMModelWrapper(m) for m in self.models]
+        # wrapped_models = [LightGBMModelWrapper(m) for m in self.models]
+        wrapped_models = [ONNXModelWrapper(m) for m in self.models]
         models = [el for m in wrapped_models for el in [m, DropColumnsTransformer(
-            remove_cols=[],
-            optional_remove_cols=[self._prediction_col_name, self._probability_col_name, self._raw_prediction_col_name]
-        )]]
+        # models = [el for m in self.models for el in [m, DropColumnsTransformer(
+                remove_cols=[],
+                optional_remove_cols=[self._prediction_col_name,
+                                    self._probability_col_name,
+                                    self._raw_prediction_col_name]
+            )
+        ]]
+        models.append(ProbabilityColsTransformer(probability_сols=self._models_prediction_columns, num_classes=self.n_classes))
         averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
         return averaging_model
 

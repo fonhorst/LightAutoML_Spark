@@ -4,6 +4,8 @@ from copy import copy, deepcopy
 from typing import Dict, cast, Sequence, List, Set, Optional, Union
 
 from pyspark.sql import Column
+from pyspark.sql import functions as F
+from pyspark.ml.functions import array_to_vector
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
@@ -316,6 +318,36 @@ class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols, Defau
         ds_cols = set(dataset.columns)
         present_opt_cols = [c for c in self.getOptionalCols() if c in ds_cols]
         return dataset.select(*self.getInputCols(), *present_opt_cols)
+
+
+class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
+    """Converts probability columns values from ONNX model format to LGBMCBooster format
+    """
+    probabilityCols = Param(Params._dummy(), "probabilityCols", "probability сolumn names in dataframe",
+                           typeConverter=TypeConverters.toListString)
+
+    numClasses = Param(Params._dummy(), "numClasses", "number of classes",
+                           typeConverter=TypeConverters.toInt)
+
+    def __init__(self, probability_сols: List[str] = [], num_classes: int = 0):
+        super().__init__()
+        self.set(self.probabilityCols, probability_сols)
+        self.set(self.numClasses, num_classes)
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        # dataset.toPandas().to_csv("/tmp/automl_multiclass_transform_before_ProbabilityColsTransformer.csv", index=False)
+        dataset = dataset.cache()
+        dataset.write.mode('overwrite').format('noop').save()
+        logger.info("+++++Values convertation is started+++++")
+        num_classes = self.getOrDefault(self.numClasses)
+        probability_cols = self.getOrDefault(self.probabilityCols)
+        other_cols = [c for c in dataset.columns if c not in probability_cols]
+        probability_cols = [array_to_vector(F.array([F.col(c).getItem(i) for i in range(num_classes)])).alias(c) for c in probability_cols] # .cast("array<double>")
+        dataset = dataset.select(*other_cols, *probability_cols)
+        # dataset.toPandas().to_csv("/tmp/automl_multiclass_transform_after_ProbabilityColsTransformer.csv", index=False)
+        dataset.write.mode('overwrite').format('noop').save()
+        logger.info("+++++Values convertation is ended+++++")
+        return dataset
 
 
 class DropColumnsTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):

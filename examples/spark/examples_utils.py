@@ -99,7 +99,7 @@ def get_spark_session():
             .getOrCreate()
         )
 
-    spark_sess.sparkContext.setCheckpointDir("/tmp/spark_checkpoints")
+    spark_sess.sparkContext.setCheckpointDir("file:///tmp/spark_checkpoints")
 
     spark_sess.sparkContext.setLogLevel("WARN")
 
