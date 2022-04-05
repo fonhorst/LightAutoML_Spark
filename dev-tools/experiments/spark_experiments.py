@@ -757,6 +757,89 @@ def calculate_le_scaling(spark: SparkSession, path: str, **_):
     }
 
 
+def calculate_le_te_scaling(
+        spark: SparkSession,
+        path: str,
+        checkpoint_path: Optional[str] = None,
+        **_):
+    execs = int(spark.conf.get('spark.executor.instances'))
+    cores = int(spark.conf.get('spark.executor.cores'))
+
+    if checkpoint_path is not None:
+        checkpoint_path = os.path.join(checkpoint_path, 'data.dump')
+        chkp = load_dump_if_exist(spark, checkpoint_path)
+    else:
+        checkpoint_path = None
+        chkp = None
+
+    if not chkp:
+        logger.info(f"No checkpoint found on path {checkpoint_path}. Will create it ")
+        df = spark.read.json(path).repartition(execs * cores).cache()
+        df.write.mode('overwrite').format('noop').save()
+
+        cat_roles = {
+           c: CategoryRole(dtype=np.float32) for c in df.columns
+        }
+
+        with log_exec_timer("SparkLabelEncoder") as le_timer:
+            estimator = SparkLabelEncoderEstimator(
+                input_cols=list(cat_roles.keys()),
+                input_roles=cat_roles
+            )
+
+            transformer = estimator.fit(df)
+
+        cv = 5
+        with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
+            df = transformer.transform(df).select(
+                '*',
+                F.rand(42).alias('target'),
+                F.floor(F.rand(142) * cv).astype('int').alias('folds')
+            ).cache()
+            df.write.mode('overwrite').format('noop').save()
+
+        le_ds = SparkDataset(
+            data=df,
+            roles=estimator.getOutputRoles(),
+            task=SparkTask('reg'),
+            target='target',
+            folds='folds'
+        )
+
+        if checkpoint_path is not None:
+            dump_data(checkpoint_path, le_ds)
+
+        result_le = {
+            "le_fit": le_timer.duration,
+            "le_transform": le_transform_timer.duration,
+        }
+    else:
+        logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
+        result_le = dict()
+        le_ds, _ = chkp
+
+    with log_exec_timer("TargetEncoder") as te_timer:
+        te_estimator = SparkTargetEncoderEstimator(
+            input_cols=le_ds.features,
+            input_roles=le_ds.roles,
+            task_name='reg',
+            folds_column=le_ds.folds_column,
+            target_column=le_ds.target_column
+        )
+
+        te_transformer = te_estimator.fit(df)
+
+    with log_exec_timer("TargetEncoder transform") as te_transform_timer:
+        df = te_transformer.transform(df)
+        df.write.mode('overwrite').format('noop').save()
+
+    return {
+        **result_le,
+        "te_fit": te_timer.duration,
+        "te_transform": te_transform_timer.duration
+    }
+
+
 if __name__ == "__main__":
     logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename="/tmp/lama.log"))
     logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -795,6 +878,8 @@ if __name__ == "__main__":
             func = calculate_broadcast
         elif func_name == 'calculate_le_scaling':
             func = calculate_le_scaling
+        elif func_name == 'calculate_le_te_scaling':
+            func = calculate_le_te_scaling
         else:
             raise ValueError(f"Incorrect func name: {func_name}. ")
 
