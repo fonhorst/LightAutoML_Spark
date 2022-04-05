@@ -792,9 +792,10 @@ def calculate_le_te_scaling(
         cv = 5
         with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
             df = transformer.transform(df).select(
-                '*',
+                F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN),
                 F.rand(42).alias('target'),
-                F.floor(F.rand(142) * cv).astype('int').alias('folds')
+                F.floor(F.rand(142) * cv).astype('int').alias('folds'),
+                *list(estimator.getOutputRoles().keys()),
             ).cache()
             df.write.mode('overwrite').format('noop').save()
 

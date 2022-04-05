@@ -22,7 +22,7 @@ experiments:
     library: [ "spark" ]
     repeat_rate: 1
     params:
-      func: [ "calculate_le_scaling" ]
+      func: [ "calculate_le_te_scaling" ]
       path: [ "/opt/spark_data/data_for_LE_TE_tests/1000000_rows_1000_columns_id.json" ]
       checkpoint_path: [ "/tmp/results/scaling-te/scaling_te-1M_1000_100.dump" ]
     spark_config:
