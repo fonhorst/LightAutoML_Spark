@@ -1,4 +1,5 @@
 import logging.config
+import uuid
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -79,7 +80,7 @@ def main(dataset_name: str, seed: int):
     # 1. use_algos = [["lgb"]]
     # 2. use_algos = [["linear_l2"]]
     # 3. use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["lgb"]]
+    use_algos = [["lgb", "linear_l2"], ["lgb"]]
 
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
@@ -94,6 +95,7 @@ def main(dataset_name: str, seed: int):
             timeout=3600 * 3,
             general_params={"use_algos": use_algos},
             reader_params={"cv": cv, "advanced_roles": False},
+            # linear_l2_params={"default_params": {"cs": [1e-5]}},
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
         )
 
@@ -116,7 +118,7 @@ def main(dataset_name: str, seed: int):
         score = task.get_dataset_metric()
         test_metric_value = score(te_pred)
 
-    logger.info(f"mse score for test predictions: {test_metric_value}")
+    logger.info(f"Score for test predictions: {test_metric_value}")
 
     logger.info("Predicting is finished")
 
@@ -144,12 +146,11 @@ def multirun(dataset_name: str):
     with pd.option_context('display.max_rows', None, 'display.max_columns', None):
         print(df)
 
-    df.to_csv(f"lama_results_{dataset_name}.csv")
+    df.to_csv(f"lama_results_{dataset_name}_{uuid.uuid4()}.csv")
 
 
 if __name__ == "__main__":
     # One can run:
     # 1. main(dataset_name="used_cars_dataset", seed=42)
     # 2. multirun(dataset_name="used_cars_dataset")
-    main(dataset_name="used_cars_dataset", seed=42)
-
+    main(dataset_name="lama_test_dataset", seed=42)
