@@ -294,7 +294,7 @@ def calculate_lgbadv_boostlgb(
             train_chkp_ds, metadata = train_chkp
 
             df = train_chkp_ds.data
-            df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(10)])))
+            df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(1)])))
             df = df.drop("new_col")
             df = df.cache()
             print(f"Duplicated dataset size: {df.count()}")

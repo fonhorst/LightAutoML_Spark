@@ -53,9 +53,9 @@ experiments:
       cv: [ 2 ]
       checkpoint_path: [ "/tmp/results/lgbadv_chkp_scaling/lgbadv_used_cars_dataset_4x/" ]
     spark_config:
-      spark.executor.instances: [ '2' ]
+      spark.executor.instances: [ '8' ]
       spark.executor.cores: [ '8' ]
-      spark.executor.memory: [ '96g' ]
+      spark.executor.memory: [ '64g' ]
 #
 #  - name: "scaling-automl-lgb"
 #    library: [ "spark" ]
