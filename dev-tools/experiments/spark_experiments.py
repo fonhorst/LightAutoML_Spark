@@ -368,8 +368,6 @@ def calculate_linear_l2(
         **_) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-    checkpoint_path = None
-
     with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
         if checkpoint_path is not None:
             train_checkpoint_path = os.path.join(checkpoint_path, 'train.dump')
@@ -427,8 +425,13 @@ def calculate_linear_l2(
 
         score = task.get_dataset_metric()
 
-        spark_ml_algo = SparkLinearLBFGS(cacher_key='main_cache')
-        spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+        with log_exec_timer("Linear_time") as linear_timer:
+            spark_ml_algo = SparkLinearLBFGS(
+                cacher_key='main_cache',
+                default_params={"regParam": [1e-5]},
+                freeze_defaults=True
+            )
+            spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None
         assert oof_preds is not None
@@ -450,7 +453,12 @@ def calculate_linear_l2(
         )
         test_score = score(test_preds_sdf)
 
-    return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score, 'test_score': test_score}
+    return {
+        pipe_timer.name: pipe_timer.duration,
+        linear_timer.name: linear_timer.duration,
+        'oof_score': oof_score,
+        'test_score': test_score
+    }
 
 
 def calculate_reader(
