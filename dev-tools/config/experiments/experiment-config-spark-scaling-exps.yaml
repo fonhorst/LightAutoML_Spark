@@ -43,19 +43,19 @@ experiments:
 #      spark.executor.cores: [ '8']
 #      spark.executor.memory: [ '64g' ]
 
-#  - name: "scaling-lgb"
-#    library: [ "spark" ]
-#    repeat_rate: 1
-#    params:
-#      func: [ "calculate_lgbadv_boostlgb" ]
-#      dataset: [ "used_cars_dataset_4x" ]
-#      seed: [ 42 ]
-#      cv: [ 2 ]
-#      checkpoint_path: [ "/tmp/results/lgbadv_chkp_scaling/lgbadv_used_cars_dataset_4x/" ]
-#    spark_config:
-#      spark.executor.instances: [ '1' ]
-#      spark.executor.cores: [ '16' ]
-#      spark.executor.memory: [ '64g' ]
+  - name: "scaling-lgb"
+    library: [ "spark" ]
+    repeat_rate: 1
+    params:
+      func: [ "calculate_lgbadv_boostlgb" ]
+      dataset: [ "used_cars_dataset_4x" ]
+      seed: [ 42 ]
+      cv: [ 2 ]
+      checkpoint_path: [ "/tmp/results/lgbadv_chkp_scaling/lgbadv_used_cars_dataset_4x/" ]
+    spark_config:
+      spark.executor.instances: [ '2' ]
+      spark.executor.cores: [ '8' ]
+      spark.executor.memory: [ '96g' ]
 #
 #  - name: "scaling-automl-lgb"
 #    library: [ "spark" ]
@@ -71,16 +71,16 @@ experiments:
 #      spark.executor.instances: [ '1' ]
 #      spark.executor.cores: [ '8' ]
 #      spark.executor.memory: [ '64g' ]
-  - name: "scaling-linear-l2"
-    library: [ "spark" ]
-    repeat_rate: 1
-    params:
-      func: [ "calculate_linear_l2" ]
-      dataset: [ "used_cars_dataset_4x" ]
-      seed: [ 42 ]
-      cv: [ 2 ]
-      checkpoint_path: [ "/tmp/results/linear_chkp_scaling/linear_used_cars_dataset_4x/" ]
-    spark_config:
-      spark.executor.instances: [ '1' ]
-      spark.executor.cores: [ '4' ]
-      spark.executor.memory: [ '64g' ]
+#  - name: "scaling-linear-l2"
+#    library: [ "spark" ]
+#    repeat_rate: 1
+#    params:
+#      func: [ "calculate_linear_l2" ]
+#      dataset: [ "used_cars_dataset_4x" ]
+#      seed: [ 42 ]
+#      cv: [ 2 ]
+#      checkpoint_path: [ "/tmp/results/linear_chkp_scaling/linear_used_cars_dataset_4x/" ]
+#    spark_config:
+#      spark.executor.instances: [ '4' ]
+#      spark.executor.cores: [ '8' ]
+#      spark.executor.memory: [ '32g' ]

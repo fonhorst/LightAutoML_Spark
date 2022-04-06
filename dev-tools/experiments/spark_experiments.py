@@ -292,6 +292,16 @@ def calculate_lgbadv_boostlgb(
             logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
 
             train_chkp_ds, metadata = train_chkp
+
+            df = train_chkp_ds.data
+            df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(10)])))
+            df = df.drop("new_col")
+            df = df.cache()
+            print(f"Duplicated dataset size: {df.count()}")
+            new_train_chkp_ds = train_chkp_ds.empty()
+            new_train_chkp_ds.set_data(df, train_chkp_ds.features, train_chkp_ds.roles)
+            train_chkp_ds = new_train_chkp_ds
+
             iterator = SparkFoldsIterator(train_chkp_ds, n_folds=cv)
             iterator.input_roles = metadata['iterator_input_roles']
 
@@ -317,7 +327,7 @@ def calculate_lgbadv_boostlgb(
                     "maxBin": 255,
                     "minDataInLeaf": 5,
                     # e.g. num trees
-                    "numIterations": 500,
+                    "numIterations": 100,
                     "earlyStoppingRound": 5000,
                     # for regression
                     "alpha": 1.0,
@@ -415,6 +425,16 @@ def calculate_linear_l2(
             logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
 
             train_chkp_ds, metadata = train_chkp
+
+            df = train_chkp_ds.data
+            df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(10)])))
+            df = df.drop("new_col")
+            df = df.cache()
+            print(f"Duplicated dataset size: {df.count()}")
+            new_train_chkp_ds = train_chkp_ds.empty()
+            new_train_chkp_ds.set_data(df, train_chkp_ds.features, train_chkp_ds.roles)
+            train_chkp_ds = new_train_chkp_ds
+
             iterator = SparkFoldsIterator(train_chkp_ds, n_folds=cv)
             iterator.input_roles = metadata['iterator_input_roles']
 
