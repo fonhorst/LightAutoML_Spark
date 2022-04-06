@@ -56,8 +56,11 @@ class SparkMetric(LAMLMetric):
             assert self._target_col in sdf.columns and self._prediction_col in sdf.columns
             prediction_column = self._prediction_col
             target_column = self._target_col
-        elif isinstance(dataset, SparkDataset) and len(dataset.features) == 1:
-            prediction_column = dataset.features[0]
+        elif isinstance(dataset, SparkDataset):
+            if len(dataset.features) == 1:
+                prediction_column = dataset.features[0]
+            else:
+                prediction_column = next(c for c in dataset.data.columns if c.startswith('prediction'))
             target_column = dataset.target_column
         else:
             sdf = cast(SparkDataFrame, dataset)
