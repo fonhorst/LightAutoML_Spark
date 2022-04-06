@@ -28,7 +28,8 @@ default_spark_config: {
 
   spark.local.dir: /data,
   spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.options.type: Directory,
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.options.path: /data/hdd/tmp/spark_tmp,
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.options.path: /data/hdd/tmp/spark_tmp,
+  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.options.path: /data/sdd/tmp/spark_tmp,
   spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.mount.path: /data,
   spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.mount.readOnly: false,
 

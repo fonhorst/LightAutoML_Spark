@@ -30,15 +30,29 @@ experiments:
 #      spark.executor.cores: [ '8' ]
 #      spark.executor.memory: [ '32g' ]
 
-  - name: "scaling-te"
+#  - name: "scaling-te"
+#    library: [ "spark" ]
+#    repeat_rate: 1
+#    params:
+#      func: [ "calculate_le_model_scaling" ]
+#      model_type: [ "lgb" ]
+#      path: [ "/opt/spark_data/data_for_LE_TE_tests/10M_rows_100_columns_id.json" ]
+#      checkpoint_path: [ "/tmp/results/scaling-te/scaling_te-10M_100_100.dump" ]
+#    spark_config:
+#      spark.executor.instances: [ '1' ]
+#      spark.executor.cores: [ '8']
+#      spark.executor.memory: [ '64g' ]
+
+  - name: "scaling-lgb"
     library: [ "spark" ]
     repeat_rate: 1
     params:
-      func: [ "calculate_le_model_scaling" ]
-      model_type: [ "lgb" ]
-      path: [ "/opt/spark_data/data_for_LE_TE_tests/10M_rows_100_columns_id.json" ]
-      checkpoint_path: [ "/tmp/results/scaling-te/scaling_te-10M_100_100.dump" ]
+      func: [ "calculate_lgbadv_boostlgb" ]
+      dataset: [ "used_cars_dataset_4x" ]
+      seed: [ 42 ]
+      cv: [ 2 ]
+      checkpoint_path: [ "/tmp/results/lgbadv_chkp_scaling/lgbadv_used_cars_dataset_4x/" ]
     spark_config:
       spark.executor.instances: [ '1' ]
-      spark.executor.cores: [ '8']
+      spark.executor.cores: [ '16' ]
       spark.executor.memory: [ '64g' ]

@@ -297,13 +297,37 @@ def calculate_lgbadv_boostlgb(
 
             stest, _ = test_chkp
 
-        # iterator = iterator.convert_to_holdout_iterator()
+        iterator = iterator.convert_to_holdout_iterator()
         # iterator = SparkDummyIterator(iterator.train, iterator.input_roles)
 
         score = task.get_dataset_metric()
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key='main_cache', use_single_dataset_mode=True, max_validation_size=10_000)
-        spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
+        with log_exec_timer("Boost_time") as boost_timer:
+            spark_ml_algo = SparkBoostLGBM(
+                cacher_key='main_cache',
+                use_single_dataset_mode=True,
+                default_params={
+                    "learningRate": 0.05,
+                    "numLeaves": 128,
+                    "featureFraction": 0.7,
+                    "baggingFraction": 0.7,
+                    "baggingFreq": 1,
+                    "maxDepth": -1,
+                    "minGainToSplit": 0.0,
+                    "maxBin": 255,
+                    "minDataInLeaf": 5,
+                    # e.g. num trees
+                    "numIterations": 500,
+                    "earlyStoppingRound": 5000,
+                    # for regression
+                    "alpha": 1.0,
+                    "lambdaL1": 0.0,
+                    "lambdaL2": 0.0
+                },
+                freeze_defaults=True,
+                max_validation_size=10_000
+            )
+            spark_ml_algo, oof_preds = tune_and_fit_predict(spark_ml_algo, DefaultTuner(), iterator)
 
         assert spark_ml_algo is not None
         assert oof_preds is not None
@@ -325,7 +349,12 @@ def calculate_lgbadv_boostlgb(
         )
         test_score = score(test_preds_sdf)
 
-    return {pipe_timer.name: pipe_timer.duration, 'oof_score': oof_score, 'test_score': test_score}
+    return {
+        pipe_timer.name: pipe_timer.duration,
+        boost_timer.name: boost_timer.duration,
+        'oof_score': oof_score,
+        'test_score': test_score
+    }
 
 
 def calculate_linear_l2(
