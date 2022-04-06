@@ -4,6 +4,7 @@
 Simple example for binary classification on tabular data.
 """
 import logging.config
+import math
 import os
 import pickle
 import random
@@ -15,8 +16,13 @@ from typing import Dict, Any, Optional, Tuple, cast
 
 import yaml
 from pyspark import SparkFiles
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.regression import LinearRegression
 from pyspark.sql import functions as F, SparkSession
 from pyspark.sql.pandas.functions import pandas_udf
+from synapse.ml.lightgbm import LightGBMRegressor
 
 from dataset_utils import datasets
 from lightautoml.dataset.roles import CategoryRole
@@ -841,6 +847,129 @@ def calculate_le_te_scaling(
     }
 
 
+def calculate_le_model_scaling(
+        spark: SparkSession,
+        path: str,
+        model_type: str,
+        checkpoint_path: Optional[str] = None,
+        **_):
+    execs = int(spark.conf.get('spark.executor.instances'))
+    cores = int(spark.conf.get('spark.executor.cores'))
+
+    if checkpoint_path is not None:
+        checkpoint_path = os.path.join(checkpoint_path, 'data.dump')
+        chkp = load_dump_if_exist(spark, checkpoint_path)
+    else:
+        checkpoint_path = None
+        chkp = None
+
+    if not chkp:
+        logger.info(f"No checkpoint found on path {checkpoint_path}. Will create it ")
+        df = spark.read.json(path).repartition(execs * cores).cache()
+        df.write.mode('overwrite').format('noop').save()
+
+        cat_roles = {
+           c: CategoryRole(dtype=np.float32) for c in df.columns
+        }
+
+        with log_exec_timer("SparkLabelEncoder") as le_timer:
+            estimator = SparkLabelEncoderEstimator(
+                input_cols=list(cat_roles.keys()),
+                input_roles=cat_roles
+            )
+
+            transformer = estimator.fit(df)
+
+        cv = 5
+        with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
+            df = transformer.transform(df).select(
+                F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN),
+                F.rand(42).alias('target'),
+                F.floor(F.rand(142) * cv).astype('int').alias('folds'),
+                *list(estimator.getOutputRoles().keys()),
+            ).cache()
+            df.write.mode('overwrite').format('noop').save()
+
+        le_ds = SparkDataset(
+            data=df,
+            roles=estimator.getOutputRoles(),
+            task=SparkTask('reg'),
+            target='target',
+            folds='folds'
+        )
+
+        if checkpoint_path is not None:
+            dump_data(checkpoint_path, le_ds)
+
+        result_le = {
+            "le_fit": le_timer.duration,
+            "le_transform": le_transform_timer.duration,
+        }
+    else:
+        logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
+        result_le = dict()
+        le_ds, _ = chkp
+
+    assembler = VectorAssembler(
+        inputCols=le_ds.features,
+        outputCol="assembler_features"
+    )
+
+    if model_type == 'linreg':
+        model = LinearRegression(featuresCol=assembler.getOutputCol(),
+                                   labelCol=le_ds.target_column,
+                                   predictionCol='prediction',
+                                   maxIter=1000,
+                                   aggregationDepth=2,
+                                   elasticNetParam=0.7)
+    else:
+        count = le_ds.data.count()
+        num_threads = max(int(spark.conf.get("spark.executor.cores", "1")) - 1, 1)
+        num_threads = 7
+        model = LightGBMRegressor(
+            numThreads=num_threads,
+            objective="regression",
+            metric="mse",
+            learningRate=0.05,
+            numLeaves=128,
+            # numLeaves=32,
+            featureFraction=1.0,
+            baggingFraction=1.0,
+            baggingFreq=1,
+            maxDepth=-1,
+            minGainToSplit=0.0,
+            maxBin=255,
+            minDataInLeaf=5,
+            numIterations=100,
+            earlyStoppingRound=1000,
+            alpha=1.0,
+            lambdaL1=0.5,
+            lambdaL2=0.0,
+            featuresCol=assembler.getOutputCol(),
+            labelCol=le_ds.target_column,
+            verbosity=1,
+            useSingleDatasetMode=True,
+            isProvideTrainingMetric=True,
+            chunkSize=math.ceil(count / num_threads)
+            # chunkSize=700_000
+        )
+
+    pipeline = Pipeline(stages=[assembler, model])
+
+    with log_exec_timer("LinReg fit") as fit_timer:
+        transformer = pipeline.fit(le_ds.data)
+
+    # with log_exec_timer("LinReg fit") as transform_timer:
+    #     df = transformer.transform(le_ds.data)
+    #     df.write.mode('overwrite').format('noop').save()
+
+    return {
+        **result_le,
+        "linreg_fit": fit_timer.duration,
+        # "linreg_transform": transform_timer.duration
+    }
+
+
 if __name__ == "__main__":
     logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename="/tmp/lama.log"))
     logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -881,6 +1010,8 @@ if __name__ == "__main__":
             func = calculate_le_scaling
         elif func_name == 'calculate_le_te_scaling':
             func = calculate_le_te_scaling
+        elif func_name == 'calculate_le_model_scaling':
+            func = calculate_le_model_scaling
         else:
             raise ValueError(f"Incorrect func name: {func_name}. ")
 

@@ -18,14 +18,27 @@ experiments:
 #      spark.executor.cores: [ '8' ]
 #      spark.executor.memory: [ '32g' ]
 
+#  - name: "scaling-te"
+#    library: [ "spark" ]
+#    repeat_rate: 1
+#    params:
+#      func: [ "calculate_le_te_scaling" ]
+#      path: [ "/opt/spark_data/data_for_LE_TE_tests/1000000_rows_1000_columns_id.json" ]
+#      checkpoint_path: [ "/tmp/results/scaling-te/scaling_te-1M_1000_100.dump" ]
+#    spark_config:
+#      spark.executor.instances: [ '8' ]
+#      spark.executor.cores: [ '8' ]
+#      spark.executor.memory: [ '32g' ]
+
   - name: "scaling-te"
     library: [ "spark" ]
     repeat_rate: 1
     params:
-      func: [ "calculate_le_te_scaling" ]
-      path: [ "/opt/spark_data/data_for_LE_TE_tests/1000000_rows_1000_columns_id.json" ]
-      checkpoint_path: [ "/tmp/results/scaling-te/scaling_te-1M_1000_100.dump" ]
+      func: [ "calculate_le_model_scaling" ]
+      model_type: [ "lgb" ]
+      path: [ "/opt/spark_data/data_for_LE_TE_tests/10M_rows_100_columns_id.json" ]
+      checkpoint_path: [ "/tmp/results/scaling-te/scaling_te-10M_100_100.dump" ]
     spark_config:
-      spark.executor.instances: [ '8' ]
-      spark.executor.cores: [ '8' ]
-      spark.executor.memory: [ '32g' ]
+      spark.executor.instances: [ '1' ]
+      spark.executor.cores: [ '8']
+      spark.executor.memory: [ '64g' ]
