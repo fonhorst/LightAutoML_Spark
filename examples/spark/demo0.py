@@ -36,6 +36,7 @@ from lightautoml.spark.validation.iterators import SparkFoldsIterator
 
 from examples_utils import get_spark_session
 from pyspark.sql import functions as F
+from pyspark.ml import PipelineModel
 
 
 if __name__ == "__main__":
@@ -184,21 +185,20 @@ if __name__ == "__main__":
     print("\n{}".format(train_pred))
     print("Preds.shape = {}".format(train_pred.shape))
 
-    # print("Pickle automl")
-    # with open("automl.pickle", "wb") as f:
-    #     pickle.dump(total, f)
+    print("Save MLPipeline")
+    total.transformer.write().overwrite().save("file:///tmp/SparkMLPipeline")
 
-    # print("Load pickled automl")
-    # with open("automl.pickle", "rb") as f:
-    #     total = pickle.load(f)
+    print("Load saved MLPipeline")
+    pipeline_model = PipelineModel.load("file:///tmp/SparkMLPipeline")
 
-    # print("Predict loaded automl")
-    # train_pred = total.predict(sdataset)
-    # os.remove("automl.pickle")
+    print("Predict loaded automl")
+    preds = pipeline_model.transform(sdataset.data)
 
     # # # Check preds feature names
-    # print("Preds features: {}".format(train_pred.features))
+    print("Preds columns: {}".format(preds.columns))
 
     # # Check model feature scores
     print("Feature scores for model_1:\n{}".format(model1.get_features_score()))
     print("Feature scores for model_2:\n{}".format(model2.get_features_score()))
+
+    spark.stop()
