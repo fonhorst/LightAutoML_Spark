@@ -80,7 +80,8 @@ def main(dataset_name: str, seed: int):
     # 1. use_algos = [["lgb"]]
     # 2. use_algos = [["linear_l2"]]
     # 3. use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
+    use_algos = [["lgb"]]
 
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
@@ -90,11 +91,14 @@ def main(dataset_name: str, seed: int):
 
         task = Task(task_type)
 
+        num_threads = 4
         automl = TabularAutoML(
             task=task,
+            cpu_limit=num_threads,
             timeout=3600 * 3,
             general_params={"use_algos": use_algos},
             reader_params={"cv": cv, "advanced_roles": False},
+            lgb_params={"default_params": {"num_threads": num_threads}},
             # linear_l2_params={"default_params": {"cs": [1e-5]}},
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
         )
