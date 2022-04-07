@@ -21,7 +21,7 @@ from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from lightautoml.spark.mlwriters import LightGBMModelWrapperMLReader, LightGBMModelWrapperMLWriter, ONNXModelWrapperMLReader, ONNXModelWrapperMLWriter
-from lightautoml.spark.transformers.base import DropColumnsTransformer, ProbabilityColsTransformer
+from lightautoml.spark.transformers.base import DropColumnsTransformer, PredictionColsTransformer, ProbabilityColsTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.utils.timer import TaskTimer
 from lightautoml.validation.base import TrainValidIterator
@@ -410,13 +410,23 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         model_payload_ml = self._convertModel(booster, len(full.data.columns) - 1)
 
         onnx_ml = ONNXModel().setModelPayload(model_payload_ml)
-        onnx_ml = (
-        onnx_ml
-            .setDeviceType("CPU")
-            .setFeedDict({"input": f"{self._name}_vassembler_features"})
-            .setFetchDict({ml_model.getProbabilityCol(): "probabilities", ml_model.getPredictionCol(): "label"}) # getPredictionCol() getLabelCol() getRawPredictionCol
-            .setMiniBatchSize(1)
-        )
+
+        if full.task.name == "reg":
+            onnx_ml = (
+                onnx_ml
+                    .setDeviceType("CPU")
+                    .setFeedDict({"input": f"{self._name}_vassembler_features"})
+                    .setFetchDict({ml_model.getPredictionCol(): "variable"})
+                    .setMiniBatchSize(1)
+            )
+        else:
+            onnx_ml = (
+                onnx_ml
+                    .setDeviceType("CPU")
+                    .setFeedDict({"input": f"{self._name}_vassembler_features"})
+                    .setFetchDict({ml_model.getProbabilityCol(): "probabilities", ml_model.getPredictionCol(): "label"})
+                    .setMiniBatchSize(1)
+            )
 
         self._models_feature_impotances.append(ml_model.getFeatureImportances(importance_type='gain'))
 
@@ -447,8 +457,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     def _convertModel(lgbm_model: LGBMClassifier or Booster, input_size: int) -> bytes:
         from onnxmltools.convert import convert_lightgbm
         from onnxconverter_common.data_types import FloatTensorType
-        initial_types = [("input", FloatTensorType([-1, input_size]))] # FloatTensorType([-1, input_size]
-        onnx_model = convert_lightgbm(lgbm_model, initial_types=initial_types, target_opset=9)
+        from onnx.defs import onnx_opset_version
+        from onnxconverter_common.onnx_ex import DEFAULT_OPSET_NUMBER
+        TARGET_OPSET = min(DEFAULT_OPSET_NUMBER, onnx_opset_version())
+        initial_types = [("input", FloatTensorType([-1, input_size]))]
+        onnx_model = convert_lightgbm(lgbm_model, initial_types=initial_types, target_opset=TARGET_OPSET)
         return onnx_model.SerializeToString()
 
     def _build_transformer(self) -> Transformer:
@@ -463,7 +476,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                                     self._raw_prediction_col_name]
             )
         ]]
-        models.append(ProbabilityColsTransformer(probability_сols=self._models_prediction_columns, num_classes=self.n_classes))
+        if self.task.name in ['binary', 'multiclass']:
+            models.append(ProbabilityColsTransformer(probability_сols=self._models_prediction_columns, num_classes=self.n_classes))
+        else:
+            models.append(PredictionColsTransformer(prediction_сols=self._models_prediction_columns))
         averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
         return averaging_model
 

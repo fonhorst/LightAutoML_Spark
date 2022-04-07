@@ -107,8 +107,6 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
         logger.info(f"score for test predictions via loaded pipeline: {test_metric_value}")
 
-        actual_predictions_sum = te_pred.select(F.sum(pred_column).alias("sum")).collect()[0]["sum"]
-        logger.info(f"actual predictions sum: {actual_predictions_sum}")
 
     logger.info("Predicting is finished")
 

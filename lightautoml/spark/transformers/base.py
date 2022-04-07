@@ -350,6 +350,24 @@ class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultPara
         return dataset
 
 
+class PredictionColsTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
+    """Converts prediction columns values from ONNX model format to LGBMCBooster format
+    """
+    predictionCols = Param(Params._dummy(), "predictionCols", "probability сolumn names in dataframe",
+                           typeConverter=TypeConverters.toListString)
+
+    def __init__(self, prediction_сols: List[str] = []):
+        super().__init__()
+        self.set(self.predictionCols, prediction_сols)
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        prediction_cols = self.getOrDefault(self.predictionCols)
+        other_cols = [c for c in dataset.columns if c not in prediction_cols]
+        prediction_cols = [F.col(c).getItem(0).alias(c) for c in prediction_cols]
+        dataset = dataset.select(*other_cols, *prediction_cols)
+        return dataset
+
+
 class DropColumnsTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
     colsToRemove = Param(Params._dummy(), "colsToRemove", "columns to be removed",
                          typeConverter=TypeConverters.toListString)

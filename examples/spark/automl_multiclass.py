@@ -88,7 +88,7 @@ if __name__ == "__main__":
         te_pred = te_pred.cache()
         te_pred.write.mode('overwrite').format('noop').save()
 
-    with log_exec_timer("spark-lama calc score on test via loaded pipeline") as predict_timer_3:
+    with log_exec_timer("spark-lama calc score on test via loaded pipeline") as scor_timer:
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
         score = task.get_dataset_metric()
         actual_metric_value = score(te_pred.select(
