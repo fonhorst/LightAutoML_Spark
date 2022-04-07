@@ -358,7 +358,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         lgbm = LGBMBooster(
             **params,
-            boostingType="goss",
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
             validationIndicatorCol=self.validation_column,

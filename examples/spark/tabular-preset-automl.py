@@ -148,6 +148,6 @@ if __name__ == "__main__":
     # 1. main(dataset_name="used_cars_dataset", seed=42)
     # 2. multirun(spark_sess, dataset_name="used_cars_dataset")
     # multirun(spark_sess, dataset_name="used_cars_dataset_1x")
-    main(spark_sess, dataset_name="used_cars_dataset_1x", seed=42)
+    main(spark_sess, dataset_name="used_cars_dataset", seed=42)
 
     spark_sess.stop()
