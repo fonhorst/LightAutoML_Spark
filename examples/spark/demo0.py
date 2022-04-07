@@ -58,10 +58,10 @@ if __name__ == "__main__":
 
     # Fix dates and convert to date type
     print("Fix dates and convert to date type")
-    # data["BIRTH_DATE"] = np.datetime64("2018-01-01") + data["DAYS_BIRTH"].astype(np.dtype("timedelta64[D]"))
-    # data["EMP_DATE"] = np.datetime64("2018-01-01") + np.clip(data["DAYS_EMPLOYED"], None, 0).astype(
-    #     np.dtype("timedelta64[D]")
-    # )
+    data["BIRTH_DATE"] = (np.datetime64("2018-01-01") + data["DAYS_BIRTH"].astype(np.dtype("timedelta64[D]"))).astype(str)
+    data["EMP_DATE"] = (
+        np.datetime64("2018-01-01") + np.clip(data["DAYS_EMPLOYED"], None, 0).astype(np.dtype("timedelta64[D]"))
+    ).astype(str)
     data.drop(["DAYS_BIRTH", "DAYS_EMPLOYED"], axis=1, inplace=True)
 
     # Create folds
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         TargetRole(): "TARGET",
         CategoryRole(dtype=str): ["NAME_CONTRACT_TYPE", "NAME_TYPE_SUITE"],
         NumericRole(np.float32): ["AMT_CREDIT", "AMT_GOODS_PRICE"],
-        # DatetimeRole(seasonality=["y", "m", "wd"]): ["BIRTH_DATE", "EMP_DATE"],
+        DatetimeRole(seasonality=["y", "m", "wd"]): ["BIRTH_DATE", "EMP_DATE"],
         FoldsRole(): "__fold__",
     }
 
