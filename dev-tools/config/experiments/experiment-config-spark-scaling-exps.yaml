@@ -7,16 +7,16 @@ state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip exp
 
 # Unique set of parameters for each experiment
 experiments:
-#  - name: "scaling"
-#    library: [ "spark" ]
-#    repeat_rate: 1
-#    params:
-#      func: [ "calculate_le_scaling" ]
-#      path: [ "/opt/spark_data/data_for_LE_TE_tests/10M_rows_1000_columns_id.json" ]
-#    spark_config:
-#      spark.executor.instances: [ '16']
-#      spark.executor.cores: [ '8' ]
-#      spark.executor.memory: [ '64g' ]
+  - name: "scaling"
+    library: [ "spark" ]
+    repeat_rate: 1
+    params:
+      func: [ "calculate_le_scaling" ]
+      path: [ "/opt/spark_data/data_for_LE_TE_tests/10M_rows_1000_columns_id.json" ]
+    spark_config:
+      spark.executor.instances: [ '8']
+      spark.executor.cores: [ '8' ]
+      spark.executor.memory: [ '64g' ]
 
 #  - name: "scaling-te"
 #    library: [ "spark" ]
@@ -106,6 +106,6 @@ experiments:
       use_algos:
         - [ [ "lgb" ] ]
     spark_config:
-      spark.executor.instances: [ '16' ]
+      spark.executor.instances: [ '4' ]
       spark.executor.cores: [ '8' ]
       spark.executor.memory: [ '64g' ]
