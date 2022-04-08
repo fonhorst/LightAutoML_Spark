@@ -208,15 +208,20 @@ if __name__ == "__main__":
         )
     )
 
-    # print(
-    #     "Feature importances of lowest level algorithm - model 1:\n{}".format(
-    #         automl.levels[0][0].ml_algos[1].get_features_score()
-    #     )
-    # )
+    print(
+        "Feature importances of lowest level algorithm - model 1:\n{}".format(
+            automl.levels[0][0].ml_algos[1].get_features_score()
+        )
+    )
 
     test_pred = automl.predict(test_data_sdf)
     print("Prediction for test data:\n{}\nShape = {}".format(test_pred, test_pred.shape))
 
     print("Check scores...")
-    # print("OOF score: {}".format(roc_auc_score(train_data_sdf["TARGET"].values, oof_pred.data[:, 0])))
-    # print("TEST score: {}".format(roc_auc_score(test_data_sdf["TARGET"].values, test_pred.data[:, 0])))
+    score = task.get_dataset_metric()
+    off_score = score(oof_pred)
+    test_score = score(test_pred)
+    print(f"OOF score: {off_score}")
+    print(f"TEST score: {test_score}")
+
+    spark.stop()
