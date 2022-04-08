@@ -200,6 +200,7 @@ def calculate_automl(
             lgb_params={'use_single_dataset_mode': True},
             # linear_l2_params={"default_params": {"regParam": [1]}},
             reader_params={"cv": cv, "advanced_roles": False},
+            gbm_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
         )
 
@@ -432,7 +433,7 @@ def calculate_linear_l2(
             train_chkp_ds, metadata = train_chkp
 
             df = train_chkp_ds.data
-            df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(10)])))
+            df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(1)])))
             df = df.drop("new_col")
             df = df.cache()
             print(f"Duplicated dataset size: {df.count()}")
@@ -798,7 +799,7 @@ def calculate_le_scaling(spark: SparkSession, path: str, **_):
     execs = int(spark.conf.get('spark.executor.instances'))
     cores = int(spark.conf.get('spark.executor.cores'))
 
-    df = spark.read.json(path).repartition(execs * cores).cache()
+    df = spark.read.json(path).coalesce(execs * cores).cache()
     df.write.mode('overwrite').format('noop').save()
 
     cat_roles = {

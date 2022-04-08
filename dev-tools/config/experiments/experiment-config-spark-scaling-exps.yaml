@@ -12,9 +12,9 @@ experiments:
     repeat_rate: 1
     params:
       func: [ "calculate_le_scaling" ]
-      path: [ "/opt/spark_data/data_for_LE_TE_tests/1000000_rows_1000_columns_id.json" ]
+      path: [ "/opt/spark_data/data_for_LE_TE_tests/10M_rows_1000_columns_id.json" ]
     spark_config:
-      spark.executor.instances: [ '2', '16']
+      spark.executor.instances: [ '16']
       spark.executor.cores: [ '8' ]
       spark.executor.memory: [ '64g' ]
 
@@ -53,7 +53,7 @@ experiments:
 #      cv: [ 2 ]
 #      checkpoint_path: [ "/tmp/results/lgbadv_chkp_scaling/lgbadv_used_cars_dataset_4x/" ]
 #    spark_config:
-#      spark.executor.instances: [ '8' ]
+#      spark.executor.instances: ['16']
 #      spark.executor.cores: [ '8' ]
 #      spark.executor.memory: [ '64g' ]
 #
@@ -81,9 +81,9 @@ experiments:
 #      cv: [ 2 ]
 #      checkpoint_path: [ "/tmp/results/linear_chkp_scaling/linear_used_cars_dataset_4x/" ]
 #    spark_config:
-#      spark.executor.instances: [ '4', '8' ]
+#      spark.executor.instances: [ '16' ]
 #      spark.executor.cores: [ '8' ]
-#      spark.executor.memory: [ '32g' ]
+#      spark.executor.memory: [ '64g' ]
 #  - name: "scaling-chkp"
 #    library: [ "spark" ]
 #    repeat_rate: 1
