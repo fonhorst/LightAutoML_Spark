@@ -5,20 +5,17 @@
 building ML pipeline from blocks and fit + predict the pipeline itself
 """
 
-import os
-import pickle
+import logging.config
 import time
 
 import numpy as np
 import pandas as pd
 
-from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.dataset.roles import DatetimeRole
 from lightautoml.dataset.roles import FoldsRole
 from lightautoml.dataset.roles import NumericRole
 from lightautoml.dataset.roles import TargetRole
-from lightautoml.dataset.utils import roles_parser
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 
 
@@ -38,12 +35,18 @@ from examples_utils import get_spark_session
 from pyspark.sql import functions as F
 from pyspark.ml import PipelineModel
 
+from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
+
+logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/lama.log'))
+logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
+logger = logging.getLogger(__name__)
+
 
 if __name__ == "__main__":
     spark = get_spark_session()
 
     # Read data from file
-    print("Read data from file")
+    logger.info("Read data from file")
     data = pd.read_csv(
         "examples/data/sampled_app_train.csv",
         usecols=[
@@ -58,7 +61,7 @@ if __name__ == "__main__":
     )
 
     # Fix dates and convert to date type
-    print("Fix dates and convert to date type")
+    logger.info("Fix dates and convert to date type")
     data["BIRTH_DATE"] = (np.datetime64("2018-01-01") + data["DAYS_BIRTH"].astype(np.dtype("timedelta64[D]"))).astype(str)
     data["EMP_DATE"] = (
         np.datetime64("2018-01-01") + np.clip(data["DAYS_EMPLOYED"], None, 0).astype(np.dtype("timedelta64[D]"))
@@ -66,12 +69,12 @@ if __name__ == "__main__":
     data.drop(["DAYS_BIRTH", "DAYS_EMPLOYED"], axis=1, inplace=True)
 
     # Create folds
-    print("Create folds")
+    logger.info("Create folds")
     data["__fold__"] = np.random.randint(0, 5, len(data))
 
     # Print data head
-    print("Print data head")
-    print(data.head())
+    logger.info("Print data head")
+    logger.info(data.head())
 
     dataset_sdf = spark.createDataFrame(data)
     dataset_sdf = dataset_sdf.select(
@@ -83,7 +86,7 @@ if __name__ == "__main__":
     
 
     # # Set roles for columns
-    print("Set roles for columns")
+    logger.info("Set roles for columns")
     check_roles = {
         TargetRole(): "TARGET",
         CategoryRole(dtype=str): ["NAME_CONTRACT_TYPE", "NAME_TYPE_SUITE"],
@@ -97,26 +100,26 @@ if __name__ == "__main__":
     cacher_key = "main_cache"
 
     # # Creating PandasDataSet
-    print("Creating PandasDataset")
+    logger.info("Creating PandasDataset")
     start_time = time.time()
     # pd_dataset = PandasDataset(data, roles_parser(check_roles), task=task)
     sreader = SparkToSparkReader(task=task, advanced_roles=False)
     sdataset = sreader.fit_read(dataset_sdf, roles=check_roles)
-    print("PandasDataset created. Time = {:.3f} sec".format(time.time() - start_time))
+    logger.info("PandasDataset created. Time = {:.3f} sec".format(time.time() - start_time))
 
     # # Print pandas dataset feature roles
-    print("Print pandas dataset feature roles")
+    logger.info("Print pandas dataset feature roles")
     roles = sdataset.roles
     for role in roles:
-        print("{}: {}".format(role, roles[role]))
+        logger.info("{}: {}".format(role, roles[role]))
 
     # # Feature selection part
-    print("Feature selection part")
+    logger.info("Feature selection part")
     selector_iterator = SparkFoldsIterator(sdataset, 1)
-    print("Selection iterator created")
+    logger.info("Selection iterator created")
 
     pipe = SparkLGBSimpleFeatures(cacher_key='preselector')
-    print("Pipe and model created")
+    logger.info("Pipe and model created")
 
     model0 = SparkBoostLGBM(
         cacher_key='preselector',
@@ -132,23 +135,23 @@ if __name__ == "__main__":
     selector = ImportanceCutoffSelector(pipe, model0, mbie, cutoff=10)
     start_time = time.time()
     selector.fit(selector_iterator)
-    print("Feature selector fitted. Time = {:.3f} sec".format(time.time() - start_time))
+    logger.info("Feature selector fitted. Time = {:.3f} sec".format(time.time() - start_time))
 
-    print("Feature selector scores:")
-    print("\n{}".format(selector.get_features_score()))
+    logger.info("Feature selector scores:")
+    logger.info("\n{}".format(selector.get_features_score()))
 
     # # Build AutoML pipeline
-    print("Start building AutoML pipeline")
+    logger.info("Start building AutoML pipeline")
     pipe = SparkLGBSimpleFeatures(cacher_key=cacher_key)
-    print("Pipe created")
+    logger.info("Pipe created")
 
     params_tuner1 = OptunaTuner(n_trials=10, timeout=300)
     model1 = SparkBoostLGBM(cacher_key=cacher_key, default_params={"learningRate": 0.05, "numLeaves": 128})
-    print("Tuner1 and model1 created")
+    logger.info("Tuner1 and model1 created")
 
     params_tuner2 = OptunaTuner(n_trials=100, timeout=300)
     model2 = SparkBoostLGBM(cacher_key=cacher_key, default_params={"learningRate": 0.025, "numLeaves": 64})
-    print("Tuner2 and model2 created")
+    logger.info("Tuner2 and model2 created")
 
     total = SparkMLPipeline(
         cacher_key=cacher_key,
@@ -158,47 +161,47 @@ if __name__ == "__main__":
         post_selection=None,
     )
 
-    print("Finished building AutoML pipeline")
+    logger.info("Finished building AutoML pipeline")
 
     # # Create full train iterator
-    print("Full train valid iterator creation")
+    logger.info("Full train valid iterator creation")
     train_valid = SparkFoldsIterator(sdataset)
-    print("Full train valid iterator created")
+    logger.info("Full train valid iterator created")
 
     # # Fit predict using pipeline
-    print("Start AutoML pipeline fit_predict")
+    logger.info("Start AutoML pipeline fit_predict")
     start_time = time.time()
     pred = total.fit_predict(train_valid)
-    print("Fit_predict finished. Time = {:.3f} sec".format(time.time() - start_time))
+    logger.info("Fit_predict finished. Time = {:.3f} sec".format(time.time() - start_time))
 
     # # Check preds
-    print("Preds:")
-    print("\n{}".format(pred))
-    print("Preds.shape = {}".format(pred.shape))
+    logger.info("Preds:")
+    logger.info("\n{}".format(pred))
+    logger.info("Preds.shape = {}".format(pred.shape))
 
     # # Predict full train dataset
-    print("Predict full train dataset")
+    logger.info("Predict full train dataset")
     start_time = time.time()
     train_pred = total.predict(sdataset)
-    print("Predict finished. Time = {:.3f} sec".format(time.time() - start_time))
-    print("Preds:")
-    print("\n{}".format(train_pred))
-    print("Preds.shape = {}".format(train_pred.shape))
+    logger.info("Predict finished. Time = {:.3f} sec".format(time.time() - start_time))
+    logger.info("Preds:")
+    logger.info("\n{}".format(train_pred))
+    logger.info("Preds.shape = {}".format(train_pred.shape))
 
-    print("Save MLPipeline")
+    logger.info("Save MLPipeline")
     total.transformer.write().overwrite().save("file:///tmp/SparkMLPipeline")
 
-    print("Load saved MLPipeline")
+    logger.info("Load saved MLPipeline")
     pipeline_model = PipelineModel.load("file:///tmp/SparkMLPipeline")
 
-    print("Predict loaded automl")
+    logger.info("Predict loaded automl")
     preds = pipeline_model.transform(sdataset.data)
 
     # # # Check preds feature names
-    print("Preds columns: {}".format(preds.columns))
+    logger.info("Preds columns: {}".format(preds.columns))
 
     # # Check model feature scores
-    print("Feature scores for model_1:\n{}".format(model1.get_features_score()))
-    print("Feature scores for model_2:\n{}".format(model2.get_features_score()))
+    logger.info("Feature scores for model_1:\n{}".format(model1.get_features_score()))
+    logger.info("Feature scores for model_2:\n{}".format(model2.get_features_score()))
 
     spark.stop()
