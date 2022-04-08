@@ -6,14 +6,9 @@ import time
 import numpy as np
 import pandas as pd
 
-from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
-from lightautoml.automl.base import AutoML
-from lightautoml.ml_algo.boost_lgbm import BoostLGBM
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
-from lightautoml.pipelines.features.lgb_pipeline import LGBSimpleFeatures
-from lightautoml.pipelines.ml.base import MLPipeline
 from lightautoml.pipelines.selection.base import ComposedSelector
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector
 from lightautoml.pipelines.selection.importance_based import (
@@ -22,19 +17,13 @@ from lightautoml.pipelines.selection.importance_based import (
 from lightautoml.pipelines.selection.permutation_importance_based import (
     NpIterativeFeatureSelector,
 )
-from lightautoml.pipelines.selection.permutation_importance_based import (
-    NpPermutationImportanceEstimator,
-)
-from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.spark.automl.base import SparkAutoML
-from lightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
 from lightautoml.spark.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask
-from lightautoml.tasks import Task
 
 from examples_utils import get_spark_session
 from pyspark.sql import functions as F
@@ -81,7 +70,6 @@ if __name__ == "__main__":
     cacher_key = "main_cache"
 
     print("Create reader...")
-    # reader = PandasToPandasReader(task, cv=5, random_state=1)
     sreader = SparkToSparkReader(task=task, cv=5, random_state=1, advanced_roles=False)
     print("Reader created")
 
