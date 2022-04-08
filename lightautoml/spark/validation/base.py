@@ -96,7 +96,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
             .alias(self.TRAIN_VAL_COLUMN)
         )
 
-        sdf = train.data.select('*', is_val_col)
+        sdf = train.data.select(*[c for c in train.data.columns if c != self.TRAIN_VAL_COLUMN], is_val_col)
         train_part_sdf = sdf.where(F.col(self.TRAIN_VAL_COLUMN) == 0)
         valid_part_sdf = sdf.where(F.col(self.TRAIN_VAL_COLUMN) == 1)
 
