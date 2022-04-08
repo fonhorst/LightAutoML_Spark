@@ -197,8 +197,9 @@ def calculate_automl(
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
-            lgb_params={'use_single_dataset_mode': True},
-            # linear_l2_params={"default_params": {"regParam": [1]}},
+            lgb_params={'use_single_dataset_mode': True,
+                        "default_params": { "numIterations": 100, "earlyStoppingRound": 5000}, "freeze_defaults": True },
+            linear_l2_params={"default_params": {"regParam": [1e-5]}},
             reader_params={"cv": cv, "advanced_roles": False},
             gbm_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
