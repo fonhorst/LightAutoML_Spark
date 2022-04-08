@@ -10,6 +10,7 @@ import pickle
 import random
 import shutil
 import time
+import uuid
 from contextlib import contextmanager
 from copy import copy
 from typing import Dict, Any, Optional, Tuple, cast
@@ -54,7 +55,11 @@ DUMP_DATA_NAME = "data.parquet"
 @contextmanager
 def open_spark_session() -> Tuple[SparkSession, str]:
     if os.environ.get("SCRIPT_ENV", None) == "cluster":
-        spark_sess = SparkSession.builder.getOrCreate()
+        spark_sess = (
+            SparkSession
+            .builder
+            .getOrCreate()
+        )
         config_path = SparkFiles.get('config.yaml')
     else:
         spark_sess = (
@@ -75,7 +80,7 @@ def open_spark_session() -> Tuple[SparkSession, str]:
         config_path = '/tmp/config.yaml'
 
     spark_sess.sparkContext.setLogLevel("WARN")
-    spark_sess.sparkContext.setCheckpointDir("/tmp/chkp")
+    spark_sess.sparkContext.setCheckpointDir(f"/tmp/chkp_{uuid.uuid4()}")
 
     try:
         yield spark_sess, config_path
@@ -1027,6 +1032,32 @@ def calculate_le_model_scaling(
     }
 
 
+def calculate_chkp(spark: SparkSession, path: str, **_):
+    execs = int(spark.conf.get('spark.executor.instances'))
+    cores = int(spark.conf.get('spark.executor.cores'))
+
+    df = spark.read.csv(path)
+    df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(10)])))
+    df = df.drop("new_col")
+    # df = df.repartition(execs * cores).cache()
+    df = df.cache()
+    df.write.mode('overwrite').format('noop').save()
+    print(f"Duplicated dataset size: {df.count()}")
+
+    with log_exec_timer('chkp-timer') as chkp_timer:
+        df.localCheckpoint(eager=True)
+
+    print(f"Chkp time: {chkp_timer.duration}")
+
+    import time
+    time.sleep(600)
+
+    return {
+        chkp_timer.name: chkp_timer.duration
+    }
+
+
+
 if __name__ == "__main__":
     logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename="/tmp/lama.log"))
     logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -1069,6 +1100,8 @@ if __name__ == "__main__":
             func = calculate_le_te_scaling
         elif func_name == 'calculate_le_model_scaling':
             func = calculate_le_model_scaling
+        elif func_name == 'calculate_chkp':
+            func = calculate_chkp
         else:
             raise ValueError(f"Incorrect func name: {func_name}. ")
 
