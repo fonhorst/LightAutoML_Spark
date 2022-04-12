@@ -431,12 +431,15 @@ def calculate_linear_l2(
         else:
             logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
 
+            exec_cores = int(spark.conf.get("spark.executor.cores"))
+            exec_instances = int(spark.conf.get("spark.executor.instances"))
+
             train_chkp_ds, metadata = train_chkp
 
             df = train_chkp_ds.data
-            df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(1)])))
+            df = df.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(10)])))
             df = df.drop("new_col")
-            df = df.cache()
+            df = df.repartition(exec_cores * exec_instances).cache()
             print(f"Duplicated dataset size: {df.count()}")
             new_train_chkp_ds = train_chkp_ds.empty()
             new_train_chkp_ds.set_data(df, train_chkp_ds.features, train_chkp_ds.roles)
