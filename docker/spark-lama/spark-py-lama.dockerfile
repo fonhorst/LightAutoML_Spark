@@ -1,5 +1,5 @@
-ARG repo=node2.bdcl:5000
-FROM ${repo}/spark-py:lama-v3.2.0
+ARG base_image
+FROM ${base_image}
 
 ARG spark_jars_cache=jars_cache
 
@@ -26,6 +26,7 @@ RUN pip install --upgrade lightgbm==3.2.1
 COPY examples/spark /examples
 
 COPY jars /root/jars
+COPY examples /examples
 
 ENV PYSPARK_PYTHON=python3
 
