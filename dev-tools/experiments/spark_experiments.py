@@ -190,8 +190,8 @@ def calculate_automl(
         **_) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-        train_data, test_data = prepare_test_and_train(spark, path, seed)
-        test_data_dropped = test_data
+    train_data, test_data = prepare_test_and_train(spark, path, seed)
+    test_data_dropped = test_data
     
     train_data = train_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
     train_data = train_data.drop("new_col")

@@ -35,16 +35,16 @@ default_spark_config: {
 #  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-tmp-dir.mount.path: /tmp,
 #  spark.kubernetes.executor.volumes.persistentVolumeClaim.spark-tmp-dir.mount.readOnly: false,
 
-  spark.local.dir: /data,
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.options.type: Directory,
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.options.path: /data/sdd/tmp/spark_tmp,
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.mount.path: /data,
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.mount.readOnly: false,
-
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-2.options.type: Directory,
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-2.options.path: /data/sdd/tmp/spark_chkp,
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-2.mount.path: /tmp/chkp,
-  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-2.mount.readOnly: false,
+#  spark.local.dir: /data,
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.options.type: Directory,
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.options.path: /data/sdd/tmp/spark_tmp,
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.mount.path: /data,
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-1.mount.readOnly: false,
+#
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-2.options.type: Directory,
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-2.options.path: /data/sdd/tmp/spark_chkp,
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-2.mount.path: /tmp/chkp,
+#  spark.kubernetes.executor.volumes.hostPath.spark-local-dir-2.mount.readOnly: false,
 
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.claimName: spark-lama-data,
   spark.kubernetes.driver.volumes.persistentVolumeClaim.spark-lama-data.options.storageClass: local-hdd,
