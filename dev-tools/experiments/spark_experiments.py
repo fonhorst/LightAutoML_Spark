@@ -185,20 +185,30 @@ def calculate_automl(
         cv: int = 5,
         use_algos = ("lgb", "linear_l2"),
         roles: Optional[Dict] = None,
+        lgb_num_iterations: int = 100,
+        dataset_increase_factor: int = 1,
         **_) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-    with log_exec_timer("spark-lama training") as train_timer:
-        task = SparkTask(task_type)
         train_data, test_data = prepare_test_and_train(spark, path, seed)
         test_data_dropped = test_data
+    
+    train_data = train_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
+    train_data = train_data.drop("new_col")
+    # df = df.repartition(execs * cores).cache()
+    train_data = train_data.cache()
+    train_data.write.mode('overwrite').format('noop').save()
+    print(f"Duplicated dataset size: {train_data.count()}")
+
+    with log_exec_timer("spark-lama training") as train_timer:
+        task = SparkTask(task_type)
 
         automl = SparkTabularAutoML(
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
             lgb_params={'use_single_dataset_mode': True,
-                        "default_params": { "numIterations": 100, "earlyStoppingRound": 5000}, "freeze_defaults": True },
+                        "default_params": { "numIterations": lgb_num_iterations, "earlyStoppingRound": 5000}, "freeze_defaults": True },
             linear_l2_params={"default_params": {"regParam": [1e-5]}},
             reader_params={"cv": cv, "advanced_roles": False},
             gbm_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
