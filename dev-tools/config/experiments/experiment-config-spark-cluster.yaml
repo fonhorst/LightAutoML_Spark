@@ -17,6 +17,7 @@ experiments:
       cv: [ 2 ]
       use_algos:
         - [ [ "linear_l2" ] ]
+        - [ [ "lgb", "linear_l2" ], ["lgb"] ]
     checkpoint_path: [ "/tmp/results/linear_chkp_cmp_all/linear_fp_used_cars_dataset_1x/" ]
     spark_config:
       spark.executor.instances: [ '4' ]
