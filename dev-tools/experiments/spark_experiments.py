@@ -1122,3 +1122,5 @@ if __name__ == "__main__":
 
         result = func(spark=spark, **ds_cfg)
         print(f"EXP-RESULT: {result}")
+        ex_instances = int(spark.conf.get('spark.executor.instances'))
+        print(f"spark.executor.instances: {ex_instances}")
