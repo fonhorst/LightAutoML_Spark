@@ -125,6 +125,10 @@ def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDa
     metadata_file = os.path.join(path, DUMP_METADATA_NAME)
     data_file = os.path.join(path, DUMP_DATA_NAME)
 
+    df = spark.read.parquet(data_file)
+    df = df.cache()
+    df.write.mode('overwrite').format('noop').save()
+
     ex_instances = int(spark.conf.get('spark.executor.instances'))
     ex_cores = int(spark.conf.get('spark.executor.cores'))
 
@@ -188,6 +192,9 @@ def calculate_automl(
         lgb_num_iterations: int = 100,
         dataset_increase_factor: int = 1,
         **_) -> Dict[str, Any]:
+    execs = int(spark.conf.get('spark.executor.instances'))
+    cores = int(spark.conf.get('spark.executor.cores'))
+
     roles = roles if roles else {}
 
     train_data, test_data = prepare_test_and_train(spark, path, seed)
@@ -195,7 +202,7 @@ def calculate_automl(
     
     train_data = train_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
     train_data = train_data.drop("new_col")
-    # df = df.repartition(execs * cores).cache()
+    train_data = train_data.repartition(execs * cores).cache()
     train_data = train_data.cache()
     train_data.write.mode('overwrite').format('noop').save()
     print(f"Duplicated dataset size: {train_data.count()}")
@@ -568,9 +575,8 @@ def calculate_te(
         cv: int = 5,
         roles: Optional[Dict] = None,
         checkpoint_path: Optional[str] = None,
+        dataset_increase_factor: int = 1,
         **_):
-
-    checkpoint_path = None
 
     if checkpoint_path is not None:
         checkpoint_path = os.path.join(checkpoint_path, 'data.dump')
@@ -583,6 +589,17 @@ def calculate_te(
 
     if not chkp:
         data, _ = prepare_test_and_train(spark, path, seed, test_proportion=0.0)
+
+        execs = int(spark.conf.get('spark.executor.instances'))
+        cores = int(spark.conf.get('spark.executor.cores'))
+
+        data = data.withColumn("new_col",
+                               F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
+        data = data.drop("new_col")
+        data = data.repartition(execs * cores).cache()
+        data = data.cache()
+        data.write.mode('overwrite').format('noop').save()
+        print(f"Duplicated dataset size: {data.count()}")
 
         task = SparkTask(task_type)
 
@@ -601,8 +618,7 @@ def calculate_te(
             transformer = estimator.fit(sdataset.data)
 
         with log_exec_timer("SparkLabelEncoder transform") as le_transform_timer:
-            df = transformer.transform(sdataset.data).cache()
-            df.write.mode('overwrite').format('noop').save()
+            df = transformer.transform(sdataset.data).localCheckpoint(eager=True)
 
         df = df.select(
             SparkDataset.ID_COLUMN,
@@ -659,6 +675,7 @@ def calculate_cat_te(
         cv: int = 5,
         roles: Optional[Dict] = None,
         checkpoint_path: Optional[str] = None,
+        dataset_increase_factor: int = 1,
         **_):
 
     if checkpoint_path is not None:
@@ -673,6 +690,17 @@ def calculate_cat_te(
     if not chkp:
         data, _ = prepare_test_and_train(spark, path, seed, test_proportion=0.0)
 
+        execs = int(spark.conf.get('spark.executor.instances'))
+        cores = int(spark.conf.get('spark.executor.cores'))
+
+        data = data.withColumn("new_col",
+                               F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
+        data = data.drop("new_col")
+        data = data.repartition(execs * cores).cache()
+        data = data.cache()
+        data.write.mode('overwrite').format('noop').save()
+        print(f"Duplicated dataset size: {data.count()}")
+
         task = SparkTask(task_type)
 
         with log_exec_timer("Reader") as reader_timer:
@@ -685,13 +713,13 @@ def calculate_cat_te(
             estimator = SparkCatIntersectionsEstimator(
                 input_cols=list(cat_roles.keys()),
                 input_roles=cat_roles,
-                max_depth=3
+                max_depth=2
             )
 
             transformer = estimator.fit(sdataset.data)
 
         with log_exec_timer("SparkLabelEncoder transform") as ci_transform_timer:
-            df = transformer.transform(sdataset.data).cache()
+            df = transformer.transform(sdataset.data)
             # df.write.mode('overwrite').format('noop').save()
             df = cast(SparkDataFrame, df)
             df = df.localCheckpoint(eager=True)
@@ -710,6 +738,12 @@ def calculate_cat_te(
     else:
         logger.info(f"Checkpoint exists on path {checkpoint_path}. Will use it ")
         le_ds, _ = chkp
+
+    with log_exec_timer("Intermediate test") as f:
+        for _ in range(3):
+            le_ds.data.select([F.col(c) * 2 for c in le_ds.data.columns]).write.mode('overwrite').format('noop').save()
+
+    print(f"INTERMEDIATE TEST DURATION: {f.duration}")
 
     with log_exec_timer("TargetEncoder") as te_timer:
         te_estimator = SparkTargetEncoderEstimator(
@@ -857,8 +891,8 @@ def calculate_le_te_scaling(
 
     if not chkp:
         logger.info(f"No checkpoint found on path {checkpoint_path}. Will create it ")
-        df = spark.read.json(path).repartition(execs * cores).cache()
-        df.write.mode('overwrite').format('noop').save()
+        data, _ = prepare_test_and_train(spark, path, 42, test_proportion=0.0)
+        df = data
 
         cat_roles = {
            c: CategoryRole(dtype=np.float32) for c in df.columns
@@ -879,7 +913,7 @@ def calculate_le_te_scaling(
                 F.rand(42).alias('target'),
                 F.floor(F.rand(142) * cv).astype('int').alias('folds'),
                 *list(estimator.getOutputRoles().keys()),
-            ).cache()
+            ).localCheckpoint(eager=True)
             df.write.mode('overwrite').format('noop').save()
 
         le_ds = SparkDataset(
