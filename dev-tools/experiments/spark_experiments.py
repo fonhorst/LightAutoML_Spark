@@ -13,7 +13,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from copy import copy
-from typing import Dict, Any, Optional, Tuple, cast
+from typing import Dict, Any, List, Optional, Tuple, cast
 
 import yaml
 from pyspark import SparkFiles
@@ -190,6 +190,7 @@ def calculate_automl(
         use_algos = ("lgb", "linear_l2"),
         roles: Optional[Dict] = None,
         lgb_num_iterations: int = 100,
+        linear_l2_reg_param: List[float] = [1e-5],
         dataset_increase_factor: int = 1,
         **_) -> Dict[str, Any]:
     execs = int(spark.conf.get('spark.executor.instances'))
@@ -199,6 +200,9 @@ def calculate_automl(
 
     train_data, test_data = prepare_test_and_train(spark, path, seed)
     test_data_dropped = test_data
+
+    execs = int(spark.conf.get('spark.executor.instances'))
+    cores = int(spark.conf.get('spark.executor.cores'))
     
     train_data = train_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
     train_data = train_data.drop("new_col")
@@ -216,9 +220,10 @@ def calculate_automl(
             general_params={"use_algos": use_algos},
             lgb_params={'use_single_dataset_mode': True,
                         "default_params": { "numIterations": lgb_num_iterations, "earlyStoppingRound": 5000}, "freeze_defaults": True },
-            linear_l2_params={"default_params": {"regParam": [1e-5]}},
+            linear_l2_params={"default_params": {"regParam": linear_l2_reg_param}},
             reader_params={"cv": cv, "advanced_roles": False},
             gbm_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
+            linear_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
         )
 
