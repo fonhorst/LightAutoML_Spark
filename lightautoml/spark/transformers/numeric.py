@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, Dict, List
 
 import numpy as np
@@ -14,6 +15,9 @@ from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
 from lightautoml.spark.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, ObsoleteSparkTransformer
 from lightautoml.transformers.numeric import numeric_check
+
+
+logger = logging.getLogger(__name__)
 
 
 class SparkNaNFlagsEstimator(SparkBaseEstimator):
@@ -161,12 +165,16 @@ class SparkFillnaMedianEstimator(SparkBaseEstimator):
 
         """
 
+        logger.debug(f"Starting to fit estimator {self}")
+
         row = sdf\
             .select([F.percentile_approx(c, 0.5).alias(c) for c in self.getInputCols()])\
             .select([F.when(F.isnan(c), 0).otherwise(F.col(c)).alias(c) for c in self.getInputCols()])\
             .first()
 
         self._meds = row.asDict()
+
+        logger.debug(f"Finished to fit estimator {self}")
 
         return SparkFillnaMedianTransformer(input_cols=self.getInputCols(),
                                             output_cols=self.getOutputCols(),
