@@ -96,7 +96,8 @@ events = [
     Event("LinearLBGFS", "Starting LinearLGBFS", "LinearLGBFS is finished"),
     Event("LinearLBGFS single fold", "fit_predict single fold in LinearLBGFS",
           "fit_predict single fold finished in LinearLBGFS"),
-    Event("LGBM", "Starting LGBM fit", "Finished LGBM fit")
+    Event("LGBM", "Starting LGBM fit", "Finished LGBM fit"),
+    Event("Cacher", "Starting to materialize data", "Finished data materialization")
 ]
 
 
