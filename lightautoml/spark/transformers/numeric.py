@@ -147,12 +147,16 @@ class SparkFillnaMedianEstimator(SparkBaseEstimator):
     def __init__(self,
                  input_cols: List[str],
                  input_roles: Dict[str, ColumnRole],
-                 do_replace_columns: bool = False):
+                 do_replace_columns: bool = False,
+                 subsample: int = 1_000_000,
+                 seed: int = 42):
         super().__init__(input_cols,
                          input_roles,
                          do_replace_columns=do_replace_columns,
                          output_role=NumericRole(np.float32))
         self._meds: Optional[Dict[str, float]] = None
+        self._subsample = subsample
+        self._seed = seed
 
     def _fit(self, sdf: SparkDataFrame) -> Transformer:
         """Approximately estimates medians.
@@ -166,6 +170,15 @@ class SparkFillnaMedianEstimator(SparkBaseEstimator):
         """
 
         logger.debug(f"Starting to fit estimator {self}")
+
+        total_number = sdf.count()
+        if self._subsample > total_number:
+            fraction = 1.0
+        else:
+            total_number = self._subsample
+            fraction = self._subsample/total_number
+        sdf = sdf.sample(fraction=fraction, seed=self._seed)
+        logger.debug(f"Sample size: {sdf.count()}")
 
         row = sdf\
             .select([F.percentile_approx(c, 0.5).alias(c) for c in self.getInputCols()])\
