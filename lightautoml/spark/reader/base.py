@@ -65,6 +65,8 @@ stype2dtype = {
 class SparkReaderHelper:
     @staticmethod
     def _create_unique_ids(train_data: SparkDataFrame, cacher_key: Optional[str] = None) -> SparkDataFrame:
+        logger.info("SparkReaderHelper._create_unique_ids() is started")
+
         if SparkDataset.ID_COLUMN not in train_data.columns:
             train_data = train_data.select(
                 '*',
@@ -75,6 +77,8 @@ class SparkReaderHelper:
             cacher = Cacher(key=cacher_key)
             cacher.fit(train_data)
             train_data = cacher.dataset
+
+        logger.info("SparkReaderHelper._create_unique_ids() is finished")
 
         return train_data
 
@@ -265,6 +269,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         # if self.samples:
         #     subsample = subsample.sample(fraction=0.1, seed=42).limit(self.samples).cache()
 
+        logger.info("SparkToSparkReader infer roles is started")
         # infer roles
         feats_to_guess: List[str] = []
         inferred_feats: Dict[str, ColumnRole] = dict()
@@ -308,6 +313,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 inferred_feats[feat] = r
             else:
                 feats_to_guess.append(feat)
+
+        logger.info("SparkToSparkReader infer roles is finished")
 
         ok_features = self._ok_features(train_data, feats_to_guess)
         guessed_feats = self._guess_role(train_data, ok_features)
@@ -451,6 +458,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             Transformed target.
 
         """
+        logger.info("SparkToSparkReader._create_target() is started")
+
         self.class_mapping = None
 
         nan_count = sdf.where(F.isnan(target_col)).count()
@@ -480,6 +489,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 return sdf
 
         sdf_with_proc_target = self._process_target_column(self.task.name, self.class_mapping, sdf, target_col)
+
+        logger.info("SparkToSparkReader._create_target() is finished")
 
         return sdf_with_proc_target
 
@@ -515,6 +526,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             Feature role.
 
         """
+        logger.info("SparkToSparkReader._guess_role() is started")
+
         guessed_cols = dict()
         cols_to_check = []
         check_columns = []
@@ -570,6 +583,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             else:
                 guessed_cols[feature] = CategoryRole(object)
 
+        logger.info("SparkToSparkReader._guess_role() is finished")
+
         return guessed_cols
 
     def _ok_features(self, train_data: SparkDataFrame, features: List[str]) -> List[Tuple[str, bool]]:
@@ -582,6 +597,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             ``True`` if nan ratio and freqency are not high.
 
         """
+        logger.info("SparkToSparkReader._ok_features() is started")
 
         row = train_data.select(
             F.count('*').alias('count'),
@@ -611,6 +627,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
             estimated_features.append((feat, True))
 
+        logger.info("SparkToSparkReader._ok_features() is finished")
         return estimated_features
 
     def advanced_roles_guess(self, dataset: SparkDataset, manual_roles: Optional[RolesDict] = None) -> RolesDict:
