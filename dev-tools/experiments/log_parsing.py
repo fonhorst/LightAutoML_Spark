@@ -115,7 +115,12 @@ events = [
     Event("LinearLBGFS single fold", "fit_predict single fold in LinearLBGFS",
           "fit_predict single fold finished in LinearLBGFS"),
     Event("LGBM", "Starting LGBM fit", "Finished LGBM fit"),
-    Event("Cacher", "Starting to materialize data", "Finished data materialization")
+    Event("Cacher", "Starting to materialize data", "Finished data materialization"),
+    Event("SparkReaderHelper._create_unique_ids()", "SparkReaderHelper._create_unique_ids() is started", "SparkReaderHelper._create_unique_ids() is finished"),
+    Event("SparkToSparkReader infer roles", "SparkToSparkReader infer roles is started", "SparkToSparkReader infer roles is finished"),
+    Event("SparkToSparkReader._create_target()", "SparkToSparkReader._create_target() is started", "SparkToSparkReader._create_target() is finished"),
+    Event("SparkToSparkReader._guess_role()", "SparkToSparkReader._guess_role() is started", "SparkToSparkReader._guess_role() is finished"),
+    Event("SparkToSparkReader._ok_features()", "SparkToSparkReader._ok_features() is started", "SparkToSparkReader._ok_features() is finished")
 ]
 
 
