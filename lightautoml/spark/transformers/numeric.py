@@ -175,7 +175,6 @@ class SparkFillnaMedianEstimator(SparkBaseEstimator):
         if self._subsample > total_number:
             fraction = 1.0
         else:
-            total_number = self._subsample
             fraction = self._subsample/total_number
         sdf = sdf.sample(fraction=fraction, seed=self._seed)
         logger.debug(f"Sample size: {sdf.count()}")
