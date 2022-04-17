@@ -1,9 +1,10 @@
 import datetime
 import itertools
+import json
 import pprint
 import sys
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, cast
+from typing import Iterable, List, Optional, cast, Dict
 
 
 @dataclass
@@ -88,6 +89,23 @@ def select_lines(events: List[Event], lines: Iterable[str]) -> Iterable[EventSta
                 break
 
 
+def extract_result(lines: Iterable[str]) -> Dict:
+    result_marker = "EXP-RESULT: "
+    try:
+        result_line = next(
+            line for line in lines
+            if line.startswith(result_marker)
+        )
+    except StopIteration:
+        result_line = None
+
+    if result_line is not None:
+        result = json.loads(result_line[len(result_marker):].strip().replace("'", '"'))
+    else:
+        result = None
+
+    return result
+
 events = [
     Event("Reader", "Reader starting fit_read", "Reader finished fit_read"),
     Event("LE", "(LE)] fit is started", "(LE)] fit is finished"),
@@ -106,7 +124,9 @@ if __name__ == "__main__":
 
     event_instances = make_events(select_lines(events, log))
     event_instances = sorted(event_instances, key=lambda x: x.start.time)
+    exp_result = extract_result(log)
 
     print("========================Events==========================")
     pprint.pprint(event_instances)
-    print("==================================================")
+    print("========================Results==========================")
+    pprint.pprint(exp_result)

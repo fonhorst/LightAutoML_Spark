@@ -18,8 +18,8 @@ experiments:
       use_algos:
         - [ [ "lgb" ] ]
       lgb_num_iterations: [ 500 ]
-      dataset_increase_factor: [ 4 ]
+      dataset_increase_factor: [ 40 ]
     spark_config:
       spark.executor.instances: [ '16' ] # '4', '8', '16', '32'
-      spark.executor.cores: [ '8' ]
-      spark.executor.memory: [ '32g' ]
+      spark.executor.cores: [ '16' ]
+      spark.executor.memory: [ '64g' ]
