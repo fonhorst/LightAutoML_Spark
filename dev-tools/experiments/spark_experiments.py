@@ -201,9 +201,6 @@ def calculate_automl(
     train_data, test_data = prepare_test_and_train(spark, path, seed)
     test_data_dropped = test_data
 
-    execs = int(spark.conf.get('spark.executor.instances'))
-    cores = int(spark.conf.get('spark.executor.cores'))
-    
     train_data = train_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
     train_data = train_data.drop("new_col")
     train_data = train_data.repartition(execs * cores).cache()
@@ -224,7 +221,8 @@ def calculate_automl(
             reader_params={"cv": cv, "advanced_roles": False},
             gbm_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
             linear_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
-            tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600}
+            tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 101, 'max_tuning_time': 3600},
+            timeout=3600 * 12
         )
 
         oof_predictions = automl.fit_predict(
@@ -252,6 +250,9 @@ def calculate_automl(
     logger.info("Predicting is finished")
 
     return {
+        "use_algos": use_algos,
+        "train_data.count": train_data.count(),
+        "spark.executor.instances": execs,
         "metric_value": metric_value,
         "test_metric_value": test_metric_value,
         "train_duration_secs": train_timer.duration,
