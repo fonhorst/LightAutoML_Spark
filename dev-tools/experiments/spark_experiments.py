@@ -17,7 +17,7 @@ from typing import Dict, Any, List, Optional, Tuple, cast
 
 import yaml
 from pyspark import SparkFiles
-from pyspark.ml import Pipeline
+from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import LinearRegression
@@ -180,6 +180,61 @@ def prepare_test_and_train(spark: SparkSession, path:str, seed: int, test_propor
     return train_data, test_data
 
 
+def load_and_predict_automl(
+        spark: SparkSession,
+        path: str,
+        task_type: str,
+        seed: int = 42,
+        roles: Optional[Dict] = None,
+        dataset_increase_factor: int = 1,
+        automl_model_path=None,
+        **_) -> Dict[str, Any]:
+
+    execs = int(spark.conf.get('spark.executor.instances'))
+    cores = int(spark.conf.get('spark.executor.cores'))
+    memory = spark.conf.get('spark.executor.memory')
+
+    roles = roles if roles else {}
+
+    train_data, test_data = prepare_test_and_train(spark, path, seed)
+
+    if dataset_increase_factor > 1:
+        test_data = test_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
+        test_data = test_data.drop("new_col")
+        test_data = test_data.repartition(execs * cores).cache()
+        test_data = test_data.cache()
+        test_data.write.mode('overwrite').format('noop').save()
+        logger.info(f"Duplicated dataset size: {test_data.count()}")
+
+    with log_exec_timer("Loading model time") as loading_timer:
+        pipeline_model = PipelineModel.load(automl_model_path)
+
+    with log_exec_timer("spark-lama predicting on test") as predict_timer:
+        te_pred = pipeline_model.transform(test_data)
+        te_pred = te_pred.cache()
+        te_pred.write.mode('overwrite').format('noop').save()
+
+    task = SparkTask(task_type)
+    pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
+    score = task.get_dataset_metric()
+    test_metric_value = score(te_pred.select(
+        SparkDataset.ID_COLUMN,
+        F.col(roles['target']).alias('target'),
+        F.col(pred_column).alias('prediction')
+    ))
+
+    logger.info(f"score for test predictions via loaded pipeline: {test_metric_value}")
+
+    return {
+        "train_data.count": test_data.count(),
+        "spark.executor.instances": execs,
+        "spark.executor.cores": cores,
+        "spark.executor.memory": memory,
+        "test_metric_value": test_metric_value,
+        "predict_duration_secs": predict_timer.duration
+    }
+
+
 def calculate_automl(
         spark: SparkSession,
         path: str,
@@ -192,6 +247,7 @@ def calculate_automl(
         lgb_num_iterations: int = 100,
         linear_l2_reg_param: List[float] = [1e-5],
         dataset_increase_factor: int = 1,
+        automl_save_path = None,
         **_) -> Dict[str, Any]:
     execs = int(spark.conf.get('spark.executor.instances'))
     cores = int(spark.conf.get('spark.executor.cores'))
@@ -201,12 +257,13 @@ def calculate_automl(
     train_data, test_data = prepare_test_and_train(spark, path, seed)
     test_data_dropped = test_data
 
-    train_data = train_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
-    train_data = train_data.drop("new_col")
-    train_data = train_data.repartition(execs * cores).cache()
-    train_data = train_data.cache()
-    train_data.write.mode('overwrite').format('noop').save()
-    print(f"Duplicated dataset size: {train_data.count()}")
+    if dataset_increase_factor > 1:
+        train_data = train_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
+        train_data = train_data.drop("new_col")
+        train_data = train_data.repartition(execs * cores).cache()
+        train_data = train_data.cache()
+        train_data.write.mode('overwrite').format('noop').save()
+        logger.info(f"Duplicated dataset size: {train_data.count()}")
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
@@ -248,6 +305,10 @@ def calculate_automl(
         logger.info(f"{metric_name} score for test predictions: {test_metric_value}")
 
     logger.info("Predicting is finished")
+
+    if automl_save_path:
+        transformer = automl.make_transformer()
+        transformer.write().overwrite().save(automl_save_path)
 
     return {
         "use_algos": use_algos,
@@ -1157,6 +1218,8 @@ if __name__ == "__main__":
             func = calculate_le_model_scaling
         elif func_name == 'calculate_chkp':
             func = calculate_chkp
+        elif func_name == 'load_and_predict_automl':
+            func = load_and_predict_automl
         else:
             raise ValueError(f"Incorrect func name: {func_name}. ")
 
