@@ -209,14 +209,14 @@ if __name__ == "__main__":
         )
     )
 
-    test_pred = automl.predict(test_data_sdf)
+    test_pred = automl.predict(test_data_sdf, add_reader_attrs=True)
     logger.info("Prediction for test data:\n{}\nShape = {}".format(test_pred, test_pred.shape))
 
     logger.info("Check scores...")
     score = task.get_dataset_metric()
     off_score = score(oof_pred)
-    # test_score = score(test_pred)
+    test_score = score(test_pred)
     logger.info(f"OOF score: {off_score}")
-    # logger.info(f"TEST score: {test_score}")
+    logger.info(f"TEST score: {test_score}")
 
     spark.stop()
