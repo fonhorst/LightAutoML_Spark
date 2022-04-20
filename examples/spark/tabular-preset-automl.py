@@ -24,13 +24,20 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 1. use_algos = [["lgb"]]
     # 2. use_algos = [["linear_l2"]]
     # 3. use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["linear_l2", "lgb"]]
-    cv = 5
+    # use_algos = [["linear_l2", "lgb"]]
+    use_algos = [["lgb"]]
+    cv = 3
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
         train_data, test_data = prepare_test_and_train(spark, path, seed)
+
+        # train_data = train_data.withColumn("new_col",
+        #                                  F.explode(F.array(*[F.lit(0) for i in range(10)])))
+        # train_data = train_data.drop("new_col")
+        # train_data = train_data.repartition(64).localCheckpoint()
+        # train_data.write.mode('overwrite').format('noop').save()
 
         test_data_dropped = test_data
 
