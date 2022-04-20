@@ -248,6 +248,7 @@ def calculate_automl(
         linear_l2_reg_param: List[float] = [1e-5],
         dataset_increase_factor: int = 1,
         automl_save_path = None,
+        test_data_dump_path = None,
         **_) -> Dict[str, Any]:
     execs = int(spark.conf.get('spark.executor.instances'))
     cores = int(spark.conf.get('spark.executor.cores'))
@@ -255,7 +256,6 @@ def calculate_automl(
     roles = roles if roles else {}
 
     train_data, test_data = prepare_test_and_train(spark, path, seed)
-    test_data_dropped = test_data
 
     if dataset_increase_factor > 1:
         train_data = train_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
@@ -297,7 +297,7 @@ def calculate_automl(
     automl.release_cache()
 
     with log_exec_timer("spark-lama predicting on test") as predict_timer:
-        te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
+        te_pred = automl.predict(test_data, add_reader_attrs=True)
 
         score = task.get_dataset_metric()
         test_metric_value = score(te_pred)
@@ -309,6 +309,9 @@ def calculate_automl(
     if automl_save_path:
         transformer = automl.make_transformer()
         transformer.write().overwrite().save(automl_save_path)
+
+    if test_data_dump_path:
+        test_data.write.mode('overwrite').parquet(test_data_dump_path)
 
     return {
         "use_algos": use_algos,
