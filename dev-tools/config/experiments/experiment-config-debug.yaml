@@ -7,22 +7,6 @@ state_file: 'delete'  # Available values are 'use|ignore|delete', use - skip exp
 
 # Unique set of parameters for each experiment
 experiments:
-#  - name: "automl_lgb_96M_1e_64g"
-#    library: [ "spark" ]
-#    repeat_rate: 1
-#    params:
-#      func: [ "calculate_automl" ]
-#      dataset: [ "used_cars_dataset_1x" ]
-#      seed: [ 42 ]
-#      cv: [ 3 ]
-#      use_algos:
-#        - [ [ "lgb" ] ]
-#      lgb_num_iterations: [ 500 ]
-#      dataset_increase_factor: [ 1 ] # 4 40
-#    spark_config:
-#      spark.executor.instances: [ '8' ] # '1', '2', '4', '8', '16', '24', '32'
-#      spark.executor.cores: [ '8' ]
-#      spark.executor.memory: [ '64g' ]
   - name: "scaling-lgb"
     library: [ "spark" ]
     repeat_rate: 1

@@ -125,10 +125,6 @@ def load_dump_if_exist(spark: SparkSession, path: str) -> Optional[Tuple[SparkDa
     metadata_file = os.path.join(path, DUMP_METADATA_NAME)
     data_file = os.path.join(path, DUMP_DATA_NAME)
 
-    df = spark.read.parquet(data_file)
-    df = df.cache()
-    df.write.mode('overwrite').format('noop').save()
-
     ex_instances = int(spark.conf.get('spark.executor.instances'))
     ex_cores = int(spark.conf.get('spark.executor.cores'))
 
@@ -320,9 +316,6 @@ def calculate_automl(
     if test_data_dump_path:
         test_data.write.mode('overwrite').parquet(test_data_dump_path)
 
-    import time
-    time.sleep(1200)
-
     return {
         "use_algos": use_algos,
         "train_data.count": train_data.count(),
@@ -345,15 +338,6 @@ def calculate_lgbadv_boostlgb(
         **_) -> Dict[str, Any]:
     roles = roles if roles else {}
 
-    # # if checkpoint_path is not None:
-    # test_path = os.path.join(checkpoint_path, 'test.dump')
-    # print(f"Writing to {test_path}")
-    # df = spark.createDataFrame([{"a": i} for i in range(1000)])
-    # df.write.mode('overwrite').format('noop').save(test_path)
-    # return {"success": True}
-
-    # checkpoint_path = None
-
     with log_exec_timer("spark-lama ml_pipe") as pipe_timer:
         if checkpoint_path is not None:
             train_checkpoint_path = os.path.join(checkpoint_path, 'train.dump')
@@ -367,8 +351,6 @@ def calculate_lgbadv_boostlgb(
             test_chkp = None
 
         task = SparkTask(task_type)
-
-        # train_chkp = None
 
         if not train_chkp or not test_chkp:
             logger.info(f"Checkpoint doesn't exist on path {checkpoint_path}. Will create it.")
@@ -418,8 +400,7 @@ def calculate_lgbadv_boostlgb(
 
             stest, _ = test_chkp
 
-        # iterator = iterator.convert_to_holdout_iterator()
-        # iterator = SparkDummyIterator(iterator.train, iterator.input_roles)
+        iterator = iterator.convert_to_holdout_iterator()
 
         score = task.get_dataset_metric()
 
@@ -453,8 +434,6 @@ def calculate_lgbadv_boostlgb(
         assert spark_ml_algo is not None
         assert oof_preds is not None
 
-        oof_preds.data.write.mode('overwrite').format('noop').save()
-
         spark_ml_algo = cast(SparkTabularMLAlgo, spark_ml_algo)
         oof_preds = cast(SparkDataset, oof_preds)
         oof_preds_sdf = oof_preds.data.select(
@@ -471,9 +450,6 @@ def calculate_lgbadv_boostlgb(
             F.col(spark_ml_algo.prediction_feature).alias("prediction")
         )
         test_score = score(test_preds_sdf)
-
-    import time
-    time.sleep(1200)
 
     return {
         pipe_timer.name: pipe_timer.duration,

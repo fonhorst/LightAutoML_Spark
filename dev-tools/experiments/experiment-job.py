@@ -22,17 +22,10 @@ DEFAULT_SPARK_CONFIG_SETTINGS = "dev-tools/config/experiments/default-spark-conf
 EXP_PY_FILES_DIR = "dev-tools/experiments/"
 MARKER = "EXP-RESULT:"
 
-
 statefile_path = "/tmp/exp-job"
 results_path = "/tmp/exp-job"
-# cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster.yaml"
-# cfg_path = "./dev-tools/config/experiments/experiment-config-spark-quality-exps.yaml"
-# cfg_path = "./dev-tools/config/experiments/experiment-config-spark-scaling-exps.yaml"
-# cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster-automl-lgb.yaml"
-# cfg_path = "./dev-tools/config/experiments/experiment-config-debug.yaml"
+
 cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster-automl-lgb-load-pipeline.yaml"
-# cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster-automl-linear_l2.yaml"
-# cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster-automl-linear_l2-load-pipeline.yaml"
 all_results_path = "/tmp/exp-job/results.txt"
 
 

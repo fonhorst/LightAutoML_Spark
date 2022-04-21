@@ -81,7 +81,7 @@ def get_dataset_attrs(name: str):
 
 def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
     data = spark.read.csv(path, header=True, escape="\"")
-    data = data.repartition(4).cache()
+    data = data.cache()
     data.write.mode('overwrite').format('noop').save()
 
     train_data, test_data = data.randomSplit([0.8, 0.2], seed)
@@ -118,7 +118,6 @@ def get_spark_session():
 
     spark_sess.sparkContext.setCheckpointDir("/tmp/spark_checkpoints")
 
-    # spark_sess.sparkContext.setLogLevel("WARN")
-    spark_sess.sparkContext.setLogLevel("DEBUG")
+    spark_sess.sparkContext.setLogLevel("WARN")
 
     return spark_sess
