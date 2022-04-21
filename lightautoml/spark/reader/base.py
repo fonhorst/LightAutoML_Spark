@@ -263,11 +263,15 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = self._create_target(train_data, target_col=self.target_col)
 
-        # get subsample if it needed
-        subsample = train_data
-        # # TODO: LAMA-SPARK replace seed here with a variable
-        # if self.samples:
-        #     subsample = subsample.sample(fraction=0.1, seed=42).limit(self.samples).cache()
+        total_number = train_data.count()
+        if self.samples is not None:
+            if self.samples > total_number:
+                fraction = 1.0
+            else:
+                fraction = self.samples/total_number
+            subsample = train_data.sample(fraction=fraction, seed=self.random_state).cache()
+        else:
+            subsample = train_data
 
         logger.info("SparkToSparkReader infer roles is started")
         # infer roles
@@ -317,7 +321,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         logger.info("SparkToSparkReader infer roles is finished")
 
         ok_features = self._ok_features(train_data, feats_to_guess)
-        guessed_feats = self._guess_role(train_data, ok_features)
+        guessed_feats = self._guess_role(subsample, ok_features)
         inferred_feats.update(guessed_feats)
 
         # # set back
