@@ -63,12 +63,10 @@ if __name__ == "__main__":
     test_data.reset_index(drop=True, inplace=True)
     logger.info("Data splitted. Parts sizes: train_data = {}, test_data = {}".format(train_data.shape, test_data.shape))
 
-
     train_data_sdf = spark.createDataFrame(train_data).cache()
     test_data_sdf = spark.createDataFrame(test_data).cache()
     train_data_sdf.write.mode('overwrite').format('noop').save()
     test_data_sdf.write.mode('overwrite').format('noop').save()
-    
 
     logger.info("Create task..")
     task = SparkTask("binary")
@@ -87,8 +85,6 @@ if __name__ == "__main__":
         default_params={
             "learningRate": 0.05,
             "numLeaves": 64,
-            # "seed": 42,
-            "numThreads": 5,
         }
     )
     model02 = SparkBoostLGBM(
@@ -96,8 +92,6 @@ if __name__ == "__main__":
         default_params={
             "learningRate": 0.05,
             "numLeaves": 64,
-            # "seed": 42,
-            "numThreads": 5,
         }
     )
     pipe0 = SparkLGBSimpleFeatures(cacher_key='preselector')
@@ -113,14 +107,12 @@ if __name__ == "__main__":
     pipe = SparkLGBSimpleFeatures(cacher_key=cacher_key)
 
     logger.info("\t ParamsTuner1 and Model1...")
-    params_tuner1 = OptunaTuner(n_trials=100, timeout=100)
+    params_tuner1 = OptunaTuner(n_trials=1, timeout=100)
     model1 = SparkBoostLGBM(
         cacher_key=cacher_key,
         default_params={
             "learningRate": 0.05,
-            "numLeaves": 128,
-            # "seed": 1,
-            "numThreads": 5,
+            "numLeaves": 128
         }
     )
     logger.info("\t Tuner1 and model1 created")
@@ -131,8 +123,6 @@ if __name__ == "__main__":
         default_params={
             "learningRate": 0.025,
             "numLeaves": 64,
-            # "seed": 2,
-            "numThreads": 5,
         }
     )
     logger.info("\t Tuner2 and model2 created")

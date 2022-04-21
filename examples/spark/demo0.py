@@ -83,7 +83,6 @@ if __name__ == "__main__":
     ).cache()
     dataset_sdf.write.mode('overwrite').format('noop').save()
     dataset_sdf = dataset_sdf.select(F.col("__fold__").cast("int").alias("__fold__"), *[c for c in dataset_sdf.columns if c != "__fold__"])
-    
 
     # # Set roles for columns
     logger.info("Set roles for columns")
