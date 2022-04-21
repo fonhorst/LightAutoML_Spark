@@ -188,6 +188,7 @@ def load_and_predict_automl(
         roles: Optional[Dict] = None,
         dataset_increase_factor: int = 1,
         automl_model_path=None,
+        test_data_dump_path = None,
         **_) -> Dict[str, Any]:
 
     execs = int(spark.conf.get('spark.executor.instances'))
@@ -196,12 +197,18 @@ def load_and_predict_automl(
 
     roles = roles if roles else {}
 
-    train_data, test_data = prepare_test_and_train(spark, path, seed)
+    # train_data, test_data = prepare_test_and_train(spark, path, seed)
+    test_data = spark.read.parquet(test_data_dump_path)
+    # test_data = test_data.sample(fraction=0.0002, seed=100)
 
     if dataset_increase_factor > 1:
         test_data = test_data.withColumn("new_col", F.explode(F.array(*[F.lit(0) for i in range(dataset_increase_factor)])))
         test_data = test_data.drop("new_col")
-        test_data = test_data.repartition(execs * cores).cache()
+        test_data = test_data.select(
+            *[c for c in test_data.columns if c != SparkDataset.ID_COLUMN],
+            F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN),
+        ).cache()
+        test_data = test_data.repartition(execs * cores, SparkDataset.ID_COLUMN).cache()
         test_data = test_data.cache()
         test_data.write.mode('overwrite').format('noop').save()
         logger.info(f"Duplicated dataset size: {test_data.count()}")
@@ -226,7 +233,7 @@ def load_and_predict_automl(
     logger.info(f"score for test predictions via loaded pipeline: {test_metric_value}")
 
     return {
-        "train_data.count": test_data.count(),
+        "predict_data.count": test_data.count(),
         "spark.executor.instances": execs,
         "spark.executor.cores": cores,
         "spark.executor.memory": memory,
