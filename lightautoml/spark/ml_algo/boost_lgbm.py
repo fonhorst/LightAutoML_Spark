@@ -449,8 +449,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         imp = 0
         for model_feature_impotances in self._models_feature_impotances:
             imp = imp + pd.Series(model_feature_impotances)
-        # for model in self.models:
-        #     imp = imp + pd.Series(model.getFeatureImportances(importance_type='gain'))
 
         imp = imp / len(self._models_feature_impotances)
 
