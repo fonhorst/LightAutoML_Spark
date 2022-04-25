@@ -1,48 +1,18 @@
-package org.apache.spark.ml.feature.lightautoml
+package org.apache.spark.lightautoml.utils
 
-import org.apache.spark.rdd.{PartitionCoalescer, PartitionGroup, RDD, UnionPartition}
-import org.apache.spark.sql.{Row, SparkSession}
-
-import scala.util.Random
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.col
 
+import scala.util.Random
 
-class BalancedUnionPartitionCoalescer extends PartitionCoalescer with Serializable {
-  override def coalesce(maxPartitions: Int, parent: RDD[_]): Array[PartitionGroup] = {
-    val up_arr = parent.partitions.map(_.asInstanceOf[UnionPartition[_]])
-    val parent2parts = up_arr
-            .map(x => (x.parentRddIndex, x))
-            .groupBy(_._1)
-            .map(x => (x._1, x._2.map(_._2).sortBy(_.parentPartition.index)))
-
-    val unique_sizes = parent2parts.map(_._2.length).toSet
-
-    assert(unique_sizes.size == 1)
-
-    val partsNum = unique_sizes.head
-
-    assert(maxPartitions <= partsNum)
-
-    val pgs = (0 until partsNum).map(i => {
-      val pg = new PartitionGroup()
-      parent2parts.values.foreach(x => pg.partitions += x(i))
-      pg
-    })
-
-    pgs.toArray
-  }
-}
-
-
-object Temp extends App {
-
+object TestBalancedUnionPartitionCoalescer extends App {
   val num_workers = 3
   val num_cores = 2
   val folds_count = 5
 
   val spark = SparkSession
           .builder()
-          .master(s"local-cluster[${num_workers}, ${num_cores}, 3072]")
+          .master(s"local-cluster[${num_workers}, ${num_cores}, 1024]")
           .config("spark.jars", "target/scala-2.12/spark-lightautoml_2.12-0.1.jar")
           .getOrCreate()
 
@@ -64,7 +34,7 @@ object Temp extends App {
     partitionCoalescer = Some(new BalancedUnionPartitionCoalescer)
   )
 
-//  coalesced_rdd.count()
+  //  coalesced_rdd.count()
 
   var coalesced_df = spark.createDataFrame(coalesced_rdd, schema = full_df.schema)
 
@@ -77,7 +47,6 @@ object Temp extends App {
 
   // check for balanced dataset:
   // 1. all executors should have the same number partitions as their parents dataset have
-  // 2. all executors should have approximately the same number of records
   // 2. all partitions should have approximately the same number of records
 
   val sameNumOfPartitions = df.rdd.getNumPartitions == coalesced_df.rdd.getNumPartitions
@@ -86,7 +55,7 @@ object Temp extends App {
   val parts_sizes = result.map(_.length)
   val min_size = parts_sizes.min
   val max_size = parts_sizes.max
-  assert((max_size - min_size) / min_size <= 0.02)
+  assert((max_size - min_size).toFloat / min_size <= 0.02)
 
   // part_id, (fold, record_count)
   val partsWithFolds = result
@@ -103,10 +72,9 @@ object Temp extends App {
   val foldsBalancedInAllPartitions = partsWithFolds.forall{ x =>
     val min_count = x._2.values.min
     val max_count = x._2.values.max
-    (max_count - min_count) / min_count <= 0.02
+    (max_count - min_count).toFloat / min_count <= 0.02
   }
   assert(foldsBalancedInAllPartitions)
 
-  // there should be an error if datasets participating in union have different number of partitions
   spark.stop()
 }
