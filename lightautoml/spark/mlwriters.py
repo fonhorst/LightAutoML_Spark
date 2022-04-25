@@ -189,9 +189,7 @@ class ONNXModelWrapperMLWriter(MLWriter):
 class ONNXModelWrapperMLReader(MLWriter):
 
     def load(self, path):
-        """Load the ML instance from the input path and wrap by LightGBMModelWrapper()"""
-
-        # metadata = DefaultParamsReader.loadMetadata(path, self.sc)
+        """Load the ML instance from the input path and wrap by ONNXModelWrapper()"""
 
         from lightautoml.spark.ml_algo.boost_lgbm import ONNXModelWrapper
         model_wrapper = ONNXModelWrapper()
