@@ -51,6 +51,12 @@ DATASETS = {
         "path": "/opt/spark_data/ipums_97.csv",
         "task_type": "multiclass",
         "roles": {"target": "movedin"},
+    },
+
+    "company_bankruptcy_dataset": {
+        "path": "/opt/spark_data/company_bankruptcy_prediction_data.csv",
+        "task_type": "binary",
+        "roles": {"target": "Bankrupt?"},
     }
 }
 

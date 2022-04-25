@@ -38,7 +38,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
-            lgb_params={'use_single_dataset_mode': True},
+            lgb_params={'use_single_dataset_mode': True, 'convert_to_onnx': True, 'mini_batch_size': 1000},
             # linear_l2_params={"default_params": {"regParam": [1e-5]}},
             reader_params={"cv": cv, "advanced_roles": False}
         )
@@ -64,24 +64,26 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
     with log_exec_timer("spark-lama predicting on test (#1 way)") as predict_timer:
         te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
+        te_pred.data.cache()
+        te_pred.data.write.mode('overwrite').format('noop').save()
 
-        score = task.get_dataset_metric()
-        test_metric_value = score(te_pred)
-
-        logger.info(f"score for test predictions: {test_metric_value}")
+    score = task.get_dataset_metric()
+    test_metric_value = score(te_pred)
+    logger.info(f"score for test predictions: {test_metric_value}")
 
     with log_exec_timer("spark-lama predicting on test (#2 way)"):
         te_pred = automl.make_transformer().transform(test_data_dropped)
+        te_pred = te_pred.cache()
+        te_pred.write.mode('overwrite').format('noop').save()
 
-        pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
-        score = task.get_dataset_metric()
-        test_metric_value = score(te_pred.select(
-            SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(pred_column).alias('prediction')
-        ))
-
-        logger.info(f"score for test predictions: {test_metric_value}")
+    pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
+    score = task.get_dataset_metric()
+    test_metric_value = score(te_pred.select(
+        SparkDataset.ID_COLUMN,
+        F.col(roles['target']).alias('target'),
+        F.col(pred_column).alias('prediction')
+    ))
+    logger.info(f"score for test predictions: {test_metric_value}")
 
     base_path = "/tmp/spark_results"
     automl_model_path = os.path.join(base_path, "automl_pipeline")
@@ -96,16 +98,18 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
     with log_exec_timer("spark-lama predicting on test (#3 way)"):
         te_pred = pipeline_model.transform(test_data_dropped)
+        te_pred = te_pred.cache()
+        te_pred.write.mode('overwrite').format('noop').save()
 
-        pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
-        score = task.get_dataset_metric()
-        test_metric_value = score(te_pred.select(
-            SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(pred_column).alias('prediction')
-        ))
+    pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
+    score = task.get_dataset_metric()
+    test_metric_value = score(te_pred.select(
+        SparkDataset.ID_COLUMN,
+        F.col(roles['target']).alias('target'),
+        F.col(pred_column).alias('prediction')
+    ))
 
-        logger.info(f"score for test predictions via loaded pipeline: {test_metric_value}")
+    logger.info(f"score for test predictions via loaded pipeline: {test_metric_value}")
 
 
     logger.info("Predicting is finished")
@@ -147,6 +151,10 @@ if __name__ == "__main__":
     # One can run:
     # 1. main(dataset_name="used_cars_dataset", seed=42)
     # 2. multirun(spark_sess, dataset_name="used_cars_dataset")
-    main(spark_sess, dataset_name="ipums_97", seed=42)
+    # main(spark_sess, dataset_name="ipums_97", seed=42)
+    # main(spark_sess, dataset_name="used_cars_dataset", seed=42)
+    main(spark_sess, dataset_name="buzz_dataset", seed=42)
+    # main(spark_sess, dataset_name="lama_test_dataset", seed=42)
+    # main(spark_sess, dataset_name="company_bankruptcy_dataset", seed=42)
 
     spark_sess.stop()

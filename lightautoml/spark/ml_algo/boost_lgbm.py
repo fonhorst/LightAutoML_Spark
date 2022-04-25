@@ -113,6 +113,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                  optimization_search_space: Optional[dict] = {},
                  use_single_dataset_mode: bool = True,
                  max_validation_size: int = 10_000,
+                 convert_to_onnx: bool = False,
+                 mini_batch_size: int = 5000,
                  seed: int = 42):
         SparkTabularMLAlgo.__init__(self, cacher_key, default_params, freeze_defaults, timer, optimization_search_space)
         self._probability_col_name = "probability"
@@ -124,6 +126,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self._max_validation_size = max_validation_size
         self._seed = seed
         self._models_feature_impotances = []
+        self._convert_to_onnx = convert_to_onnx
+        self._mini_batch_size = mini_batch_size
 
     def _infer_params(self) -> Tuple[dict, int]:
         """Infer all parameters in lightgbm format.
@@ -403,36 +407,36 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
         ).transform(val_pred)
 
-        logger.info("------Model convert is started------")
-        # # TODO: Remove this code when synapse.ml developers fix problem with infer LGBMClassifier model
-        booster_model_str = ml_model.getLightGBMBooster().modelStr().get()
-        booster = lgb.Booster(model_str=booster_model_str)
-        model_payload_ml = self._convertModel(booster, len(full.data.columns) - 1)
-
-        onnx_ml = ONNXModel().setModelPayload(model_payload_ml)
-
-        if full.task.name == "reg":
-            onnx_ml = (
-                onnx_ml
-                    .setDeviceType("CPU")
-                    .setFeedDict({"input": f"{self._name}_vassembler_features"})
-                    .setFetchDict({ml_model.getPredictionCol(): "variable"})
-                    .setMiniBatchSize(1)
-            )
-        else:
-            onnx_ml = (
-                onnx_ml
-                    .setDeviceType("CPU")
-                    .setFeedDict({"input": f"{self._name}_vassembler_features"})
-                    .setFetchDict({ml_model.getProbabilityCol(): "probabilities", ml_model.getPredictionCol(): "label"})
-                    .setMiniBatchSize(1)
-            )
-
         self._models_feature_impotances.append(ml_model.getFeatureImportances(importance_type='gain'))
 
-        ml_model = onnx_ml
-        logger.info("------Model convert is ended------")
-        # ======================================
+        # # TODO: Remove this code when synapse.ml developers fix problem with batch infer LGBMBooster
+        if self._convert_to_onnx:
+            logger.info("Model convert is started")
+            booster_model_str = ml_model.getLightGBMBooster().modelStr().get()
+            booster = lgb.Booster(model_str=booster_model_str)
+            model_payload_ml = self._convertModel(booster, len(self.input_features))
+
+            onnx_ml = ONNXModel().setModelPayload(model_payload_ml)
+
+            if full.task.name == "reg":
+                onnx_ml = (
+                    onnx_ml
+                        .setDeviceType("CPU")
+                        .setFeedDict({"input": f"{self._name}_vassembler_features"})
+                        .setFetchDict({ml_model.getPredictionCol(): "variable"})
+                        .setMiniBatchSize(self._mini_batch_size)
+                )
+            else:
+                onnx_ml = (
+                    onnx_ml
+                        .setDeviceType("CPU")
+                        .setFeedDict({"input": f"{self._name}_vassembler_features"})
+                        .setFetchDict({ml_model.getProbabilityCol(): "probabilities", ml_model.getPredictionCol(): "label"})
+                        .setMiniBatchSize(self._mini_batch_size)
+                )
+
+            ml_model = onnx_ml
+            logger.info("Model convert is ended")
 
         return ml_model, val_pred, fold_prediction_column
 
@@ -454,32 +458,31 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return result
 
     @staticmethod
-    def _convertModel(lgbm_model: LGBMClassifier or Booster, input_size: int) -> bytes:
+    def _convertModel(lgbm_model: Booster, input_size: int) -> bytes:
         from onnxmltools.convert import convert_lightgbm
         from onnxconverter_common.data_types import FloatTensorType
-        from onnx.defs import onnx_opset_version
-        from onnxconverter_common.onnx_ex import DEFAULT_OPSET_NUMBER
-        TARGET_OPSET = min(DEFAULT_OPSET_NUMBER, onnx_opset_version())
         initial_types = [("input", FloatTensorType([-1, input_size]))]
-        onnx_model = convert_lightgbm(lgbm_model, initial_types=initial_types, target_opset=TARGET_OPSET)
+        onnx_model = convert_lightgbm(lgbm_model, initial_types=initial_types, target_opset=9)
         return onnx_model.SerializeToString()
 
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        # wrapped_models = [LightGBMModelWrapper(m) for m in self.models]
-        wrapped_models = [ONNXModelWrapper(m) for m in self.models]
+        if self._convert_to_onnx:
+            wrapped_models = [ONNXModelWrapper(m) for m in self.models]
+        else:
+            wrapped_models = [LightGBMModelWrapper(m) for m in self.models]
         models = [el for m in wrapped_models for el in [m, DropColumnsTransformer(
-        # models = [el for m in self.models for el in [m, DropColumnsTransformer(
                 remove_cols=[],
                 optional_remove_cols=[self._prediction_col_name,
                                     self._probability_col_name,
                                     self._raw_prediction_col_name]
             )
         ]]
-        if self.task.name in ['binary', 'multiclass']:
-            models.append(ProbabilityColsTransformer(probability_сols=self._models_prediction_columns, num_classes=self.n_classes))
-        else:
-            models.append(PredictionColsTransformer(prediction_сols=self._models_prediction_columns))
+        if self._convert_to_onnx:
+            if self.task.name in ['binary', 'multiclass']:
+                models.append(ProbabilityColsTransformer(probability_сols=self._models_prediction_columns, num_classes=self.n_classes))
+            else:
+                models.append(PredictionColsTransformer(prediction_сols=self._models_prediction_columns))
         averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
         return averaging_model
 
