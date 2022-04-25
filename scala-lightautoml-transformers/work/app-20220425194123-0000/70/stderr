@@ -1,0 +1,5 @@
+Spark Executor Command: "/home/nikolay/.jdks/corretto-11.0.13/bin/java" "-cp" "/home/nikolay/wspace/LightAutoML/scala-lightautoml-transformers/./conf:/home/nikolay/wspace/LightAutoML/scala-lightautoml-transformers/./assembly/target/scala-2.12/jars/*" "-Xmx1024M" "-Dspark.driver.port=40621" "org.apache.spark.executor.CoarseGrainedExecutorBackend" "--driver-url" "spark://CoarseGrainedScheduler@fedora:40621" "--executor-id" "70" "--hostname" "192.168.3.5" "--cores" "2" "--app-id" "app-20220425194123-0000" "--worker-url" "spark://Worker@192.168.3.5:35749"
+========================================
+
+Error: Could not find or load main class org.apache.spark.executor.CoarseGrainedExecutorBackend
+Caused by: java.lang.ClassNotFoundException: org.apache.spark.executor.CoarseGrainedExecutorBackend
