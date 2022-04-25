@@ -4,6 +4,8 @@ from typing import Optional, cast, Tuple, Iterable, Sequence
 
 from lightautoml.dataset.base import LAMLDataset, RolesDict
 from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.transformers.scala_wrappers.balanced_union_partitions_coalescer import \
+    BalancedUnionPartitionsCoalescerTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator
 from lightautoml.validation.base import TrainValidIterator, HoldoutIterator
 
@@ -207,6 +209,10 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
         assert len(val_preds) > 0
+
+        if len(val_preds) == 1:
+            return val_preds[0]
+
         num_partitions = val_preds[0].rdd.getNumPartitions()
         full_val_preds = functools.reduce(lambda x, y: x.unionByName(y), val_preds)
         # TODO: SPARK-LAMA for debug only
@@ -228,14 +234,20 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         print(f"#2 PARTITIONS AFTER UNION and COALESCE")
         pprint.pprint(res)
 
-        # TODO: SPARK-LAMA temporary method of preventing of uneven data distribution
-        # hack to prevent uneven distribution of partitions
-        # and data among partitions after coalesce
-        full_val_preds = full_val_preds.localCheckpoint(True)
-        full_val_preds = full_val_preds.coalesce(num_partitions)
+        # # TODO: SPARK-LAMA temporary method of preventing of uneven data distribution
+        # # hack to prevent uneven distribution of partitions
+        # # and data among partitions after coalesce
+        # full_val_preds = full_val_preds.localCheckpoint(True)
+        # full_val_preds = full_val_preds.coalesce(num_partitions)
+        #
+        # res = full_val_preds.rdd.mapPartitionsWithIndex(fun2).collect()
+        # print(f"#3 PARTITIONS AFTER UNION and LOCALCHEKPOINT with COALESCE")
+        # pprint.pprint(res)
+
+        full_val_preds = BalancedUnionPartitionsCoalescerTransformer().transform(full_val_preds)
 
         res = full_val_preds.rdd.mapPartitionsWithIndex(fun2).collect()
-        print(f"#3 PARTITIONS AFTER UNION and LOCALCHEKPOINT with COALESCE")
+        print(f"#4 PARTITIONS AFTER UNION and CUSTOM COALESCER")
         pprint.pprint(res)
 
         return full_val_preds
