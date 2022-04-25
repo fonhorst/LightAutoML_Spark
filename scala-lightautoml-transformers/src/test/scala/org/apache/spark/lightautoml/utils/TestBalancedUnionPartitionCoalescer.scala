@@ -11,6 +11,7 @@ import scala.util.Random
 *   - create 'assembly/target/scala-2.12/jars' directory in the root of the project (scala-lightautoml-transformers)
 *   - copy spark jars to 'assembly/target/scala-2.12/jars'. These jars can be taken from spark/pyspark distributions
 *     for example: cp -r $HOME/.cache/pypoetry/virtualenvs/lightautoml-749ciRtl-py3.9/lib/python3.9/site-packages/pyspark/jars/ assembly/target/scala-2.12/jars
+*   - ensure that spark-lightautoml_2.12-0.1.jar has been built and accessible for spark (run: sbt package)
 * */
 
 object TestBalancedUnionPartitionCoalescer extends App {
