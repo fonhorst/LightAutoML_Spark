@@ -335,18 +335,11 @@ class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultPara
         self.set(self.numClasses, num_classes)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        # dataset.toPandas().to_csv("/tmp/automl_multiclass_transform_before_ProbabilityColsTransformer.csv", index=False)
-        dataset = dataset.cache()
-        dataset.write.mode('overwrite').format('noop').save()
-        logger.info("+++++Values convertation is started+++++")
         num_classes = self.getOrDefault(self.numClasses)
         probability_cols = self.getOrDefault(self.probabilityCols)
         other_cols = [c for c in dataset.columns if c not in probability_cols]
-        probability_cols = [array_to_vector(F.array([F.col(c).getItem(i) for i in range(num_classes)])).alias(c) for c in probability_cols] # .cast("array<double>")
+        probability_cols = [array_to_vector(F.array([F.col(c).getItem(i) for i in range(num_classes)])).alias(c) for c in probability_cols]
         dataset = dataset.select(*other_cols, *probability_cols)
-        # dataset.toPandas().to_csv("/tmp/automl_multiclass_transform_after_ProbabilityColsTransformer.csv", index=False)
-        dataset.write.mode('overwrite').format('noop').save()
-        logger.info("+++++Values convertation is ended+++++")
         return dataset
 
 
