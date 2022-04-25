@@ -1,9 +1,17 @@
 package org.apache.spark.lightautoml.utils
 
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.{Row, SparkSession}
 
 import scala.util.Random
+
+/*
+*  To run this example:
+*   - set env variable: SPARK_SCALA_VERSION=2.12
+*   - create 'assembly/target/scala-2.12/jars' directory in the root of the project (scala-lightautoml-transformers)
+*   - copy spark jars to 'assembly/target/scala-2.12/jars'. These jars can be taken from spark/pyspark distributions
+*     for example: cp -r $HOME/.cache/pypoetry/virtualenvs/lightautoml-749ciRtl-py3.9/lib/python3.9/site-packages/pyspark/jars/ assembly/target/scala-2.12/jars
+* */
 
 object TestBalancedUnionPartitionCoalescer extends App {
   val num_workers = 3
@@ -34,7 +42,6 @@ object TestBalancedUnionPartitionCoalescer extends App {
     partitionCoalescer = Some(new BalancedUnionPartitionCoalescer)
   )
 
-  //  coalesced_rdd.count()
 
   var coalesced_df = spark.createDataFrame(coalesced_rdd, schema = full_df.schema)
 
@@ -45,36 +52,52 @@ object TestBalancedUnionPartitionCoalescer extends App {
 
   val result = coalesced_df.rdd.collectPartitions()
 
-  // check for balanced dataset:
-  // 1. all executors should have the same number partitions as their parents dataset have
-  // 2. all partitions should have approximately the same number of records
-
+  // checking:
+  // 1. Number of partitions should be the same as the number of partitions in the initial dataframe
   val sameNumOfPartitions = df.rdd.getNumPartitions == coalesced_df.rdd.getNumPartitions
   assert(sameNumOfPartitions)
 
+  // 2. all partitions should have approximately the same number of records
   val parts_sizes = result.map(_.length)
   val min_size = parts_sizes.min
   val max_size = parts_sizes.max
   assert((max_size - min_size).toFloat / min_size <= 0.02)
 
-  // part_id, (fold, record_count)
-  val partsWithFolds = result
-          .zipWithIndex
-          .flatMap(x => x._1.map(y => (x._2, y.getInt(1))))
-          .sortBy(_._1)
-          .groupBy(_._1)
-          .map(x => (x._1, x._2.map(_._2)))
-          .map(x => (x._1, x._2.sortBy(x => x).groupBy(x => x).map(x => (x._1, x._2.length))))
 
+  def parts2folds(res: Array[Array[Row]]): Map[Int, Map[Int, Int]] = {
+    res
+      .zipWithIndex
+      .flatMap(x => x._1.map(y => (x._2, y.getInt(1))))
+      .sortBy(_._1)
+      .groupBy(_._1)
+      .map(x => (x._1, x._2.map(_._2)))
+      .map(x => (x._1, x._2.sortBy(x => x).groupBy(x => x).map(x => (x._1, x._2.length))))
+  }
+
+  // part_id, (fold, record_count)
+  val partsWithFolds = parts2folds(result)
+
+  // 3. All folds should be presented in all partitions of the resulting dataframe
   val allFoldsInAllPartitions = partsWithFolds.forall(_._2.size == folds_count)
   assert(allFoldsInAllPartitions)
 
-  val foldsBalancedInAllPartitions = partsWithFolds.forall{ x =>
-    val min_count = x._2.values.min
-    val max_count = x._2.values.max
-    (max_count - min_count).toFloat / min_count <= 0.02
+  // 4. The resulting dataframe should contain the same number of records of a certain fold
+  // as it appears in parent datasets
+  for (f_df <- dfs) {
+    val f_parts = f_df.rdd.collectPartitions()
+    val single_fold_parts = parts2folds(f_parts)
+
+    val allPartsContainSingleFold = single_fold_parts.forall(_._2.size == 1)
+    assert(allPartsContainSingleFold)
+
+    val countOfRecordsWithCertainFoldsShouldStayTheSame = partsWithFolds.forall{ x =>
+      val (fold_num, count) = single_fold_parts(x._1).head
+      val count_after_union = x._2(fold_num)
+      count == count_after_union
+    }
+
+    assert(countOfRecordsWithCertainFoldsShouldStayTheSame)
   }
-  assert(foldsBalancedInAllPartitions)
 
   spark.stop()
 }
