@@ -13,7 +13,6 @@ import scala.util.Random
 *     for example: cp -r $HOME/.cache/pypoetry/virtualenvs/lightautoml-749ciRtl-py3.9/lib/python3.9/site-packages/pyspark/jars/ assembly/target/scala-2.12/jars
 *   - ensure that spark-lightautoml_2.12-0.1.jar has been built and accessible for spark (run: sbt package)
 * */
-
 object TestBalancedUnionPartitionCoalescer extends App {
   val num_workers = 3
   val num_cores = 2
@@ -36,15 +35,6 @@ object TestBalancedUnionPartitionCoalescer extends App {
 
   val dfs = (0 until 5).map(x => df.where(col("fold").equalTo(x)))
   val full_df = dfs.reduce((acc, sdf) => acc.unionByName(sdf))
-
-//  val coalesced_rdd = full_df.rdd.coalesce(
-//    df.rdd.getNumPartitions,
-//    shuffle = false,
-//    partitionCoalescer = Some(new BalancedUnionPartitionCoalescer)
-//  )
-//
-//
-//  var coalesced_df = spark.createDataFrame(coalesced_rdd, schema = full_df.schema)
 
   val unionPartitionsCoalescerTransformer = new BalancedUnionPartitionsCoalescerTransformer(uid = "some uid")
   var coalesced_df = unionPartitionsCoalescerTransformer.transform(full_df)
