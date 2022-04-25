@@ -37,14 +37,17 @@ object TestBalancedUnionPartitionCoalescer extends App {
   val dfs = (0 until 5).map(x => df.where(col("fold").equalTo(x)))
   val full_df = dfs.reduce((acc, sdf) => acc.unionByName(sdf))
 
-  val coalesced_rdd = full_df.rdd.coalesce(
-    df.rdd.getNumPartitions,
-    shuffle = false,
-    partitionCoalescer = Some(new BalancedUnionPartitionCoalescer)
-  )
+//  val coalesced_rdd = full_df.rdd.coalesce(
+//    df.rdd.getNumPartitions,
+//    shuffle = false,
+//    partitionCoalescer = Some(new BalancedUnionPartitionCoalescer)
+//  )
+//
+//
+//  var coalesced_df = spark.createDataFrame(coalesced_rdd, schema = full_df.schema)
 
-
-  var coalesced_df = spark.createDataFrame(coalesced_rdd, schema = full_df.schema)
+  val unionPartitionsCoalescerTransformer = new BalancedUnionPartitionsCoalescerTransformer(uid = "some uid")
+  var coalesced_df = unionPartitionsCoalescerTransformer.transform(full_df)
 
   coalesced_df = coalesced_df.cache()
   coalesced_df.write.mode("overwrite").format("noop").save()
@@ -63,7 +66,6 @@ object TestBalancedUnionPartitionCoalescer extends App {
   val min_size = parts_sizes.min
   val max_size = parts_sizes.max
   assert((max_size - min_size).toFloat / min_size <= 0.02)
-
 
   def parts2folds(res: Array[Array[Row]]): Map[Int, Map[Int, Int]] = {
     res

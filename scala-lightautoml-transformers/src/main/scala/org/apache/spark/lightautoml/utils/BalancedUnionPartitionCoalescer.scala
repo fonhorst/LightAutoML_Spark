@@ -21,7 +21,7 @@ class BalancedUnionPartitionCoalescer extends PartitionCoalescer with Serializab
 
     val partsNum = unique_sizes.head
 
-    assert(maxPartitions <= partsNum)
+//    assert(maxPartitions <= partsNum)
 
     val pgs = (0 until partsNum).map(i => {
       val pg = new PartitionGroup()
