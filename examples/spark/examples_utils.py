@@ -5,25 +5,39 @@ from pyspark.sql import SparkSession
 
 from lightautoml.spark.dataset.base import SparkDataFrame
 
+used_cars_params = {
+    "task_type": "reg",
+    "roles": {
+        "target": "price",
+        "drop": ["dealer_zip", "description", "listed_date",
+                 "year", 'Unnamed: 0', '_c0',
+                 'sp_id', 'sp_name', 'trimId',
+                 'trim_name', 'major_options', 'main_picture_url',
+                 'interior_color', 'exterior_color'],
+        "numeric": ['latitude', 'longitude', 'mileage']
+    },
+    "dtype": {
+        'fleet': 'str', 'frame_damaged': 'str',
+        'has_accidents': 'str', 'isCab': 'str',
+        'is_cpo': 'str', 'is_new': 'str',
+        'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
+    }
+}
+
 DATASETS = {
     "used_cars_dataset": {
             "path": "/opt/spark_data/small_used_cars_data.csv",
-            "task_type": "reg",
-            "roles": {
-                "target": "price",
-                "drop": ["dealer_zip", "description", "listed_date",
-                         "year", 'Unnamed: 0', '_c0',
-                         'sp_id', 'sp_name', 'trimId',
-                         'trim_name', 'major_options', 'main_picture_url',
-                         'interior_color', 'exterior_color'],
-                "numeric": ['latitude', 'longitude', 'mileage']
-            },
-            "dtype": {
-                'fleet': 'str', 'frame_damaged': 'str',
-                'has_accidents': 'str', 'isCab': 'str',
-                'is_cpo': 'str', 'is_new': 'str',
-                'is_oemcpo': 'str', 'salvage': 'str', 'theft_title': 'str', 'franchise_dealer': 'str'
-            }
+            **used_cars_params
+    },
+
+    "used_cars_dataset_1x": {
+        "path": "/opt/spark_data/derivative_datasets/1x_dataset.csv",
+        **used_cars_params
+    },
+
+    "used_cars_dataset_4x": {
+        "path": "/opt/spark_data/derivative_datasets/4x_dataset.csv",
+        **used_cars_params
     },
 
     # https://www.openml.org/d/4549
@@ -72,7 +86,8 @@ def get_dataset_attrs(name: str):
 
 
 def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
-    data = spark.read.csv(path, header=True, escape="\"").cache()
+    data = spark.read.csv(path, header=True, escape="\"")
+    data = data.cache()
     data.write.mode('overwrite').format('noop').save()
 
     train_data, test_data = data.randomSplit([0.8, 0.2], seed)
@@ -95,12 +110,14 @@ def get_spark_session():
             .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+            .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+            .config("spark.kryoserializer.buffer.max", "512m")
             .config("spark.cleaner.referenceTracking.cleanCheckpoints", "true")
             .config("spark.cleaner.referenceTracking", "true")
             .config("spark.cleaner.periodicGC.interval", "1min")
             .config("spark.sql.shuffle.partitions", "16")
-            .config("spark.driver.memory", "12g")
-            .config("spark.executor.memory", "12g")
+            .config("spark.driver.memory", "16g")
+            .config("spark.executor.memory", "16g")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
             .getOrCreate()
         )

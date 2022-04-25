@@ -2,22 +2,29 @@
 
 set -ex
 
+BASE_IMAGE_TAG="lama-v3.2.0"
 
 if [[ -z "${KUBE_NAMESPACE}" ]]
 then
   KUBE_NAMESPACE=default
 fi
 
-if [[ -z "${REPO}" ]]
-then
-  echo "REPO var is not defined"
-fi
-
 if [[ -z "${IMAGE_TAG}" ]]
 then
-  IMAGE_TAG="lama-v3.2.0-nikolay"
+  IMAGE_TAG=${BASE_IMAGE_TAG}
 fi
 
+
+if [[ -z "${REPO}" ]]
+then
+  echo "REPO var is not defined!"
+  REPO=""
+  IMAGE=spark-py-lama:${IMAGE_TAG}
+  BASE_SPARK_IMAGE=spark-py:${BASE_IMAGE_TAG}
+else
+  IMAGE=${REPO}/spark-py-lama:${IMAGE_TAG}
+  BASE_SPARK_IMAGE=${REPO}/spark-py:${BASE_IMAGE_TAG}
+fi
 
 
 function build_jars() {
@@ -46,13 +53,22 @@ function build_pyspark_images() {
     && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
 
   # create images with names:
-  # - ${REPO}/spark:${IMAGE_TAG}
-  # - ${REPO}/spark-py:${IMAGE_TAG}
-  ./spark/bin/docker-image-tool.sh -r "${REPO}" -t ${IMAGE_TAG} \
-    -p spark/kubernetes/dockerfiles/spark/bindings/python/Dockerfile \
-    build
+  # - ${REPO}/spark:${BASE_IMAGE_TAG}
+  # - ${REPO}/spark-py:${BASE_IMAGE_TAG}
+  # the last is equal to BASE_SPARK_IMAGE
 
-  ./spark/bin/docker-image-tool.sh -r "${REPO}" -t ${IMAGE_TAG} push
+  if [[ ! -z "${REPO}" ]]
+  then
+    ./spark/bin/docker-image-tool.sh -r ${REPO} -t ${BASE_IMAGE_TAG} \
+      -p spark/kubernetes/dockerfiles/spark/bindings/python/Dockerfile \
+      build
+
+    ./spark/bin/docker-image-tool.sh -r ${REPO} -t ${BASE_IMAGE_TAG} push
+  else
+      ./spark/bin/docker-image-tool.sh -t ${BASE_IMAGE_TAG} \
+      -p spark/kubernetes/dockerfiles/spark/bindings/python/Dockerfile \
+      build
+  fi
 }
 
 function build_lama_dist() {
@@ -67,11 +83,15 @@ function build_lama_image() {
   poetry build
 
   docker build \
-    -t ${REPO}/spark-py-lama:${IMAGE_TAG} \
+    --build-arg base_image=${BASE_SPARK_IMAGE} \
+    -t ${IMAGE} \
     -f docker/spark-lama/spark-py-lama.dockerfile \
     .
 
-  docker push ${REPO}/spark-py-lama:${IMAGE_TAG}
+  if [[ ! -z "${REPO}" ]]
+  then
+    docker push ${IMAGE}
+  fi
 
   rm -rf dist
 }
@@ -108,7 +128,7 @@ function submit_job() {
     --conf 'spark.memory.storageFraction=0.5' \
     --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
     --conf 'spark.sql.execution.arrow.pyspark.enabled=true' \
-    --conf "spark.kubernetes.container.image=${REPO}/spark-py-lama:${IMAGE_TAG}" \
+    --conf "spark.kubernetes.container.image=${IMAGE}" \
     --conf 'spark.kubernetes.namespace='${KUBE_NAMESPACE} \
     --conf 'spark.kubernetes.authenticate.driver.serviceAccountName=spark' \
     --conf 'spark.kubernetes.memoryOverheadFactor=0.4' \

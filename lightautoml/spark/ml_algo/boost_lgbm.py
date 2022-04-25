@@ -391,7 +391,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             verbosity=verbose_eval,
             useSingleDatasetMode=self._use_single_dataset_mode,
             isProvideTrainingMetric=True,
-            chunkSize=1_000_000
+            chunkSize=4_000_000
         )
 
         logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
@@ -404,7 +404,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         val_pred = ml_model.transform(self._assembler.transform(valid_data))
         val_pred = DropColumnsTransformer(
             remove_cols=[],
-            optional_remove_cols=[self._prediction_col_name, self._probability_col_name]
+            optional_remove_cols=[self._prediction_col_name, self._probability_col_name, self._raw_prediction_col_name]
         ).transform(val_pred)
 
         self._models_feature_impotances.append(ml_model.getFeatureImportances(importance_type='gain'))

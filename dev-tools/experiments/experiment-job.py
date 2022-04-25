@@ -22,11 +22,10 @@ DEFAULT_SPARK_CONFIG_SETTINGS = "dev-tools/config/experiments/default-spark-conf
 EXP_PY_FILES_DIR = "dev-tools/experiments/"
 MARKER = "EXP-RESULT:"
 
-
 statefile_path = "/tmp/exp-job"
 results_path = "/tmp/exp-job"
-# cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster.yaml"
-cfg_path = "./dev-tools/config/experiments/experiment-config-spark-quality-exps.yaml"
+
+cfg_path = "./dev-tools/config/experiments/experiment-config-spark-cluster-automl-lgb-load-pipeline.yaml"
 all_results_path = "/tmp/exp-job/results.txt"
 
 
@@ -335,7 +334,7 @@ def main():
 
     cfg = read_config(cfg_path)
     exp_cfgs = generate_experiments(cfg)
-    exp_procs = limit_procs(run_experiments(exp_cfgs), max_parallel_ops=32)
+    exp_procs = limit_procs(run_experiments(exp_cfgs), max_parallel_ops=5)
     register_results(exp_procs, total=len(exp_cfgs))
     print_all_results_file()
 
