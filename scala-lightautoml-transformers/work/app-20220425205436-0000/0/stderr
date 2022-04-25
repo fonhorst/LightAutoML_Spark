@@ -1,0 +1,83 @@
+Spark Executor Command: "/home/nikolay/.jdks/corretto-11.0.13/bin/java" "-cp" "/home/nikolay/wspace/LightAutoML/scala-lightautoml-transformers/./conf:/home/nikolay/wspace/LightAutoML/scala-lightautoml-transformers/./assembly/target/scala-2.12/jars/*" "-Xmx1024M" "-Dspark.driver.port=43761" "org.apache.spark.executor.CoarseGrainedExecutorBackend" "--driver-url" "spark://CoarseGrainedScheduler@fedora:43761" "--executor-id" "0" "--hostname" "192.168.3.5" "--cores" "2" "--app-id" "app-20220425205436-0000" "--worker-url" "spark://Worker@192.168.3.5:42637"
+========================================
+
+Using Spark's default log4j profile: org/apache/spark/log4j-defaults.properties
+22/04/25 20:54:38 INFO CoarseGrainedExecutorBackend: Started daemon with process name: 137350@localhost.localdomain
+22/04/25 20:54:38 INFO SignalUtils: Registering signal handler for TERM
+22/04/25 20:54:38 INFO SignalUtils: Registering signal handler for HUP
+22/04/25 20:54:38 INFO SignalUtils: Registering signal handler for INT
+22/04/25 20:54:39 WARN Utils: Your hostname, localhost.localdomain resolves to a loopback address: 127.0.0.1; using 192.168.3.5 instead (on interface wlp0s20f3)
+22/04/25 20:54:39 WARN Utils: Set SPARK_LOCAL_IP if you need to bind to another address
+WARNING: An illegal reflective access operation has occurred
+WARNING: Illegal reflective access by org.apache.spark.unsafe.Platform (file:/home/nikolay/.cache/pypoetry/virtualenvs/lightautoml-749ciRtl-py3.9/lib/python3.9/site-packages/pyspark/jars/spark-unsafe_2.12-3.2.0.jar) to constructor java.nio.DirectByteBuffer(long,int)
+WARNING: Please consider reporting this to the maintainers of org.apache.spark.unsafe.Platform
+WARNING: Use --illegal-access=warn to enable warnings of further illegal reflective access operations
+WARNING: All illegal access operations will be denied in a future release
+22/04/25 20:54:39 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+22/04/25 20:54:39 INFO SecurityManager: Changing view acls to: nikolay
+22/04/25 20:54:39 INFO SecurityManager: Changing modify acls to: nikolay
+22/04/25 20:54:39 INFO SecurityManager: Changing view acls groups to: 
+22/04/25 20:54:39 INFO SecurityManager: Changing modify acls groups to: 
+22/04/25 20:54:39 INFO SecurityManager: SecurityManager: authentication disabled; ui acls disabled; users  with view permissions: Set(nikolay); groups with view permissions: Set(); users  with modify permissions: Set(nikolay); groups with modify permissions: Set()
+22/04/25 20:54:40 INFO TransportClientFactory: Successfully created connection to fedora/192.168.3.5:43761 after 115 ms (0 ms spent in bootstraps)
+22/04/25 20:54:40 INFO SecurityManager: Changing view acls to: nikolay
+22/04/25 20:54:40 INFO SecurityManager: Changing modify acls to: nikolay
+22/04/25 20:54:40 INFO SecurityManager: Changing view acls groups to: 
+22/04/25 20:54:40 INFO SecurityManager: Changing modify acls groups to: 
+22/04/25 20:54:40 INFO SecurityManager: SecurityManager: authentication disabled; ui acls disabled; users  with view permissions: Set(nikolay); groups with view permissions: Set(); users  with modify permissions: Set(nikolay); groups with modify permissions: Set()
+22/04/25 20:54:40 INFO TransportClientFactory: Successfully created connection to fedora/192.168.3.5:43761 after 25 ms (0 ms spent in bootstraps)
+22/04/25 20:54:41 INFO DiskBlockManager: Created local directory at /tmp/spark-e6acf42a-33ab-4f76-9da4-bc5886136892/executor-55d77831-596b-417b-a2df-7a53249ce29a/blockmgr-6a7bd2d5-2053-42af-8d5e-2c7ec0a2ce24
+22/04/25 20:54:41 INFO MemoryStore: MemoryStore started with capacity 434.4 MiB
+22/04/25 20:54:41 INFO CoarseGrainedExecutorBackend: Connecting to driver: spark://CoarseGrainedScheduler@fedora:43761
+22/04/25 20:54:41 INFO WorkerWatcher: Connecting to worker spark://Worker@192.168.3.5:42637
+22/04/25 20:54:41 INFO ResourceUtils: ==============================================================
+22/04/25 20:54:41 INFO ResourceUtils: No custom resources configured for spark.executor.
+22/04/25 20:54:41 INFO ResourceUtils: ==============================================================
+22/04/25 20:54:41 INFO TransportClientFactory: Successfully created connection to /192.168.3.5:42637 after 32 ms (0 ms spent in bootstraps)
+22/04/25 20:54:41 INFO WorkerWatcher: Successfully connected to spark://Worker@192.168.3.5:42637
+22/04/25 20:54:41 INFO CoarseGrainedExecutorBackend: Successfully registered with driver
+22/04/25 20:54:41 INFO Executor: Starting executor ID 0 on host 192.168.3.5
+22/04/25 20:54:42 INFO Utils: Successfully started service 'org.apache.spark.network.netty.NettyBlockTransferService' on port 37401.
+22/04/25 20:54:42 INFO NettyBlockTransferService: Server created on 192.168.3.5:37401
+22/04/25 20:54:42 INFO BlockManager: Using org.apache.spark.storage.RandomBlockReplicationPolicy for block replication policy
+22/04/25 20:54:42 INFO BlockManagerMaster: Registering BlockManager BlockManagerId(0, 192.168.3.5, 37401, None)
+22/04/25 20:54:42 INFO BlockManagerMaster: Registered BlockManager BlockManagerId(0, 192.168.3.5, 37401, None)
+22/04/25 20:54:42 INFO BlockManager: Initialized BlockManager: BlockManagerId(0, 192.168.3.5, 37401, None)
+22/04/25 20:54:42 INFO Executor: Fetching spark://fedora:43761/jars/spark-lightautoml_2.12-0.1.jar with timestamp 1650909274939
+22/04/25 20:54:42 INFO TransportClientFactory: Successfully created connection to fedora/192.168.3.5:43761 after 2 ms (0 ms spent in bootstraps)
+22/04/25 20:54:42 INFO Utils: Fetching spark://fedora:43761/jars/spark-lightautoml_2.12-0.1.jar to /tmp/spark-e6acf42a-33ab-4f76-9da4-bc5886136892/executor-55d77831-596b-417b-a2df-7a53249ce29a/spark-72197342-ccde-4649-b6f6-d08c399d8ac3/fetchFileTemp11859667703212746887.tmp
+22/04/25 20:54:42 INFO Utils: Copying /tmp/spark-e6acf42a-33ab-4f76-9da4-bc5886136892/executor-55d77831-596b-417b-a2df-7a53249ce29a/spark-72197342-ccde-4649-b6f6-d08c399d8ac3/-14511230861650909274939_cache to /home/nikolay/wspace/LightAutoML/scala-lightautoml-transformers/work/app-20220425205436-0000/0/./spark-lightautoml_2.12-0.1.jar
+22/04/25 20:54:42 INFO Executor: Adding file:/home/nikolay/wspace/LightAutoML/scala-lightautoml-transformers/work/app-20220425205436-0000/0/./spark-lightautoml_2.12-0.1.jar to class loader
+22/04/25 20:54:44 INFO CoarseGrainedExecutorBackend: Got assigned task 1
+22/04/25 20:54:44 INFO Executor: Running task 1.0 in stage 0.0 (TID 1)
+22/04/25 20:54:44 INFO TorrentBroadcast: Started reading broadcast variable 0 with 1 pieces (estimated total size 4.0 MiB)
+22/04/25 20:54:44 INFO TransportClientFactory: Successfully created connection to fedora/192.168.3.5:42557 after 4 ms (0 ms spent in bootstraps)
+22/04/25 20:54:44 INFO MemoryStore: Block broadcast_0_piece0 stored as bytes in memory (estimated size 16.8 KiB, free 434.4 MiB)
+22/04/25 20:54:44 INFO TorrentBroadcast: Reading broadcast variable 0 took 137 ms
+22/04/25 20:54:44 INFO MemoryStore: Block broadcast_0 stored as values in memory (estimated size 53.0 KiB, free 434.3 MiB)
+22/04/25 20:54:45 INFO CodeGenerator: Code generated in 197.498355 ms
+22/04/25 20:54:45 INFO CodeGenerator: Code generated in 23.404067 ms
+22/04/25 20:54:45 INFO CodeGenerator: Code generated in 9.389722 ms
+22/04/25 20:54:45 INFO CodeGenerator: Code generated in 25.92617 ms
+22/04/25 20:54:45 INFO CodeGenerator: Code generated in 22.399664 ms
+22/04/25 20:54:45 INFO CodeGenerator: Code generated in 19.774206 ms
+22/04/25 20:54:45 INFO CodeGenerator: Code generated in 18.553894 ms
+22/04/25 20:54:46 INFO CodeGenerator: Code generated in 17.995695 ms
+22/04/25 20:54:46 INFO MemoryStore: Block rdd_24_1 stored as values in memory (estimated size 2.8 KiB, free 434.3 MiB)
+22/04/25 20:54:46 INFO CodeGenerator: Code generated in 4.40092 ms
+22/04/25 20:54:46 INFO CodeGenerator: Code generated in 16.746883 ms
+22/04/25 20:54:46 INFO DataWritingSparkTask: Writer for partition 1 is committing.
+22/04/25 20:54:46 INFO DataWritingSparkTask: Committed partition 1 (task 1, attempt 0, stage 0.0)
+22/04/25 20:54:46 INFO Executor: Finished task 1.0 in stage 0.0 (TID 1). 2546 bytes result sent to driver
+22/04/25 20:54:46 INFO CoarseGrainedExecutorBackend: Got assigned task 3
+22/04/25 20:54:46 INFO Executor: Running task 1.0 in stage 1.0 (TID 3)
+22/04/25 20:54:46 INFO TorrentBroadcast: Started reading broadcast variable 1 with 1 pieces (estimated total size 4.0 MiB)
+22/04/25 20:54:46 INFO MemoryStore: Block broadcast_1_piece0 stored as bytes in memory (estimated size 18.0 KiB, free 434.3 MiB)
+22/04/25 20:54:46 INFO TorrentBroadcast: Reading broadcast variable 1 took 11 ms
+22/04/25 20:54:46 INFO MemoryStore: Block broadcast_1 stored as values in memory (estimated size 55.2 KiB, free 434.3 MiB)
+22/04/25 20:54:46 INFO BlockManager: Found block rdd_24_1 locally
+22/04/25 20:54:46 INFO CodeGenerator: Code generated in 11.551405 ms
+22/04/25 20:54:46 INFO Executor: Finished task 1.0 in stage 1.0 (TID 3). 3087 bytes result sent to driver
+22/04/25 20:55:42 INFO CoarseGrainedExecutorBackend: Driver commanded a shutdown
+22/04/25 20:55:42 ERROR CoarseGrainedExecutorBackend: RECEIVED SIGNAL TERM
+tdown

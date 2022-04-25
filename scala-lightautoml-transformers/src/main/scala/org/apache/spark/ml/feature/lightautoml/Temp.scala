@@ -40,7 +40,6 @@ object Temp extends App {
   val spark = SparkSession
           .builder()
           .master("local-cluster[3, 2, 3072]")
-          .config("spark.driver.host", "127.0.0.1")
           .config("spark.jars", "target/scala-2.12/spark-lightautoml_2.12-0.1.jar")
           .getOrCreate()
 //          .config("spark.jars", "/home/nikolay/.ivy2/jars").getOrCreate()
@@ -58,11 +57,15 @@ object Temp extends App {
     partitionCoalescer = Some(new BalancedUnionPartitionCoalescer)
   )
 
-  coalesced_rdd.count()
+//  coalesced_rdd.count()
 
-//  val coalesced_df = spark.createDataFrame(coalesced_rdd, schema = full_df.schema)
-//
-//  coalesced_df.count()
+  var coalesced_df = spark.createDataFrame(coalesced_rdd, schema = full_df.schema)
+
+  coalesced_df = coalesced_df.cache()
+  coalesced_df.write.mode("overwrite").format("noop").save()
+
+  coalesced_df.count()
+
   // check for balanced dataset:
   // 1. all executors should have the same number partitions as their parents dataset have
   // 2. all executors should have approximately the same number of records
