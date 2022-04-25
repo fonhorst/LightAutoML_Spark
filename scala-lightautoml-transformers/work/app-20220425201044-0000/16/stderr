@@ -1,3 +1,0 @@
-Spark Executor Command: "/home/nikolay/.jdks/corretto-11.0.13/bin/java" "-cp" "/home/nikolay/wspace/LightAutoML/scala-lightautoml-transformers/./conf:/home/nikolay/wspace/LightAutoML/scala-lightautoml-transformers/./assembly/target/scala-2.12/jars/*" "-Xmx1024M" "-Dspark.driver.port=40491" "org.apache.spark.executor.CoarseGrainedExecutorBackend" "--driver-url" "spark://CoarseGrainedScheduler@127.0.0.1:40491" "--executor-id" "16" "--hostname" "192.168.3.5" "--cores" "2" "--app-id" "app-20220425201044-0000" "--worker-url" "spark://Worker@192.168.3.5:37773"
-========================================
-
