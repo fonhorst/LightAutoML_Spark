@@ -26,7 +26,6 @@ if __name__ == "__main__":
     dataset_name = "ipums_97"
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
-
     train_data, test_data = prepare_test_and_train(spark, path, seed)
 
     with log_exec_timer("spark-lama training") as train_timer:
@@ -50,23 +49,16 @@ if __name__ == "__main__":
 
     logger.info(f"score for out-of-fold predictions: {metric_value}")
 
-
     transformer = automl.make_transformer()
 
-    # we delete this variable to make garbage collection of a local checkpoint
-    # used to produce Spark DataFrame with predictions possible
     del preds
     automl.release_cache()
 
     with log_exec_timer("saving model") as saving_timer:
-        # transformer.write().overwrite().save("hdfs://localhost:9000/automl_multiclass")
-        # transformer.write().overwrite().save("hdfs://namenode:9000/automl_multiclass")
         transformer.write().overwrite().save("file:///tmp/automl_multiclass")
 
     with log_exec_timer("spark-lama predicting on test") as predict_timer_2:
         te_pred = transformer.transform(test_data)
-
-        # te_pred.toPandas().to_csv("/tmp/automl_multiclass_transform.csv", index=False)
 
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
         score = task.get_dataset_metric()
@@ -79,8 +71,6 @@ if __name__ == "__main__":
         logger.info(f"score for test predictions: {expected_metric_value}")
 
     with log_exec_timer("Loading model time") as loading_timer:
-        # pipeline_model = PipelineModel.load("hdfs://localhost:9000/automl_multiclass")
-        # pipeline_model = PipelineModel.load("hdfs://namenode:9000/automl_multiclass")
         pipeline_model = PipelineModel.load("file:///tmp/automl_multiclass")
 
     with log_exec_timer("spark-lama predicting on test via loaded pipeline") as predict_timer_3:
@@ -112,3 +102,5 @@ if __name__ == "__main__":
     }
 
     print(f"EXP-RESULT: {result}")
+
+    spark.stop()
