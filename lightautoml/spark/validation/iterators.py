@@ -3,7 +3,8 @@ import logging
 from typing import Optional, cast, Tuple, Iterable, Sequence
 
 from lightautoml.dataset.base import LAMLDataset, RolesDict
-from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.utils import SparkDataFrame
 from lightautoml.spark.transformers.scala_wrappers.balanced_union_partitions_coalescer import \
     BalancedUnionPartitionsCoalescerTransformer
 from lightautoml.spark.validation.base import SparkBaseTrainValidIterator

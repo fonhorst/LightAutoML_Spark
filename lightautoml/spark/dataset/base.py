@@ -1,10 +1,7 @@
-import warnings
-from contextlib import contextmanager
 from copy import copy
 from typing import Sequence, Any, Tuple, Union, Optional, List, cast, Dict, Set
 
 import pandas as pd
-import pyspark
 from pyspark.ml.functions import vector_to_array
 from pyspark.sql import functions as F, Column
 from pyspark.sql.session import SparkSession
@@ -15,10 +12,8 @@ from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset, NpRol
 from lightautoml.dataset.roles import ColumnRole, NumericRole, DropRole
 from lightautoml.spark import VALIDATION_COLUMN
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
+from lightautoml.spark.utils import warn_if_not_cached, SparkDataFrame
 from lightautoml.tasks import Task
-
-# SparkDataFrame = NewType('SparkDataFrame', pyspark.sql.DataFrame)
-SparkDataFrame = pyspark.sql.DataFrame
 
 
 class SparkDataset(LAMLDataset):
@@ -172,9 +167,7 @@ class SparkDataset(LAMLDataset):
 
     @property
     def shape(self) -> Tuple[Optional[int], Optional[int]]:
-        if not self.data.is_cached:
-            warnings.warn("Attempting to calculate shape on not cached dataframe. "
-                          "It may take too much time.", RuntimeWarning)
+        warn_if_not_cached(self.data)
         return self.data.count(), len(self.features)
 
     @property

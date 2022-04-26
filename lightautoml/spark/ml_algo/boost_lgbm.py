@@ -18,7 +18,8 @@ from lightgbm import Booster, LGBMClassifier
 
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
-from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.utils import SparkDataFrame
 from lightautoml.spark.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from lightautoml.spark.mlwriters import LightGBMModelWrapperMLReader, LightGBMModelWrapperMLWriter, ONNXModelWrapperMLReader, ONNXModelWrapperMLWriter
 from lightautoml.spark.transformers.base import DropColumnsTransformer, PredictionColsTransformer, ProbabilityColsTransformer

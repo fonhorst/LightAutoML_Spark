@@ -20,7 +20,7 @@ from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from lightautoml.spark.automl.blend import SparkWeightedBlender, SparkBestModelSelector
 from lightautoml.spark.automl.presets.base import SparkAutoMLPreset
 from lightautoml.spark.automl.presets.utils import calc_feats_permutation_imps, replace_dayofweek_in_date, replace_month_in_date, replace_year_in_date
-from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
 from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
@@ -29,7 +29,7 @@ from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPi
 from lightautoml.spark.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from lightautoml.spark.reader.base import SparkToSparkReader
 from lightautoml.spark.tasks.base import SparkTask
-from lightautoml.spark.utils import Cacher
+from lightautoml.spark.utils import Cacher, SparkDataFrame
 
 logger = logging.getLogger(__name__)
 

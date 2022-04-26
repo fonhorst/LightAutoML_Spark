@@ -20,7 +20,7 @@ from lightautoml.dataset.base import RolesDict, LAMLDataset
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
-from lightautoml.spark.dataset.base import SparkDataset, SparkDataFrame
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
 from lightautoml.spark.transformers.base import SparkChangeRolesTransformer, ColumnsSelectorTransformer, \
     DropColumnsTransformer
@@ -32,8 +32,7 @@ from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEsti
 from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.numeric import SparkQuantileBinningEstimator
-from lightautoml.spark.utils import NoOpTransformer, Cacher, EmptyCacher
-
+from lightautoml.spark.utils import NoOpTransformer, Cacher, EmptyCacher, warn_if_not_cached, SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -588,10 +587,7 @@ class SparkTabularDataFeatures:
             Series.
 
         """
-
-        # TODO: LAMA-SPARK: should be conditioned on a global setting
-        #       producing either an error or warning
-        # assert not train.data.is_cached, "The train dataset should be cached before executing this operation"
+        warn_if_not_cached(train.data)
 
         sdf = train.data.select(feats)
 
@@ -599,7 +595,6 @@ class SparkTabularDataFeatures:
         # if self.subsample:
         #     sdf = sdf.sample(withReplacement=False, fraction=self.subsample, seed=self.random_state)
 
-        # TODO SPARK-LAMA: To improve performance we have used approx_count_distinct() instead of count_distinct()
         sdf = sdf.select([F.approx_count_distinct(col).alias(col) for col in feats])
         result = sdf.collect()[0]
 

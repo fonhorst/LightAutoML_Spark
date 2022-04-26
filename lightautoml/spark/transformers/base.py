@@ -10,9 +10,9 @@ from pyspark.ml.functions import array_to_vector
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
 from lightautoml.dataset.utils import concatenate
-from lightautoml.spark.dataset.base import SparkDataFrame, SparkDataset
+from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
-from lightautoml.spark.utils import log_exec_time
+from lightautoml.spark.utils import log_exec_time, SparkDataFrame
 from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LAMAColumnsSelector, \
     ChangeRoles as LAMAChangeRoles
 from lightautoml.transformers.base import Roles
@@ -80,9 +80,9 @@ class SparkColumnsAndRoles(HasInputCols, HasOutputCols, HasInputRoles, HasOutput
         return self.getOrDefault(self.columnsToReplace)
 
     @staticmethod
-    def make_dataset(transformer: 'SparkColumnsAndRoles', base_dataset: SparkDataset, data: SparkDataFrame) -> SparkDataset:
-        # TODO: SPARK-LAMA deepcopy?
-        new_roles = copy(base_dataset.roles)
+    def make_dataset(transformer: 'SparkColumnsAndRoles', base_dataset: SparkDataset, data: SparkDataFrame) \
+            -> SparkDataset:
+        new_roles = deepcopy(base_dataset.roles)
         new_roles.update(transformer.getOutputRoles())
         new_ds = base_dataset.empty()
         new_ds.set_data(data, base_dataset.features + transformer.getOutputCols(),  new_roles)
