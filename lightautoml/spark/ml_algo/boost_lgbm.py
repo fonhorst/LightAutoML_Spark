@@ -114,6 +114,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                  optimization_search_space: Optional[dict] = {},
                  use_single_dataset_mode: bool = True,
                  max_validation_size: int = 10_000,
+                 chunk_size: int = 4_000_000,
                  convert_to_onnx: bool = False,
                  mini_batch_size: int = 5000,
                  seed: int = 42):
@@ -127,6 +128,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self._max_validation_size = max_validation_size
         self._seed = seed
         self._models_feature_impotances = []
+        self._chunk_size = chunk_size
         self._convert_to_onnx = convert_to_onnx
         self._mini_batch_size = mini_batch_size
 
@@ -390,7 +392,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             verbosity=verbose_eval,
             useSingleDatasetMode=self._use_single_dataset_mode,
             isProvideTrainingMetric=True,
-            chunkSize=4_000_000
+            chunkSize=self._chunk_size
         )
 
         logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
