@@ -28,7 +28,7 @@ from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTra
     SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
 from lightautoml.spark.transformers.categorical import SparkCatIntersectionsEstimator, \
     SparkFreqEncoderEstimator, \
-    SparkLabelEncoderEstimator, SparkOrdinalEncoderEstimator
+    SparkLabelEncoderEstimator, SparkOrdinalEncoderEstimator, SparkMulticlassTargetEncoderEstimator
 from lightautoml.spark.transformers.categorical import SparkTargetEncoderEstimator
 from lightautoml.spark.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from lightautoml.spark.transformers.numeric import SparkQuantileBinningEstimator
@@ -502,11 +502,8 @@ class SparkTabularDataFeatures:
                 result = train.data.select(F.max(train.target_column).alias("max")).first()
                 n_classes = result['max'] + 1
 
-                # TODO: SPARK-LAMA add warning here
-                target_encoder = None
-                # raise NotImplementedError()
-                # if n_classes <= self.multiclass_te_co:
-                #     target_encoder = MultiClassTargetEncoder
+                if n_classes <= self.multiclass_te_co:
+                    target_encoder = SparkMulticlassTargetEncoderEstimator
 
         return target_encoder
 
