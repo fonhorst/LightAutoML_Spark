@@ -1,3 +1,4 @@
+import warnings
 from contextlib import contextmanager
 from copy import copy
 from typing import Sequence, Any, Tuple, Union, Optional, List, cast, Dict, Set
@@ -57,8 +58,7 @@ class SparkDataset(LAMLDataset):
         for ds in datasets[1:]:
             curr_sdf = curr_sdf.join(ds.data, cls.ID_COLUMN)
 
-        # TODO: SPARK-LAMA can we do it without cast?
-        curr_sdf = cast(SparkDataFrame, curr_sdf.select(datasets[0].data[cls.ID_COLUMN], *features))
+        curr_sdf = curr_sdf.select(datasets[0].data[cls.ID_COLUMN], *features)
 
         output = datasets[0].empty()
         output.set_data(curr_sdf, features, roles)
@@ -172,8 +172,9 @@ class SparkDataset(LAMLDataset):
 
     @property
     def shape(self) -> Tuple[Optional[int], Optional[int]]:
-        # TODO: SPARK-LAMA raise warning
-        # assert self.data.is_cached, "Shape should not be calculated if data is not cached"
+        if not self.data.is_cached:
+            warnings.warn("Attempting to calculate shape on not cached dataframe. "
+                          "It may take too much time.", RuntimeWarning)
         return self.data.count(), len(self.features)
 
     @property

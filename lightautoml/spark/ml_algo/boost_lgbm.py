@@ -340,7 +340,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         logger.info(f"Input cols for the vector assembler: {full.features}")
         logger.info(f"Running lgb with the following params: {params}")
 
-        # TODO: SPARK-LAMA reconsider using of 'keep' as a handleInvalid value
         if self._assembler is None:
             self._assembler = VectorAssembler(
                 inputCols=self.input_features,
@@ -354,7 +353,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             params['rawPredictionCol'] = self._raw_prediction_col_name
             params['probabilityCol'] = fold_prediction_column
             params['predictionCol'] = self._prediction_col_name
-            # TODO: SPARK-LAMA better to determine it beforehand
             params['isUnbalance'] = True
         else:
             params['predictionCol'] = fold_prediction_column
@@ -409,7 +407,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         self._models_feature_impotances.append(ml_model.getFeatureImportances(importance_type='gain'))
 
-        # # TODO: Remove this code when synapse.ml developers fix problem with batch infer LGBMBooster
         if self._convert_to_onnx:
             logger.info("Model convert is started")
             booster_model_str = ml_model.getLightGBMBooster().modelStr().get()

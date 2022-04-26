@@ -340,7 +340,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         kwargs["folds"] = folds_col
         kwargs["target"] = self.target_col
 
-        # TODO: SPARK-LAMA is it correct nan ?
         ff = [
             F.when(F.isnull(f), float('nan')).otherwise(F.col(f).astype(FloatType())).alias(f)
             if isinstance(self.roles[f], NumericRole) else f

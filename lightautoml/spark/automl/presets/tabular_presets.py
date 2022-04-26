@@ -113,7 +113,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 param = {}
             self.__dict__[name] = upd_params(self.__dict__[name], param)
 
-    # TODO: SPARK-LAMA rewrite in the descdent
+
     def infer_auto_params(self, train_data: SparkDataFrame, multilevel_avail: bool = False):
         # infer optuna tuning iteration based on dataframe len
         if self.tuning_params["max_tuning_iter"] == "auto":
@@ -132,7 +132,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 self.tuning_params["max_tuning_iter"] = 5
 
         if self.general_params["use_algos"] == "auto":
-            # TODO: More rules and add cases
             self.general_params["use_algos"] = [["lgb", "lgb_tuned", "linear_l2", "cb", "cb_tuned"]]
             if self.task.name == "multiclass" and multilevel_avail:
                 self.general_params["use_algos"].append(["linear_l2", "lgb"])
@@ -259,9 +258,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             if algo_key == "lgb":
                 gbm_model = SparkBoostLGBM(cacher_key=self._cacher_key, timer=gbm_timer, **self.lgb_params)
             elif algo_key == "cb":
-                # TODO: SPARK-LAMA implement this later
                 raise NotImplementedError("Not supported yet")
-                # gbm_model = BoostCB(timer=gbm_timer, **self.cb_params)
             else:
                 raise ValueError("Wrong algo key")
 
@@ -324,7 +321,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
             levels.append(lvl)
 
-        # TODO: SPARK-LAMA replace with the weighthed blender
         # blend everything
         blender = SparkWeightedBlender(max_nonzero_coef=self.general_params["weighted_blender_max_nonzero_coef"])
 
@@ -338,7 +334,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             timer=self.timer,
         )
 
-    # TODO: SPARK-LAMA should be renamed into a more general way
     def _get_read_csv_params(self):
         try:
             cols_to_read = self.reader.used_features

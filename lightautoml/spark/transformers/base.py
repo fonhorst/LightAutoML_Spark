@@ -240,16 +240,6 @@ class ObsoleteSparkTransformer(LAMLTransformer):
             assert len(not_found_feats) == 0, \
                 f"Not found features {not_found_feats} among existing {existing_feats}"
             self._features = use_features
-
-            # # TODO: SPARK-LAMA reimplement it later
-            # # here we intentionally is going to reduce features to the desired
-            # # to pass the check with rewriting checks themselves
-            # use_roles = {feat: dataset.roles[feat] for feat in use_features}
-            # ds = dataset.empty()
-            # ds.set_data(dataset.data, use_features, use_roles, dataset.dependencies)
-
-            # for check_func in self._fit_checks:
-            #     check_func(ds)
         else:
             self._features = dataset.features
 
@@ -273,16 +263,9 @@ class ObsoleteSparkTransformer(LAMLTransformer):
         return dataset
 
     def fit_transform(self, dataset: SparkDataset) -> SparkDataset:
-        # TODO: SPARK-LAMA probably we should assume
-        #  that fit_transform executes with cache by default
-        #  e.g fit_transform returns a cached and materialized dataset
         logger.info(f"fit_transform in {self._fname_prefix}: {type(self)}")
 
         self.fit(dataset)
-
-        # when True, it means that during fit operation we conducted some action that
-        # materialized our current dataset and thus we can unpersist all its dependencies
-        # because we have data to propagate in the cache already
 
         result = self.transform(dataset)
 

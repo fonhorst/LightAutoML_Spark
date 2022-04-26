@@ -21,8 +21,6 @@ from lightautoml.utils.timer import TaskTimer
 
 logger = logging.getLogger(__name__)
 
-# TODO: SPARK-LAMA replace it back
-# SparkMLModel = Union[PredictionModel, PipelineModel]
 SparkMLModel = PipelineModel
 
 
@@ -236,7 +234,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
     @staticmethod
     def _get_predict_column(model: SparkMLModel) -> str:
-        # TODO SPARK-LAMA: Rewrite using class recognition.
         try:
             return model.getPredictionCol()
         except AttributeError:

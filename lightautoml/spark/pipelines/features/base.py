@@ -569,10 +569,6 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        # TODO: removed from CatIntersection
-        # subs = self.subsample,
-        # random_state = self.random_state,
-
         cat_processing = SparkCatIntersectionsEstimator(input_cols=feats_to_select,
                                                         input_roles=roles,
                                                         max_depth=self.max_intersection_depth)
