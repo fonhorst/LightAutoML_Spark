@@ -174,11 +174,11 @@ docker-compose logs -f resourcemanager
 docker exec -ti spark-submit bash -c "./bin/slamactl.sh submit-job-yarn dist/LightAutoML-0.3.0.tar.gz,examples/spark/examples_utils.py examples/spark/tabular-preset-automl.py"
 ```
 #### 10. To monitor application execution, you can use the hadoop web interface (http://localhost:8088), which displays the status of the application, resources and application logs.
-![hadoop_applications_web_ui](imgs/hadoop_applications_web_ui.png)
+![hadoop_applications_web_ui](../imgs/hadoop_applications_web_ui.png)
 
 Let's see the information about the application and its logs.
 
-![hadoop_view_application1](imgs/hadoop_view_application1.png)
+![hadoop_view_application1](../imgs/hadoop_view_application1.png)
 
 ![hadoop_view_application2](../imgs/hadoop_view_application2.png)
 
