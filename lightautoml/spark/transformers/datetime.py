@@ -1,13 +1,14 @@
 from copy import deepcopy
-from typing import Dict, Optional, Sequence, List
+from typing import Dict, Iterator, Optional, Sequence, List
 from collections import defaultdict, OrderedDict
 from itertools import chain, combinations
 from datetime import datetime
 import holidays
 import numpy as np
 import pandas as pd
-from pandas import Series
 from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame
+from pyspark.sql.pandas.functions import pandas_udf
+from pyspark.sql.types import IntegerType
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
@@ -20,20 +21,6 @@ from lightautoml.spark.transformers.base import ObsoleteSparkTransformer, SparkB
 from pyspark.ml import Transformer, Estimator
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.param.shared import TypeConverters, Param, Params
-
-
-def is_holiday(timestamp: int,
-               country: str,
-               state: Optional[str] = None,
-               prov: Optional[str] = None) -> int:
-
-    date = datetime.fromtimestamp(timestamp)
-    return 1 if date in holidays.CountryHoliday(
-        years=date.year,
-        country=country,
-        prov=prov,
-        state=state
-    ) else 0
 
 
 def get_timestamp_attr(timestamp: int, attr: str) -> int:
@@ -51,11 +38,6 @@ def get_timestamp_attr(timestamp: int, attr: str) -> int:
     except TypeError:
         return at
 
-
-# TODO SPARK-LAMA: Replace with pandas_udf.
-# They should be more efficient and arrow optimization is possible for them.
-# https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749551873
-is_holiday_udf = F.udf(lambda *args, **kwargs: is_holiday(*args, **kwargs), SparkTypes.IntegerType())
 
 # TODO SPARK-LAMA: It should to fail.
 # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749610253
@@ -202,13 +184,20 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer, SparkDatetimeHelper, Com
             new_cols.extend(seas_cols)
 
             if roles[col].country is not None:
+                @pandas_udf(returnType=IntegerType())
+                def is_holiday(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
+                    for x in arrs:
+                        x = x.apply(lambda d: datetime.fromtimestamp(d)).dt.normalize()
+                        _holidays = holidays.CountryHoliday(
+                            years=np.unique(x.dt.year.values),
+                            country=roles[col].country,
+                            prov=roles[col].prov,
+                            state=roles[col].state
+                        )
+                        yield x.isin(_holidays).astype(int)
+
                 hol_col = (
-                    is_holiday_udf(
-                        fcol,
-                        F.lit(roles[col].country),
-                        F.lit(roles[col].state),
-                        F.lit(roles[col].prov)
-                    ).alias(f"{self._fname_prefix}_hol__{col}")
+                    is_holiday(fcol).alias(f"{self._fname_prefix}_hol__{col}")
                 )
                 new_cols.append(hol_col)
 
