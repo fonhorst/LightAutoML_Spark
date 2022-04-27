@@ -23,25 +23,44 @@ from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.param.shared import TypeConverters, Param, Params
 
 
-def get_timestamp_attr(timestamp: int, attr: str) -> int:
-    if not timestamp:
-        return None
 
-    try:
-        date = pd.to_datetime(datetime.fromtimestamp(timestamp))
-    except:
-        date = datetime.now()
+def get_unit_of_timestamp_column(seas: str, col: str):
+    """Generates pyspark column to extract unit of time from timestamp
 
-    try:
-        at = getattr(date, attr)
-        return at()
-    except TypeError:
-        return at
-
-
-# TODO SPARK-LAMA: It should to fail.
-# https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749610253
-get_timestamp_attr_udf = F.udf(lambda *args, **kwargs: get_timestamp_attr(*args, **kwargs), SparkTypes.IntegerType())
+    Args:
+        seas (str): unit of time: `y`(year), `m`(month), `d`(day),
+        `wd`(weekday), `hour`(hour), `min`(minute), `sec`(second), `ms`(microsecond), `ns`(nanosecond)
+        col (str): column name with datetime values
+    """
+    if seas == 'y':
+        return F.year(F.to_timestamp(F.col(col)))
+    elif seas == 'm':
+        return F.month(F.to_timestamp(F.col(col)))
+    elif seas == 'd':
+        return F.dayofmonth(F.to_timestamp(F.col(col)))
+    # TODO SPARK-LAMA: F.dayofweek() starts numbering from another day.
+    # Differs from pandas.Timestamp.weekday.
+    # elif seas == 'wd':
+    #     return F.dayofweek(F.to_timestamp(F.col(col)))
+    elif seas == 'hour':
+        return F.hour(F.to_timestamp(F.col(col)))
+    elif seas == 'min':
+        return F.minute(F.to_timestamp(F.col(col)))
+    elif seas == 'sec':
+        return F.second(F.to_timestamp(F.col(col)))
+    else:
+        @pandas_udf(returnType=IntegerType())
+        def get_timestamp_attr(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
+            for x in arrs:
+                def convert_to_datetime(timestamp: int):
+                    try:
+                        date = pd.to_datetime(datetime.fromtimestamp(timestamp))
+                    except:
+                        date = datetime.now()
+                    return date
+                x = x.apply(lambda d: convert_to_datetime(d))
+                yield getattr(x.dt, date_attrs[seas])
+        return get_timestamp_attr(F.to_timestamp(F.col(col)).cast("long"))
 
 
 class SparkDatetimeHelper:
@@ -177,7 +196,7 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer, SparkDatetimeHelper, Com
             fcol = F.to_timestamp(F.col(col)).cast("long")
             seas_cols = [(
                 F.when(F.isnan(fcol) | F.isnull(fcol), None)
-                .otherwise(get_timestamp_attr_udf(fcol, F.lit(date_attrs[seas])))
+                .otherwise(get_unit_of_timestamp_column(seas, col))
                 .alias(f"{self._fname_prefix}_{seas}__{col}")
             ) for seas in self.transformations[col]]
 
