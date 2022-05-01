@@ -1,7 +1,7 @@
 package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.hadoop.fs.Path
-import org.apache.spark.SparkException
+import org.apache.spark.{SparkContext, SparkException}
 import org.apache.spark.ml.feature.{StringIndexer, StringIndexerAggregator, StringIndexerBase, StringIndexerModel}
 import org.apache.spark.annotation.Since
 import org.apache.spark.ml.{Estimator, Model}
@@ -11,9 +11,9 @@ import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.util._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, If, Literal}
-import org.apache.spark.sql.functions.{collect_set, udf}
+import org.apache.spark.sql.functions.{collect_set, udf, lit}
 import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, Encoders}
+import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, Encoders, SparkSession}
 import org.apache.spark.util.ThreadUtils
 import org.apache.spark.util.VersionUtils.majorMinorVersion
 import org.apache.spark.util.collection.OpenHashMap
@@ -370,8 +370,12 @@ class LAMLStringIndexerModel(override val uid: String,
       // expression, however, lookup for a key in a map is not efficient in SparkSQL now.
       // See `ElementAt` and `GetMapValue` expressions. If SQL's map lookup is improved,
       // we can consider to change this.
+      val ctx = SparkContext.getActive.get
+      val labelToIndexBcst = ctx.broadcast(labelToIndex)
+
       val filter = udf { label: String =>
-        labelToIndex.contains(label)
+        val l2idx = labelToIndexBcst.value
+        l2idx.contains(label)
       }
       filter(dataset(inputColName))
     }
@@ -383,28 +387,45 @@ class LAMLStringIndexerModel(override val uid: String,
   private def getIndexer(labelToIndex: OpenHashMap[String, Double]) = {
     val keepInvalid = (getHandleInvalid == StringIndexer.KEEP_INVALID)
 
+    val ctx = SparkContext.getActive.get
+    val labelToIndexBcst = ctx.broadcast(labelToIndex)
+
+    val l2idx = new OpenHashMap[String, Double]()
+
     udf { label: String =>
-      if (label == null) {
-        if (keepInvalid) {
-          if ($(nanLast)){
-            labelToIndex("NaN")
-          } else {
-            $(defaultValue)
-          }
-        } else {
-          throw new SparkException("StringIndexer encountered NULL value. To handle or skip " +
-                  "NULLS, try setting StringIndexer.handleInvalid.")
+      val mp = labelToIndexBcst.value
+      if (l2idx.contains("some")){
+        l2idx("some")
+      } else
+        {
+          -mp.size
         }
-      } else {
-        if (labelToIndex.contains(label)) {
-          labelToIndex(label)
-        } else if (keepInvalid) {
-          $(defaultValue)
-        } else {
-          throw new SparkException(s"Unseen label: $label. To handle unseen labels, " +
-                  s"set Param handleInvalid to ${StringIndexer.KEEP_INVALID}.")
-        }
-      }
+
+      // TODO: this is the problem place
+
+//      val l2idx = labelToIndexBcst.value
+//
+//      if (label == null) {
+//        if (keepInvalid) {
+//          if ($(nanLast)){
+//            l2idx("NaN")
+//          } else {
+//            $(defaultValue)
+//          }
+//        } else {
+//          throw new SparkException("StringIndexer encountered NULL value. To handle or skip " +
+//                  "NULLS, try setting StringIndexer.handleInvalid.")
+//        }
+//      } else {
+//        if (l2idx.contains(label)) {
+//          l2idx(label)
+//        } else if (keepInvalid) {
+//          $(defaultValue)
+//        } else {
+//          throw new SparkException(s"Unseen label: $label. To handle unseen labels, " +
+//                  s"set Param handleInvalid to ${StringIndexer.KEEP_INVALID}.")
+//        }
+//      }
     }.asNondeterministic()
   }
 
@@ -416,11 +437,13 @@ class LAMLStringIndexerModel(override val uid: String,
     val outputColumns = new Array[Column](outputColNames.length)
 
     // Skips invalid rows if `handleInvalid` is set to `StringIndexer.SKIP_INVALID`.
-    val filteredDataset = if (getHandleInvalid == StringIndexer.SKIP_INVALID) {
-      filterInvalidData(dataset, inputColNames)
-    } else {
-      dataset
-    }
+//    val filteredDataset = if (getHandleInvalid == StringIndexer.SKIP_INVALID) {
+//      filterInvalidData(dataset, inputColNames)
+//    } else {
+//      dataset
+//    }
+
+    val filteredDataset = dataset
 
     for (i <- 0 until outputColNames.length) {
       val inputColName = inputColNames(i)
@@ -433,9 +456,14 @@ class LAMLStringIndexerModel(override val uid: String,
                 "Skip StringIndexerModel for this column.")
         outputColNames(i) = null
       } else {
+//        val labelsForMetadata = getHandleInvalid match {
+//          case StringIndexer.KEEP_INVALID => labels.map(_._1) :+ "__unknown"
+//          case _ => labels.map(_._1)
+//        }
+
         val labelsForMetadata = getHandleInvalid match {
-          case StringIndexer.KEEP_INVALID => labels.map(_._1) :+ "__unknown"
-          case _ => labels.map(_._1)
+          case StringIndexer.KEEP_INVALID => labels.take(2).map(_._1).toArray
+          case _ => labels.take(2).map(_._1).toArray
         }
         val metadata = NominalAttribute.defaultAttr
                 .withName(outputColName)
@@ -446,6 +474,8 @@ class LAMLStringIndexerModel(override val uid: String,
 
         outputColumns(i) = indexer(dataset(inputColName).cast(StringType))
                 .as(outputColName, metadata)
+
+//        outputColumns(i) = lit(-3.0).as(outputColName, metadata)
       }
     }
 
