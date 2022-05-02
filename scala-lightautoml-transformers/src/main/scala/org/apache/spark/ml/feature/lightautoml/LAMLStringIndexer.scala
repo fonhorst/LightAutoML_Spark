@@ -390,42 +390,34 @@ class LAMLStringIndexerModel(override val uid: String,
     val ctx = SparkContext.getActive.get
     val labelToIndexBcst = ctx.broadcast(labelToIndex)
 
-    val l2idx = new OpenHashMap[String, Double]()
+    val isNanLast = $(nanLast)
+    val defaultVal = $(defaultValue)
 
     udf { label: String =>
-      val mp = labelToIndexBcst.value
-      if (l2idx.contains("some")){
-        l2idx("some")
-      } else
-        {
-          -mp.size
+      val l2idx = labelToIndexBcst.value
+//      val l2idx = labelToIndex
+
+      if (label == null) {
+        if (keepInvalid) {
+          if (isNanLast){
+            l2idx("NaN")
+          } else {
+            defaultVal
+          }
+        } else {
+          throw new SparkException("StringIndexer encountered NULL value. To handle or skip " +
+                  "NULLS, try setting StringIndexer.handleInvalid.")
         }
-
-      // TODO: this is the problem place
-
-//      val l2idx = labelToIndexBcst.value
-//
-//      if (label == null) {
-//        if (keepInvalid) {
-//          if ($(nanLast)){
-//            l2idx("NaN")
-//          } else {
-//            $(defaultValue)
-//          }
-//        } else {
-//          throw new SparkException("StringIndexer encountered NULL value. To handle or skip " +
-//                  "NULLS, try setting StringIndexer.handleInvalid.")
-//        }
-//      } else {
-//        if (l2idx.contains(label)) {
-//          l2idx(label)
-//        } else if (keepInvalid) {
-//          $(defaultValue)
-//        } else {
-//          throw new SparkException(s"Unseen label: $label. To handle unseen labels, " +
-//                  s"set Param handleInvalid to ${StringIndexer.KEEP_INVALID}.")
-//        }
-//      }
+      } else {
+        if (l2idx.contains(label)) {
+          l2idx(label)
+        } else if (keepInvalid) {
+          defaultVal
+        } else {
+          throw new SparkException(s"Unseen label: $label. To handle unseen labels, " +
+                  s"set Param handleInvalid to ${StringIndexer.KEEP_INVALID}.")
+        }
+      }
     }.asNondeterministic()
   }
 

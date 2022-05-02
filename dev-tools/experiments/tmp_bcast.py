@@ -19,7 +19,7 @@ spark = (
     .getOrCreate()
 )
 
-spark.sparkContext.setLogLevel("WARN")
+spark.sparkContext.setLogLevel("INFO")
 
 data_file = "/opt/spark_data/test-le.parquet"
 if not os.path.exists(data_file):
