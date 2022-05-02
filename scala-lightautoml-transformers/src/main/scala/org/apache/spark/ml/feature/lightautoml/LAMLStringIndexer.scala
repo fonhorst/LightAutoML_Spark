@@ -395,7 +395,6 @@ class LAMLStringIndexerModel(override val uid: String,
 
     udf { label: String =>
       val l2idx = labelToIndexBcst.value
-//      val l2idx = labelToIndex
 
       if (label == null) {
         if (keepInvalid) {
@@ -429,15 +428,13 @@ class LAMLStringIndexerModel(override val uid: String,
     val outputColumns = new Array[Column](outputColNames.length)
 
     // Skips invalid rows if `handleInvalid` is set to `StringIndexer.SKIP_INVALID`.
-//    val filteredDataset = if (getHandleInvalid == StringIndexer.SKIP_INVALID) {
-//      filterInvalidData(dataset, inputColNames)
-//    } else {
-//      dataset
-//    }
+    val filteredDataset = if (getHandleInvalid == StringIndexer.SKIP_INVALID) {
+      filterInvalidData(dataset, inputColNames)
+    } else {
+      dataset
+    }
 
-    val filteredDataset = dataset
-
-    for (i <- 0 until outputColNames.length) {
+    for (i <- outputColNames.indices) {
       val inputColName = inputColNames(i)
       val outputColName = outputColNames(i)
       val labelToIndex = labelsToIndexArray(i)
@@ -466,8 +463,6 @@ class LAMLStringIndexerModel(override val uid: String,
 
         outputColumns(i) = indexer(dataset(inputColName).cast(StringType))
                 .as(outputColName, metadata)
-
-//        outputColumns(i) = lit(-3.0).as(outputColName, metadata)
       }
     }
 
