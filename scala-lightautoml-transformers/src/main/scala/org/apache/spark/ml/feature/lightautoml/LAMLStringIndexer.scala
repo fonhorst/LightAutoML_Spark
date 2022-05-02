@@ -445,18 +445,14 @@ class LAMLStringIndexerModel(override val uid: String,
                 "Skip StringIndexerModel for this column.")
         outputColNames(i) = null
       } else {
-//        val labelsForMetadata = getHandleInvalid match {
-//          case StringIndexer.KEEP_INVALID => labels.map(_._1) :+ "__unknown"
-//          case _ => labels.map(_._1)
-//        }
 
-        val labelsForMetadata = getHandleInvalid match {
-          case StringIndexer.KEEP_INVALID => labels.take(2).map(_._1).toArray
-          case _ => labels.take(2).map(_._1).toArray
-        }
+        // we don't put labels themselves into metadata
+        // cause they can weigh far too much (for instance, 100 - 500 MB)
+        // and would be broadcasted with the task each time
+        // which creates additional overheads on deserialization of tasks in workers
         val metadata = NominalAttribute.defaultAttr
                 .withName(outputColName)
-                .withValues(labelsForMetadata)
+                .withNumValues(labels.length)
                 .toMetadata()
 
         val indexer = getIndexer(labelToIndex)
