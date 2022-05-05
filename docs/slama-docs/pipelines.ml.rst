@@ -19,7 +19,6 @@ Base Classes
 
     SparkMLPipeline
 
-
 Pipeline for Nested Cross-Validation
 ------------------------------------
 

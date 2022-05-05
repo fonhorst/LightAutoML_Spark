@@ -23,7 +23,6 @@ Base Classes
     SparkNoOpTransformer
     SelectTransformer
     FittedPipe
-    build_graph
 
 
 
