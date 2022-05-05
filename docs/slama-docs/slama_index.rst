@@ -25,4 +25,6 @@ Known limitations:
     pipelines.selection
     pipelines.features
     pipelines.ml
+    reader
+    report
     tasks

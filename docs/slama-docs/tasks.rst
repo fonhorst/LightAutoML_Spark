@@ -17,3 +17,4 @@ Task Class
     :template: classtemplate.rst
 
     SparkTask
+    SparkMetric

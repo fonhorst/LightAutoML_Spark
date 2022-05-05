@@ -24,8 +24,6 @@ Base Classes
     SelectTransformer
     FittedPipe
 
-
-
 Feature Pipelines for Boosting Models
 -----------------------------------------
 
@@ -51,3 +49,15 @@ Feature Pipelines for Linear Models
     :template: classtemplate.rst
 
     SparkLinearFeatures
+
+Utility Functions
+-----------------
+
+.. currentmodule:: lightautoml.spark.pipelines.features.base
+
+.. autosummary::
+    :toctree: ./generated
+    :nosignatures:
+    :template: functiontemplate.rst
+
+    build_graph
