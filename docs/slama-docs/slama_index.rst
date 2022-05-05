@@ -18,4 +18,11 @@ Known limitations:
     :maxdepth: 1
     :caption: Python API
 
+    automl
+    dataset
+    ml_algo
+    pipelines
+    pipelines.selection
+    pipelines.features
+    pipelines.ml
     tasks
