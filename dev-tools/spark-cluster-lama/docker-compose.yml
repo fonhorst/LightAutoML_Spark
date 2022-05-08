@@ -1,7 +1,7 @@
 version: '2'
 
 services:
-  spark:
+  spark-master:
     image: node2.bdcl:5000/spark-master-worker:3.2.1-py3.9
     environment:
       - SPARK_MODE=master

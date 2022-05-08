@@ -8,7 +8,7 @@ COPY build_tmp/spark-lightautoml_2.12-0.1.jar /opt
 RUN pip install /opt/LightAutoML-0.3.0.tar.gz
 
 COPY submit.sh /opt
-COPY examples /examples
+COPY build_tmp/examples /examples
 
 RUN chmod 777 /opt/bitnami/spark
 WORKDIR /opt/bitnami/spark

@@ -17,6 +17,7 @@ rm -rf ${BUILD_TMP_FOLDER}
 mkdir ${BUILD_TMP_FOLDER}
 cp requirements.txt ${BUILD_TMP_FOLDER}
 cp -r dist ${BUILD_TMP_FOLDER}/dist
+cp -r examples ${BUILD_TMP_FOLDER}/examples
 cp jars/spark-lightautoml_2.12-0.1.jar ${BUILD_TMP_FOLDER}/spark-lightautoml_2.12-0.1.jar
 
 docker build -t ${BASE_IMAGE_NAME} -f ${DOCKERFILE_FOLDER}/base.dockerfile ${BUILD_FOLDER}
