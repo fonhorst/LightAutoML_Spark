@@ -34,15 +34,5 @@ ENV APP_VERSION="3.2.1" \
     PYTHONPATH="/opt/bitnami/spark/python/:$PYTHONPATH" \
     SPARK_HOME="/opt/bitnami/spark"
 
-COPY requirements.txt /tmp
+COPY build_tmp/requirements.txt /tmp
 RUN pip install -r /tmp/requirements.txt
-
-COPY LightAutoML-0.3.0.pyspark-3.2.1.tar.gz /tmp
-RUN pip install /tmp/LightAutoML-0.3.0.pyspark-3.2.1.tar.gz
-
-RUN mkdir -p /workdir && chown 1001:1001 /workdir
-RUN chmod 777 /opt/bitnami/spark
-WORKDIR /workdir
-USER 1001
-ENTRYPOINT [ "/opt/bitnami/scripts/spark/entrypoint.sh" ]
-CMD [ "/opt/bitnami/scripts/spark/run.sh" ]
