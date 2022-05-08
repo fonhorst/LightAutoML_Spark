@@ -22,12 +22,16 @@ do
 	workers+=("node${node}.bdcl")
 done
 
-function build_images() {
-  local build_dist="${1:-false}"    # Default value is false
+function build_wheel() {
+  poetry export -f requirements.txt > requirements.txt
+  poetry build
+}
 
-  if "${build_dist}"; then
-    poetry export -f requirements.txt > requirements.txt
-    poetry build
+function build_images() {
+  local do_build_dist="${1:-false}"    # Default value is false
+
+  if "${do_build_dist}"; then
+    build_wheel
   fi
 
   rm -rf ${BUILD_TMP_FOLDER}
@@ -107,6 +111,9 @@ function teardown_scluster() {
 function help() {
   echo "
   List of commands.
+    build-wheel - builds SLAMA wheel
+    build-images - builds SLAMA wheel and builds and pushes docker images
+    build-images-no-poetry - builds and pushes docker images only
     create-config -  create docker-compose file remotely on control node (${control_node})
     deploy - deploy spark cluster (master will be on ${master})
     deploy-workers - deploy some spark workers (without force)
@@ -133,6 +140,10 @@ function main () {
     echo "Executing command: ${cmd}"
 
     case "${cmd}" in
+    "build-wheel")
+        build_wheel
+        ;;
+
     "build-images")
         build_images true
         ;;
