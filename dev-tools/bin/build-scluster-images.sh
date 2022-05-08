@@ -10,8 +10,8 @@ DOCKERFILE_FOLDER=dev-tools/spark-cluster-lama/dockerfiles/base
 BUILD_FOLDER=dev-tools/spark-cluster-lama/dockerfiles/base
 BUILD_TMP_FOLDER=${BUILD_FOLDER}/build_tmp
 
-poetry export -f requirements.txt > requirements.txt
-poetry build
+#poetry export -f requirements.txt > requirements.txt
+#poetry build
 
 rm -rf ${BUILD_TMP_FOLDER}
 mkdir ${BUILD_TMP_FOLDER}

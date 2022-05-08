@@ -168,3 +168,6 @@ jars/*.jar
 
 docs/generated
 docs/slama-docs/generated
+
+rsync-repo.sh
+dev-tools/spark-cluster-lama/dockerfiles/base/build_tmp/
