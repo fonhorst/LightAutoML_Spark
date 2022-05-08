@@ -67,7 +67,7 @@ function deploy_workers() {
   do
       echo "Starting a worker on host: ${host}"
       # shellcheck disable=SC2029
-      ssh $host "cd ${COMPOSE_DIR} && docker-compose up -d ${args} spark-worker"
+      ssh $host "cd ${COMPOSE_DIR} && docker-compose pull && docker-compose up -d ${args} spark-worker"
   done
 }
 
@@ -82,7 +82,7 @@ function deploy_scluster() {
 
   echo "Starting the master on host: ${master}"
   # shellcheck disable=SC2029
-  ssh ${master} "cd ${COMPOSE_DIR} && docker-compose up -d ${args} spark-master spark-submit"
+  ssh ${master} "cd ${COMPOSE_DIR} && docker-compose pull && docker-compose up -d ${args} spark-master spark-submit"
 
   deploy_workers ${force_mode}
 }
@@ -92,7 +92,7 @@ function teardown_workers() {
   do
       echo "Stopping a worker on host: ${host}"
       # shellcheck disable=SC2029
-      ssh $host "cd ${COMPOSE_DIR} && docker-compose down spark-worker"
+      ssh $host "cd ${COMPOSE_DIR} && docker-compose down"
   done
 }
 
@@ -101,7 +101,7 @@ function teardown_scluster() {
   
   echo "Stopping the master on host: ${master}"
   # shellcheck disable=SC2029
-  ssh ${master} "cd ${COMPOSE_DIR} && docker-compose down spark-master spark-submit"
+  ssh ${master} "cd ${COMPOSE_DIR} && docker-compose down"
 }
 
 function help() {
