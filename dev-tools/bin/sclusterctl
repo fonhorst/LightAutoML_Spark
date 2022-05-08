@@ -108,6 +108,14 @@ function teardown_scluster() {
   ssh ${master} "cd ${COMPOSE_DIR} && docker-compose down"
 }
 
+function run() {
+    docker run -d \
+     -v /mnt/ess_storage/DN_1/storage/sber_LAMA/kaggle_used_cars_dataset:/opt/spark_data \
+     -v /mnt/nfs/spark-lama-pipelines:/tmp/spark_results \
+     --network host ${SUBMITTER_IMAGE_NAME} \
+     /examples/spark/tabular-preset-automl.py
+}
+
 function help() {
   echo "
   List of commands.
@@ -120,6 +128,7 @@ function help() {
     redeploy - forcefully deploy spark cluster (e.g. to apply new config)
     teardown-workers - stop some spark workers
     teardown - stop spark cluster
+    run - execute
     help - prints this message
   "
 }
@@ -174,6 +183,10 @@ function main () {
 
     "teardown")
         teardown_scluster
+        ;;
+
+    "run")
+        run
         ;;
 
     "help")

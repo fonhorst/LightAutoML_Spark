@@ -4,7 +4,6 @@ set -ex
 
 script=$1
 
-export HOME=/opt/bitnami/spark
 export SCRIPT_ENV=cluster
 spark-submit \
   --master spark://node3.bdcl:7077 \
