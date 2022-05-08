@@ -4,6 +4,7 @@ set -ex
 
 script=$1
 
+export HOME=/opt/bitnami/spark
 export SCRIPT_ENV=cluster
 spark-submit \
   --master spark://node3.bdcl:7077 \
@@ -14,10 +15,10 @@ spark-submit \
   --conf 'spark.kryoserializer.buffer.max=512m' \
   --conf 'spark.driver.cores=10' \
   --conf 'spark.driver.memory=20g' \
-  --conf 'spark.executor.instances=8' \
-  --conf 'spark.executor.cores=20' \
+  --conf 'spark.executor.instances=4' \
+  --conf 'spark.executor.cores=10' \
   --conf 'spark.executor.memory=20g' \
-  --conf 'spark.cores.max=160' \
+  --conf 'spark.cores.max=40' \
   --conf 'spark.memory.fraction=0.6' \
   --conf 'spark.memory.storageFraction=0.5' \
   --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \

@@ -15,8 +15,8 @@ services:
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://node3.bdcl:7077
-      - SPARK_WORKER_MEMORY=40G
-      - SPARK_WORKER_CORES=20
+      - SPARK_WORKER_MEMORY=168G
+      - SPARK_WORKER_CORES=10
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
       - SPARK_RPC_ENCRYPTION_ENABLED=no
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
@@ -26,7 +26,7 @@ services:
       - /mnt/ess_storage/DN_1/storage/sber_LAMA/kaggle_used_cars_dataset:/opt/spark_data
 #      - /mnt/ess_storage/DN_1/storage/sber_LAMA/spark_checkpoints_ht_expt:/tmp/spark_checkpoints
       - /mnt/nfs/spark-lama-pipelines:/tmp/spark_results
-    cpuset: "0-10"
+    cpuset: "0-9"
   spark-submit:
     image: node2.bdcl:5000/spark-submitter:3.2.1-py3.9
     network_mode: "host"
@@ -38,4 +38,5 @@ services:
       - /mnt/nfs/spark-lama-pipelines:/tmp/spark_results
 #      - /mnt/ess_storage/DN_1/storage/sber_LAMA/spark_cluster/ivy:/opt/bitnami/spark/ivy:z
 #      - /mnt/ess_storage/DN_1/storage/sber_LAMA/spark_cluster/examples:/examples
+    entrypoint: /bin/bash
     command: tail -f /dev/null
