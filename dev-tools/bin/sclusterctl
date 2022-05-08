@@ -1,0 +1,179 @@
+#!/bin/bash
+
+set -ex
+
+# build settings
+BASE_IMAGE_NAME=node2.bdcl:5000/spark-base:3.2.1-py3.9
+MASTER_WORKER_IMAGE_NAME=node2.bdcl:5000/spark-master-worker:3.2.1-py3.9
+SUBMITTER_IMAGE_NAME=node2.bdcl:5000/spark-submitter:3.2.1-py3.9
+DOCKERFILE_FOLDER=dev-tools/spark-cluster-lama/dockerfiles/base
+BUILD_FOLDER=dev-tools/spark-cluster-lama/dockerfiles/base
+BUILD_TMP_FOLDER=${BUILD_FOLDER}/build_tmp
+
+# deploy settings
+BASE_REMOTE_DIR="/mnt/nfs/scluster"
+COMPOSE_DIR="${BASE_REMOTE_DIR}/spark-cluster-lama"
+control_node="node3.bdcl"
+master="node3.bdcl"
+workers=()
+
+for (( node=4; node<=8; node++ ))
+do
+	workers+=("node${node}.bdcl")
+done
+
+function build_images() {
+  local build_dist="${1:-false}"    # Default value is false
+
+  if "${build_dist}"; then
+    poetry export -f requirements.txt > requirements.txt
+    poetry build
+  fi
+
+  rm -rf ${BUILD_TMP_FOLDER}
+  mkdir ${BUILD_TMP_FOLDER}
+  cp requirements.txt ${BUILD_TMP_FOLDER}
+  cp -r dist ${BUILD_TMP_FOLDER}/dist
+  cp -r examples ${BUILD_TMP_FOLDER}/examples
+  cp jars/spark-lightautoml_2.12-0.1.jar ${BUILD_TMP_FOLDER}/spark-lightautoml_2.12-0.1.jar
+
+  docker build -t ${BASE_IMAGE_NAME} -f ${DOCKERFILE_FOLDER}/base.dockerfile ${BUILD_FOLDER}
+  docker push ${BASE_IMAGE_NAME}
+
+  docker build -t ${MASTER_WORKER_IMAGE_NAME} -f ${DOCKERFILE_FOLDER}/spark-master-worker.dockerfile ${BUILD_FOLDER}
+  docker push ${MASTER_WORKER_IMAGE_NAME}
+
+  docker build -t ${SUBMITTER_IMAGE_NAME} -f ${DOCKERFILE_FOLDER}/spark-submitter.dockerfile ${BUILD_FOLDER}
+  docker push ${SUBMITTER_IMAGE_NAME}
+
+  rm -rf ${BUILD_TMP_FOLDER}
+}
+
+function create_config_on_control_node() {
+  ssh ${control_node} "mkdir -p ${BASE_REMOTE_DIR} && rm -rf ${BASE_REMOTE_DIR}/spark-cluster-lama"
+  scp -r dev-tools/spark-cluster-lama ${control_node}:${COMPOSE_DIR}
+}
+
+function deploy_workers() {
+  local force_mode="${1:-false}"
+
+  if "${force_mode}"; then
+    args="--force-recreate"
+  else
+      args=""
+  fi
+
+  for host in "${workers[@]}"
+  do
+      echo "Starting a worker on host: ${host}"
+      # shellcheck disable=SC2029
+      ssh $host "cd ${COMPOSE_DIR} && docker-compose up -d ${args} spark-worker"
+  done
+}
+
+function deploy_scluster() {
+  local force_mode="${1:-false}"    # Default value is false
+
+  if "${force_mode}"; then
+      args="--force-recreate"
+  else
+      args=""
+  fi
+
+  echo "Starting the master on host: ${master}"
+  # shellcheck disable=SC2029
+  ssh ${master} "cd ${COMPOSE_DIR} && docker-compose up -d ${args} spark-master spark-submit"
+
+  deploy_workers ${force_mode}
+}
+
+function teardown_workers() {
+  for host in "${workers[@]}"
+  do
+      echo "Stopping a worker on host: ${host}"
+      # shellcheck disable=SC2029
+      ssh $host "cd ${COMPOSE_DIR} && docker-compose down spark-worker"
+  done
+}
+
+function teardown_scluster() {
+  teardown_workers
+  
+  echo "Stopping the master on host: ${master}"
+  # shellcheck disable=SC2029
+  ssh ${master} "cd ${COMPOSE_DIR} && docker-compose down spark-master spark-submit"
+}
+
+function help() {
+  echo "
+  List of commands.
+    create-config -  create docker-compose file remotely on control node (${control_node})
+    deploy - deploy spark cluster (master will be on ${master})
+    deploy-workers - deploy some spark workers (without force)
+    redeploy - forcefully deploy spark cluster (e.g. to apply new config)
+    teardown-workers - stop some spark workers
+    teardown - stop spark cluster
+    help - prints this message
+  "
+}
+
+
+function main () {
+    cmd="$1"
+
+    if [ -z "${cmd}" ]
+    then
+      echo "No command is provided."
+      help
+      exit 1
+    fi
+
+    shift 1
+
+    echo "Executing command: ${cmd}"
+
+    case "${cmd}" in
+    "build-images")
+        build_images true
+        ;;
+
+    "build-images-no-poetry")
+        build_images false
+        ;;
+
+    "create-config")
+        create_config_on_control_node
+        ;;
+
+    "deploy")
+        deploy_scluster false
+        ;;
+
+    "deploy-workers")
+        deploy_workers
+        ;;
+
+    "redeploy")
+        deploy_scluster true
+        ;;
+
+    "teardown-workers")
+        teardown_workers
+        ;;
+
+    "teardown")
+        teardown_scluster
+        ;;
+
+    "help")
+        help
+        ;;
+
+    *)
+        echo "Unknown command: ${cmd}"
+        ;;
+
+    esac
+}
+
+main "${@}"
