@@ -112,8 +112,10 @@ function run() {
     docker run -d \
      -v /mnt/ess_storage/DN_1/storage/sber_LAMA/kaggle_used_cars_dataset:/opt/spark_data \
      -v /mnt/nfs/spark-lama-pipelines:/tmp/spark_results \
+     --env EXEC_CORES=6 --env EXEC_INST=8 --env EXEC_MEM=128g --env DS_INC=1 \
      --network host ${SUBMITTER_IMAGE_NAME} \
-     /examples/spark/calc-func.py
+     /examples/spark/tmp-tabular-preset-automl.py
+#     /examples/spark/calc-func.py
 #     /examples/spark/tabular-preset-automl.py
 }
 
