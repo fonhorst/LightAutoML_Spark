@@ -4,6 +4,11 @@ set -ex
 
 script=$1
 
+EXEC_CORES="${EXEC_CORES:-6}"
+EXEC_INST="${EXEC_INST:-4}"
+EXEC_MEM="${EXEC_MEM:-128g}"
+CORES_MAX=$((EXEC_CORES * EXEC_INST))
+
 export SCRIPT_ENV=cluster
 spark-submit \
   --master spark://node3.bdcl:7077 \
@@ -14,10 +19,10 @@ spark-submit \
   --conf 'spark.kryoserializer.buffer.max=512m' \
   --conf 'spark.driver.cores=10' \
   --conf 'spark.driver.memory=20g' \
-  --conf 'spark.executor.instances=4' \
-  --conf 'spark.executor.cores=6' \
-  --conf 'spark.executor.memory=128g' \
-  --conf 'spark.cores.max=24' \
+  --conf "spark.executor.instances=${EXEC_INST}" \
+  --conf "spark.executor.cores=${EXEC_CORES}" \
+  --conf "spark.executor.memory=${EXEC_MEM}" \
+  --conf "spark.cores.max=${CORES_MAX}" \
   --conf 'spark.memory.fraction=0.6' \
   --conf 'spark.memory.storageFraction=0.5' \
   --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
