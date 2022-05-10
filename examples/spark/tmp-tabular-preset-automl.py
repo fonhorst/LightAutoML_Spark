@@ -26,7 +26,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 3. use_algos = [["linear_l2"]]
     # 4. use_algos = [["lgb", "linear_l2"], ["lgb"]]
     # use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["linear_l2"]]
+    use_algos = [["lgb", "linear_l2"], ["lgb"]]
     cv = 3
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
@@ -34,7 +34,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
     execs = int(spark.conf.get('spark.executor.instances'))
     cores = int(spark.conf.get('spark.executor.cores'))
-    dataset_increase_factor = os.environ.get("DS_INC", 1)
+    dataset_increase_factor = int(os.environ.get("DS_INC", "1"))
     logger.info(f"Dataset increase factor: {dataset_increase_factor}")
     if dataset_increase_factor > 0:
         train_data = train_data.withColumn("new_col",
