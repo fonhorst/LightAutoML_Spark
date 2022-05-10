@@ -1,4 +1,5 @@
 import logging.config
+import os
 import uuid
 
 import pandas as pd
@@ -32,19 +33,21 @@ def main(dataset_name: str, seed: int):
 
         task = Task(task_type)
 
-        num_threads = 5
+        num_threads = int(os.environ.get("EXEC_CORES", "4"))
+        mem = int(os.environ.get("EXEC_MEM", "16"))
+
         automl = TabularAutoML(
             task=task,
             cpu_limit=num_threads,
             timeout=3600 * 12,
-            memory_limit=128,
+            memory_limit=mem,
             general_params={"use_algos": use_algos},
             reader_params={"cv": cv, "advanced_roles": False},
             lgb_params={
                 "default_params": {"num_threads": num_threads, "numIterations": 500, "earlyStoppingRound": 5000},
                 "freeze_defaults": True
             },
-            linear_l2_params={"default_params": {"regParam": [1e-5, 5e-5]}},
+            linear_l2_params={"default_params": {"cs": [1e-5, 5e-5]}},
             gbm_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
             linear_pipeline_params={'max_intersection_depth': 2, 'top_intersections': 2},
         )
@@ -87,21 +90,10 @@ def main(dataset_name: str, seed: int):
     return result
 
 
-def multirun(dataset_name: str):
-    seeds = [ 1, 5, 42, 100, 777]
-    results = [main(dataset_name, seed) for seed in seeds]
-
-    df = pd.DataFrame(results)
-
-    with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-        print(df)
-
-    df.to_csv(f"lama_results_{dataset_name}_{uuid.uuid4()}.csv")
-
-
 if __name__ == "__main__":
     # One can run:
     # 1. main(dataset_name="used_cars_dataset", seed=42)
     # 2. multirun(dataset_name="used_cars_dataset")
-    main(dataset_name="used_cars_dataset_1x", seed=42)
-    # multirun(dataset_name="used_cars_dataset_1x")
+    ds_name = os.environ.get("DS_NAME", "used_cars_dataset")
+    logger.info(f"Running with dataset {ds_name}")
+    main(dataset_name=ds_name, seed=42)
