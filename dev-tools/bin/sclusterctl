@@ -78,7 +78,7 @@ function deploy_workers() {
   do
       echo "Starting a worker on host: ${host}"
       # shellcheck disable=SC2029
-      ssh $host "cd ${COMPOSE_DIR} && docker-compose pull && docker-compose up -d ${args} spark-worker"
+      ssh $host "cd ${COMPOSE_DIR} && docker-compose pull && docker-compose up -d ${args} spark-worker-1 spark-worker-2"
   done
 }
 
@@ -103,7 +103,7 @@ function teardown_workers() {
   do
       echo "Stopping a worker on host: ${host}"
       # shellcheck disable=SC2029
-      ssh $host "cd ${COMPOSE_DIR} && docker-compose down"
+      ssh $host "cd ${COMPOSE_DIR} && docker-compose down --remove-orphans"
   done
 }
 

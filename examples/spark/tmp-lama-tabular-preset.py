@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def main(dataset_name: str, seed: int):
-    cv = 5
+    cv = 3
 
     # Algos and layers to be used during automl:
     # For example:
