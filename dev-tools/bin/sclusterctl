@@ -17,9 +17,16 @@ control_node="node3.bdcl"
 master="node3.bdcl"
 workers=()
 
+# node20 experiences some problems
+# node6 docker settings are inappropriate (see /etc/docker/daemon.json)
+ignored_nodes=(6 20)
 for (( node=4; node<=21; node++ ))
 do
-	workers+=("node${node}.bdcl")
+    if [[ ! " ${ignored_nodes[*]} " =~ ${node} ]]; then
+        workers+=("node${node}.bdcl")
+    else
+        echo "Won't add node ${node} to the workers list because it is in the ignored nodes list"
+    fi
 done
 
 function build_wheel() {
@@ -113,7 +120,7 @@ function run() {
      -v /mnt/ess_storage/DN_1/storage/sber_LAMA/kaggle_used_cars_dataset:/opt/spark_data \
      -v /mnt/nfs/spark-lama-pipelines:/tmp/spark_results \
      --env EXEC_CORES="${EXEC_CORES:-6}" --env EXEC_INST="${EXEC_INST:-8}" \
-     --env EXEC_MEM="${EXEC_MEM:-128g}" --env DS_INC="${DS_INC:-1}" \
+     --env EXEC_MEM="${EXEC_MEM:-110g}" --env DS_INC="${DS_INC:-1}" \
      --network host ${SUBMITTER_IMAGE_NAME} \
      /examples/spark/tmp-tabular-preset-automl.py
 #     /examples/spark/calc-func.py
