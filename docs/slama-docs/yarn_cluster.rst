@@ -23,8 +23,9 @@ If there are no jar file(s) in ``jars`` directory, then you need to build lama j
 ./bin/slamactl.sh build-jars
 
 
-2. Copy lama wheel file from ``dist/LightAutoML-0.3.0-py3-none-any.whl`` to ``docker-hadoop/nodemanager/LightAutoML-0.3.0-py3-none-any.whl``.
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2. Distribute lama wheel to nodemanager
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Copy lama wheel file from ``dist/LightAutoML-0.3.0-py3-none-any.whl`` to ``docker-hadoop/nodemanager/LightAutoML-0.3.0-py3-none-any.whl``.
 We copy the lama wheel assembly to the nodemanager Docker file, because later it will be needed in the nodemanager service to execute the pipelines that we will send to spark. ::
 
     cp dist/LightAutoML-0.3.0-py3-none-any.whl docker-hadoop/nodemanager/LightAutoML-0.3.0-py3-none-any.whl
@@ -102,8 +103,10 @@ If one of the services did not up, then you need to look at its logs. For exampl
     
     docker exec -ti spark-submit bash -c "./bin/slamactl.sh submit-job-yarn dist/LightAutoML-0.3.0.tar.gz,examples/spark/examples_utils.py examples/spark/tabular-preset-automl.py"
 
-10. To monitor application execution, you can use the hadoop web interface (http://localhost:8088), which displays the status of the application, resources and application logs.
-^^^^^^^^^^^^^^^
+10. Monitoring application execution
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+To monitor application execution, you can use the hadoop web interface (http://localhost:8088), which displays the status of the application, resources and application logs.
+
 .. image:: imgs/hadoop_applications_web_ui.png
 
 Let's see the information about the application and its logs.
@@ -114,13 +117,16 @@ Let's see the information about the application and its logs.
 
 .. image:: imgs/hadoop_application_logs.png
 
-11. When the application is running, you can go to the hadoop web interface and get a link to the Spark WebUI.
+11. Spark WebUI
 ^^^^^^^^^^^^^^^
+When the application is running, you can go to the hadoop web interface and get a link to the Spark WebUI.
+
 .. image:: imgs/link_to_spark_web_ui.png
 .. image:: imgs/spark_web_ui.png
 
-12. HDFS Web UI is available at http://localhost:9870.
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+12. HDFS Web UI
+^^^^^^^^^^^^^^^
+HDFS Web UI is available at http://localhost:9870.
 Here you can browse your files in HDFS http://localhost:9870/explorer.html. HDFS stores trained pipelines and Spark application files.
 
 .. image:: imgs/hdfs_web_ui.png

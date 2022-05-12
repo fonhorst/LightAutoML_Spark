@@ -42,6 +42,13 @@ Known limitations:
 
 .. toctree::
     :maxdepth: 1
+    :caption: Running on Kubernetes Cluster
+
+    kubernetes_cluster
+
+
+.. toctree::
+    :maxdepth: 1
     :caption: Running on Spark Standalone Cluster
 
     standalone_cluster
@@ -49,6 +56,6 @@ Known limitations:
 
 .. toctree::
     :maxdepth: 1
-    :caption: Running on YARN
+    :caption: Running on YARN Cluster
 
     yarn_cluster
