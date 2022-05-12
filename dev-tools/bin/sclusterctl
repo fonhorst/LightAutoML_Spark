@@ -132,8 +132,8 @@ function run_lama() {
      -v /mnt/ess_storage/DN_1/storage/sber_LAMA/kaggle_used_cars_dataset:/opt/spark_data \
      --env EXEC_CORES="${EXEC_CORES:-6}" \
      --env EXEC_MEM="${EXEC_MEM:-128}" \
-     --env DS_NAME="used_cars_dataset_1x" \
-     --cpuset-cpus "0-9" \
+     --env DS_NAME="used_cars_dataset_4x" \
+     --cpuset-cpus "0-19" \
      --network host \
      --entrypoint="python3" \
      ${SUBMITTER_IMAGE_NAME} \
