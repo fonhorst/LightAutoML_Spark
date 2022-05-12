@@ -25,7 +25,7 @@ Setting of cpus and memory is up to you.
 
 All services should be in running state:
 
-    ![alt text](LightAutoML/imgs/minikube_image2.png)
+.. image:: imgs/minikube_image2.png
 
 Environment setup
 =================
@@ -63,7 +63,7 @@ Environment setup
 
 Results of the command execution should look like:
 
-    ![alt text](LightAutoML/imgs/image3.png)
+.. image:: imgs/image3.png
 
 Instead of 'unchanged' state there may be 'created' state if nothing existed before this command was executed.
 
@@ -84,10 +84,10 @@ Instead of 'unchanged' state there may be 'created' state if nothing existed bef
     ./bin/slamactl.sh build-lama-image
 
 10. One can check resulting images with the command: ::
-
+    
     docker images
 
-    ![alt text](LightAutoML/imgs/image4.png)
+.. image:: imgs/image4.png
 
 11. Upload required datasets into the folder of pv spark-lama-data.
 
@@ -106,7 +106,7 @@ Run examples in minikube
 
 4. Check state of SLAMA application's pods with command ``kubectl get pods -n spark-lama-exps``:
 
-    ![alt text](LightAutoML/imgs/image2.png)
+.. image:: imgs/image2.png
 
 5. Check the result of execution when the driver pod is completed with: ::
 
@@ -114,7 +114,7 @@ Run examples in minikube
 
 An example of the result:
 
-    ![alt text](LightAutoML/imgs/image6.png)
+.. image:: imgs/image6.png
 
 6. One can open Spark Web UI of SLAMA application on localhost. 
    That requires to execute a command for port forwarding to one of localhost ports: ::
@@ -123,6 +123,6 @@ An example of the result:
 
 To open Spark WebUI follow the link <http://localhost:9040>
 
-    ![alt text](LightAutoML/imgs/image7.png)
+.. image:: imgs/image7.png
 
 Note: SLAMA application should be in running state. 
