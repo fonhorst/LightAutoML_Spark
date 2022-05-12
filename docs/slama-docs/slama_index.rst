@@ -35,6 +35,13 @@ Known limitations:
 
 .. toctree::
     :maxdepth: 1
+    :caption: Deploy on Minikube
+
+    slama_minikube_readme
+
+
+.. toctree::
+    :maxdepth: 1
     :caption: Running on Spark Standalone Cluster
 
     standalone_cluster
