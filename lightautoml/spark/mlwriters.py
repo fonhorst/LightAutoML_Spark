@@ -9,7 +9,7 @@ from typing import Union
 from collections import namedtuple
 
 from pyspark import SparkContext
-from pyspark.sql import SQLContext
+from pyspark.sql.session import SparkSession
 from pyspark.ml.common import inherit_doc
 from pyspark.ml.util import DefaultParamsReader
 from pyspark.ml.util import MLReadable
@@ -109,7 +109,8 @@ class СommonPickleMLReader(MLReader):
     def load(self, path):
         """Load the ML instance from the input path."""
 
-        df = SQLContext(self.sc).read.parquet(os.path.join(path, "transformer_class_instance"))
+        spark_sess = SparkSession.builder.getOrCreate()
+        df = spark_sess.read.parquet(os.path.join(path, "transformer_class_instance"))
         pickled_instance = df.rdd.map(lambda row: bytes(row.pipeline)).first()
         instance = pickle.loads(pickled_instance)
 
@@ -161,7 +162,8 @@ class SparkLabelEncoderTransformerMLReader(MLReader):
     def load(self, path):
         """Load the ML instance from the input path."""
 
-        df = SQLContext(self.sc).read.parquet(os.path.join(path, "transformer_class_instance"))
+        spark_sess = SparkSession.builder.getOrCreate()
+        df = spark_sess.read.parquet(os.path.join(path, "transformer_class_instance"))
         pickled_instance = df.rdd.map(lambda row: bytes(row.pipeline)).first()
         instance = pickle.loads(pickled_instance)
 
