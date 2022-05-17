@@ -79,7 +79,13 @@ DATASETS = {
         "path": "file:///opt/spark_data/Health_AnimalBites.csv",
         "task_type": "multiclass",
         "roles": {"target": "WhereBittenIDDesc", DatetimeRole(seasonality=["y", "m", "wd"], date_format="yyyy-MM-dd HH:mm:ss"): ["bite_date"],}, # SpeciesIDDesc
-    }
+    },
+
+    "crime_data_2010_2017": {
+        "path": "file:///opt/spark_data/Crime_Data_2010_2017.csv",
+        "task_type": "reg",
+        "roles": {"target": "Time Occurred", DatetimeRole(seasonality=["y", "m", "wd"], date_format="MM/dd/yyy", base_date=True): ["Date Reported", "Date Occurred"],}, # SpeciesIDDesc
+    },
 }
 
 
