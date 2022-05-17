@@ -210,7 +210,7 @@ class LightGBMModelWrapperMLWriter(MLWriter):
         LightGBMModelWrapperMLWriter.saveMetadata(self.instance, path, self.sc)
 
         model: Union[LightGBMRegressionModel, LightGBMClassificationModel] = self.instance.model
-        model.saveNativeModel(os.path.join(path, "model"))
+        model.save(os.path.join(path, "model"))
 
     @staticmethod
     def saveMetadata(instance, path, sc):
@@ -251,20 +251,11 @@ class LightGBMModelWrapperMLWriter(MLWriter):
         cls = instance.__module__ + '.' + instance.__class__.__name__
         model_cls = instance.model.__module__ + '.' + instance.model.__class__.__name__
 
-        if isinstance(instance.model, LightGBMClassificationModel):
-            rawPredictionCol = instance.model.getRawPredictionCol()
-            probabilityCol = instance.model.getProbabilityCol()
-        else:
-            rawPredictionCol = None
-            probabilityCol = None
         basicMetadata = {"class": cls, "timestamp": int(round(time.time() * 1000)),
-                         "sparkVersion": sc.version, "uid": uid, "paramMap":
-                         {"featuresCol": instance.model.getFeaturesCol(),
-                          "predictionCol": instance.model.getPredictionCol(),
-                          "rawPredictionCol": rawPredictionCol,
-                          "probabilityCol": probabilityCol
-                         },
-                         "defaultParamMap": None, "modelClass": model_cls}
+                         "sparkVersion": sc.version, "uid": uid,
+                         "paramMap": None,
+                         "defaultParamMap": None,
+                         "modelClass": model_cls}
 
         return json.dumps(basicMetadata, separators=[',', ':'])
 
@@ -277,24 +268,18 @@ class LightGBMModelWrapperMLReader(MLReader):
         metadata = DefaultParamsReader.loadMetadata(path, self.sc)
         if metadata["modelClass"].endswith('LightGBMRegressionModel'):
             from synapse.ml.lightgbm.LightGBMRegressionModel import (
-                LightGBMRegressionModel as model_type,
+                LightGBMRegressionModel as model_class
             )
         elif metadata["modelClass"].endswith('LightGBMClassificationModel'):
             from synapse.ml.lightgbm.LightGBMClassificationModel import (
-                LightGBMClassificationModel as model_type,
+                LightGBMClassificationModel as model_class
             )
         else:
             raise NotImplementedError("Unknown model type.")
 
         from lightautoml.spark.ml_algo.boost_lgbm import LightGBMModelWrapper
         model_wrapper = LightGBMModelWrapper()
-        model_wrapper.model = model_type.loadNativeModelFromFile(os.path.join(path, "model"))
-        model_wrapper.model.setFeaturesCol(metadata["paramMap"]["featuresCol"])
-        model_wrapper.model.setPredictionCol(metadata["paramMap"]["predictionCol"])
-        if metadata["paramMap"]["rawPredictionCol"]:
-            model_wrapper.model.setRawPredictionCol(metadata["paramMap"]["rawPredictionCol"])
-        if metadata["paramMap"]["probabilityCol"]:
-            model_wrapper.model.setProbabilityCol(metadata["paramMap"]["probabilityCol"])
+        model_wrapper.model = model_class.load(os.path.join(path, "model"))
             
 
         return model_wrapper
