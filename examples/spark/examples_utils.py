@@ -2,6 +2,7 @@ import os
 from typing import Tuple
 
 from pyspark.sql import SparkSession
+from lightautoml.dataset.roles import DatetimeRole
 
 from lightautoml.spark.utils import SparkDataFrame
 
@@ -71,6 +72,13 @@ DATASETS = {
         "path": "file:///opt/spark_data/company_bankruptcy_prediction_data.csv",
         "task_type": "binary",
         "roles": {"target": "Bankrupt?"},
+    },
+
+    # https://www.kaggle.com/datasets/rtatman/animal-bites?resource=download&select=Health_AnimalBites.csv
+    "health_animal_bites": {
+        "path": "file:///opt/spark_data/Health_AnimalBites.csv",
+        "task_type": "multiclass",
+        "roles": {"target": "WhereBittenIDDesc", DatetimeRole(seasonality=["y", "m", "wd"], date_format="yyyy-MM-dd HH:mm:ss"): ["bite_date"],}, # SpeciesIDDesc
     }
 }
 

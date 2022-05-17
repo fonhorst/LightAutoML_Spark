@@ -28,13 +28,16 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 2. use_algos = [["lgb_tuned"]]
     # 3. use_algos = [["linear_l2"]]
     # 4. use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    cv = 5
+    use_algos = [["lgb"]]
+    cv = 2
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
         train_data, test_data = prepare_test_and_train(spark, path, seed)
+
+        train_data = train_data.filter((~F.isnull("SpeciesIDDesc")) & (~F.isnull("bite_date"))) # SpeciesIDDesc WhereBittenIDDesc
+        test_data = test_data.filter((~F.isnull("SpeciesIDDesc")) & (~F.isnull("bite_date")))
 
         test_data_dropped = test_data
 
@@ -146,6 +149,10 @@ if __name__ == "__main__":
     # One can run:
     # 1. main(dataset_name="lama_test_dataste", seed=42)
     # 2. multirun(spark_sess, dataset_name="lama_test_dataset")
-    main(spark_sess, dataset_name="lama_test_dataset", seed=42)
+    # main(spark_sess, dataset_name="lama_test_dataset", seed=42)
+    # main(spark_sess, dataset_name="used_cars_dataset", seed=42)
+    # main(spark_sess, dataset_name="buzz_dataset", seed=42)
+    # main(spark_sess, dataset_name="ailerons_dataset", seed=42)
+    main(spark_sess, dataset_name="health_animal_bites", seed=42)
 
     spark_sess.stop()
