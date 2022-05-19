@@ -36,8 +36,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
         task = SparkTask(task_type)
         train_data, test_data = prepare_test_and_train(spark, path, seed)
 
-        train_data = train_data.filter((~F.isnull("SpeciesIDDesc")) & (~F.isnull("bite_date"))) # SpeciesIDDesc WhereBittenIDDesc
-        test_data = test_data.filter((~F.isnull("SpeciesIDDesc")) & (~F.isnull("bite_date")))
+        # train_data = train_data.filter((~F.isnull("WhereBittenIDDesc")) & (~F.isnull("bite_date"))) # SpeciesIDDesc WhereBittenIDDesc
+        # test_data = test_data.filter((~F.isnull("WhereBittenIDDesc")) & (~F.isnull("bite_date")))
 
         test_data_dropped = test_data
 
@@ -153,6 +153,11 @@ if __name__ == "__main__":
     # main(spark_sess, dataset_name="used_cars_dataset", seed=42)
     # main(spark_sess, dataset_name="buzz_dataset", seed=42)
     # main(spark_sess, dataset_name="ailerons_dataset", seed=42)
-    main(spark_sess, dataset_name="health_animal_bites", seed=42)
+    # main(spark_sess, dataset_name="health_animal_bites", seed=42)
+    # main(spark_sess, dataset_name="crime_data_2010_2017", seed=42)
+    # main(spark_sess, dataset_name="effects_of_covid_19_on_trade_at_15_december_2021_provisional", seed=42)
+    # main(spark_sess, dataset_name="subnational_period_life_tables_2017_2019", seed=42)
+    main(spark_sess, dataset_name="expo", seed=42)
+    
 
     spark_sess.stop()

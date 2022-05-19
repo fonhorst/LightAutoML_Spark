@@ -86,6 +86,31 @@ DATASETS = {
         "task_type": "reg",
         "roles": {"target": "Time Occurred", DatetimeRole(seasonality=["y", "m", "wd"], date_format="MM/dd/yyy", base_date=True): ["Date Reported", "Date Occurred"],}, # SpeciesIDDesc
     },
+
+    "effects_of_covid_19_on_trade_at_15_december_2021_provisional": {
+        "path": "file:///opt/spark_data/effects-of-covid-19-on-trade-at-15-december-2021-provisional.csv",
+        "task_type": "reg",
+        "roles": {"target": "Value", DatetimeRole(seasonality=["m"], date_format="dd/MM/yyy", base_date=True): ["Date"],},
+    },
+
+    "subnational_period_life_tables_2017_2019": {
+        "path": "file:///opt/spark_data/Subnational-period-life-tables-2017-2019-CSV.csv",
+        "task_type": "reg",
+        "roles": {"target": "value"}
+    },
+    
+    "expo": {
+        "path": "file:///opt/spark_data/expo/1990.csv",
+        "task_type": "binary",
+        "roles": {"target": "Cancelled"}
+    },
+
+    # "higgs": {
+    #     "path": "file:///opt/spark_data/HIGGS.csv",
+    #     "task_type": "binary",
+    #     "roles": {"target": "Cancelled"}
+    # },
+    
 }
 
 
@@ -120,7 +145,7 @@ def get_spark_session():
         spark_sess = (
             SparkSession
             .builder
-            .master("local[4]")
+            .master("local[*]")
             .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
@@ -130,8 +155,8 @@ def get_spark_session():
             .config("spark.cleaner.referenceTracking", "true")
             .config("spark.cleaner.periodicGC.interval", "1min")
             .config("spark.sql.shuffle.partitions", "16")
-            .config("spark.driver.memory", "16g")
-            .config("spark.executor.memory", "16g")
+            .config("spark.driver.memory", "55g")
+            .config("spark.executor.memory", "55g")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
             .getOrCreate()
         )
