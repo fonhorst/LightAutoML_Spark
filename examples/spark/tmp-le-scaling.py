@@ -22,7 +22,7 @@ def main(spark: SparkSession, path: str):
     execs = int(spark.conf.get('spark.executor.instances'))
     cores = int(spark.conf.get('spark.executor.cores'))
 
-    df = spark.read.json(path).repartition(execs * cores * 2).cache()
+    df = spark.read.json(path).repartition(execs * cores).cache()
     df.write.mode('overwrite').format('noop').save()
 
     cat_roles = {
