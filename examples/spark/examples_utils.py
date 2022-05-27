@@ -86,14 +86,16 @@ def get_dataset_attrs(name: str):
 
 
 def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
-    execs = int(spark.conf.get('spark.executor.instances'))
-    cores = int(spark.conf.get('spark.executor.cores'))
+    execs = int(spark.conf.get('spark.executor.instances', '1'))
+    cores = int(spark.conf.get('spark.executor.cores', '8'))
 
     data = spark.read.csv(path, header=True, escape="\"")
     data = data.repartition(execs * cores).cache()
     data.write.mode('overwrite').format('noop').save()
 
-    train_data, test_data = data.randomSplit([0.8, 0.2], seed)
+    train_data, test_data = data, data#data.randomSplit([0.8, 0.2], seed)
+    train_data = train_data.cache()
+    test_data = test_data.cache()
     train_data.write.mode('overwrite').format('noop').save()
     test_data.write.mode('overwrite').format('noop').save()
 

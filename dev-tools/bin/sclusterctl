@@ -122,8 +122,8 @@ function run() {
      --env EXEC_CORES="${EXEC_CORES:-6}" --env EXEC_INST="${EXEC_INST:-8}" \
      --env EXEC_MEM="${EXEC_MEM:-110g}" --env DS_INC="${DS_INC:-1}" \
      --network host ${SUBMITTER_IMAGE_NAME} \
-     /examples/spark/tmp-le-scaling.py
-#     /examples/spark/tmp-tabular-preset-automl.py
+     /examples/spark/tmp-tabular-preset-automl.py
+     #     /examples/spark/tmp-le-scaling.py
 #     /examples/spark/calc-func.py
 #     /examples/spark/tabular-preset-automl.py
 }
