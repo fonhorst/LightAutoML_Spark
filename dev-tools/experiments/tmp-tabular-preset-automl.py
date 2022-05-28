@@ -32,8 +32,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
     train_data, test_data = prepare_test_and_train(spark, path, seed)
 
-    execs = int(spark.conf.get('spark.executor.instances'))
-    cores = int(spark.conf.get('spark.executor.cores'))
+    execs = int(spark.conf.get('spark.executor.instances', '1'))
+    cores = int(spark.conf.get('spark.executor.cores', '8'))
     dataset_increase_factor = int(os.environ.get("DS_INC", "1"))
     logger.info(f"Dataset increase factor: {dataset_increase_factor}")
     if dataset_increase_factor > 0:

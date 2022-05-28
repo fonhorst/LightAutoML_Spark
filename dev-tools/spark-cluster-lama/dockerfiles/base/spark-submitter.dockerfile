@@ -16,6 +16,7 @@ RUN pip install /opt/LightAutoML-0.3.0.tar.gz
 
 COPY submit.sh /opt
 COPY build_tmp/examples /examples
+COPY build_tmp/experiments /examples/experiments
 
 USER 1001
 ENTRYPOINT [ "/opt/submit.sh" ]
