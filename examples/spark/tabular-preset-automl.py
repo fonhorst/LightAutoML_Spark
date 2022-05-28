@@ -17,6 +17,9 @@ logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
+# NOTE! This demo requires datasets to be downloaded into a local folder.
+# Run ./bin/download-datasets.sh to get required datasets into the folder.
+
 
 def main(spark: SparkSession, dataset_name: str, seed: int):
     # Algos and layers to be used during automl:
@@ -40,7 +43,6 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
-            linear_l2_params={"default_params": {"regParam": [1e-5]}},
             lgb_params={'use_single_dataset_mode': True, 'convert_to_onnx': False, 'mini_batch_size': 1000},
             reader_params={"cv": cv, "advanced_roles": False}
         )
