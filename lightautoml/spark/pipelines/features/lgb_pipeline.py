@@ -60,12 +60,22 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
 
         transformers_list.append(self.get_numeric_data(train))
 
-        union_all = SparkUnionTransformer(transformers_list)
+        union_all = SparkUnionTransformer([x for x in transformers_list if x is not None])
 
         return union_all
 
 
 class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
+    """Create advanced pipeline for trees based models.
+
+    Includes:
+
+        - Different cats and numbers handling according to role params.
+        - Dates handling - extracting seasons and create datediffs.
+        - Create categorical intersections.
+
+    """
+
     def __init__(
             self,
             feats_imp: Optional[ImportanceEstimator] = None,
