@@ -4,36 +4,37 @@ kind: ConfigMap
 metadata:
   name: hadoop-env
 data:
-  CORE_CONF_fs_defaultFS: hdfs://hdfs-namenode.hdfs-3.svc:9000
-  CORE_CONF_hadoop_http_staticuser_user: root
+  HADOOP_ROOT_LOGGER: "hadoop.root.logger=DEBUG,console"
+  CORE_CONF_fs_defaultFS: "hdfs://node21.bdcl:9000"
+  CORE_CONF_hadoop_http_staticuser_user: "root"
   CORE_CONF_hadoop_proxyuser_hue_hosts: "*"
   CORE_CONF_hadoop_proxyuser_hue_groups: "*"
-  CORE_CONF_io_compression_codecs: org.apache.hadoop.io.compress.SnappyCodec
-  YARN_CONF_yarn_log___aggregation___enable: true
-  YARN_CONF_yarn_log_server_url: http://yarn-history-server:8188/applicationhistory/logs/
-  YARN_CONF_yarn_resourcemanager_recovery_enabled: true
-  YARN_CONF_yarn_resourcemanager_store_class: org.apache.hadoop.yarn.server.resourcemanager.recovery.FileSystemRMStateStore
-  YARN_CONF_yarn_resourcemanager_scheduler_class: org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler
-  YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___mb: 16384
-  YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___vcores: 8
-  YARN_CONF_yarn_scheduler_maximum___allocation___mb: 32768
-  YARN_CONF_yarn_scheduler_maximum___allocation___vcores: 8
-  YARN_CONF_yarn_resourcemanager_fs_state___store_uri: /rmstate
-  YARN_CONF_yarn_resourcemanager_bind___host: 0.0.0.0
-  YARN_CONF_yarn_resourcemanager_hostname: yarn-resourcemanager
-  YARN_CONF_yarn_resourcemanager_address: yarn-resourcemanager:8032
-  YARN_CONF_yarn_resourcemanager_scheduler_address: yarn-resourcemanager:8030
-  YARN_CONF_yarn_resourcemanager_resource__tracker_address: yarn-resourcemanager:8031
-  YARN_CONF_yarn_timeline___service_enabled: true
-  YARN_CONF_yarn_timeline___service_generic___application___history_enabled: true
-  YAEN_CONF_yarn_timeline___service_bind___host: 0.0.0.0
-  YARN_CONF_yarn_timeline___service_hostname: yarn-history-server
-  YARN_CONF_mapreduce_map_output_compress: true
-  YARN_CONF_mapred_map_output_compress_codec: org.apache.hadoop.io.compress.SnappyCodec
-  YARN_CONF_yarn_nodemanager_resource_memory___mb: 32768
-  YARN_CONF_yarn_nodemanager_resource_cpu___vcores: 8
-  YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: 98.5
-  YARN_CONF_yarn_nodemanager_remote___app___log___dir: /app-logs
+  CORE_CONF_io_compression_codecs: "org.apache.hadoop.io.compress.SnappyCodec"
+  YARN_CONF_yarn_log___aggregation___enable: "true"
+  YARN_CONF_yarn_log_server_url: "http://yarn-history-server:8188/applicationhistory/logs/"
+  YARN_CONF_yarn_resourcemanager_recovery_enabled: "true"
+  YARN_CONF_yarn_resourcemanager_store_class: "org.apache.hadoop.yarn.server.resourcemanager.recovery.FileSystemRMStateStore"
+  YARN_CONF_yarn_resourcemanager_scheduler_class: "org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler"
+  YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___mb: "16384"
+  YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___vcores: "8"
+  YARN_CONF_yarn_scheduler_maximum___allocation___mb: "32768"
+  YARN_CONF_yarn_scheduler_maximum___allocation___vcores: "8"
+  YARN_CONF_yarn_resourcemanager_fs_state___store_uri: "/rmstate"
+#  YARN_CONF_yarn_resourcemanager_bind___host: "0.0.0.0"
+#  YARN_CONF_yarn_resourcemanager_hostname: "yarn-resourcemanager"
+#  YARN_CONF_yarn_resourcemanager_address: "yarn-resourcemanager:8032"
+#  YARN_CONF_yarn_resourcemanager_scheduler_address: "yarn-resourcemanager:8030"
+#  YARN_CONF_yarn_resourcemanager_resource__tracker_address: "yarn-resourcemanager:8031"
+  YARN_CONF_yarn_timeline___service_enabled: "true"
+  YARN_CONF_yarn_timeline___service_generic___application___history_enabled: "true"
+  YAEN_CONF_yarn_timeline___service_bind___host: "0.0.0.0"
+  YARN_CONF_yarn_timeline___service_hostname: "yarn-history-server"
+  YARN_CONF_mapreduce_map_output_compress: "true"
+  YARN_CONF_mapred_map_output_compress_codec: "org.apache.hadoop.io.compress.SnappyCodec"
+  YARN_CONF_yarn_nodemanager_resource_memory___mb: "32768"
+  YARN_CONF_yarn_nodemanager_resource_cpu___vcores: "8"
+  YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: "98.5"
+  YARN_CONF_yarn_nodemanager_remote___app___log___dir: "/app-logs"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -96,6 +97,7 @@ spec:
       labels:
         app: yarn-resourcemanager
     spec:
+      hostname: yarn-resourcemanager
       containers:
         - name: resourcemanager
           image: node2.bdcl:5000/yarn-resourcemanager:slama-yarn
@@ -114,9 +116,9 @@ spec:
             - containerPort: 8030
               name: scheduler
             - containerPort: 8031
-              name: resource-tracker
+              name: rtracker
             - containerPort: 8032
-              name: resource-manager
+              name: rmanager
             - containerPort: 8088
               name: http-webui
             - containerPort: 8090
@@ -165,7 +167,7 @@ spec:
             - containerPort: 8042
               name: http-webui
             - containerPort: 8044
-              name: http-webui
+              name: https-webui
           volumeMounts:
             - name: data
               mountPath: /opt/spark_data/
@@ -221,6 +223,6 @@ spec:
     - port: 8042
       name: http-webui
     - port: 8044
-      name: http-webui
+      name: https-webui
   selector:
     app: yarn-nodemanager
