@@ -4,7 +4,7 @@ kind: ConfigMap
 metadata:
   name: hadoop-env
 data:
-  HADOOP_ROOT_LOGGER: "hadoop.root.logger=DEBUG,console"
+#  HADOOP_ROOT_LOGGER: "hadoop.root.logger=DEBUG,console"
   CORE_CONF_fs_defaultFS: "hdfs://node21.bdcl:9000"
   CORE_CONF_hadoop_http_staticuser_user: "root"
   CORE_CONF_hadoop_proxyuser_hue_hosts: "*"
@@ -20,11 +20,11 @@ data:
   YARN_CONF_yarn_scheduler_maximum___allocation___mb: "32768"
   YARN_CONF_yarn_scheduler_maximum___allocation___vcores: "8"
   YARN_CONF_yarn_resourcemanager_fs_state___store_uri: "/rmstate"
-#  YARN_CONF_yarn_resourcemanager_bind___host: "0.0.0.0"
-#  YARN_CONF_yarn_resourcemanager_hostname: "yarn-resourcemanager"
-#  YARN_CONF_yarn_resourcemanager_address: "yarn-resourcemanager:8032"
-#  YARN_CONF_yarn_resourcemanager_scheduler_address: "yarn-resourcemanager:8030"
-#  YARN_CONF_yarn_resourcemanager_resource__tracker_address: "yarn-resourcemanager:8031"
+  YARN_CONF_yarn_resourcemanager_bind___host: "0.0.0.0"
+  YARN_CONF_yarn_resourcemanager_hostname: "yarn-resourcemanager"
+  YARN_CONF_yarn_resourcemanager_address: "yarn-resourcemanager:8032"
+  YARN_CONF_yarn_resourcemanager_scheduler_address: "yarn-resourcemanager:8030"
+  YARN_CONF_yarn_resourcemanager_resource__tracker_address: "yarn-resourcemanager:8031"
   YARN_CONF_yarn_timeline___service_enabled: "true"
   YARN_CONF_yarn_timeline___service_generic___application___history_enabled: "true"
   YAEN_CONF_yarn_timeline___service_bind___host: "0.0.0.0"
@@ -55,7 +55,7 @@ spec:
       volumes:
         - name: storage
           persistentVolumeClaim:
-            claimName: yarn-history-server-pvc
+            claimName: yarn-historyserver
       containers:
         - name: history-server
           image: node2.bdcl:5000/yarn-historyserver:slama-yarn
