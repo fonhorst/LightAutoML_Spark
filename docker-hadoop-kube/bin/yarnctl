@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+
+set -ex
+
+if [[ -z "${KUBE_NAMESPACE}" ]]
+then
+  KUBE_NAMESPACE="default"
+fi
+
+if [[ -z "${REPO}" ]]
+then
+  REPO="node2.bdcl"
+fi
+
+if [[ -z "${IMAGE_TAG}" ]]
+then
+  IMAGE_TAG="slama-yarn"
+fi
+
+## declare an array variable
+declare -a components=("base" "historyserver" "nodemanager" "resourcemanager" "spark-submit")
+
+function build_images() {
+    echo "Building required docker images..."
+    for comp in "${components[@]}"
+    do
+        image="${REPO}/yarn-${comp}:${IMAGE_TAG}"
+        echo "Building docker image: ${image}"
+        docker build -t "${image}" "${comp}"
+    done
+    echo "The required images have been successfully built"
+}
+
+function push_images() {
+    echo "Pushing required docker images into the repository ${REPO}"
+    for comp in "${components[@]}"
+    do
+        image="${REPO}/yarn-${comp}:${IMAGE_TAG}"
+        echo "Pushing docker image: ${image}"
+        docker push "${image}"
+    done
+    echo "The required images have been successfully pushed"
+}
+
+function install_images() {
+    build_images
+    push_images
+}
+
+function help() {
+  echo "
+  List of commands.
+    build-images - builds docker images for components of the YARN cluster
+    push-images - pushes built docker images into the repository to be used later in the kube cluster
+    install-images -
+    deploy - deploys the YARN cluster
+    redeploy -
+    teardown - stop the YARN cluster
+    scale -
+    help - prints this message
+  "
+}
+
+function main () {
+    cmd="$1"
+
+    if [ -z "${cmd}" ]
+    then
+      echo "No command is provided."
+      help
+      exit 1
+    fi
+
+    shift 1
+
+    echo "Executing command: ${cmd}"
+
+    case "${cmd}" in
+    "build-wheel")
+        build_wheel
+        ;;
+
+    "build-images")
+        build_images true
+        ;;
+
+    "build-images-no-poetry")
+        build_images false
+        ;;
+
+    "create-config")
+        create_config_on_control_node
+        ;;
+
+    "deploy")
+        deploy_scluster false
+        ;;
+
+    "deploy-workers")
+        deploy_workers
+        ;;
+
+    "redeploy")
+        deploy_scluster true
+        ;;
+
+    "teardown-workers")
+        teardown_workers
+        ;;
+
+    "teardown")
+        teardown_scluster
+        ;;
+
+    "run")
+        run
+        ;;
+
+    "run-lama")
+        run_lama
+        ;;
+
+    "help")
+        help
+        ;;
+
+    *)
+        echo "Unknown command: ${cmd}"
+        ;;
+
+    esac
+}
+
+main "${@}"
