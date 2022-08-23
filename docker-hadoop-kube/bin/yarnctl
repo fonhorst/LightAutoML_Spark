@@ -9,7 +9,7 @@ fi
 
 if [[ -z "${REPO}" ]]
 then
-  REPO="node2.bdcl"
+  REPO="node2.bdcl:5000"
 fi
 
 if [[ -z "${IMAGE_TAG}" ]]
@@ -76,48 +76,12 @@ function main () {
     echo "Executing command: ${cmd}"
 
     case "${cmd}" in
-    "build-wheel")
-        build_wheel
-        ;;
-
     "build-images")
-        build_images true
+        build_images
         ;;
 
-    "build-images-no-poetry")
-        build_images false
-        ;;
-
-    "create-config")
-        create_config_on_control_node
-        ;;
-
-    "deploy")
-        deploy_scluster false
-        ;;
-
-    "deploy-workers")
-        deploy_workers
-        ;;
-
-    "redeploy")
-        deploy_scluster true
-        ;;
-
-    "teardown-workers")
-        teardown_workers
-        ;;
-
-    "teardown")
-        teardown_scluster
-        ;;
-
-    "run")
-        run
-        ;;
-
-    "run-lama")
-        run_lama
+    "install-images")
+        install_images
         ;;
 
     "help")
