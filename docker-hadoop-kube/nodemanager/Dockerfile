@@ -1,5 +1,7 @@
 FROM bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
 
+ARG PYTHON_VERSION=3.8.9
+
 MAINTAINER Ivan Ermilov <ivan.s.ermilov@gmail.com>
 
 HEALTHCHECK CMD curl -f http://localhost:8042/ || exit 1
@@ -15,13 +17,13 @@ RUN apt install build-essential libncurses5-dev zlib1g-dev libnss3-dev libgdbm-d
 
 RUN apt install wget
 
-RUN wget https://www.python.org/ftp/python/3.9.12/Python-3.9.12.tgz
+RUN wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz
 
-RUN tar -xvf Python-3.9.12.tgz
+RUN tar -xvf Python-${PYTHON_VERSION}.tgz
 
-RUN cd Python-3.9.12 && ./configure --enable-optimizations
+RUN cd Python-${PYTHON_VERSION} && ./configure --enable-optimizations
 
-RUN cd Python-3.9.12 && make altinstall
+RUN cd Python-${PYTHON_VERSION} && make altinstall
 
 RUN ln -s /usr/local/bin/python3.9 /usr/bin/python3
 
