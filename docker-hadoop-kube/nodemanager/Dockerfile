@@ -1,6 +1,5 @@
-FROM bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
-
-ARG PYTHON_VERSION=3.8.9
+ARG IMAGE_TAG=slama-yarn
+FROM node2.bdcl:5000/yarn-base:${IMAGE_TAG}
 
 MAINTAINER Ivan Ermilov <ivan.s.ermilov@gmail.com>
 
@@ -17,6 +16,9 @@ RUN apt install build-essential libncurses5-dev zlib1g-dev libnss3-dev libgdbm-d
 
 RUN apt install wget
 
+ARG PYTHON_VERSION=3.8.9
+ENV PYTHON_VERSION=${PYTHON_VERSION}
+
 RUN wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz
 
 RUN tar -xvf Python-${PYTHON_VERSION}.tgz
@@ -25,7 +27,7 @@ RUN cd Python-${PYTHON_VERSION} && ./configure --enable-optimizations
 
 RUN cd Python-${PYTHON_VERSION} && make altinstall
 
-RUN ln -s /usr/local/bin/python3.9 /usr/bin/python3
+RUN ln -s /usr/local/bin/python$(echo ${PYTHON_VERSION} | awk -F '.' '{print $1"."$2}') /usr/bin/python3
 
 #ADD LightAutoML-0.3.0-py3-none-any.whl /LightAutoML-0.3.0-py3-none-any.whl
 #

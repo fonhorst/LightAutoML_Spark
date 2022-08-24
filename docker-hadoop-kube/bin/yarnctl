@@ -26,8 +26,12 @@ function build_images() {
     do
         image="${REPO}/yarn-${comp}:${IMAGE_TAG}"
         echo "Building docker image: ${image}"
-        docker build -t "${image}" "${comp}"
+        docker build --build-arg IMAGE_TAG=${IMAGE_TAG} -t "${image}" "${comp}"
     done
+
+    # TODO: add building
+    # docker build --build-arg PYSPARK_VERSION=3.1.1 -t node2.bdcl:5000/yarn-spark-submit:slama-yarn-3.1.1 spark-submit
+
     echo "The required images have been successfully built"
 }
 
@@ -53,6 +57,25 @@ function provision_volumes() {
 
 function deploy() {
     kubectl -n ${KUBE_NAMESPACE} apply -f yarn-cluster.yaml
+}
+
+function teardown() {
+    kubectl -n ${KUBE_NAMESPACE} delete -f yarn-cluster.yaml --ignore-not-found
+#    TODO: actualize it later
+#    kubectl -n ${KUBE_NAMESPACE} wait -f yarn-cluster.yaml --for=delete --timeout=60s
+}
+
+function teardown_workers() {
+    kubectl -n ${KUBE_NAMESPACE} delete yarn-nodemanager --ignore-not-found
+}
+
+function restart_workers() {
+    kubectl -n ${KUBE_NAMESPACE} rollout restart deployment yarn-nodemanager
+}
+
+function redeploy() {
+    teardown
+    deploy
 }
 
 function help() {
@@ -103,6 +126,22 @@ function main () {
 
     "deploy")
         deploy
+        ;;
+
+    "teardown")
+        teardown
+        ;;
+
+    "redeploy")
+        redeploy
+        ;;
+
+    "teardown-workers")
+        teardown_workers
+        ;;
+
+    "restart-workers")
+        restart_workers
         ;;
 
     "help")

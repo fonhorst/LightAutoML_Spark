@@ -9,12 +9,15 @@ ARG PYSPARK_VERSION=3.2.0
 
 RUN pip install pyspark==${PYSPARK_VERSION}
 
-# COPY bin/yarn-site.xml /etc/hadoop/yarn-site.xml
-# COPY bin/core-site.xml /etc/hadoop/core-site.xmb
+COPY yarn-site.xml /etc/hadoop/yarn-site.xml
+COPY core-site.xml /etc/hadoop/core-site.xmb
 
 ENV YARN_CONF_DIR="/etc/hadoop"
 ENV HADOOP_CONF_DIR="/etc/hadoop"
 
-WORKDIR /LightAutoML
+RUN mkdir -p /src
+COPY submit_example.py  /src
+COPY submit.sh /src
+WORKDIR /src
 
 CMD ["sleep", "infinity"]

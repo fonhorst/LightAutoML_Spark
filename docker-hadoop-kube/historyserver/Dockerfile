@@ -1,4 +1,5 @@
-FROM bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
+ARG IMAGE_TAG=slama-yarn
+FROM node2.bdcl:5000/yarn-base:${IMAGE_TAG}
 
 MAINTAINER Ivan Ermilov <ivan.s.ermilov@gmail.com>
 

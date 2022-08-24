@@ -17,19 +17,9 @@
 <!-- Put site-specific property overrides in this file. -->
 
 <configuration>
-<property><name>hadoop.proxyuser.hue.hosts</name><value>*</value></property>
-<property><name>fs.defaultFS</name><value>hdfs://namenode:9000</value></property>
-<property><name>hadoop.http.staticuser.user</name><value>root</value></property>
-<property><name>io.compression.codecs</name><value>org.apache.hadoop.io.compress.SnappyCodec</value></property>
-<property><name>hadoop.proxyuser.hue.groups</name><value>*</value></property>
-<property><name>hadoop.proxyuser.hue.hosts</name><value>*</value></property>
-<property><name>fs.defaultFS</name><value>hdfs://namenode:9000</value></property>
-<property><name>hadoop.http.staticuser.user</name><value>root</value></property>
-<property><name>io.compression.codecs</name><value>org.apache.hadoop.io.compress.SnappyCodec</value></property>
-<property><name>hadoop.proxyuser.hue.groups</name><value>*</value></property>
-<property><name>hadoop.proxyuser.hue.hosts</name><value>*</value></property>
-<property><name>fs.defaultFS</name><value>hdfs://namenode:9000</value></property>
-<property><name>hadoop.http.staticuser.user</name><value>root</value></property>
-<property><name>io.compression.codecs</name><value>org.apache.hadoop.io.compress.SnappyCodec</value></property>
-<property><name>hadoop.proxyuser.hue.groups</name><value>*</value></property>
+    <property><name>fs.defaultFS</name><value>hdfs://node21.bdcl:9000</value></property>
+    <property><name>hadoop.http.staticuser.user</name><value>root</value></property>
+    <property><name>io.compression.codecs</name><value>org.apache.hadoop.io.compress.SnappyCodec</value></property>
+    <property><name>hadoop.proxyuser.hue.groups</name><value>*</value></property>
+    <property><name>hadoop.proxyuser.hue.hosts</name><value>*</value></property>
 </configuration>
