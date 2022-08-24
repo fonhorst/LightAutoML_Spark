@@ -8,11 +8,11 @@ spark-submit \
   --master yarn \
   --deploy-mode cluster \
   --conf 'spark.kryoserializer.buffer.max=512m' \
-  --conf 'spark.driver.cores=4' \
-  --conf 'spark.driver.memory=5g' \
+  --conf 'spark.driver.cores=1' \
+  --conf 'spark.driver.memory=3g' \
   --conf 'spark.executor.instances=3' \
   --conf 'spark.executor.cores=4' \
-  --conf 'spark.executor.memory=5g' \
+  --conf 'spark.executor.memory=2g' \
   --conf 'spark.cores.max=12' \
   --conf 'spark.sql.autoBroadcastJoinThreshold=100MB' \
   --conf 'spark.sql.execution.arrow.pyspark.enabled=true' \

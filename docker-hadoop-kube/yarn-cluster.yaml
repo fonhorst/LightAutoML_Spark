@@ -125,10 +125,11 @@ spec:
               name: https-webui
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: yarn-nodemanager
 spec:
+  serviceName: yarn-nms
   replicas: 1
   selector:
     matchLabels:
@@ -140,6 +141,7 @@ spec:
       labels:
         app: yarn-nodemanager
     spec:
+      setHostnameAsFQDN: true
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -216,9 +218,9 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: yarn-nodemanager
+  name: yarn-nms
 spec:
-  type: NodePort
+  clusterIP: None
   ports:
     - port: 8042
       name: http-webui

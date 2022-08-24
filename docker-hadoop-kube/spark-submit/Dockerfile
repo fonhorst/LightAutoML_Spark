@@ -10,7 +10,7 @@ ARG PYSPARK_VERSION=3.2.0
 RUN pip install pyspark==${PYSPARK_VERSION}
 
 COPY yarn-site.xml /etc/hadoop/yarn-site.xml
-COPY core-site.xml /etc/hadoop/core-site.xmb
+COPY core-site.xml /etc/hadoop/core-site.xml
 
 ENV YARN_CONF_DIR="/etc/hadoop"
 ENV HADOOP_CONF_DIR="/etc/hadoop"
