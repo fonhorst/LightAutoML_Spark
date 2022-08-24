@@ -3,6 +3,7 @@
 set -ex
 
 export SPARK_HOME=/usr/local/lib/python3.8/site-packages/pyspark
+export PYSPARK_PYTHON=/usr/bin/python3
 
 spark-submit \
   --master yarn \
