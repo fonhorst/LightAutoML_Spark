@@ -18,18 +18,18 @@ from lightautoml.pipelines.selection.importance_based import (
 from lightautoml.pipelines.selection.permutation_importance_based import (
     NpIterativeFeatureSelector,
 )
-from lightautoml.spark.automl.base import SparkAutoML
-from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
-from lightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
-from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
-from lightautoml.spark.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
-from lightautoml.spark.reader.base import SparkToSparkReader
-from lightautoml.spark.tasks.base import SparkTask
+from sparklightautoml.spark.automl.base import SparkAutoML
+from sparklightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
+from sparklightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
+from sparklightautoml.spark.pipelines.ml.base import SparkMLPipeline
+from sparklightautoml.spark.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
+from sparklightautoml.spark.reader.base import SparkToSparkReader
+from sparklightautoml.spark.tasks.base import SparkTask
 
 from examples_utils import get_spark_session
 from pyspark.sql import functions as F
 
-from lightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
+from sparklightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
