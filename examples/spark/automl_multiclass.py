@@ -5,12 +5,12 @@ from pyspark.ml import PipelineModel
 from pyspark.sql import functions as F
 
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
-from sparklightautoml.spark.automl.presets.tabular_presets import SparkTabularAutoML
-from sparklightautoml.spark.dataset.base import SparkDataset
-from sparklightautoml.spark.tasks.base import SparkTask
-from sparklightautoml.spark.utils import VERBOSE_LOGGING_FORMAT
-from sparklightautoml.spark.utils import log_exec_timer
-from sparklightautoml.spark.utils import logging_config
+from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
+from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.tasks.base import SparkTask
+from sparklightautoml.utils import VERBOSE_LOGGING_FORMAT
+from sparklightautoml.utils import log_exec_timer
+from sparklightautoml.utils import logging_config
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)

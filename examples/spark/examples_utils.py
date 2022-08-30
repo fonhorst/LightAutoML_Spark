@@ -3,7 +3,7 @@ from typing import Tuple
 
 from pyspark.sql import SparkSession
 
-from sparklightautoml.spark.utils import SparkDataFrame
+from sparklightautoml.utils import SparkDataFrame
 
 used_cars_params = {
     "task_type": "reg",

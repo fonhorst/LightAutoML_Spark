@@ -6,14 +6,14 @@ from pyspark.ml import PipelineModel
 
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
-from sparklightautoml.spark.dataset.base import SparkDataset
-from sparklightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM
-from sparklightautoml.spark.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
-from sparklightautoml.spark.pipelines.ml.base import SparkMLPipeline
-from sparklightautoml.spark.reader.base import SparkToSparkReader
-from sparklightautoml.spark.tasks.base import SparkTask as SparkTask
-from sparklightautoml.spark.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
-from sparklightautoml.spark.validation.iterators import SparkFoldsIterator
+from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
+from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
+from sparklightautoml.pipelines.ml.base import SparkMLPipeline
+from sparklightautoml.reader.base import SparkToSparkReader
+from sparklightautoml.tasks.base import SparkTask as SparkTask
+from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
+from sparklightautoml.validation.iterators import SparkFoldsIterator
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
