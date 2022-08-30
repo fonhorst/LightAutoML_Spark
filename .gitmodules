@@ -1,3 +1,6 @@
 [submodule "dev-tools/docker-hadoop"]
 	path = dev-tools/docker-hadoop
 	url = git@github.com:netang/docker-hadoop.git
+[submodule "dev-tools/docker-hadoop-kube"]
+	path = dev-tools/docker-hadoop-kube
+	url = git@github.com:netang/docker-hadoop-kube.git
