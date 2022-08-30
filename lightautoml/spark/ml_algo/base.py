@@ -3,12 +3,14 @@ from typing import Tuple, cast, List, Optional
 
 import numpy as np
 from pyspark.ml import PipelineModel, Transformer
-from pyspark.ml.functions import vector_to_array, array_to_vector
+from pyspark.ml.functions import vector_to_array
 from pyspark.ml.param import Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
 from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType
+
+from lightautoml.spark.spark_functions import array_to_vector
 
 from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo

@@ -1,35 +1,18 @@
 import logging
-import pickle
 import random
-from typing import cast
 
-import pandas as pd
-from pyspark.ml.functions import array_to_vector
-from pyspark.ml.linalg import DenseVector
 from pyspark.sql import SparkSession
 
-from lightautoml.automl.blend import BestModelSelector, Blender, WeightedBlender
-from lightautoml.dataset.np_pd_dataset import NumpyDataset
 from lightautoml.dataset.roles import NumericRole
-from lightautoml.spark.automl.blend import SparkBestModelSelector, SparkWeightedBlender
-
+from lightautoml.spark.automl.blend import SparkWeightedBlender
 from lightautoml.spark.dataset.base import SparkDataset
 from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.ml_algo.boost_lgbm import SparkBoostLGBM as SparkBoostLGBM
-from lightautoml.spark.ml_algo.linear_pyspark import SparkLinearLBFGS
 from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
-from lightautoml.spark.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline as SparkNestedTabularMLPipeline
 from lightautoml.spark.tasks.base import SparkTask as SparkTask
-from lightautoml.spark.transformers.base import ColumnsSelectorTransformer, DropColumnsTransformer
 from lightautoml.spark.utils import log_exec_time, VERBOSE_LOGGING_FORMAT
 from lightautoml.spark.validation.iterators import SparkDummyIterator
-from lightautoml.tasks import Task
-from .. import from_pandas_to_spark, spark as spark_sess, compare_obtained_datasets
-
-import numpy as np
-import pyspark.sql.functions as F
-
-from ..test_auto_ml.utils import DummySparkMLPipeline, DummyMLAlgo
+from .. import spark as spark_sess
+from ..test_auto_ml.utils import DummyMLAlgo
 
 spark = spark_sess
 
