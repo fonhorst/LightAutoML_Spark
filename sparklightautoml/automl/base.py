@@ -64,13 +64,15 @@ class SparkAutoML:
 
     """
 
-    def __init__(self,
-                 reader: SparkToSparkReader,
-                 levels: Sequence[Sequence[SparkMLPipeline]],
-                 timer: Optional[PipelineTimer] = None,
-                 blender: Optional[SparkBlender] = None,
-                 skip_conn: bool = False,
-                 return_all_predictions: bool = False):
+    def __init__(
+        self,
+        reader: SparkToSparkReader,
+        levels: Sequence[Sequence[SparkMLPipeline]],
+        timer: Optional[PipelineTimer] = None,
+        blender: Optional[SparkBlender] = None,
+        skip_conn: bool = False,
+        return_all_predictions: bool = False,
+    ):
         """
 
         Args:
@@ -101,7 +103,7 @@ class SparkAutoML:
         self._transformer = None
         self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
-    def make_transformer(self, no_reader: bool = False,  return_all_predictions: bool = False) -> Transformer:
+    def make_transformer(self, no_reader: bool = False, return_all_predictions: bool = False) -> Transformer:
 
         automl_transformer, _ = self._build_transformer(no_reader, return_all_predictions)
 
@@ -190,11 +192,11 @@ class SparkAutoML:
         train_dataset = self.reader.fit_read(train_data, train_features, roles)
 
         assert (
-                len(self._levels) <= 1 or train_dataset.folds is not None
+            len(self._levels) <= 1 or train_dataset.folds is not None
         ), "Not possible to fit more than 1 level without cv folds"
 
         assert (
-                len(self._levels) <= 1 or valid_data is None
+            len(self._levels) <= 1 or valid_data is None
         ), "Not possible to fit more than 1 level with holdout validation"
 
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
@@ -271,7 +273,7 @@ class SparkAutoML:
         data: Any,
         features_names: Optional[Sequence[str]] = None,
         return_all_predictions: Optional[bool] = None,
-        add_reader_attrs: bool = False
+        add_reader_attrs: bool = False,
     ) -> SparkDataset:
         """Predict with automl on new dataset.
 
@@ -287,7 +289,9 @@ class SparkAutoML:
         """
         dataset = self.reader.read(data, features_names, add_array_attrs=add_reader_attrs)
         logger.info(f"After Reader in {type(self)}. Columns: {sorted(dataset.data.columns)}")
-        automl_transformer, roles = self._build_transformer(no_reader=True, return_all_predictions=return_all_predictions)
+        automl_transformer, roles = self._build_transformer(
+            no_reader=True, return_all_predictions=return_all_predictions
+        )
         predictions = automl_transformer.transform(dataset.data)
 
         sds = dataset.empty()
@@ -328,11 +332,9 @@ class SparkAutoML:
 
         return model_stats
 
-    def _create_validation_iterator(self,
-                                    train: SparkDataset,
-                                    valid: Optional[SparkDataset],
-                                    n_folds: Optional[int],
-                                    cv_iter: Optional[Callable]) -> SparkBaseTrainValidIterator:
+    def _create_validation_iterator(
+        self, train: SparkDataset, valid: Optional[SparkDataset], n_folds: Optional[int], cv_iter: Optional[Callable]
+    ) -> SparkBaseTrainValidIterator:
         if valid:
             dataset = self._merge_train_and_valid_datasets(train, valid)
             iterator = SparkHoldoutIterator(dataset)
@@ -347,8 +349,9 @@ class SparkAutoML:
 
         return iterator
 
-    def _build_transformer(self, no_reader: bool = False,  return_all_predictions: bool = False) \
-            -> Tuple[Transformer, RolesDict]:
+    def _build_transformer(
+        self, no_reader: bool = False, return_all_predictions: bool = False
+    ) -> Tuple[Transformer, RolesDict]:
         stages = []
         if not no_reader:
             stages.append(self.reader.make_transformer(add_array_attrs=True))
@@ -366,7 +369,7 @@ class SparkAutoML:
 
         sel_tr = ColumnsSelectorTransformer(
             input_cols=[SparkDataset.ID_COLUMN] + list(output_roles.keys()),
-            optional_cols=[self.reader.target_col] if self.reader.target_col else []
+            optional_cols=[self.reader.target_col] if self.reader.target_col else [],
         )
         stages.append(sel_tr)
 

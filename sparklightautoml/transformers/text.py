@@ -28,13 +28,7 @@ class TfidfTextTransformer(ObsoleteSparkTransformer, TunableTransformer):
     _fit_checks = (text_check,)
     _transform_checks = ()
     _fname_prefix = "tfidf"
-    _default_params = {
-        "min_df": 5,
-        "max_df": 1.0,
-        "max_features": 30_000,
-        "dtype": np.float32,
-        "normalization": 2.0
-    }
+    _default_params = {"min_df": 5, "max_df": 1.0, "max_features": 30_000, "dtype": np.float32, "normalization": 2.0}
 
     # These properties are not supported
     # cause there is no analogues in Spark ML
@@ -130,7 +124,7 @@ class TfidfTextTransformer(ObsoleteSparkTransformer, TunableTransformer):
                 maxDF=self.params["max_df"],
                 vocabSize=self.params["max_features"],
                 inputCol=tokenizer.getOutputCol(),
-                outputCol=f"{c}_word_features"
+                outputCol=f"{c}_word_features",
             )
             out_col = f"{self._fname_prefix}__{c}"
             idf = IDF(inputCol=count_tf.getOutputCol(), outputCol=f"{c}_idf_features")
@@ -181,8 +175,7 @@ class TfidfTextTransformer(ObsoleteSparkTransformer, TunableTransformer):
             curr_sdf = tfidf_model.transform(curr_sdf)
 
             role = NumericVectorOrArrayRole(
-                size=vocab_size,
-                element_col_name_template=f"{self._fname_prefix}_{{}}__{idf_col}"
+                size=vocab_size, element_col_name_template=f"{self._fname_prefix}_{{}}__{idf_col}"
             )
 
             all_idf_features.append(idf_col)
@@ -401,10 +394,12 @@ class AutoNLPWrap(ObsoleteSparkTransformer):
             emb_name = transformer.get_name()
             emb_size = transformer.get_out_shape()
 
-            role = NumericVectorOrArrayRole(size=emb_size,
-                                            element_col_name_template=f"{self._fname_prefix}_{emb_name}_{{}}__{c}",
-                                            dtype=np.float32,
-                                            is_vector=False)
+            role = NumericVectorOrArrayRole(
+                size=emb_size,
+                element_col_name_template=f"{self._fname_prefix}_{emb_name}_{{}}__{c}",
+                dtype=np.float32,
+                is_vector=False,
+            )
 
             feat_name = f"{self._fname_prefix}_{emb_name}__{c}"
 
@@ -512,7 +507,9 @@ class Tokenizer(ObsoleteSparkTransformer):
             # PysparkTokenizer transforms strings to lowercase, do not use it
             # tokenizer = PysparkTokenizer(inputCol=column, outputCol=self._fname_prefix + "__" + column)
 
-            tokenizer = PysparkRegexTokenizer(inputCol=column, outputCol=self._fname_prefix + "__" + column, toLowercase=False)
+            tokenizer = PysparkRegexTokenizer(
+                inputCol=column, outputCol=self._fname_prefix + "__" + column, toLowercase=False
+            )
             tokenized = tokenizer.transform(spark_data_frame)
             spark_data_frame = tokenized
             spark_data_frame = spark_data_frame.drop(column)

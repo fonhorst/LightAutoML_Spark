@@ -122,7 +122,7 @@ class ImageFeaturesTransformer(ObsoleteSparkTransformer):
                 size=len(self._fg.fe.get_names()),
                 element_col_name_template=[f"{self._fname_prefix}_{name}__{c}" for name in self._fg.fe.get_names()],
                 dtype=np.float32,
-                is_vector=False
+                is_vector=False,
             )
             fg_bcast = dataset.spark_session.sparkContext.broadcast(self._fg)
 
@@ -145,12 +145,13 @@ class ImageFeaturesTransformer(ObsoleteSparkTransformer):
 
 class AutoCVWrap(ObsoleteSparkTransformer):
     """Calculate image embeddings."""
+
     _fit_checks = ()
     _transform_checks = ()
     _fname_prefix = "emb_cv"
     _emb_name = ""
 
-    _T = TypeVar('_T')
+    _T = TypeVar("_T")
 
     @property
     def features(self) -> List[str]:
@@ -167,17 +168,17 @@ class AutoCVWrap(ObsoleteSparkTransformer):
         raise NotImplementedError()
 
     def __init__(
-            self,
-            model="efficientnet-b0",
-            weights_path: Optional[str] = None,
-            cache_dir: str = "./cache_CV",
-            subs: Optional = None,
-            device: torch.device = torch.device("cuda:0"),
-            n_jobs: int = 4,
-            random_state: int = 42,
-            is_advprop: bool = True,
-            batch_size: int = 128,
-            verbose: bool = True
+        self,
+        model="efficientnet-b0",
+        weights_path: Optional[str] = None,
+        cache_dir: str = "./cache_CV",
+        subs: Optional = None,
+        device: torch.device = torch.device("cuda:0"),
+        n_jobs: int = 4,
+        random_state: int = 42,
+        is_advprop: bool = True,
+        batch_size: int = 128,
+        verbose: bool = True,
     ):
         """
 
@@ -209,7 +210,7 @@ class AutoCVWrap(ObsoleteSparkTransformer):
             weights_path,
             batch_size,
             verbose,
-            image_loader=self._image_loader
+            image_loader=self._image_loader,
         )
 
         self._emb_name = "DI_" + single_text_hash(self.embed_model)
@@ -234,7 +235,7 @@ class AutoCVWrap(ObsoleteSparkTransformer):
                 # TODO: better to mark fitless classes with some Marker type via inheritance
                 # TODO: to avoid errors of applying the wrong transformer as early as possible
                 deepcopy(self.transformer.fit(sdf.select(c))),
-                out_column_name
+                out_column_name,
             )
 
         self._features = [feat for _, feat in self._img_transformers.values()]
@@ -261,7 +262,7 @@ class AutoCVWrap(ObsoleteSparkTransformer):
                 size=self.emb_size,
                 element_col_name_template=f"{self._fname_prefix}_{self._emb_name}_{{}}__{c}",
                 dtype=np.float32,
-                is_vector=False
+                is_vector=False,
             )
 
             # TODO: probably transformer should be created on the worker side and not in the driver

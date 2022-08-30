@@ -6,8 +6,16 @@ from pyspark.ml.functions import vector_to_array
 from pyspark.sql import functions as F, Column
 from pyspark.sql.session import SparkSession
 
-from lightautoml.dataset.base import LAMLDataset, IntIdx, RowSlice, ColSlice, LAMLColumn, RolesDict, \
-    valid_array_attributes, array_attr_roles
+from lightautoml.dataset.base import (
+    LAMLDataset,
+    IntIdx,
+    RowSlice,
+    ColSlice,
+    LAMLColumn,
+    RolesDict,
+    valid_array_attributes,
+    array_attr_roles,
+)
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset, NpRoles
 from lightautoml.dataset.roles import ColumnRole, NumericRole, DropRole
 from sparklightautoml import VALIDATION_COLUMN
@@ -20,6 +28,7 @@ class SparkDataset(LAMLDataset):
     """
     Implements a dataset that uses a ``pyspark.sql.DataFrame`` internally, stores some internal state (features, roles, ...) and provide methods to work with dataset.
     """
+
     _init_checks = ()
     _data_checks = ()
     _concat_checks = ()
@@ -63,11 +72,7 @@ class SparkDataset(LAMLDataset):
 
         return output
 
-    def __init__(self,
-                 data: SparkDataFrame,
-                 roles: Optional[RolesDict],
-                 task: Optional[Task] = None,
-                 **kwargs: Any):
+    def __init__(self, data: SparkDataFrame, roles: Optional[RolesDict], task: Optional[Task] = None, **kwargs: Any):
 
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
@@ -85,12 +90,7 @@ class SparkDataset(LAMLDataset):
         self._validate_dataframe(data)
 
         self._data = None
-        self._service_columns: Set[str] = {
-            self.ID_COLUMN,
-            self.target_column,
-            self.folds_column,
-            VALIDATION_COLUMN
-        }
+        self._service_columns: Set[str] = {self.ID_COLUMN, self.target_column, self.folds_column, VALIDATION_COLUMN}
 
         roles = roles if roles else dict()
 
@@ -123,8 +123,7 @@ class SparkDataset(LAMLDataset):
             list of features.
 
         """
-        return [c for c in self.data.columns if c not in self._service_columns] \
-            if self.data else []
+        return [c for c in self.data.columns if c not in self._service_columns] if self.data else []
 
     @features.setter
     def features(self, val: None):
@@ -194,10 +193,9 @@ class SparkDataset(LAMLDataset):
         if isinstance(clice, str):
             clice = [clice]
 
-        assert all(c in self.features for c in clice), \
-            f"Not all columns presented in the dataset.\n" \
-            f"Presented: {self.features}\n" \
-            f"Asked for: {clice}"
+        assert all(c in self.features for c in clice), (
+            f"Not all columns presented in the dataset.\n" f"Presented: {self.features}\n" f"Asked for: {clice}"
+        )
 
         present_svc_cols = [c for c in self.service_columns]
         sdf = cast(SparkDataFrame, self.data.select(*present_svc_cols, *clice))
@@ -213,12 +211,15 @@ class SparkDataset(LAMLDataset):
         raise NotImplementedError(f"The method is not supported by {self._dataset_type}")
 
     def _validate_dataframe(self, sdf: SparkDataFrame) -> None:
-        assert self.ID_COLUMN in sdf.columns, \
-            f"No special unique row id column (the column name: {self.ID_COLUMN}) in the spark dataframe"
+        assert (
+            self.ID_COLUMN in sdf.columns
+        ), f"No special unique row id column (the column name: {self.ID_COLUMN}) in the spark dataframe"
         # assert kwargs["target"] in data.columns, \
         #     f"No target column (the column name: {kwargs['target']}) in the spark dataframe"
 
-    def _materialize_to_pandas(self) -> Tuple[pd.DataFrame, Optional[pd.Series], Optional[pd.Series], Dict[str, ColumnRole]]:
+    def _materialize_to_pandas(
+        self,
+    ) -> Tuple[pd.DataFrame, Optional[pd.Series], Optional[pd.Series], Dict[str, ColumnRole]]:
         sdf = self.data
 
         def expand_if_vec_or_arr(col, role) -> Tuple[List[Column], ColumnRole]:
@@ -231,10 +232,7 @@ class SparkDataset(LAMLDataset):
                     return vector_to_array(column)
                 return column
 
-            arr = [
-                to_array(F.col(col))[i].alias(vrole.feature_name_at(i))
-                for i in range(vrole.size)
-            ]
+            arr = [to_array(F.col(col))[i].alias(vrole.feature_name_at(i)) for i in range(vrole.size)]
 
             return arr, NumericRole(dtype=vrole.dtype)
 
@@ -269,10 +267,7 @@ class SparkDataset(LAMLDataset):
 
         return df, target_series, folds_series, all_roles
 
-    def set_data(self,
-                 data: SparkDataFrame,
-                 features: List[str],
-                 roles: NpRoles = None):
+    def set_data(self, data: SparkDataFrame, features: List[str], roles: NpRoles = None):
         """Inplace set data, features, roles for empty dataset.
 
         Args:
@@ -290,9 +285,9 @@ class SparkDataset(LAMLDataset):
         task = Task(self.task.name) if self.task else None
         kwargs = dict()
         if target_data is not None:
-            kwargs['target'] = target_data
+            kwargs["target"] = target_data
         if folds_data is not None:
-            kwargs['folds'] = folds_data
+            kwargs["folds"] = folds_data
         pds = PandasDataset(data=data, roles=roles, task=task, **kwargs)
 
         return pds
@@ -319,12 +314,7 @@ class SparkDataset(LAMLDataset):
             folds = None
 
         return NumpyDataset(
-            data=data.to_numpy(),
-            features=list(data.columns),
-            roles=roles,
-            task=self.task,
-            target=target,
-            folds=folds
+            data=data.to_numpy(), features=list(data.columns), roles=roles, task=self.task, target=target, folds=folds
         )
 
     @staticmethod

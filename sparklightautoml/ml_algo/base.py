@@ -31,12 +31,12 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
     _default_validation_col_name: str = SparkBaseTrainValidIterator.TRAIN_VAL_COLUMN
 
     def __init__(
-            self,
-            cacher_key: str,
-            default_params: Optional[dict] = None,
-            freeze_defaults: bool = True,
-            timer: Optional[TaskTimer] = None,
-            optimization_search_space: Optional[dict] = {},
+        self,
+        cacher_key: str,
+        default_params: Optional[dict] = None,
+        freeze_defaults: bool = True,
+        timer: Optional[TaskTimer] = None,
+        optimization_search_space: Optional[dict] = {},
     ):
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
         self._cacher_key = cacher_key
@@ -52,7 +52,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
     def prediction_feature(self) -> str:
         # return self._prediction_col
         return f"prediction_{self._name}"
-
 
     @property
     def prediction_role(self) -> ColumnRole:
@@ -115,18 +114,14 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         if self.task.name == "multiclass":
             outp_dim = valid_ds.data.select(F.max(valid_ds.target_column).alias("max")).first()
             outp_dim = outp_dim["max"] + 1
-            self._prediction_role = NumericVectorOrArrayRole(outp_dim,
-                                                             f"{self.prediction_feature}" + "_{}",
-                                                             np.float32,
-                                                             force_input=True,
-                                                             prob=True)
+            self._prediction_role = NumericVectorOrArrayRole(
+                outp_dim, f"{self.prediction_feature}" + "_{}", np.float32, force_input=True, prob=True
+            )
         elif self.task.name == "binary":
             outp_dim = 2
-            self._prediction_role = NumericVectorOrArrayRole(outp_dim,
-                                                             f"{self.prediction_feature}" + "_{}",
-                                                             np.float32,
-                                                             force_input=True,
-                                                             prob=True)
+            self._prediction_role = NumericVectorOrArrayRole(
+                outp_dim, f"{self.prediction_feature}" + "_{}", np.float32, force_input=True, prob=True
+            )
         else:
             self._prediction_role = NumericRole(np.float32, force_input=True, prob=False)
 
@@ -174,8 +169,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         preds_dfs = [
             df.select(
-                '*',
-                *[F.lit(neutral_element).alias(c) for c in self._models_prediction_columns if c not in df.columns]
+                "*", *[F.lit(neutral_element).alias(c) for c in self._models_prediction_columns if c not in df.columns]
             )
             for df in preds_dfs
         ]
@@ -194,18 +188,17 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         if iterator_len > 1:
             single_pred_ds = self._make_single_prediction_dataset(pred_ds)
             logger.info(
-                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(single_pred_ds)}\x1b[0m")
+                f"Fitting \x1b[1m{self._name}\x1b[0m finished. score = \x1b[1m{self.score(single_pred_ds)}\x1b[0m"
+            )
 
         if iterator_len > 1 or "Tuned" not in self._name:
             logger.info("\x1b[1m{}\x1b[0m fitting and predicting completed".format(self._name))
 
         return pred_ds
 
-    def fit_predict_single_fold(self,
-                                fold_prediction_column: str,
-                                full: SparkDataset,
-                                train: SparkDataset,
-                                valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+    def fit_predict_single_fold(
+        self, fold_prediction_column: str, full: SparkDataset, train: SparkDataset, valid: SparkDataset
+    ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
         Args:
@@ -245,7 +238,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
     def _predict_feature_name(self):
         return f"{self._name}_prediction"
 
-    def _set_prediction(self, dataset: SparkDataset,  preds: SparkDataFrame) -> SparkDataset:
+    def _set_prediction(self, dataset: SparkDataset, preds: SparkDataFrame) -> SparkDataset:
         """Insert predictions to dataset with. Inplace transformation.
 
         Args:
@@ -260,11 +253,13 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         prob = self.task.name in ["binary", "multiclass"]
 
         if self.task.name in ["binary", "multiclass"]:
-            role = NumericVectorOrArrayRole(size=self.n_classes,
-                                            element_col_name_template=self._predict_feature_name() + "_{}",
-                                            dtype=np.float32,
-                                            force_input=True,
-                                            prob=prob)
+            role = NumericVectorOrArrayRole(
+                size=self.n_classes,
+                element_col_name_template=self._predict_feature_name() + "_{}",
+                dtype=np.float32,
+                force_input=True,
+                prob=prob,
+            )
         else:
             role = NumericRole(dtype=np.float32, force_input=True, prob=prob)
 
@@ -293,20 +288,23 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
     """
     Transformer that gets one or more columns and produce column with average values.
     """
+
     taskName = Param(Params._dummy(), "taskName", "task name")
     removeCols = Param(Params._dummy(), "removeCols", "cols to remove")
     convertToArrayFirst = Param(Params._dummy(), "convertToArrayFirst", "convert to array first")
     weights = Param(Params._dummy(), "weights", "weights")
     dimNum = Param(Params._dummy(), "dimNum", "dim num")
 
-    def __init__(self,
-                 task_name: str = None,
-                 input_cols: List[str] = [],
-                 output_col: str = "averaged_values",
-                 remove_cols: Optional[List[str]] = None,
-                 convert_to_array_first: bool = False,
-                 weights: Optional[List[int]] = None,
-                 dim_num: int = 1):
+    def __init__(
+        self,
+        task_name: str = None,
+        input_cols: List[str] = [],
+        output_col: str = "averaged_values",
+        remove_cols: Optional[List[str]] = None,
+        convert_to_array_first: bool = False,
+        weights: Optional[List[int]] = None,
+        dim_num: int = 1,
+    ):
         """
         Args:
             task_name (str, optional): Task name: "binary", "multiclass" or "reg".
@@ -354,30 +352,37 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
         pred_cols = self.getInputCols()
         dim_size = self.getInputCols()
         weights = {c: w for w, c in zip(self.getWeights(), pred_cols)}
-        non_null_count_col = (F.lit(len(pred_cols)) - sum(F.isnull(c).astype(IntegerType()) for c in pred_cols))
+        non_null_count_col = F.lit(len(pred_cols)) - sum(F.isnull(c).astype(IntegerType()) for c in pred_cols)
 
         if self.getTaskName() in ["binary", "multiclass"]:
+
             def convert_column(c):
                 return vector_to_array(c).alias(c) if self.getConvertToArrayFirst() else F.col(c)
 
             normalized_cols = [
                 F.when(F.isnull(c), F.array(*[F.lit(0.0) for _ in range(self.getDimNum())]))
-                    .otherwise(convert_column(c)).alias(c)
+                .otherwise(convert_column(c))
+                .alias(c)
                 for c in pred_cols
             ]
-            arr_fields_summ = F.transform(F.arrays_zip(*normalized_cols), lambda x: F.aggregate(
-                F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]),
-                F.lit(0.0),
-                lambda acc, x: acc + x
-            ) / non_null_count_col)
+            arr_fields_summ = F.transform(
+                F.arrays_zip(*normalized_cols),
+                lambda x: F.aggregate(
+                    F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]), F.lit(0.0), lambda acc, x: acc + x
+                )
+                / non_null_count_col,
+            )
 
             out_col = array_to_vector(arr_fields_summ) if self.getConvertToArrayFirst() else arr_fields_summ
         else:
-            scalar_fields_summ = F.aggregate(
-                F.array(*[F.col(c) * F.lit(weights[c]) for c in pred_cols]),
-                F.lit(0.0),
-                lambda acc, x: acc + F.when(F.isnull(x), F.lit(0.0)).otherwise(x)
-            ) / non_null_count_col
+            scalar_fields_summ = (
+                F.aggregate(
+                    F.array(*[F.col(c) * F.lit(weights[c]) for c in pred_cols]),
+                    F.lit(0.0),
+                    lambda acc, x: acc + F.when(F.isnull(x), F.lit(0.0)).otherwise(x),
+                )
+                / non_null_count_col
+            )
 
             out_col = scalar_fields_summ
 

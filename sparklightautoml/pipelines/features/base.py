@@ -22,13 +22,26 @@ from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from sparklightautoml.transformers.base import SparkChangeRolesTransformer, ColumnsSelectorTransformer, \
-    DropColumnsTransformer
-from sparklightautoml.transformers.base import SparkBaseEstimator, SparkBaseTransformer, SparkUnionTransformer, \
-    SparkSequentialTransformer, SparkEstOrTrans, SparkColumnsAndRoles
-from sparklightautoml.transformers.categorical import SparkCatIntersectionsEstimator, \
-    SparkFreqEncoderEstimator, \
-    SparkLabelEncoderEstimator, SparkOrdinalEncoderEstimator, SparkMulticlassTargetEncoderEstimator
+from sparklightautoml.transformers.base import (
+    SparkChangeRolesTransformer,
+    ColumnsSelectorTransformer,
+    DropColumnsTransformer,
+)
+from sparklightautoml.transformers.base import (
+    SparkBaseEstimator,
+    SparkBaseTransformer,
+    SparkUnionTransformer,
+    SparkSequentialTransformer,
+    SparkEstOrTrans,
+    SparkColumnsAndRoles,
+)
+from sparklightautoml.transformers.categorical import (
+    SparkCatIntersectionsEstimator,
+    SparkFreqEncoderEstimator,
+    SparkLabelEncoderEstimator,
+    SparkOrdinalEncoderEstimator,
+    SparkMulticlassTargetEncoderEstimator,
+)
 from sparklightautoml.transformers.categorical import SparkTargetEncoderEstimator
 from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
@@ -92,8 +105,7 @@ class SelectTransformer(Transformer):
     Transformer that returns ``pyspark.sql.DataFrame`` with selected columns.
     """
 
-    colsToSelect = Param(Params._dummy(), "colsToSelect",
-                        "columns to select from the dataframe")
+    colsToSelect = Param(Params._dummy(), "colsToSelect", "columns to select from the dataframe")
 
     def __init__(self, cols_to_select: List[str]):
         """
@@ -126,7 +138,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
     """
 
-    def __init__(self, cacher_key: str = 'default_cacher', **kwargs):
+    def __init__(self, cacher_key: str = "default_cacher", **kwargs):
         super().__init__(**kwargs)
         self._cacher_key = cacher_key
         self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
@@ -225,8 +237,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
 
         return FittedPipe(sdf=current_sdf, transformer=pipeline, roles=out_roles)
 
-    def _optimize_and_fit(self, train: SparkDataFrame, pipeline: SparkEstOrTrans)\
-            -> FittedPipe:
+    def _optimize_and_fit(self, train: SparkDataFrame, pipeline: SparkEstOrTrans) -> FittedPipe:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
 
@@ -290,7 +301,7 @@ class SparkTabularDataFeatures:
         self.multiclass_te_co = 3
         self.top_intersections = 5
         self.max_intersection_depth = 3
-        self.subsample = 0.1 #10000
+        self.subsample = 0.1  # 10000
         self.random_state = 42
         self.feats_imp = None
         self.ascending_by_cardinality = False
@@ -342,11 +353,7 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in itertools.chain(base_dates, datetimes)}
 
-        base_diff = SparkBaseDiffTransformer(
-            input_roles=roles,
-            base_names=base_dates,
-            diff_names=datetimes
-        )
+        base_diff = SparkBaseDiffTransformer(input_roles=roles, base_names=base_dates, diff_names=datetimes)
 
         return base_diff
 
@@ -408,14 +415,15 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        num_processing = SparkChangeRolesTransformer(input_cols=feats_to_select,
-                                                     input_roles=roles,
-                                                     role=NumericRole(np.float32))
+        num_processing = SparkChangeRolesTransformer(
+            input_cols=feats_to_select, input_roles=roles, role=NumericRole(np.float32)
+        )
 
         return num_processing
 
-    def get_freq_encoding(self, train: SparkDataset, feats_to_select: Optional[List[str]] = None) \
-            -> Optional[SparkBaseEstimator]:
+    def get_freq_encoding(
+        self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
+    ) -> Optional[SparkBaseEstimator]:
         """Get frequency encoding part.
 
         Args:
@@ -459,10 +467,9 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        ord = SparkOrdinalEncoderEstimator(input_cols=feats_to_select,
-                                           input_roles=roles,
-                                           subs=self.subsample,
-                                           random_state=self.random_state)
+        ord = SparkOrdinalEncoderEstimator(
+            input_cols=feats_to_select, input_roles=roles, subs=self.subsample, random_state=self.random_state
+        )
 
         return ord
 
@@ -491,10 +498,9 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        cat_processing = SparkLabelEncoderEstimator(input_cols=feats_to_select,
-                                                    input_roles=roles,
-                                                    subs=self.subsample,
-                                                    random_state=self.random_state)
+        cat_processing = SparkLabelEncoderEstimator(
+            input_cols=feats_to_select, input_roles=roles, subs=self.subsample, random_state=self.random_state
+        )
         return cat_processing
 
     def get_target_encoder(self, train: SparkDataset) -> Optional[type]:
@@ -513,7 +519,7 @@ class SparkTabularDataFeatures:
                 target_encoder = SparkTargetEncoderEstimator
             else:
                 result = train.data.select(F.max(train.target_column).alias("max")).first()
-                n_classes = result['max'] + 1
+                n_classes = result["max"] + 1
 
                 if n_classes <= self.multiclass_te_co:
                     target_encoder = SparkMulticlassTargetEncoderEstimator
@@ -542,9 +548,7 @@ class SparkTabularDataFeatures:
         roles = {f: train.roles[f] for f in feats_to_select}
 
         binned_processing = SparkQuantileBinningEstimator(
-            input_cols=feats_to_select,
-            input_roles=roles,
-            nbins=self.max_bin_count
+            input_cols=feats_to_select, input_roles=roles, nbins=self.max_bin_count
         )
 
         return binned_processing
@@ -578,9 +582,9 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        cat_processing = SparkCatIntersectionsEstimator(input_cols=feats_to_select,
-                                                        input_roles=roles,
-                                                        max_depth=self.max_intersection_depth)
+        cat_processing = SparkCatIntersectionsEstimator(
+            input_cols=feats_to_select, input_roles=roles, max_depth=self.max_intersection_depth
+        )
 
         return cat_processing
 

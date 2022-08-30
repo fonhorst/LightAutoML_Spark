@@ -65,7 +65,7 @@ class SparkBlender(ABC):
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
             self._transformer = ColumnsSelectorTransformer(
                 input_cols=[SparkDataset.ID_COLUMN] + list(pipes[0].output_roles.keys()),
-                optional_cols=[predictions.target_column] if predictions.target_column else []
+                optional_cols=[predictions.target_column] if predictions.target_column else [],
             )
             self._output_roles = copy(predictions.roles)
             return predictions, pipes
@@ -86,12 +86,12 @@ class SparkBlender(ABC):
 
         return sds
 
-    def _fit_predict(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) \
-        -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
+    def _fit_predict(
+        self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]
+    ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
         raise NotImplementedError()
 
-    def split_models(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) \
-            -> List[Tuple[str, int, int]]:
+    def split_models(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) -> List[Tuple[str, int, int]]:
         """Split predictions by single model prediction datasets.
 
         Args:
@@ -124,9 +124,7 @@ class SparkBlender(ABC):
 
     def _make_single_pred_ds(self, predictions: SparkDataset, pred_col: str) -> SparkDataset:
         pred_sdf = predictions.data.select(
-            SparkDataset.ID_COLUMN,
-            predictions.target_column,
-            F.col(pred_col).alias(self._single_prediction_col_name)
+            SparkDataset.ID_COLUMN, predictions.target_column, F.col(pred_col).alias(self._single_prediction_col_name)
         )
         pred_roles = {c: predictions.roles[c] for c in pred_sdf.columns}
         pred_ds = predictions.empty()
@@ -158,8 +156,9 @@ class SparkBestModelSelector(SparkBlender, WeightedBlender):
 
     """
 
-    def _fit_predict(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) \
-            -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
+    def _fit_predict(
+        self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]
+    ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
         """Simple fit - just take one best.
 
         Args:
@@ -209,15 +208,22 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
 
     """
 
-    def __init__(self, max_iters: int = 5, max_inner_iters: int = 7, max_nonzero_coef: float = 0.05,):
+    def __init__(
+        self,
+        max_iters: int = 5,
+        max_inner_iters: int = 7,
+        max_nonzero_coef: float = 0.05,
+    ):
         SparkBlender.__init__(self)
         WeightedBlender.__init__(self, max_iters, max_inner_iters, max_nonzero_coef)
         self._predictions_dataset: Optional[SparkDataset] = None
 
-    def _get_weighted_pred(self,
-                           splitted_preds: Sequence[str],
-                           wts: Optional[np.ndarray],
-                           remove_splitted_preds_cols: Optional[List[str]] = None) -> SparkDataset:
+    def _get_weighted_pred(
+        self,
+        splitted_preds: Sequence[str],
+        wts: Optional[np.ndarray],
+        remove_splitted_preds_cols: Optional[List[str]] = None,
+    ) -> SparkDataset:
         avr = self._build_avr_transformer(splitted_preds, wts, remove_splitted_preds_cols)
 
         weighted_preds_sdf = avr.transform(self._predictions_dataset.data)
@@ -227,9 +233,12 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
 
         return wpreds_sds
 
-    def _build_avr_transformer(self, splitted_preds: Sequence[str],
-                               wts: Optional[np.ndarray],
-                               remove_splitted_preds_cols: Optional[List[str]] = None) -> AveragingTransformer:
+    def _build_avr_transformer(
+        self,
+        splitted_preds: Sequence[str],
+        wts: Optional[np.ndarray],
+        remove_splitted_preds_cols: Optional[List[str]] = None,
+    ) -> AveragingTransformer:
         remove_cols = list(splitted_preds)
 
         if remove_splitted_preds_cols is not None:
@@ -242,11 +251,12 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
             remove_cols=remove_cols,
             convert_to_array_first=True,
             weights=(wts * len(wts)).tolist(),
-            dim_num=self._outp_dim
+            dim_num=self._outp_dim,
         )
 
-    def _fit_predict(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) \
-            -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
+    def _fit_predict(
+        self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]
+    ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
 
         self._predictions_dataset = predictions
 
@@ -261,10 +271,10 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         _, self.wts = self._prune_pipe(pipes, wts, pipe_idx)
         pipes = cast(Sequence[SparkMLPipeline], pipes)
 
-        self._transformer = self._build_avr_transformer(reweighted_pred_cols, self.wts,
-                                                        remove_splitted_preds_cols=removed_cols)
-        outp = self._get_weighted_pred(reweighted_pred_cols, self.wts,
-                                       remove_splitted_preds_cols=removed_cols)
+        self._transformer = self._build_avr_transformer(
+            reweighted_pred_cols, self.wts, remove_splitted_preds_cols=removed_cols
+        )
+        outp = self._get_weighted_pred(reweighted_pred_cols, self.wts, remove_splitted_preds_cols=removed_cols)
 
         return outp, pipes
 
@@ -277,11 +287,10 @@ class SparkMeanBlender(SparkBlender):
     No pruning.
 
     """
-    
-    def _fit_predict(self,
-                     predictions: SparkDataset,
-                     pipes: Sequence[SparkMLPipeline]
-                     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
+
+    def _fit_predict(
+        self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]
+    ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
 
         pred_cols = [pred_col for pred_col, _, _ in self.split_models(predictions, pipes)]
 
@@ -291,7 +300,7 @@ class SparkMeanBlender(SparkBlender):
             output_col=self._single_prediction_col_name,
             remove_cols=pred_cols,
             convert_to_array_first=not (predictions.task.name == "reg"),
-            dim_num=self._outp_dim
+            dim_num=self._outp_dim,
         )
 
         df = self._transformer.transform(predictions.data)
@@ -303,7 +312,7 @@ class SparkMeanBlender(SparkBlender):
                 f"MeanBlend_{{}}",
                 dtype=np.float32,
                 prob=self._outp_prob,
-                is_vector=self._pred_role.is_vector
+                is_vector=self._pred_role.is_vector,
             )
         else:
             output_role = NumericRole(np.float32, prob=self._outp_prob)
@@ -316,4 +325,3 @@ class SparkMeanBlender(SparkBlender):
         self._output_roles = copy(roles)
 
         return pred_ds, pipes
-

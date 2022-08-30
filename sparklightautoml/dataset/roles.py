@@ -12,14 +12,14 @@ class NumericVectorOrArrayRole(NumericRole):
     _name = "NumericOrArrayVector"
 
     def __init__(
-            self,
-            size: int,
-            element_col_name_template: Union[str, List[str]],
-            dtype: Dtype = np.float32,
-            force_input: bool = False,
-            prob: bool = False,
-            discretization: bool = False,
-            is_vector: bool = True
+        self,
+        size: int,
+        element_col_name_template: Union[str, List[str]],
+        dtype: Dtype = np.float32,
+        force_input: bool = False,
+        prob: bool = False,
+        discretization: bool = False,
+        is_vector: bool = True,
     ):
         """
         Args:

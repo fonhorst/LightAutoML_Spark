@@ -49,11 +49,9 @@ def replace_dayofweek_in_date(date: datetime.datetime, dayofweek: int):
     return date
 
 
-def calc_feats_permutation_imps(model,
-                                used_feats: List[str],
-                                data: SparkDataFrame,
-                                metric: SparkMetric,
-                                silent: bool = False):
+def calc_feats_permutation_imps(
+    model, used_feats: List[str], data: SparkDataFrame, metric: SparkMetric, silent: bool = False
+):
     n_used_feats = len(used_feats)
     if not silent:
         logger.info3("LightAutoML used {} feats".format(n_used_feats))
@@ -63,30 +61,22 @@ def calc_feats_permutation_imps(model,
 
     feat_imp = []
     for it, feat in enumerate(used_feats):
-        feat_imp.append(
-            calc_one_feat_imp(
-                (it + 1, n_used_feats),
-                feat,
-                model,
-                data,
-                norm_score,
-                metric,
-                silent
-            )
-        )
+        feat_imp.append(calc_one_feat_imp((it + 1, n_used_feats), feat, model, data, norm_score, metric, silent))
     feat_imp = pd.DataFrame(feat_imp, columns=["Feature", "Importance"])
     feat_imp = feat_imp.sort_values("Importance", ascending=False).reset_index(drop=True)
     return feat_imp
 
 
-def calc_one_feat_imp(iters: Tuple[int, int],
-                      feat: str,
-                      model,
-                      data: SparkDataFrame,
-                      norm_score: float,
-                      metric: SparkMetric,
-                      silent: bool,
-                      seed: int = 42):
+def calc_one_feat_imp(
+    iters: Tuple[int, int],
+    feat: str,
+    model,
+    data: SparkDataFrame,
+    norm_score: float,
+    metric: SparkMetric,
+    silent: bool,
+    seed: int = 42,
+):
 
     field: StructField = data.schema[feat]
 

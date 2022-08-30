@@ -14,8 +14,12 @@ from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
 from lightautoml.dataset.utils import roles_parser
 from lightautoml.reader.base import Reader, UserDefinedRolesDict, RoleType, RolesDict
-from lightautoml.reader.guess_roles import calc_encoding_rules, rule_based_roles_guess, calc_category_rules, \
-    rule_based_cat_handler_guess
+from lightautoml.reader.guess_roles import (
+    calc_encoding_rules,
+    rule_based_roles_guess,
+    calc_category_rules,
+    rule_based_cat_handler_guess,
+)
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
@@ -24,7 +28,7 @@ from lightautoml.tasks import Task
 
 logger = logging.getLogger(__name__)
 
-dtype2Stype ={
+dtype2Stype = {
     "str": "string",
     "bool": "boolean",
     "int": "int",
@@ -47,7 +51,7 @@ dtype2Stype ={
     "float": "float",
     "float32": "float",
     "float64": "double",
-    "float128": "double"
+    "float128": "double",
 }
 
 stype2dtype = {
@@ -58,7 +62,7 @@ stype2dtype = {
     "bigint": "longlong",
     "long": "long",
     "float": "float",
-    "double": "float64"
+    "double": "float64",
 }
 
 
@@ -72,10 +76,7 @@ class SparkReaderHelper:
         logger.debug("SparkReaderHelper._create_unique_ids() is started")
 
         if SparkDataset.ID_COLUMN not in train_data.columns:
-            train_data = train_data.select(
-                '*',
-                F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN)
-            )
+            train_data = train_data.select("*", F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN))
 
         if cacher_key is not None:
             cacher = Cacher(key=cacher_key)
@@ -87,23 +88,21 @@ class SparkReaderHelper:
         return train_data
 
     @staticmethod
-    def _convert_column(feat: str,  role: ColumnRole):
+    def _convert_column(feat: str, role: ColumnRole):
         if isinstance(role, DatetimeRole):
             result_column = F.to_timestamp(feat, role.format).alias(feat)
         elif isinstance(role, NumericRole):
             typ = dtype2Stype[role.dtype.__name__]
-            result_column = (
-                F.when(F.isnull(feat), float('nan'))
-                    .otherwise(F.col(feat).astype(typ))
-                    .alias(feat)
-            )
+            result_column = F.when(F.isnull(feat), float("nan")).otherwise(F.col(feat).astype(typ)).alias(feat)
         else:
             result_column = F.col(feat)
 
         return result_column
 
     @staticmethod
-    def _process_target_column(task_name: str, class_mapping: Dict, sdf: SparkDataFrame, target_col: str) -> SparkDataFrame:
+    def _process_target_column(
+        task_name: str, class_mapping: Dict, sdf: SparkDataFrame, target_col: str
+    ) -> SparkDataFrame:
         if class_mapping is not None:
             sdf = sdf.replace(class_mapping, subset=[target_col])
 
@@ -111,10 +110,7 @@ class SparkReaderHelper:
 
         cols = copy(sdf.columns)
         cols.remove(target_col)
-        sdf = sdf.select(
-            *cols,
-            F.col(target_col).astype(to_type).alias(target_col)
-        )
+        sdf = sdf.select(*cols, F.col(target_col).astype(to_type).alias(target_col))
 
         return sdf
 
@@ -154,8 +150,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         max_score_rate: float = 0.2,
         abs_score_val: float = 0.04,
         drop_score_co: float = 0.01,
-        cacher_key: str = 'default_cacher',
-        **kwargs: Any
+        cacher_key: str = "default_cacher",
+        **kwargs: Any,
     ):
         """
 
@@ -259,10 +255,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             parsed_roles[feat] = r
 
         assert "target" in kwargs, "Target should be defined"
-        assert isinstance(kwargs["target"], str), \
-            f"Target must be a column name, but it is {type(kwargs['target'])}"
-        assert kwargs["target"] in train_data.columns, \
-            f"Target must be a part of dataframe. Target: {kwargs['target']}"
+        assert isinstance(kwargs["target"], str), f"Target must be a column name, but it is {type(kwargs['target'])}"
+        assert kwargs["target"] in train_data.columns, f"Target must be a part of dataframe. Target: {kwargs['target']}"
         self.target_col = kwargs["target"]
 
         train_data = self._create_target(train_data, target_col=self.target_col)
@@ -294,11 +288,13 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 if r.name == "Datetime":
                     # try if it's ok to infer date with given params
                     result = subsample.select(
-                        F.sum(F.to_timestamp(feat, format=r.format).isNotNull().astype(IntegerType())).alias(f"{feat}_dt"),
-                        F.count('*').alias("count")
+                        F.sum(F.to_timestamp(feat, format=r.format).isNotNull().astype(IntegerType())).alias(
+                            f"{feat}_dt"
+                        ),
+                        F.count("*").alias("count"),
                     ).first()
 
-                    if result[f"{feat}_dt"] != result['count']:
+                    if result[f"{feat}_dt"] != result["count"]:
                         raise ValueError("Looks like given datetime parsing params are not correctly defined")
 
                 # replace default category dtype for numeric roles dtype if cat col dtype is numeric
@@ -345,22 +341,15 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         kwargs["target"] = self.target_col
 
         ff = [
-            F.when(F.isnull(f), float('nan')).otherwise(F.col(f).astype(FloatType())).alias(f)
-            if isinstance(self.roles[f], NumericRole) else f
+            F.when(F.isnull(f), float("nan")).otherwise(F.col(f).astype(FloatType())).alias(f)
+            if isinstance(self.roles[f], NumericRole)
+            else f
             for f in self.used_features
         ]
 
-        train_data = (
-            train_data
-            .select(SparkDataset.ID_COLUMN, self.target_col, folds_col, *ff)
-        )
+        train_data = train_data.select(SparkDataset.ID_COLUMN, self.target_col, folds_col, *ff)
 
-        dataset = SparkDataset(
-            train_data,
-            self.roles,
-            task=self.task,
-            **kwargs
-        )
+        dataset = SparkDataset(train_data, self.roles, task=self.task, **kwargs)
 
         if self.advanced_roles:
             new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
@@ -370,10 +359,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
 
             dataset = SparkDataset(
-                train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
-                self.roles,
-                task=self.task,
-                **kwargs
+                train_data.select(SparkDataset.ID_COLUMN, *self.used_features), self.roles, task=self.task, **kwargs
             )
 
         logger.info("Reader finished fit_read")
@@ -412,11 +398,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
     def make_transformer(self, add_array_attrs: bool = False):
         roles = {f: self.roles[f] for f in self.used_features}
         transformer = SparkToSparkReaderTransformer(
-            self.task.name,
-            self.class_mapping,
-            copy(self.used_array_attrs),
-            roles,
-            add_array_attrs
+            self.task.name, self.class_mapping, copy(self.used_array_attrs), roles, add_array_attrs
         )
         return transformer
 
@@ -433,26 +415,26 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         if "folds" in kwargs:
             folds_col = kwargs["folds"]
 
-            assert isinstance(folds_col, str), \
-                f"If kwargs contains 'folds' it should be of type str and contain folds column." \
+            assert isinstance(folds_col, str), (
+                f"If kwargs contains 'folds' it should be of type str and contain folds column."
                 f"But kwargs['folds'] has type {type(folds_col)} and contains {folds_col}"
+            )
 
-            assert folds_col in sdf.columns, \
-                f"Folds column ({folds_col}) should be presented in the train dataframe," \
+            assert folds_col in sdf.columns, (
+                f"Folds column ({folds_col}) should be presented in the train dataframe,"
                 f"but it is not possible to find the column among {sdf.columns}"
+            )
 
             cols_dtypes = dict(sdf.dtypes)
-            assert cols_dtypes[folds_col] == 'int', \
-                f"Folds column should be of integer type, but it is {cols_dtypes[folds_col]}"
+            assert (
+                cols_dtypes[folds_col] == "int"
+            ), f"Folds column should be of integer type, but it is {cols_dtypes[folds_col]}"
 
             return sdf, folds_col
 
         h = 1.0 / self.cv
         folds_col = self.DEFAULT_READER_FOLD_COL
-        sdf_with_folds = sdf.select(
-            '*',
-            F.floor(F.rand(self.random_state) / h).alias(folds_col)
-        )
+        sdf_with_folds = sdf.select("*", F.floor(F.rand(self.random_state) / h).alias(folds_col))
         return sdf_with_folds, folds_col
 
     def _create_target(self, sdf: SparkDataFrame, target_col: str = "target") -> SparkDataFrame:
@@ -485,8 +467,10 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 self.class_mapping = {x: f"{i}" for i, x in enumerate(uniques)}
                 srtd = None
             else:
-                raise ValueError(f"Unsupported type of target column {sdf.schema[target_col]}. "
-                                 f"Only numeric and string are supported.")
+                raise ValueError(
+                    f"Unsupported type of target column {sdf.schema[target_col]}. "
+                    f"Only numeric and string are supported."
+                )
 
             if srtd and (np.arange(srtd.shape[0]) == srtd).all():
 
@@ -572,20 +556,19 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             can_cast_to_datetime = F.to_timestamp(feature, format=date_format).isNotNull().astype(IntegerType())
 
             cols_to_check.append((feature, num_dtype, date_format))
-            check_columns.extend([
-                F.sum(can_cast_to_numeric).alias(f"{feature}_num"),
-                F.sum(can_cast_to_datetime).alias(f"{feature}_dt"),
-            ])
+            check_columns.extend(
+                [
+                    F.sum(can_cast_to_numeric).alias(f"{feature}_num"),
+                    F.sum(can_cast_to_datetime).alias(f"{feature}_dt"),
+                ]
+            )
 
-        result = data.select(
-            *check_columns,
-            F.count('*').alias('count')
-        ).first()
+        result = data.select(*check_columns, F.count("*").alias("count")).first()
 
         for feature, num_dtype, date_format in cols_to_check:
-            if result[f"{feature}_num"] == result['count']:
+            if result[f"{feature}_num"] == result["count"]:
                 guessed_cols[feature] = NumericRole(num_dtype)
-            elif result[f"{feature}_dt"] == result['count']:
+            elif result[f"{feature}_dt"] == result["count"]:
                 guessed_cols[feature] = DatetimeRole(np.datetime64, date_format=date_format)
             else:
                 guessed_cols[feature] = CategoryRole(object)
@@ -607,11 +590,17 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         logger.debug("SparkToSparkReader._ok_features() is started")
 
         row = train_data.select(
-            F.count('*').alias('count'),
-            *[F.mean((F.isnull(feature) | F.isnan(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
-              for feature in features if isinstance(train_data.schema[feature].dataType, NumericType)],
-            *[F.mean((F.isnull(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
-              for feature in features if not isinstance(train_data.schema[feature].dataType, NumericType)],
+            F.count("*").alias("count"),
+            *[
+                F.mean((F.isnull(feature) | F.isnan(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
+                for feature in features
+                if isinstance(train_data.schema[feature].dataType, NumericType)
+            ],
+            *[
+                F.mean((F.isnull(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
+                for feature in features
+                if not isinstance(train_data.schema[feature].dataType, NumericType)
+            ],
         ).first()
 
         estimated_features = []
@@ -622,13 +611,12 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
             # TODO: this part may be optimized using sampling
             crow = (
-                train_data
-                .groupby(feat)
-                .agg(F.count('*').alias('count'))
-                .select((F.max('count')).alias('count'))
+                train_data.groupby(feat)
+                .agg(F.count("*").alias("count"))
+                .select((F.max("count")).alias("count"))
                 .first()
             )
-            if crow['count'] / row['count'] >= self.max_constant_rate:
+            if crow["count"] / row["count"] >= self.max_constant_rate:
                 estimated_features.append((feat, False))
                 continue
 
@@ -681,11 +669,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             top_scores.append(stat["max_score"])
 
         # # # guess categories handling type
-        stat = get_category_roles_stat(
-            dataset,
-            random_state=self.random_state,
-            subsample=self.samples
-        )
+        stat = get_category_roles_stat(dataset, random_state=self.random_state, subsample=self.samples)
         if len(stat) > 0:
             # upd stat with rules
             # TODO: add sample params
@@ -703,10 +687,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             # TODO: Add sample params
 
             null_scores = get_null_scores(
-                dataset,
-                list(top_scores.index),
-                random_state=self.random_state,
-                subsample=self.samples
+                dataset, list(top_scores.index), random_state=self.random_state, subsample=self.samples
             )
 
             logger.info("AdvGuessRoles: Null scores stats were calculated")
@@ -729,12 +710,14 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickle
     taskName = Param(Params._dummy(), "taskName", "task name")
     classMapping = Param(Params._dummy(), "classMapping", "class mapping")
 
-    def __init__(self,
-                 task_name: str,
-                 class_mapping: Optional[Dict],
-                 used_array_attrs: Dict[str, str],
-                 roles: Dict[str, ColumnRole],
-                 add_array_attrs: bool = False):
+    def __init__(
+        self,
+        task_name: str,
+        class_mapping: Optional[Dict],
+        used_array_attrs: Dict[str, str],
+        roles: Dict[str, ColumnRole],
+        add_array_attrs: bool = False,
+    ):
         super().__init__()
         self.set(self.taskName, task_name)
         self.set(self.classMapping, class_mapping)
@@ -774,10 +757,7 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickle
                     continue
 
                 if array_attr == "target":
-                    data = self._process_target_column(self.getTaskName(),
-                                                       self.getClassMapping(),
-                                                       data,
-                                                       col_name)
+                    data = self._process_target_column(self.getTaskName(), self.getClassMapping(), data, col_name)
 
                 service_columns.append(col_name)
 
@@ -786,7 +766,7 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickle
         data = data.select(
             SparkDataset.ID_COLUMN,
             *service_columns,
-            *[self._convert_column(feat, role) for feat, role in roles.items()]
+            *[self._convert_column(feat, role) for feat, role in roles.items()],
         )
 
         return data

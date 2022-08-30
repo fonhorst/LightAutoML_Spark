@@ -83,11 +83,7 @@ class SparkNpPermutationImportanceEstimator(SparkImportanceEstimator):
             permutated_df = df.withColumn(feat, permutate(feat))
 
             ds: SparkDataset = valid_data.empty()
-            ds.set_data(
-                permutated_df,
-                valid_data.features,
-                valid_data.roles
-            )
+            ds.set_data(permutated_df, valid_data.features, valid_data.roles)
             logger.debug("Dataframe with shuffled column prepared")
 
             # Calculate predict and metric

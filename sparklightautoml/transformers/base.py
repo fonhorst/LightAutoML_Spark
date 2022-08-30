@@ -13,8 +13,11 @@ from lightautoml.dataset.utils import concatenate
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.utils import log_exec_time, SparkDataFrame
-from lightautoml.transformers.base import LAMLTransformer, ColumnsSelector as LAMAColumnsSelector, \
-    ChangeRoles as LAMAChangeRoles
+from lightautoml.transformers.base import (
+    LAMLTransformer,
+    ColumnsSelector as LAMAColumnsSelector,
+    ChangeRoles as LAMAChangeRoles,
+)
 from lightautoml.transformers.base import Roles
 
 from pyspark.ml import Transformer, Estimator
@@ -27,10 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 SparkEstOrTrans = Union[
-    'SparkBaseEstimator',
-    'SparkBaseTransformer',
-    'SparkUnionTransformer',
-    'SparkSequentialTransformer'
+    "SparkBaseEstimator", "SparkBaseTransformer", "SparkUnionTransformer", "SparkSequentialTransformer"
 ]
 
 
@@ -39,8 +39,7 @@ class HasInputRoles(Params):
     Mixin for param inputCols: input column names.
     """
 
-    inputRoles = Param(Params._dummy(), "inputRoles",
-                       "input roles (lama format)")
+    inputRoles = Param(Params._dummy(), "inputRoles", "input roles (lama format)")
 
     def __init__(self):
         super().__init__()
@@ -56,8 +55,8 @@ class HasOutputRoles(Params):
     """
     Mixin for param inputCols: input column names.
     """
-    outputRoles = Param(Params._dummy(), "outputRoles",
-                        "output roles (lama format)")
+
+    outputRoles = Param(Params._dummy(), "outputRoles", "output roles (lama format)")
 
     def __init__(self):
         super().__init__()
@@ -71,7 +70,7 @@ class HasOutputRoles(Params):
 
 class SparkColumnsAndRoles(HasInputCols, HasOutputCols, HasInputRoles, HasOutputRoles):
     """
-    Helper and base class for :class:`~sparklightautoml.transformers.base.SparkBaseTransformer` and 
+    Helper and base class for :class:`~sparklightautoml.transformers.base.SparkBaseTransformer` and
     :class:`~sparklightautoml.transformers.base.SparkBaseEstimator`.
     """
 
@@ -85,12 +84,13 @@ class SparkColumnsAndRoles(HasInputCols, HasOutputCols, HasInputRoles, HasOutput
         return self.getOrDefault(self.columnsToReplace)
 
     @staticmethod
-    def make_dataset(transformer: 'SparkColumnsAndRoles', base_dataset: SparkDataset, data: SparkDataFrame) \
-            -> SparkDataset:
+    def make_dataset(
+        transformer: "SparkColumnsAndRoles", base_dataset: SparkDataset, data: SparkDataFrame
+    ) -> SparkDataset:
         new_roles = deepcopy(base_dataset.roles)
         new_roles.update(transformer.getOutputRoles())
         new_ds = base_dataset.empty()
-        new_ds.set_data(data, base_dataset.features + transformer.getOutputCols(),  new_roles)
+        new_ds.set_data(data, base_dataset.features + transformer.getOutputCols(), new_roles)
         return new_ds
 
 
@@ -102,17 +102,18 @@ class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, ABC):
     _fit_checks = ()
     _fname_prefix = ""
 
-    def __init__(self,
-                 input_cols: Optional[List[str]] = None,
-                 input_roles: Optional[Dict[str, ColumnRole]] = None,
-                 do_replace_columns: bool = False,
-                 output_role: Optional[ColumnRole] = None):
+    def __init__(
+        self,
+        input_cols: Optional[List[str]] = None,
+        input_roles: Optional[Dict[str, ColumnRole]] = None,
+        do_replace_columns: bool = False,
+        output_role: Optional[ColumnRole] = None,
+    ):
         super().__init__()
 
         self._output_role = output_role
 
-        assert all((f in input_roles) for f in input_cols), \
-            "All columns should have roles"
+        assert all((f in input_roles) for f in input_cols), "All columns should have roles"
 
         self.set(self.inputCols, input_cols)
         self.set(self.outputCols, self._make_output_names(input_cols))
@@ -130,19 +131,21 @@ class SparkBaseEstimator(Estimator, SparkColumnsAndRoles, ABC):
         return new_roles
 
 
-
 class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, ABC):
     """
     Base class for transformers from `sparklightautoml.transformers`.
     """
+
     _fname_prefix = ""
 
-    def __init__(self,
-                 input_cols: List[str],
-                 output_cols: List[str],
-                 input_roles: RolesDict,
-                 output_roles: RolesDict,
-                 do_replace_columns: Union[bool, List[str]] = False):
+    def __init__(
+        self,
+        input_cols: List[str],
+        output_cols: List[str],
+        input_roles: RolesDict,
+        output_roles: RolesDict,
+        do_replace_columns: Union[bool, List[str]] = False,
+    ):
         super().__init__()
 
         # assert len(input_cols) == len(output_cols)
@@ -157,8 +160,9 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, ABC):
 
         if isinstance(do_replace_columns, List):
             cols_to_replace = cast(List[str], do_replace_columns)
-            assert len(set(cols_to_replace).difference(set(self.getInputCols()))) == 0, \
-                "All columns to replace, should be in input columns"
+            assert (
+                len(set(cols_to_replace).difference(set(self.getInputCols()))) == 0
+            ), "All columns to replace, should be in input columns"
             self.set(self.doReplaceColumns, True)
             self.set(self.columnsToReplace, cols_to_replace)
         else:
@@ -168,7 +172,7 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, ABC):
     _transform_checks = ()
 
     def _make_output_df(self, input_df: SparkDataFrame, cols_to_add: List[Union[str, Column]]):
-        return input_df.select('*', *cols_to_add)
+        return input_df.select("*", *cols_to_add)
 
         # if not self.getDoReplaceColumns():
         #     return input_df.select('*', *cols_to_add)
@@ -221,7 +225,7 @@ class SparkUnionTransformer:
         roles = {}
         for stage in self._transformer_list:
             stage = self._find_last_stage(stage)
-            roles.update(deepcopy(stage.getOutputRoles()))        
+            roles.update(deepcopy(stage.getOutputRoles()))
 
         return roles
 
@@ -257,8 +261,7 @@ class ObsoleteSparkTransformer(LAMLTransformer):
         if use_features:
             existing_feats = set(dataset.features)
             not_found_feats = [feat for feat in use_features if feat not in existing_feats]
-            assert len(not_found_feats) == 0, \
-                f"Not found features {not_found_feats} among existing {existing_feats}"
+            assert len(not_found_feats) == 0, f"Not found features {not_found_feats} among existing {existing_feats}"
             self._features = use_features
         else:
             self._features = dataset.features
@@ -298,19 +301,23 @@ class ObsoleteSparkTransformer(LAMLTransformer):
         return new_roles
 
 
-class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols, DefaultParamsWritable, DefaultParamsReadable):
+class ColumnsSelectorTransformer(
+    Transformer, HasInputCols, HasOutputCols, DefaultParamsWritable, DefaultParamsReadable
+):
     """
     Makes selection input columns from input dataframe.
     """
-    optionalCols = Param(Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString)
 
-    def __init__(self,
-                 input_cols: Optional[List[str]] = [],
-                 optional_cols: Optional[List[str]] = []):
+    optionalCols = Param(
+        Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString
+    )
+
+    def __init__(self, input_cols: Optional[List[str]] = [], optional_cols: Optional[List[str]] = []):
         super().__init__()
         optional_cols = optional_cols if optional_cols else []
-        assert len(set(input_cols).intersection(set(optional_cols))) == 0, \
-            "Input columns and optional columns cannot intersect"
+        assert (
+            len(set(input_cols).intersection(set(optional_cols))) == 0
+        ), "Input columns and optional columns cannot intersect"
 
         self.set(self.inputCols, input_cols)
         self.set(self.optionalCols, optional_cols)
@@ -327,13 +334,16 @@ class ColumnsSelectorTransformer(Transformer, HasInputCols, HasOutputCols, Defau
 
 
 class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
-    """Converts probability columns values from ONNX model format to LGBMCBooster format
-    """
-    probabilityCols = Param(Params._dummy(), "probabilityCols", "probability сolumn names in dataframe",
-                           typeConverter=TypeConverters.toListString)
+    """Converts probability columns values from ONNX model format to LGBMCBooster format"""
 
-    numClasses = Param(Params._dummy(), "numClasses", "number of classes",
-                           typeConverter=TypeConverters.toInt)
+    probabilityCols = Param(
+        Params._dummy(),
+        "probabilityCols",
+        "probability сolumn names in dataframe",
+        typeConverter=TypeConverters.toListString,
+    )
+
+    numClasses = Param(Params._dummy(), "numClasses", "number of classes", typeConverter=TypeConverters.toInt)
 
     def __init__(self, probability_сols: List[str] = [], num_classes: int = 0):
         super().__init__()
@@ -344,16 +354,23 @@ class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultPara
         num_classes = self.getOrDefault(self.numClasses)
         probability_cols = self.getOrDefault(self.probabilityCols)
         other_cols = [c for c in dataset.columns if c not in probability_cols]
-        probability_cols = [array_to_vector(F.array([F.col(c).getItem(i) for i in range(num_classes)])).alias(c) for c in probability_cols]
+        probability_cols = [
+            array_to_vector(F.array([F.col(c).getItem(i) for i in range(num_classes)])).alias(c)
+            for c in probability_cols
+        ]
         dataset = dataset.select(*other_cols, *probability_cols)
         return dataset
 
 
 class PredictionColsTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
-    """Converts prediction columns values from ONNX model format to LGBMCBooster format
-    """
-    predictionCols = Param(Params._dummy(), "predictionCols", "probability сolumn names in dataframe",
-                           typeConverter=TypeConverters.toListString)
+    """Converts prediction columns values from ONNX model format to LGBMCBooster format"""
+
+    predictionCols = Param(
+        Params._dummy(),
+        "predictionCols",
+        "probability сolumn names in dataframe",
+        typeConverter=TypeConverters.toListString,
+    )
 
     def __init__(self, prediction_сols: List[str] = []):
         super().__init__()
@@ -368,14 +385,18 @@ class PredictionColsTransformer(Transformer, DefaultParamsWritable, DefaultParam
 
 
 class DropColumnsTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
-    """Transformer that drops columns from input dataframe.
-    """
-    colsToRemove = Param(Params._dummy(), "colsToRemove", "columns to be removed",
-                         typeConverter=TypeConverters.toListString)
+    """Transformer that drops columns from input dataframe."""
 
-    optionalColsToRemove = Param(Params._dummy(), "optionalColsToRemove",
-                                 "optional columns to be removed (if they appear in the dataset)",
-                                 typeConverter=TypeConverters.toListString)
+    colsToRemove = Param(
+        Params._dummy(), "colsToRemove", "columns to be removed", typeConverter=TypeConverters.toListString
+    )
+
+    optionalColsToRemove = Param(
+        Params._dummy(),
+        "optionalColsToRemove",
+        "optional columns to be removed (if they appear in the dataset)",
+        typeConverter=TypeConverters.toListString,
+    )
 
     def __init__(self, remove_cols: List[str] = [], optional_remove_cols: Optional[List[str]] = None):
         super().__init__()
@@ -402,16 +423,14 @@ class SparkChangeRolesTransformer(SparkBaseTransformer, CommonPickleMLWritable, 
     # Note: this trasnformer cannot be applied directly to input columns of a feature pipeline
     """
 
-    def __init__(self, 
-                 input_cols: List[str],
-                 input_roles: RolesDict,
-                 role: ColumnRole):
+    def __init__(self, input_cols: List[str], input_roles: RolesDict, role: ColumnRole):
         super().__init__(
             input_cols=input_cols,
             output_cols=input_cols,
             input_roles=input_roles,
             output_roles={f: deepcopy(role) for f in input_cols},
-            do_replace_columns=True)
+            do_replace_columns=True,
+        )
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset

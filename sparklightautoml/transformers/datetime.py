@@ -23,7 +23,6 @@ from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.param.shared import TypeConverters, Param, Params
 
 
-
 def get_unit_of_timestamp_column(seas: str, col: str):
     """Generates pyspark column to extract unit of time from timestamp
 
@@ -32,44 +31,48 @@ def get_unit_of_timestamp_column(seas: str, col: str):
         `wd`(weekday), `hour`(hour), `min`(minute), `sec`(second), `ms`(microsecond), `ns`(nanosecond)
         col (str): column name with datetime values
     """
-    if seas == 'y':
+    if seas == "y":
         return F.year(F.to_timestamp(F.col(col)))
-    elif seas == 'm':
+    elif seas == "m":
         return F.month(F.to_timestamp(F.col(col)))
-    elif seas == 'd':
+    elif seas == "d":
         return F.dayofmonth(F.to_timestamp(F.col(col)))
     # TODO SPARK-LAMA: F.dayofweek() starts numbering from another day.
     # Differs from pandas.Timestamp.weekday.
     # elif seas == 'wd':
     #     return F.dayofweek(F.to_timestamp(F.col(col)))
-    elif seas == 'hour':
+    elif seas == "hour":
         return F.hour(F.to_timestamp(F.col(col)))
-    elif seas == 'min':
+    elif seas == "min":
         return F.minute(F.to_timestamp(F.col(col)))
-    elif seas == 'sec':
+    elif seas == "sec":
         return F.second(F.to_timestamp(F.col(col)))
     else:
+
         @pandas_udf(returnType=IntegerType())
         def get_timestamp_attr(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
             for x in arrs:
+
                 def convert_to_datetime(timestamp: int):
                     try:
                         date = pd.to_datetime(datetime.fromtimestamp(timestamp))
                     except:
                         date = datetime.now()
                     return date
+
                 x = x.apply(lambda d: convert_to_datetime(d))
                 yield getattr(x.dt, date_attrs[seas])
+
         return get_timestamp_attr(F.to_timestamp(F.col(col)).cast("long"))
 
 
 class SparkDatetimeHelper:
     """
-    Helper class for :class:`~sparklightautoml.transformers.datetime.SparkTimeToNumTransformer`,    
+    Helper class for :class:`~sparklightautoml.transformers.datetime.SparkTimeToNumTransformer`,
     :class:`~sparklightautoml.transformers.datetime.SparkBaseDiffTransformer` and
     :class:`~sparklightautoml.transformers.datetime.SparkDateSeasonsTransformer`
     """
-    
+
     basic_interval = "D"
 
     _interval_mapping = {
@@ -79,17 +82,18 @@ class SparkDatetimeHelper:
         "MIN": 60,
         "HOUR": 60 * 60,
         "D": 60 * 60 * 24,
-
         # FIXME SPARK-LAMA: Very rough rounding
         "M": 60 * 60 * 24 * 30,
-        "Y": 60 * 60 * 24 * 365
+        "Y": 60 * 60 * 24 * 365,
     }
 
     _fit_checks = (datetime_check,)
     _transform_checks = ()
 
 
-class SparkTimeToNumTransformer(SparkBaseTransformer, SparkDatetimeHelper, CommonPickleMLWritable, CommonPickleMLReadable):
+class SparkTimeToNumTransformer(
+    SparkBaseTransformer, SparkDatetimeHelper, CommonPickleMLWritable, CommonPickleMLReadable
+):
     """
     Transforms datetime columns values to numeric values.
     """
@@ -108,8 +112,8 @@ class SparkTimeToNumTransformer(SparkBaseTransformer, SparkDatetimeHelper, Commo
         new_cols = []
         for i, out_col in zip(self.getInputCols(), self.getOutputCols()):
             new_col = (
-                    (F.to_timestamp(F.col(i)).cast("long") - F.to_timestamp(F.lit(self.basic_time)).cast("long"))
-                    / self._interval_mapping[self.basic_interval]
+                (F.to_timestamp(F.col(i)).cast("long") - F.to_timestamp(F.lit(self.basic_time)).cast("long"))
+                / self._interval_mapping[self.basic_interval]
             ).alias(out_col)
             new_cols.append(new_col)
 
@@ -118,7 +122,9 @@ class SparkTimeToNumTransformer(SparkBaseTransformer, SparkDatetimeHelper, Commo
         return df
 
 
-class SparkBaseDiffTransformer(SparkBaseTransformer, SparkDatetimeHelper, CommonPickleMLWritable, CommonPickleMLReadable):
+class SparkBaseDiffTransformer(
+    SparkBaseTransformer, SparkDatetimeHelper, CommonPickleMLWritable, CommonPickleMLReadable
+):
     """
     Basic conversion strategy, used in selection one-to-one transformers.
     Datetime converted to difference with basic_date.
@@ -126,32 +132,27 @@ class SparkBaseDiffTransformer(SparkBaseTransformer, SparkDatetimeHelper, Common
 
     _fname_prefix = "basediff"
 
-    baseNames = Param(Params._dummy(), "baseNames",
-                            "base_names")
+    baseNames = Param(Params._dummy(), "baseNames", "base_names")
 
-    diffNames = Param(Params._dummy(), "diffNames",
-                            "diff_names")
+    diffNames = Param(Params._dummy(), "diffNames", "diff_names")
 
-    basicInterval = Param(Params._dummy(), "basicInterval",
-                            "basic_interval")
+    basicInterval = Param(Params._dummy(), "basicInterval", "basic_interval")
 
-    def __init__(self,
-                 input_roles: RolesDict,
-                 base_names: Sequence[str],
-                 diff_names: Sequence[str],
-                 basic_interval: Optional[str] = "D",
-                 do_replace_columns: bool = False):
+    def __init__(
+        self,
+        input_roles: RolesDict,
+        base_names: Sequence[str],
+        diff_names: Sequence[str],
+        basic_interval: Optional[str] = "D",
+        do_replace_columns: bool = False,
+    ):
         input_cols = list(base_names) + list(diff_names)
 
         self.base_names = base_names
         self.diff_names = diff_names
         self.basic_interval = basic_interval
 
-        output_cols = [
-            f"{self._fname_prefix}_{col}__{x}"
-            for col in base_names
-            for x in diff_names
-        ]
+        output_cols = [f"{self._fname_prefix}_{col}__{x}" for col in base_names for x in diff_names]
 
         output_roles = {col: NumericRole(dtype=np.float32) for col in output_cols}
 
@@ -164,9 +165,10 @@ class SparkBaseDiffTransformer(SparkBaseTransformer, SparkDatetimeHelper, Common
     def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
 
         new_cols = [
-            ((
-                    F.to_timestamp(F.col(dif)).cast("long") - F.to_timestamp(F.col(base)).cast("long")
-            ) / self._interval_mapping[self.basic_interval]).alias(f"{self._fname_prefix}_{base}__{dif}")
+            (
+                (F.to_timestamp(F.col(dif)).cast("long") - F.to_timestamp(F.col(base)).cast("long"))
+                / self._interval_mapping[self.basic_interval]
+            ).alias(f"{self._fname_prefix}_{base}__{dif}")
             for base in self.base_names
             for dif in self.diff_names
         ]
@@ -176,18 +178,22 @@ class SparkBaseDiffTransformer(SparkBaseTransformer, SparkDatetimeHelper, Common
         return df
 
 
-class SparkDateSeasonsTransformer(SparkBaseTransformer, SparkDatetimeHelper, CommonPickleMLWritable, CommonPickleMLReadable):
+class SparkDateSeasonsTransformer(
+    SparkBaseTransformer, SparkDatetimeHelper, CommonPickleMLWritable, CommonPickleMLReadable
+):
     """
     Extracts unit of time from Datetime values and marks holiday dates.
     """
 
     _fname_prefix = "season"
 
-    def __init__(self,
-                 input_cols: List[str],
-                 input_roles: RolesDict,
-                 do_replace_columns: bool = False,
-                 output_role: Optional[ColumnRole] = None):
+    def __init__(
+        self,
+        input_cols: List[str],
+        input_roles: RolesDict,
+        do_replace_columns: bool = False,
+        output_role: Optional[ColumnRole] = None,
+    ):
         self.output_role = output_role
         if output_role is None:
             self.output_role = CategoryRole(np.int32)
@@ -213,15 +219,19 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer, SparkDatetimeHelper, Com
         new_cols = []
         for col in self.getInputCols():
             fcol = F.to_timestamp(F.col(col)).cast("long")
-            seas_cols = [(
-                F.when(F.isnan(fcol) | F.isnull(fcol), None)
-                .otherwise(get_unit_of_timestamp_column(seas, col))
-                .alias(f"{self._fname_prefix}_{seas}__{col}")
-            ) for seas in self.transformations[col]]
+            seas_cols = [
+                (
+                    F.when(F.isnan(fcol) | F.isnull(fcol), None)
+                    .otherwise(get_unit_of_timestamp_column(seas, col))
+                    .alias(f"{self._fname_prefix}_{seas}__{col}")
+                )
+                for seas in self.transformations[col]
+            ]
 
             new_cols.extend(seas_cols)
 
             if roles[col].country is not None:
+
                 @pandas_udf(returnType=IntegerType())
                 def is_holiday(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
                     for x in arrs:
@@ -230,13 +240,11 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer, SparkDatetimeHelper, Com
                             years=np.unique(x.dt.year.values),
                             country=roles[col].country,
                             prov=roles[col].prov,
-                            state=roles[col].state
+                            state=roles[col].state,
                         )
                         yield x.isin(_holidays).astype(int)
 
-                hol_col = (
-                    is_holiday(fcol).alias(f"{self._fname_prefix}_hol__{col}")
-                )
+                hol_col = is_holiday(fcol).alias(f"{self._fname_prefix}_hol__{col}")
                 new_cols.append(hol_col)
 
         df = self._make_output_df(df, new_cols)

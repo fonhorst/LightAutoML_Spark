@@ -24,10 +24,7 @@ class PCATransformer(ObsoleteSparkTransformer):
         """Features list."""
         return self._features
 
-    def __init__(
-        self,
-        n_components: int = 500
-    ):
+    def __init__(self, n_components: int = 500):
         """
 
         Args:
@@ -51,7 +48,7 @@ class PCATransformer(ObsoleteSparkTransformer):
         sdf = dataset.data
         self.n_components = np.minimum(self.n_components, len(sdf.columns) - 1)
 
-        sdf = sdf.select(array_to_vector(F.array('*')).alias("features"))
+        sdf = sdf.select(array_to_vector(F.array("*")).alias("features"))
         pca = PCA(k=3, inputCol="features", outputCol=self.pca_output_col)
         self.pca = pca.fit(sdf)
 
@@ -79,13 +76,14 @@ class PCATransformer(ObsoleteSparkTransformer):
 
         assert self.pca, "This transformer has not been fitted yet"
 
-        sdf = dataset.data.select(*dataset.service_columns, array_to_vector(F.array('*')).alias("features"))
-        new_sdf = self.pca\
-            .transform(sdf)\
-            .select(*dataset.service_columns, *[
+        sdf = dataset.data.select(*dataset.service_columns, array_to_vector(F.array("*")).alias("features"))
+        new_sdf = self.pca.transform(sdf).select(
+            *dataset.service_columns,
+            *[
                 vector_to_array(F.col(self.pca_output_col))[i].alias(feat)
                 for i, feat in zip(range(self.n_components), self.features)
-            ])
+            ]
+        )
 
         output = dataset.empty()
         output.set_data(new_sdf, self.features, NumericRole(np.float32))

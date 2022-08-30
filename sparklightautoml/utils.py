@@ -12,13 +12,15 @@ from pyspark.ml import Transformer, Estimator
 from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import SparkSession
 
-VERBOSE_LOGGING_FORMAT = '%(asctime)s %(levelname)s %(module)s %(filename)s:%(lineno)d %(message)s'
+VERBOSE_LOGGING_FORMAT = "%(asctime)s %(levelname)s %(module)s %(filename)s:%(lineno)d %(message)s"
 
 logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def spark_session(session_args: Optional[dict] = None, master: str = "local[]", wait_secs_after_the_end: Optional[int] = None) -> SparkSession:
+def spark_session(
+    session_args: Optional[dict] = None, master: str = "local[]", wait_secs_after_the_end: Optional[int] = None
+) -> SparkSession:
     """
     Args:
         master: address of the master
@@ -35,9 +37,7 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[]", 
 
     if not session_args:
         spark_sess_builder = (
-            SparkSession
-            .builder
-            .appName("SPARK-LAMA-app")
+            SparkSession.builder.appName("SPARK-LAMA-app")
             .master(master)
             .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
@@ -56,18 +56,14 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[]", 
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
         )
     else:
-        spark_sess_builder = (
-            SparkSession
-            .builder
-            .appName("SPARK-LAMA-app")
-        )
+        spark_sess_builder = SparkSession.builder.appName("SPARK-LAMA-app")
         for arg, value in session_args.items():
             spark_sess_builder = spark_sess_builder.config(arg, value)
 
-        if 'spark.master' in session_args and not session_args['spark.master'].startswith('local['):
+        if "spark.master" in session_args and not session_args["spark.master"].startswith("local["):
             local_ip_address = socket.gethostbyname(socket.gethostname())
             logger.info(f"Using IP address for spark driver: {local_ip_address}")
-            spark_sess_builder = spark_sess_builder.config('spark.driver.host', local_ip_address)
+            spark_sess_builder = spark_sess_builder.config("spark.driver.host", local_ip_address)
 
     spark_sess = spark_sess_builder.getOrCreate()
 
@@ -76,8 +72,10 @@ def spark_session(session_args: Optional[dict] = None, master: str = "local[]", 
     try:
         yield spark_sess
     finally:
-        logger.info(f"The session is ended. Sleeping {wait_secs_after_the_end if wait_secs_after_the_end else 0} "
-                    f"secs until stop the spark session.")
+        logger.info(
+            f"The session is ended. Sleeping {wait_secs_after_the_end if wait_secs_after_the_end else 0} "
+            f"secs until stop the spark session."
+        )
         if wait_secs_after_the_end:
             time.sleep(wait_secs_after_the_end)
         spark_sess.stop()
@@ -88,14 +86,14 @@ def log_exec_time(name: Optional[str] = None, write_log=True):
 
     # Add file handler for INFO
     if write_log:
-        file_handler_info = logging.FileHandler(f'/tmp/{name}_log.log.log', mode='a')
-        file_handler_info.setFormatter(logging.Formatter('%(message)s'))
+        file_handler_info = logging.FileHandler(f"/tmp/{name}_log.log.log", mode="a")
+        file_handler_info.setFormatter(logging.Formatter("%(message)s"))
         file_handler_info.setLevel(logging.INFO)
         logger.addHandler(file_handler_info)
 
     start = datetime.now()
 
-    yield 
+    yield
 
     end = datetime.now()
     duration = (end - start).total_seconds()
@@ -135,48 +133,40 @@ def get_cached_df_through_rdd(df: SparkDataFrame, name: Optional[str] = None) ->
     return cached_df, cached_rdd
 
 
-def logging_config(level: int = logging.INFO, log_filename: str = '/var/log/lama.log') -> dict:
+def logging_config(level: int = logging.INFO, log_filename: str = "/var/log/lama.log") -> dict:
     return {
-        'version': 1,
-        'disable_existing_loggers': True,
-        'formatters': {
-            'verbose': {
-                'format': VERBOSE_LOGGING_FORMAT
-            },
-            'simple': {
-                'format': '%(asctime)s %(levelname)s %(message)s'
+        "version": 1,
+        "disable_existing_loggers": True,
+        "formatters": {
+            "verbose": {"format": VERBOSE_LOGGING_FORMAT},
+            "simple": {"format": "%(asctime)s %(levelname)s %(message)s"},
+        },
+        "handlers": {
+            "console": {"level": "DEBUG", "class": "logging.StreamHandler", "formatter": "verbose"},
+            "file": {
+                "level": "DEBUG",
+                "class": "logging.FileHandler",
+                "formatter": "verbose",
+                "filename": log_filename,
             },
         },
-        'handlers': {
-            'console': {
-                'level': 'DEBUG',
-                'class': 'logging.StreamHandler',
-                'formatter': 'verbose'
+        "loggers": {
+            "lightautoml": {
+                "handlers": ["console", "file"],
+                "propagate": True,
+                "level": level,
             },
-            'file': {
-                'level': 'DEBUG',
-                'class': 'logging.FileHandler',
-                'formatter': 'verbose',
-                'filename': log_filename
-            }
+            "sparklightautoml": {
+                "handlers": ["console", "file"],
+                "level": level,
+                "propagate": False,
+            },
+            "lightautoml.ml_algo": {
+                "handlers": ["console", "file"],
+                "level": level,
+                "propagate": False,
+            },
         },
-        'loggers': {
-            'lightautoml': {
-                'handlers': ['console', 'file'],
-                'propagate': True,
-                'level': level,
-            },
-            'sparklightautoml': {
-                'handlers': ['console', 'file'],
-                'level': level,
-                'propagate': False,
-            },
-            'lightautoml.ml_algo': {
-                'handlers': ['console', 'file'],
-                'level': level,
-                'propagate': False,
-            }
-        }
     }
 
 
@@ -188,9 +178,9 @@ def cache(df: SparkDataFrame) -> SparkDataFrame:
 
 def warn_if_not_cached(df: SparkDataFrame):
     if not df.is_cached:
-        warnings.warn("Attempting to calculate shape on not cached dataframe. "
-                      "It may take too much time.", RuntimeWarning)
-
+        warnings.warn(
+            "Attempting to calculate shape on not cached dataframe. " "It may take too much time.", RuntimeWarning
+        )
 
 
 class NoOpTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
@@ -209,7 +199,7 @@ class DebugTransformer(Transformer):
 
     def _transform(self, dataset):
         dataset = dataset.cache()
-        dataset.write.mode('overwrite').format('noop').save()
+        dataset.write.mode("overwrite").format("noop").save()
         return dataset
 
 

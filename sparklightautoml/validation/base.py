@@ -73,8 +73,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
         # we don't need to create transformer for subselecting
         # because train_valid.input_roles is used in fit_... methods
         # of features pipelines and ml_algo to define columns they work with
-        train_valid.input_roles = {feat: self.input_roles[feat]
-                                   for feat in selector.selected_features}
+        train_valid.input_roles = {feat: self.input_roles[feat] for feat in selector.selected_features}
 
         return train_valid
 
@@ -96,12 +95,10 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
     def _split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         train = cast(SparkDataset, self.train)
         is_val_col = (
-            F.when(F.col(self.train.folds_column) != fold, F.lit(0))
-            .otherwise(F.lit(1))
-            .alias(self.TRAIN_VAL_COLUMN)
+            F.when(F.col(self.train.folds_column) != fold, F.lit(0)).otherwise(F.lit(1)).alias(self.TRAIN_VAL_COLUMN)
         )
 
-        sdf = train.data.select('*', is_val_col)
+        sdf = train.data.select("*", is_val_col)
         train_part_sdf = sdf.where(F.col(self.TRAIN_VAL_COLUMN) == 0).drop(self.TRAIN_VAL_COLUMN)
         valid_part_sdf = sdf.where(F.col(self.TRAIN_VAL_COLUMN) == 1).drop(self.TRAIN_VAL_COLUMN)
 

@@ -5,8 +5,9 @@ from typing import Optional, cast, Tuple, Iterable, Sequence
 from lightautoml.dataset.base import LAMLDataset, RolesDict
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.transformers.scala_wrappers.balanced_union_partitions_coalescer import \
-    BalancedUnionPartitionsCoalescerTransformer
+from sparklightautoml.transformers.scala_wrappers.balanced_union_partitions_coalescer import (
+    BalancedUnionPartitionsCoalescerTransformer,
+)
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 from lightautoml.validation.base import TrainValidIterator, HoldoutIterator
 
@@ -61,14 +62,13 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
 
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         sds = cast(SparkDataset, self.train)
-        assert sds.folds_column is not None, \
-            "Cannot convert to Holdout iterator when folds_column is not defined"
+        assert sds.folds_column is not None, "Cannot convert to Holdout iterator when folds_column is not defined"
         return SparkHoldoutIterator(self.train, self.input_roles)
 
 
 class SparkHoldoutIterator(SparkBaseTrainValidIterator):
-    """Simple one step iterator over one fold of SparkDataset
-    """
+    """Simple one step iterator over one fold of SparkDataset"""
+
     def __init__(self, train: SparkDataset, input_roles: Optional[RolesDict] = None):
         super().__init__(train, input_roles)
         self._curr_idx = 0
@@ -117,7 +117,7 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
 
         _, train_ds, _ = self._split_by_fold(0)
         missing_cols = [F.lit(None).alias(f) for f in new_feats]
-        full_val_preds = train_ds.select('*', *missing_cols).unionByName(val_preds[0])
+        full_val_preds = train_ds.select("*", *missing_cols).unionByName(val_preds[0])
 
         return full_val_preds
 
@@ -138,7 +138,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         """
         super().__init__(train, input_roles)
 
-        num_folds = train.data.select(F.max(train.folds_column).alias('max')).first()['max']
+        num_folds = train.data.select(F.max(train.folds_column).alias("max")).first()["max"]
         self.n_folds = num_folds + 1
         if n_folds is not None:
             self.n_folds = min(self.n_folds, n_folds)

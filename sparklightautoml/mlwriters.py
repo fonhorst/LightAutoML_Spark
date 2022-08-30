@@ -56,8 +56,7 @@ class СommonPickleMLWriter(MLWriter):
         Record = namedtuple("Record", ["pipeline"])
         rdd = self.sc.parallelize([Record(pickled_instance)])
         instance_df = rdd.map(lambda rec: Record(bytearray(rec.pipeline))).toDF()
-        instance_df.write.mode('overwrite').parquet(os.path.join(path, "transformer_class_instance"))
-
+        instance_df.write.mode("overwrite").parquet(os.path.join(path, "transformer_class_instance"))
 
     @staticmethod
     def saveMetadata(instance, path, sc):
@@ -80,8 +79,7 @@ class СommonPickleMLWriter(MLWriter):
             If given, this is saved in the "paramMap" field.
         """
         metadataPath = os.path.join(path, "metadata")
-        metadataJson = СommonPickleMLWriter._get_metadata_to_save(instance,
-                                                                  sc)
+        metadataJson = СommonPickleMLWriter._get_metadata_to_save(instance, sc)
         sc.parallelize([metadataJson], 1).saveAsTextFile(metadataPath)
 
     @staticmethod
@@ -95,17 +93,21 @@ class СommonPickleMLWriter(MLWriter):
         See :py:meth:`DefaultParamsWriter.saveMetadata` for details on what this includes.
         """
         uid = instance.uid
-        cls = instance.__module__ + '.' + instance.__class__.__name__
+        cls = instance.__module__ + "." + instance.__class__.__name__
 
-        basicMetadata = {"class": cls, "timestamp": int(round(time.time() * 1000)),
-                         "sparkVersion": sc.version, "uid": uid, "paramMap": None,
-                         "defaultParamMap": None}
+        basicMetadata = {
+            "class": cls,
+            "timestamp": int(round(time.time() * 1000)),
+            "sparkVersion": sc.version,
+            "uid": uid,
+            "paramMap": None,
+            "defaultParamMap": None,
+        }
 
-        return json.dumps(basicMetadata, separators=[',', ':'])
+        return json.dumps(basicMetadata, separators=[",", ":"])
 
 
 class СommonPickleMLReader(MLReader):
-
     def load(self, path):
         """Load the ML instance from the input path."""
 
@@ -152,13 +154,12 @@ class SparkLabelEncoderTransformerMLWriter(MLWriter):
         Record = namedtuple("Record", ["pipeline"])
         rdd = self.sc.parallelize([Record(pickled_instance)])
         instance_df = rdd.map(lambda rec: Record(bytearray(rec.pipeline))).toDF()
-        instance_df.write.mode('overwrite').parquet(os.path.join(path, "transformer_class_instance"))
+        instance_df.write.mode("overwrite").parquet(os.path.join(path, "transformer_class_instance"))
 
         self.instance.indexer_model.write().overwrite().save(os.path.join(path, "indexer_model"))
 
 
 class SparkLabelEncoderTransformerMLReader(MLReader):
-
     def load(self, path):
         """Load the ML instance from the input path."""
 
@@ -168,6 +169,7 @@ class SparkLabelEncoderTransformerMLReader(MLReader):
         instance = pickle.loads(pickled_instance)
 
         from sparklightautoml.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
+
         indexer_model = LAMLStringIndexerModel.load(os.path.join(path, "indexer_model"))
         instance.indexer_model = indexer_model
 
@@ -189,15 +191,16 @@ class ONNXModelWrapperMLWriter(MLWriter):
 
 
 class ONNXModelWrapperMLReader(MLWriter):
-
     def load(self, path):
         """Load the ML instance from the input path and wrap by ONNXModelWrapper()"""
 
         from sparklightautoml.ml_algo.boost_lgbm import ONNXModelWrapper
+
         model_wrapper = ONNXModelWrapper()
-        model_wrapper.model = ONNXModel.load(os.path.join(path, "model"))          
+        model_wrapper.model = ONNXModel.load(os.path.join(path, "model"))
 
         return model_wrapper
+
 
 class LightGBMModelWrapperMLWriter(MLWriter):
     def __init__(self, instance):
@@ -233,8 +236,7 @@ class LightGBMModelWrapperMLWriter(MLWriter):
             If given, this is saved in the "paramMap" field.
         """
         metadataPath = os.path.join(path, "metadata")
-        metadataJson = LightGBMModelWrapperMLWriter._get_metadata_to_save(instance,
-                                                                          sc)
+        metadataJson = LightGBMModelWrapperMLWriter._get_metadata_to_save(instance, sc)
         sc.parallelize([metadataJson], 1).saveAsTextFile(metadataPath)
 
     @staticmethod
@@ -248,39 +250,38 @@ class LightGBMModelWrapperMLWriter(MLWriter):
         See :py:meth:`LightGBMModelWrapperMLWriter.saveMetadata` for details on what this includes.
         """
         uid = instance.uid
-        cls = instance.__module__ + '.' + instance.__class__.__name__
-        model_cls = instance.model.__module__ + '.' + instance.model.__class__.__name__
+        cls = instance.__module__ + "." + instance.__class__.__name__
+        model_cls = instance.model.__module__ + "." + instance.model.__class__.__name__
 
-        basicMetadata = {"class": cls, "timestamp": int(round(time.time() * 1000)),
-                         "sparkVersion": sc.version, "uid": uid,
-                         "paramMap": None,
-                         "defaultParamMap": None,
-                         "modelClass": model_cls}
+        basicMetadata = {
+            "class": cls,
+            "timestamp": int(round(time.time() * 1000)),
+            "sparkVersion": sc.version,
+            "uid": uid,
+            "paramMap": None,
+            "defaultParamMap": None,
+            "modelClass": model_cls,
+        }
 
-        return json.dumps(basicMetadata, separators=[',', ':'])
+        return json.dumps(basicMetadata, separators=[",", ":"])
 
 
 class LightGBMModelWrapperMLReader(MLReader):
-
     def load(self, path):
         """Load the ML instance from the input path and wrap by LightGBMModelWrapper()"""
 
         metadata = DefaultParamsReader.loadMetadata(path, self.sc)
-        if metadata["modelClass"].endswith('LightGBMRegressionModel'):
-            from synapse.ml.lightgbm.LightGBMRegressionModel import (
-                LightGBMRegressionModel as model_class
-            )
-        elif metadata["modelClass"].endswith('LightGBMClassificationModel'):
-            from synapse.ml.lightgbm.LightGBMClassificationModel import (
-                LightGBMClassificationModel as model_class
-            )
+        if metadata["modelClass"].endswith("LightGBMRegressionModel"):
+            from synapse.ml.lightgbm.LightGBMRegressionModel import LightGBMRegressionModel as model_class
+        elif metadata["modelClass"].endswith("LightGBMClassificationModel"):
+            from synapse.ml.lightgbm.LightGBMClassificationModel import LightGBMClassificationModel as model_class
         else:
             raise NotImplementedError("Unknown model type.")
 
         from sparklightautoml.ml_algo.boost_lgbm import LightGBMModelWrapper
+
         model_wrapper = LightGBMModelWrapper()
         model_wrapper.model = model_class.load(os.path.join(path, "model"))
-            
 
         return model_wrapper
 
@@ -326,8 +327,7 @@ class LAMLStringIndexerModelJavaMLReader(MLReader):
             raise TypeError("path should be a string, got type %s" % type(path))
         java_obj = self._jread.load(path)
         if not hasattr(self._clazz, "_from_java"):
-            raise NotImplementedError("This Java ML type cannot be loaded into Python currently: %r"
-                                      % self._clazz)
+            raise NotImplementedError("This Java ML type cannot be loaded into Python currently: %r" % self._clazz)
         return self._clazz._from_java(java_obj)
 
     def session(self, sparkSession):

@@ -1,7 +1,11 @@
 from typing import Optional, Union, cast
 
-from pyspark.ml.evaluation import BinaryClassificationEvaluator, RegressionEvaluator, MulticlassClassificationEvaluator, \
-    Evaluator
+from pyspark.ml.evaluation import (
+    BinaryClassificationEvaluator,
+    RegressionEvaluator,
+    MulticlassClassificationEvaluator,
+    Evaluator,
+)
 from pyspark.ml.functions import vector_to_array
 from pyspark.sql.pandas.functions import pandas_udf
 
@@ -65,7 +69,7 @@ class SparkMetric(LAMLMetric):
             if len(dataset.features) == 1:
                 prediction_column = dataset.features[0]
             else:
-                prediction_column = next(c for c in dataset.data.columns if c.startswith('prediction'))
+                prediction_column = next(c for c in dataset.data.columns if c.startswith("prediction"))
             target_column = dataset.target_column
         else:
             sdf = cast(SparkDataFrame, dataset)
@@ -80,14 +84,14 @@ class SparkMetric(LAMLMetric):
         elif self._name == "reg":
             evaluator = RegressionEvaluator(predictionCol=prediction_column)
         else:
-            temp_pred_col = 'multiclass_temp_prediction'
+            temp_pred_col = "multiclass_temp_prediction"
             evaluator = MulticlassClassificationEvaluator(probabilityCol=prediction_column, predictionCol=temp_pred_col)
 
-            @pandas_udf('double')
+            @pandas_udf("double")
             def argmax(vec: pd.Series) -> pd.Series:
                 return vec.transform(lambda x: np.argmax(x))
 
-            sdf = sdf.select('*', argmax(vector_to_array(prediction_column)).alias(temp_pred_col))
+            sdf = sdf.select("*", argmax(vector_to_array(prediction_column)).alias(temp_pred_col))
 
         evaluator = evaluator.setMetricName(self._metric_name).setLabelCol(target_column)
 
@@ -107,11 +111,8 @@ class SparkTask(LAMATask):
 
     _default_metrics = {"binary": "auc", "reg": "mse", "multiclass": "crossentropy"}
 
-    _supported_metrics ={
-        "binary": {
-            "auc": "areaUnderROC",
-            "aupr": "areaUnderPR"
-        },
+    _supported_metrics = {
+        "binary": {"auc": "areaUnderROC", "aupr": "areaUnderPR"},
         "reg": {
             "r2": "rmse",
             "mse": "mse",
@@ -121,8 +122,8 @@ class SparkTask(LAMATask):
             "crossentropy": "logLoss",
             "accuracy": "accuracy",
             "f1_micro": "f1",
-            "f1_weighted": "weightedFMeasure"
-        }
+            "f1_weighted": "weightedFMeasure",
+        },
     }
 
     def __init__(
@@ -145,15 +146,16 @@ class SparkTask(LAMATask):
             loss = _default_losses[self.name]
         # SparkLoss actualy does nothing, but it is there
         # to male TabularAutoML work
-        self.losses = {'lgb': SparkLoss(),'linear_l2': SparkLoss()}
+        self.losses = {"lgb": SparkLoss(), "linear_l2": SparkLoss()}
 
-        assert metric in self._supported_metrics[self.name], \
-            f"Unsupported metric {metric} for task {self.name}." \
+        assert metric in self._supported_metrics[self.name], (
+            f"Unsupported metric {metric} for task {self.name}."
             f"The following metrics are supported: {list(self._supported_metrics[self.name].keys())}"
+        )
 
         self.metric_name = metric
 
     def get_dataset_metric(self) -> LAMLMetric:
-        """ Obtains a function to calculate the metric on a dataset. """
+        """Obtains a function to calculate the metric on a dataset."""
         spark_metric_name = self._supported_metrics[self.name][self.metric_name]
         return SparkMetric(self.name, metric_name=spark_metric_name, greater_is_better=self.greater_is_better)

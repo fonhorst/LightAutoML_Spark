@@ -51,7 +51,7 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         pre_selection: Optional[SelectionPipeline] = None,
         features_pipeline: Optional[SparkFeaturesPipeline] = None,
         post_selection: Optional[SelectionPipeline] = None,
-        name: Optional[str] = None
+        name: Optional[str] = None,
     ):
         if features_pipeline is None:
             features_pipeline = SparkEmptyFeaturePipeline()
@@ -108,8 +108,10 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
                 preds = curr_preds
                 train_valid.train = preds
             else:
-                warnings.warn("Current ml_algo has not been trained by some reason. "
-                              "Check logs for more details.", RuntimeWarning)
+                warnings.warn(
+                    "Current ml_algo has not been trained by some reason. " "Check logs for more details.",
+                    RuntimeWarning,
+                )
 
         assert (
             len(self.ml_algos) > 0
@@ -117,8 +119,7 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
 
         del self._ml_algos
 
-        self._output_roles = {ml_algo.prediction_feature: ml_algo.prediction_role
-                              for ml_algo in self.ml_algos}
+        self._output_roles = {ml_algo.prediction_feature: ml_algo.prediction_role for ml_algo in self.ml_algos}
 
         # all out roles for the output dataset
         out_roles = copy(self._output_roles)
@@ -135,7 +136,7 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
 
         select_transformer = ColumnsSelectorTransformer(
             input_cols=[SparkDataset.ID_COLUMN, *list(out_roles.keys())],
-            optional_cols=[train_valid.train.target_column] if train_valid.train.target_column else []
+            optional_cols=[train_valid.train.target_column] if train_valid.train.target_column else [],
         )
         ml_algo_transformers = PipelineModel(stages=[ml_algo.transformer for ml_algo in self.ml_algos])
         self._transformer = PipelineModel(stages=[fp.transformer, ml_algo_transformers, select_transformer])
@@ -146,7 +147,7 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
             SparkDataset.ID_COLUMN,
             train_valid.train.target_column,
             train_valid.train.folds_column,
-            *list(out_roles.keys())
+            *list(out_roles.keys()),
         )
 
         cacher = Cacher(key=self._cacher_key)

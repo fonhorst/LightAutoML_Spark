@@ -52,17 +52,18 @@ def extract_params(input_struct):
 
 
 def get_data_for_roc_and_pr_curve(input_data, scores_col_name, true_labels_col_name):
-    data = round_score_col(input_data=input_data,
-                           min_co=0.000,
-                           max_co=1.000,
-                           step=0.001,
-                           scores_col_name=scores_col_name,
-                           true_labels_col_name=true_labels_col_name)
+    data = round_score_col(
+        input_data=input_data,
+        min_co=0.000,
+        max_co=1.000,
+        step=0.001,
+        scores_col_name=scores_col_name,
+        true_labels_col_name=true_labels_col_name,
+    )
 
     metrics = BinaryClassificationMetrics(
         scoreAndLabels=data.select(
-            F.col(f"{scores_col_name}_rounded").astype("double"),
-            F.col(true_labels_col_name).astype("double")
+            F.col(f"{scores_col_name}_rounded").astype("double"), F.col(true_labels_col_name).astype("double")
         ).rdd
     )
 
@@ -71,9 +72,8 @@ def get_data_for_roc_and_pr_curve(input_data, scores_col_name, true_labels_col_n
     pr = call2(metrics, "pr").collect()[1:-1]
 
     df = pd.DataFrame(
-        list(
-            zip(thresholds, map(itemgetter(0), roc), map(itemgetter(1), roc), map(itemgetter(1), pr))
-        ) + [(0., 1., 1., 0.)]
+        list(zip(thresholds, map(itemgetter(0), roc), map(itemgetter(1), roc), map(itemgetter(1), pr)))
+        + [(0.0, 1.0, 1.0, 0.0)]
     )
     df.columns = ["thresholds", "fpr", "recall", "precision"]
 
@@ -98,23 +98,13 @@ def round_score_col(input_data, scores_col_name, true_labels_col_name, min_co=0.
     true_labels = F.col(true_labels_col_name)
 
     return input_data.select(
-        _id_col,
-        true_labels,
-        (F.ceil(scores / step) * step).alias("_scores_prepared_value")
+        _id_col, true_labels, (F.ceil(scores / step) * step).alias("_scores_prepared_value")
     ).select(
         _id_col,
         true_labels,
-        F.when(
-            F.col("_scores_prepared_value") < min_co,
-            min_co
-        ).otherwise(
-            F.when(
-                F.col("_scores_prepared_value") > max_co,
-                max_co
-            ).otherwise(
-                F.col("_scores_prepared_value")
-            )
-        ).alias(f"{scores_col_name}_rounded")
+        F.when(F.col("_scores_prepared_value") < min_co, min_co)
+        .otherwise(F.when(F.col("_scores_prepared_value") > max_co, max_co).otherwise(F.col("_scores_prepared_value")))
+        .alias(f"{scores_col_name}_rounded"),
     )
 
 
@@ -196,12 +186,14 @@ def plot_preds_distribution_by_bins(data, path):
 
 def plot_distribution_of_logits(input_data, path, scores_col_name, true_labels_col_name):
 
-    prep_data = round_score_col(input_data=input_data,
-                                min_co=0.000,
-                                max_co=1.000,
-                                step=0.001,
-                                scores_col_name=scores_col_name,
-                                true_labels_col_name=true_labels_col_name)
+    prep_data = round_score_col(
+        input_data=input_data,
+        min_co=0.000,
+        max_co=1.000,
+        step=0.001,
+        scores_col_name=scores_col_name,
+        true_labels_col_name=true_labels_col_name,
+    )
 
     logits_col_name = f"{scores_col_name}_rounded"
     logits_col = F.col(logits_col_name)
@@ -215,24 +207,10 @@ def plot_distribution_of_logits(input_data, path, scores_col_name, true_labels_c
     data["proba_logit"] = np.log(data[logits_col_name].values / (1 - data[logits_col_name].values))
 
     data_0 = data[data[true_labels_col_name] == 0]
-    sns.kdeplot(
-        data_0["proba_logit"],
-        shade=True,
-        color="r",
-        label="Class 0 logits",
-        ax=axs,
-        weights=data_0["count"]
-    )
+    sns.kdeplot(data_0["proba_logit"], shade=True, color="r", label="Class 0 logits", ax=axs, weights=data_0["count"])
 
     data_1 = data[data[true_labels_col_name] == 1]
-    sns.kdeplot(
-        data_1["proba_logit"],
-        shade=True,
-        color="g",
-        label="Class 1 logits",
-        ax=axs,
-        weights=data_1["count"]
-    )
+    sns.kdeplot(data_1["proba_logit"], shade=True, color="g", label="Class 1 logits", ax=axs, weights=data_1["count"])
     axs.set_xlabel("Logits")
     axs.set_ylabel("Density")
     axs.set_title("Logits distribution of object predictions (by classes)")
@@ -295,17 +273,20 @@ def f1_score_w_co(input_data, true_labels_col_name, scores_col_name, min_co=0.01
     rounded_scores_col_name = f"{scores_col_name}_rounded"
     rounded_scores = F.col(rounded_scores_col_name)
 
-    data = round_score_col(input_data=input_data,
-                           min_co=min_co,
-                           max_co=max_co,
-                           step=step,
-                           true_labels_col_name=true_labels_col_name,
-                           scores_col_name=scores_col_name)
+    data = round_score_col(
+        input_data=input_data,
+        min_co=min_co,
+        max_co=max_co,
+        step=step,
+        true_labels_col_name=true_labels_col_name,
+        scores_col_name=scores_col_name,
+    )
 
-    _grp = data.groupby(rounded_scores).agg(
-        F.sum(true_labels).alias("sum"),
-        F.count(true_labels).alias("count")
-    ).toPandas()
+    _grp = (
+        data.groupby(rounded_scores)
+        .agg(F.sum(true_labels).alias("sum"), F.count(true_labels).alias("count"))
+        .toPandas()
+    )
     pos = _grp["sum"].sum()
     neg = _grp["count"].sum() - pos
 
@@ -331,11 +312,11 @@ def f1_score_w_co(input_data, true_labels_col_name, scores_col_name, min_co=0.01
 
 
 def get_bins_table(data: DataFrame, n_bins=20):
-    df: pd.DataFrame = data.groupby(
-        F.col("y_pred"), F.col("y_true")
-    ).count().toPandas().sort_values(
-        by=["y_pred", "y_true"],
-        ascending=[False, False]
+    df: pd.DataFrame = (
+        data.groupby(F.col("y_pred"), F.col("y_true"))
+        .count()
+        .toPandas()
+        .sort_values(by=["y_pred", "y_true"], ascending=[False, False])
     )
 
     total_count = df["count"].sum()
@@ -392,15 +373,7 @@ def plot_error_hist(data, path):
 
 def plot_reg_scatter(data, path):
     sns.set(style="whitegrid", font_scale=1.5)
-    g = sns.jointplot(
-        x="y_pred",
-        y="y_true",
-        data=data,
-        kind="reg",
-        truncate=False,
-        color="m",
-        height=14
-    )
+    g = sns.jointplot(x="y_pred", y="y_true", data=data, kind="reg", truncate=False, color="m", height=14)
     g.fig.suptitle("Scatter plot by subsample (2000 points)")
     g.fig.tight_layout()
     g.fig.subplots_adjust(top=0.95)
@@ -506,7 +479,7 @@ class SparkReportDeco:
             "datetime_level": "year",
             "n_sample": 100_000,
             "ice_fraction": 1.0,
-            "ice_fraction_seed": 42
+            "ice_fraction_seed": 42,
         }
 
         fi_input_params = kwargs.get("fi_params", {})
@@ -574,12 +547,12 @@ class SparkReportDeco:
         self.generate_report()
         return self
 
-    def _binary_classification_details(self, data, positive_rate,
-                                       true_labels_col_name, scores_col_name, predicted_labels_col_name):
+    def _binary_classification_details(
+        self, data, positive_rate, true_labels_col_name, scores_col_name, predicted_labels_col_name
+    ):
         prec, rec, F1 = plot_pie_f1_metric(
             data.select(
-                F.col(predicted_labels_col_name).astype("double"),
-                F.col(true_labels_col_name).astype("double")
+                F.col(predicted_labels_col_name).astype("double"), F.col(true_labels_col_name).astype("double")
             ).rdd,
             path=os.path.join(self.output_path, self._inference_content["pie_f1_metric"]),
         )
@@ -591,7 +564,7 @@ class SparkReportDeco:
             positive_rate=positive_rate,
             true_labels_col_name=true_labels_col_name,
             roc_path=os.path.join(self.output_path, self._inference_content["roc_curve"]),
-            pr_path=os.path.join(self.output_path, self._inference_content["pr_curve"])
+            pr_path=os.path.join(self.output_path, self._inference_content["pr_curve"]),
         )
 
         # Done
@@ -599,7 +572,7 @@ class SparkReportDeco:
             input_data=data,
             path=os.path.join(self.output_path, self._inference_content["distribution_of_logits"]),
             scores_col_name=scores_col_name,
-            true_labels_col_name=true_labels_col_name
+            true_labels_col_name=true_labels_col_name,
         )
 
         return auc_score, prec, rec, F1
@@ -610,27 +583,21 @@ class SparkReportDeco:
         pred_col = F.col(predictions_col_name)
 
         true_max, pred_max, variance_y_true = data.select(
-            F.max(F.abs(true_col)),
-            F.max(F.abs(pred_col)),
-            F.var_pop(true_col)
+            F.max(F.abs(true_col)), F.max(F.abs(pred_col)), F.var_pop(true_col)
         ).first()
 
         _data = data.select(
             (F.round(true_col / float(true_max), 3) * true_max).alias(true_values_col_name),
-            (F.round(pred_col / float(pred_max), 3) * pred_max).alias(predictions_col_name)
+            (F.round(pred_col / float(pred_max), 3) * pred_max).alias(predictions_col_name),
         ).cache()
 
         _pred = _data.groupBy(pred_col).count().toPandas()
         _true = _data.groupBy(true_col).count().toPandas()
 
-        pred_data = pd.DataFrame(
-            {"Target value": _pred[predictions_col_name], "count": _pred["count"]}
-        )
+        pred_data = pd.DataFrame({"Target value": _pred[predictions_col_name], "count": _pred["count"]})
         pred_data["source"] = "y_pred"
 
-        true_data = pd.DataFrame(
-            {"Target value": _true[true_values_col_name], "count": _true["count"]}
-        )
+        true_data = pd.DataFrame({"Target value": _true[true_values_col_name], "count": _true["count"]})
         true_data["source"] = "y_true"
 
         target_distribution_data = pd.concat([pred_data, true_data], ignore_index=True)
@@ -640,17 +607,15 @@ class SparkReportDeco:
             path=os.path.join(self.output_path, self._inference_content["target_distribution"]),
         )
 
-        errs = data.select(
-            (pred_col - true_col).alias("err")
-        )
+        errs = data.select((pred_col - true_col).alias("err"))
 
         err_max, err_min = errs.select(F.max(F.col("err")), F.min(F.col("err"))).first()
 
         val = err_max if abs(err_max) > abs(err_min) else err_min
 
-        err_data = errs.select(
-            (F.round(F.col("err") / val, 3) * val).alias("err")
-        ).groupBy(F.col("err")).count().toPandas()
+        err_data = (
+            errs.select((F.round(F.col("err") / val, 3) * val).alias("err")).groupBy(F.col("err")).count().toPandas()
+        )
 
         plot_error_hist(
             err_data,
@@ -659,15 +624,10 @@ class SparkReportDeco:
 
         plot_reg_scatter(
             pd.DataFrame(
-                data.select(
-                    true_col.alias("y_true"),
-                    pred_col.alias("y_pred")
-                ).rdd.takeSample(
-                    withReplacement=False,
-                    num=2000,
-                    seed=42
+                data.select(true_col.alias("y_true"), pred_col.alias("y_pred")).rdd.takeSample(
+                    withReplacement=False, num=2000, seed=42
                 ),
-                columns=["y_true", "y_pred"]
+                columns=["y_true", "y_pred"],
             ),
             path=os.path.join(self.output_path, self._inference_content["scatter_plot"]),
         )
@@ -675,8 +635,7 @@ class SparkReportDeco:
         # metrics
         metrics = RegressionMetrics(
             predictionAndObservations=data.select(
-                F.col(predictions_col_name).astype("double"),
-                F.col(true_values_col_name).astype("double")
+                F.col(predictions_col_name).astype("double"), F.col(true_values_col_name).astype("double")
             ).rdd
         )
 
@@ -684,10 +643,7 @@ class SparkReportDeco:
 
         median_ae = data.select(
             F.percentile_approx(
-                F.abs(
-                    F.col(predictions_col_name).astype("double") - F.col(true_values_col_name).astype("double")
-                ),
-                0.5
+                F.abs(F.col(predictions_col_name).astype("double") - F.col(true_values_col_name).astype("double")), 0.5
             )
         ).first()[0]
 
@@ -711,8 +667,7 @@ class SparkReportDeco:
 
         metrics = MulticlassMetrics(
             predictionAndLabels=data.select(
-                F.col(predicted_labels_col_name).astype("double"),
-                true_labels_col.astype("double")
+                F.col(predicted_labels_col_name).astype("double"), true_labels_col.astype("double")
             ).rdd
         )
 
@@ -724,21 +679,21 @@ class SparkReportDeco:
 
         # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html
         p_micro = metrics.accuracy
-        p_macro_sum = 0.
+        p_macro_sum = 0.0
         for label in labels_counts[true_labels_col_name]:
             p_macro_sum += metrics.precision(float(label))
         p_macro = p_macro_sum / total_labels_number
         p_weighted = metrics.weightedPrecision
 
         r_micro = metrics.accuracy
-        r_macro_sum = 0.
+        r_macro_sum = 0.0
         for label in labels_counts[true_labels_col_name]:
             r_macro_sum += metrics.recall(float(label))
         r_macro = r_macro_sum / total_labels_number
         r_weighted = metrics.weightedRecall
 
         f_micro = metrics.accuracy
-        f_macro_sum = 0.
+        f_macro_sum = 0.0
         for label in labels_counts[true_labels_col_name]:
             f_macro_sum += metrics.fMeasure(float(label))
         f_macro = f_macro_sum / total_labels_number
@@ -786,16 +741,13 @@ class SparkReportDeco:
             f_weighted,
         ]
 
-    def _collect_data(self,
-                      preds: SparkDataset,
-                      sample,
-                      true_values_col_name,
-                      raw_predictions_col_name,
-                      predictions_col_name) -> SparkDataFrame:
+    def _collect_data(
+        self, preds: SparkDataset, sample, true_values_col_name, raw_predictions_col_name, predictions_col_name
+    ) -> SparkDataFrame:
         # TODO: SPARK-LAMA hack, replace it later.
-        raw_pred_col = next(c for c in preds.data.columns if c.startswith('prediction'))
+        raw_pred_col = next(c for c in preds.data.columns if c.startswith("prediction"))
 
-        @pandas_udf('double')
+        @pandas_udf("double")
         def argmax(s: pd.Series) -> pd.Series:
             return s.map(np.argmax)
 
@@ -809,15 +761,11 @@ class SparkReportDeco:
             raw_prediction_col = F.col(raw_pred_col).alias(raw_predictions_col_name)
             prediction_col = F.col(raw_pred_col).alias(predictions_col_name)
 
-        df = (
-            preds.data
-            .where(~F.isnull(raw_pred_col))
-            .select(
-                F.col(SparkDataset.ID_COLUMN),
-                F.col(preds.target_column).alias(true_values_col_name),
-                raw_prediction_col,
-                prediction_col
-            )
+        df = preds.data.where(~F.isnull(raw_pred_col)).select(
+            F.col(SparkDataset.ID_COLUMN),
+            F.col(preds.target_column).alias(true_values_col_name),
+            raw_prediction_col,
+            prediction_col,
         )
 
         return df
@@ -850,13 +798,9 @@ class SparkReportDeco:
 
         # data = self._get_mock_data()
         if valid_data is None:
-            data = self._collect_data(
-                preds, train_data, true_values_col_name, scores_col_name, predictions_col_name
-            )
+            data = self._collect_data(preds, train_data, true_values_col_name, scores_col_name, predictions_col_name)
         else:
-            data = self._collect_data(
-                preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name
-            )
+            data = self._collect_data(preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name)
 
         self._inference_content = {}
         if self.task == "binary":
@@ -868,16 +812,14 @@ class SparkReportDeco:
             self._inference_content["distribution_of_logits"] = "valid_distribution_of_logits.png"
             # graphics and metrics
             _, self._F1_thresh, positive_rate = f1_score_w_co(
-                data,
-                true_labels_col_name=true_values_col_name,
-                scores_col_name=scores_col_name
+                data, true_labels_col_name=true_values_col_name, scores_col_name=scores_col_name
             )
             auc_score, prec, rec, F1 = self._binary_classification_details(
                 data,
                 positive_rate,
                 true_labels_col_name=true_values_col_name,
                 scores_col_name=scores_col_name,
-                predicted_labels_col_name=predictions_col_name
+                predicted_labels_col_name=predictions_col_name,
             )
             # update model section
             evaluation_parameters = ["AUC-score", "Precision", "Recall", "F1-score"]
@@ -894,7 +836,9 @@ class SparkReportDeco:
             self._inference_content["scatter_plot"] = "valid_scatter_plot.png"
             # graphics and metrics
 
-            mean_ae, median_ae, mse, r2, evs = self._regression_details(data, true_values_col_name, predictions_col_name)
+            mean_ae, median_ae, mse, r2, evs = self._regression_details(
+                data, true_values_col_name, predictions_col_name
+            )
             # model section
             evaluation_parameters = [
                 "Mean absolute error",
@@ -970,7 +914,7 @@ class SparkReportDeco:
             test_data,
             true_values_col_name=true_values_col_name,
             raw_predictions_col_name=scores_col_name,
-            predictions_col_name=predictions_col_name
+            predictions_col_name=predictions_col_name,
         )
 
         if self.task == "binary":
@@ -995,7 +939,7 @@ class SparkReportDeco:
                 positive_rate=positive_rate,
                 true_labels_col_name=true_values_col_name,
                 scores_col_name=scores_col_name,
-                predicted_labels_col_name=predictions_col_name
+                predicted_labels_col_name=predictions_col_name,
             )
 
             if self._n_test_sample >= 2:
@@ -1021,9 +965,7 @@ class SparkReportDeco:
             self._inference_content["scatter_plot"] = "test_scatter_plot_{}.png".format(self._n_test_sample)
             # graphics
             mean_ae, median_ae, mse, r2, evs = self._regression_details(
-                data,
-                true_values_col_name,
-                predictions_col_name
+                data, true_values_col_name, predictions_col_name
             )
             # update model section
             if self._n_test_sample >= 2:
@@ -1040,9 +982,7 @@ class SparkReportDeco:
         elif self.task == "multiclass":
             self._inference_content["confusion_matrix"] = "test_confusion_matrix_{}.png".format(self._n_test_sample)
             test_summary = self._multiclass_details(
-                data,
-                predicted_labels_col_name=predictions_col_name,
-                true_labels_col_name=true_values_col_name
+                data, predicted_labels_col_name=predictions_col_name, true_labels_col_name=true_values_col_name
             )
             if self._n_test_sample >= 2:
                 self._model_summary["Test sample {}".format(self._n_test_sample)] = test_summary
@@ -1138,13 +1078,13 @@ class SparkReportDeco:
             top_n_categories=self.interpretation_params["top_n_categories"],
             datetime_level=self.interpretation_params["datetime_level"],
             ice_fraction=self.interpretation_params["ice_fraction"],
-            ice_fraction_seed=self.interpretation_params["ice_fraction_seed"]
+            ice_fraction_seed=self.interpretation_params["ice_fraction_seed"],
         )
 
         HISTOGRAM_DATA_ROWS_LIMIT = 2000
         rows_count = test_data.count()
         if rows_count > HISTOGRAM_DATA_ROWS_LIMIT:
-            fraction = HISTOGRAM_DATA_ROWS_LIMIT/rows_count
+            fraction = HISTOGRAM_DATA_ROWS_LIMIT / rows_count
             test_data = test_data.sample(fraction=fraction)
 
         if self._model.reader._roles[feature_name].name == "Numeric":
@@ -1216,15 +1156,11 @@ class SparkReportDeco:
         return general_info.to_html(index=False, justify="left")
 
     def _get_column_nan_ratio(self, column: Column, column_name: str, total_count: int) -> Column:
-        return (F.sum(
-            F.when(
-                F.isnan(column), 1
-            ).otherwise(
-                F.when(
-                    F.isnull(column), 1
-                ).otherwise(0)
-            )
-        ) / total_count).alias(f"nanratio_{column_name}")  # column._jc.toString()
+        return (
+            F.sum(F.when(F.isnan(column), 1).otherwise(F.when(F.isnull(column), 1).otherwise(0))) / total_count
+        ).alias(
+            f"nanratio_{column_name}"
+        )  # column._jc.toString()
 
     def _exclude_nan_values(self, column: Column) -> Column:
         return F.when(F.isnan(column), None).otherwise(column)
@@ -1234,8 +1170,9 @@ class SparkReportDeco:
             column = column.astype(astype)
         return F.min(column).alias(f"min_{column_name}")
 
-    def _get_column_percentile(self, column: Column, column_name: str, percentile: float,
-                               astype: Optional[str] = None) -> Column:
+    def _get_column_percentile(
+        self, column: Column, column_name: str, percentile: float, astype: Optional[str] = None
+    ) -> Column:
         if astype:
             column = column.astype(astype)
         return F.percentile_approx(column, percentile).alias(f"perc{percentile}_{column_name}")
@@ -1316,8 +1253,8 @@ class SparkReportDeco:
             outputCols=[f"{col}_out" for col in categorical_features],
             minFreqs=[0 for _ in categorical_features],
             handleInvalid="skip",
-            defaultValue=0.,
-            freqLabel=True
+            defaultValue=0.0,
+            freqLabel=True,
         )
 
         indexer_model: LAMLStringIndexerModel = indexer.fit(train_data)
@@ -1328,7 +1265,8 @@ class SparkReportDeco:
         categorical_features_df = []
         for feature_name, enc in zip(categorical_features, encodings):
             sorted_enc: list = [
-                pair for pair in sorted(enc, key=lambda x: int(x[1]), reverse=True)
+                pair
+                for pair in sorted(enc, key=lambda x: int(x[1]), reverse=True)
                 if pair[0] is not None and pair[0] != "None"
             ]
 
@@ -1373,15 +1311,14 @@ class SparkReportDeco:
         else:
             dropped_nan_ratio = train_data.select(
                 *[
-                    (F.sum(
-                        F.when(
-                            F.isnan(F.col(col_name)), 1
-                        ).otherwise(
-                            F.when(
-                                F.isnull(F.col(col_name)), 1
-                            ).otherwise(0)
+                    (
+                        F.sum(
+                            F.when(F.isnan(F.col(col_name)), 1).otherwise(
+                                F.when(F.isnull(F.col(col_name)), 1).otherwise(0)
+                            )
                         )
-                    ) / total_count).alias(col_name)
+                        / total_count
+                    ).alias(col_name)
                     for col_name in dropped_list
                 ]
             ).toPandas()
@@ -1391,25 +1328,26 @@ class SparkReportDeco:
                 outputCols=[f"{col}_out" for col in dropped_list],
                 minFreqs=[0 for _ in dropped_list],
                 handleInvalid="skip",
-                defaultValue=0.,
-                freqLabel=True
+                defaultValue=0.0,
+                freqLabel=True,
             )
 
             indexer_model: LAMLStringIndexerModel = indexer.fit(train_data)
 
             encodings = indexer_model.labelsArray  # list of string tuples ('key', 'count'), example: ('key', '11')
             dropped_most_occured = [
-                int(sorted(enc, key=lambda x: int(x[1]), reverse=True)[0][1]) / float(total_count)
-                for enc in encodings
+                int(sorted(enc, key=lambda x: int(x[1]), reverse=True)[0][1]) / float(total_count) for enc in encodings
             ]
 
             dropped_features_table = pd.DataFrame(
-                [{"Название переменной": var_name, "nan_rate": nan_ratio, "constant_rate": most_occured} for var_name, nan_ratio, most_occured in zip(dropped_nan_ratio, dropped_nan_ratio.iloc[0], dropped_most_occured)]
+                [
+                    {"Название переменной": var_name, "nan_rate": nan_ratio, "constant_rate": most_occured}
+                    for var_name, nan_ratio, most_occured in zip(
+                        dropped_nan_ratio, dropped_nan_ratio.iloc[0], dropped_most_occured
+                    )
+                ]
             )
-            self._dropped_features_table = (
-                dropped_features_table
-                .to_html(index=False, justify="left")
-            )
+            self._dropped_features_table = dropped_features_table.to_html(index=False, justify="left")
 
     def _generate_model_section(self):
         model_summary = None
