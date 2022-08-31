@@ -2194,8 +2194,8 @@ test = ["pylint", "pytest", "pytest-black", "pytest-cov", "pytest-pylint"]
 
 [[package]]
 name = "synapseml"
-version = "0.9.5"
-description = "Synapse Machine Learning"
+version = "0.9.4"
+description = "Synpase Machine Learning"
 category = "main"
 optional = false
 python-versions = "*"
@@ -2546,7 +2546,7 @@ report = ["cffi", "weasyprint"]
 [metadata]
 lock-version = "1.1"
 python-versions = "~3.8"
-content-hash = "1fc655b11e267fa22624b251913790d7b00281cd82fa2cacfb1555afd24301cd"
+content-hash = "1d6d053e75d56ea8ee424371ddd2366c21af2d8b376323aa0b7f2d427f55dd14"
 
 [metadata.files]
 alabaster = [
@@ -4140,7 +4140,7 @@ strenum = [
     {file = "StrEnum-0.4.8.tar.gz", hash = "sha256:08a7647f4fac2977470e5618cccd5e8b939768f02e5f5dd7864adaa329559949"},
 ]
 synapseml = [
-    {file = "synapseml-0.9.5-py2.py3-none-any.whl", hash = "sha256:b377278908e4448ac02d51ecebeaf2420afb91d1efd939fee181989028ba9516"},
+    {file = "synapseml-0.9.4-py2.py3-none-any.whl", hash = "sha256:1a0ba4fd59f0e727f7b031b38c84bca2ffe77d4cb5f7593338d053331cac3bb6"},
 ]
 tenacity = [
     {file = "tenacity-8.0.1-py3-none-any.whl", hash = "sha256:f78f4ea81b0fabc06728c11dc2a8c01277bfc5181b321a4770471902e3eb844a"},

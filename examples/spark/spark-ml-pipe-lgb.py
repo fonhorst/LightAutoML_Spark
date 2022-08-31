@@ -51,12 +51,12 @@ if __name__ == "__main__":
 
         iterator = SparkFoldsIterator(sdataset, n_folds=cv)
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key=cacher_key, freeze_defaults=False)
+        spark_ml_algo = SparkBoostLGBM(cacher_key=cacher_key, freeze_defaults=False, use_single_dataset_mode=False)
         spark_features_pipeline = SparkLGBAdvancedPipeline(cacher_key=cacher_key, **ml_alg_kwargs)
         spark_selector = ImportanceCutoffSelector(
             cutoff=0.0,
             feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),
-            ml_algo=SparkBoostLGBM(cacher_key='preselector', freeze_defaults=False),
+            ml_algo=SparkBoostLGBM(cacher_key='preselector', freeze_defaults=False, use_single_dataset_mode=False),
             imp_estimator=ModelBasedImportanceEstimator()
         )
 

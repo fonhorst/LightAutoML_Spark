@@ -86,7 +86,7 @@ cffi = {version = "^1.14.5", optional = true}
 # PySpark
 pyspark = "3.0.1"
 pyarrow = ">=1.0.0"
-synapseml = "0.9.5"
+synapseml = "0.9.4"
 toposort = "1.7"
 onnxmltools = "^1.11.0"
 
