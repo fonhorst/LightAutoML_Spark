@@ -24,6 +24,7 @@ from pyspark.sql.dataframe import DataFrame
 from pyspark.sql.pandas.functions import pandas_udf
 
 from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.spark_functions import percentile_approx
 from lightautoml.spark.utils import SparkDataFrame
 from lightautoml.spark.report.handy_spark_utils import call2
 from lightautoml.spark.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
@@ -683,7 +684,7 @@ class SparkReportDeco:
         mean_ae = metrics.meanAbsoluteError
 
         median_ae = data.select(
-            F.percentile_approx(
+            percentile_approx(
                 F.abs(
                     F.col(predictions_col_name).astype("double") - F.col(true_values_col_name).astype("double")
                 ),

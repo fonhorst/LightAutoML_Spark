@@ -10,7 +10,7 @@ from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType
 
-from lightautoml.spark.spark_functions import array_to_vector
+from lightautoml.spark.spark_functions import array_to_vector, transform, aggregate
 
 from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo
@@ -367,7 +367,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
                     .otherwise(convert_column(c)).alias(c)
                 for c in pred_cols
             ]
-            arr_fields_summ = F.transform(F.arrays_zip(*normalized_cols), lambda x: F.aggregate(
+            arr_fields_summ = transform(F.arrays_zip(*normalized_cols), lambda x: aggregate(
                 F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]),
                 F.lit(0.0),
                 lambda acc, x: acc + x
@@ -375,7 +375,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
 
             out_col = array_to_vector(arr_fields_summ) if self.getConvertToArrayFirst() else arr_fields_summ
         else:
-            scalar_fields_summ = F.aggregate(
+            scalar_fields_summ = aggregate(
                 F.array(*[F.col(c) * F.lit(weights[c]) for c in pred_cols]),
                 F.lit(0.0),
                 lambda acc, x: acc + F.when(F.isnull(x), F.lit(0.0)).otherwise(x)

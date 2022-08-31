@@ -12,6 +12,7 @@ from lightautoml.dataset.base import RolesDict
 
 from lightautoml.dataset.roles import ColumnRole, NumericRole, CategoryRole
 from lightautoml.spark.dataset.base import SparkDataset
+from lightautoml.spark.spark_functions import percentile_approx
 from lightautoml.spark.utils import SparkDataFrame
 from lightautoml.spark.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from lightautoml.spark.transformers.base import SparkBaseEstimator, SparkBaseTransformer, ObsoleteSparkTransformer
@@ -187,7 +188,7 @@ class SparkFillnaMedianEstimator(SparkBaseEstimator):
         logger.debug(f"Sample size: {sdf.count()}")
 
         row = sdf\
-            .select([F.percentile_approx(c, 0.5).alias(c) for c in self.getInputCols()])\
+            .select([percentile_approx(c, 0.5).alias(c) for c in self.getInputCols()])\
             .select([F.when(F.isnan(c), 0).otherwise(F.col(c)).alias(c) for c in self.getInputCols()])\
             .first()
 
