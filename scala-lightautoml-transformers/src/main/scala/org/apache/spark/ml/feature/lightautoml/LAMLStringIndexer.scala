@@ -1,22 +1,20 @@
 package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.hadoop.fs.Path
-import org.apache.spark.{SparkContext, SparkException}
-import org.apache.spark.ml.feature.{StringIndexer, StringIndexerAggregator, StringIndexerBase, StringIndexerModel}
 import org.apache.spark.annotation.Since
-import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.ml.attribute.NominalAttribute
+import org.apache.spark.ml.feature.{StringIndexer, StringIndexerAggregator, StringIndexerBase}
 import org.apache.spark.ml.param._
-import org.apache.spark.ml.param.shared._
 import org.apache.spark.ml.util._
-import org.apache.spark.sql.types._
+import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, If, Literal}
-import org.apache.spark.sql.functions.{collect_set, lit, udf}
-import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, Encoders, Row, SparkSession}
+import org.apache.spark.sql.functions.udf
+import org.apache.spark.sql.types._
+import org.apache.spark.sql._
 import org.apache.spark.util.ThreadUtils
 import org.apache.spark.util.VersionUtils.majorMinorVersion
 import org.apache.spark.util.collection.OpenHashMap
+import org.apache.spark.{SparkContext, SparkException}
 
 //import java.util
 
