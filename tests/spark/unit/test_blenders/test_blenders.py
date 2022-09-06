@@ -4,13 +4,13 @@ import random
 from pyspark.sql import SparkSession
 
 from lightautoml.dataset.roles import NumericRole
-from lightautoml.spark.automl.blend import SparkWeightedBlender
-from lightautoml.spark.dataset.base import SparkDataset
-from lightautoml.spark.dataset.roles import NumericVectorOrArrayRole
-from lightautoml.spark.pipelines.ml.base import SparkMLPipeline
-from lightautoml.spark.tasks.base import SparkTask as SparkTask
-from lightautoml.spark.utils import log_exec_time, VERBOSE_LOGGING_FORMAT
-from lightautoml.spark.validation.iterators import SparkDummyIterator
+from sparklightautoml.automl.blend import SparkWeightedBlender
+from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
+from sparklightautoml.pipelines.ml.base import SparkMLPipeline
+from sparklightautoml.tasks.base import SparkTask as SparkTask
+from sparklightautoml.utils import log_exec_time, VERBOSE_LOGGING_FORMAT
+from sparklightautoml.validation.iterators import SparkDummyIterator
 from .. import spark as spark_sess
 from ..test_auto_ml.utils import DummyMLAlgo
 
