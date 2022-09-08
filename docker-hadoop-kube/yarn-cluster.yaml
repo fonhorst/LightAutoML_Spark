@@ -35,6 +35,7 @@ data:
   YARN_CONF_yarn_nodemanager_resource_cpu___vcores: "8"
   YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: "98.5"
   YARN_CONF_yarn_nodemanager_remote___app___log___dir: "/app-logs"
+  SPARK_HISTORY_OPTS: "-Dspark.history.fs.logDirectory=hdfs://node21.bdcl:9000/shared/spark-logs"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -80,6 +81,43 @@ spec:
           volumeMounts:
             - name: storage
               mountPath: /hadoop/yarn/timeline
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yarn-spark-history-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yarn-spark-history-server
+  template:
+    metadata:
+      annotations:
+        "sidecar.istio.io/inject": "false"
+      labels:
+        app: yarn-spark-history-server
+    spec:
+      containers:
+        - name: spark-history-server
+          image: node2.bdcl:5000/yarn-spark-history-server:slama-yarn
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "500m"
+          envFrom:
+            - configMapRef:
+                name: hadoop-env
+          env:
+            - name: "SPARK_NO_DAEMONIZE"
+              value: "true"
+          ports:
+            - containerPort: 18080
+              name: http-webui
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -194,6 +232,18 @@ spec:
       name: rpc
   selector:
     app: yarn-history-server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yarn-spark-history-server
+spec:
+  type: NodePort
+  ports:
+    - port: 18080
+      name: http-webui
+  selector:
+    app: yarn-spark-history-server
 ---
 apiVersion: v1
 kind: Service

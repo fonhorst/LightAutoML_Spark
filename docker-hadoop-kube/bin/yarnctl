@@ -18,7 +18,7 @@ then
 fi
 
 ## declare an array variable
-declare -a components=("base" "historyserver" "nodemanager" "resourcemanager" "spark-submit")
+declare -a components=("base" "historyserver" "nodemanager" "resourcemanager" "spark-submit" "spark-history-server")
 
 function build_images() {
     echo "Building required docker images..."
