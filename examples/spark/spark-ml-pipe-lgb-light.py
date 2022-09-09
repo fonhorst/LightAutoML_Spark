@@ -8,7 +8,7 @@ from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
-from sparklightautoml.validation.iterators import SparkFoldsIterator
+from sparklightautoml.validation.iterators import SparkFoldsIterator, SparkHoldoutIterator
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
         sdataset = sreader.fit_read(train_df, roles=roles)
 
-        iterator = SparkFoldsIterator(sdataset, n_folds=cv)
+        iterator = SparkHoldoutIterator(sdataset)
 
         spark_ml_algo = SparkBoostLGBM(cacher_key=cacher_key, freeze_defaults=False, use_single_dataset_mode=False)
         spark_features_pipeline = SparkLGBSimpleFeatures(cacher_key=cacher_key)
