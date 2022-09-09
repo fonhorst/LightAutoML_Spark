@@ -35,7 +35,6 @@ data:
   YARN_CONF_yarn_nodemanager_resource_cpu___vcores: "8"
   YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: "98.5"
   YARN_CONF_yarn_nodemanager_remote___app___log___dir: "/app-logs"
-  SPARK_HISTORY_OPTS: "-Dspark.history.fs.logDirectory=hdfs://node21.bdcl:9000/shared/spark-logs"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -115,6 +114,8 @@ spec:
           env:
             - name: "SPARK_NO_DAEMONIZE"
               value: "true"
+            - name: "SPARK_HISTORY_OPTS"
+              value: "-Dspark.history.fs.logDirectory=hdfs://node21.bdcl:9000/shared/spark-logs"
           ports:
             - containerPort: 18080
               name: http-webui
