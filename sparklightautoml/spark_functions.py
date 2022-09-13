@@ -1,9 +1,9 @@
 from importlib_metadata import version
 from packaging.version import parse
+from pyspark.sql.functions import countDistinct as count_distinct
 
 if parse(version('pyspark')) >= parse('3.1.0'):
     from pyspark.ml.functions import array_to_vector
-    from pyspark.sql.functions import count_distinct
     from pyspark.sql.functions import percentile_approx
     from pyspark.sql.functions import aggregate
     from pyspark.sql.functions import transform
@@ -11,7 +11,6 @@ else:
     from pyspark import SparkContext
     from pyspark.sql import Column
     from pyspark.sql.column import _to_java_column, _to_seq, _create_column_from_literal
-    from pyspark.sql.functions import countDistinct as count_distinct
 
     def _get_lambda_parameters(f):
         import inspect
