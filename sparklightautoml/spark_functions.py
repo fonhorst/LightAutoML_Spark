@@ -3,7 +3,7 @@ from packaging.version import parse
 
 if parse(version('pyspark')) >= parse('3.1.0'):
     from pyspark.ml.functions import array_to_vector
-    from pyspark.sql.functions import count_distinct
+    from pyspark.sql.functions import countDistinct as count_distinct
     from pyspark.sql.functions import percentile_approx
     from pyspark.sql.functions import aggregate
     from pyspark.sql.functions import transform

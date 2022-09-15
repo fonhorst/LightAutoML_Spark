@@ -367,65 +367,70 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         logger.info(f"Input cols for the vector assembler: {full.features}")
         logger.info(f"Running lgb with the following params: {params}")
 
-        if self._assembler is None:
-            self._assembler = VectorAssembler(
-                inputCols=self.input_features, outputCol=f"{self._name}_vassembler_features", handleInvalid="keep"
+        try:
+
+            if self._assembler is None:
+                self._assembler = VectorAssembler(
+                    inputCols=self.input_features, outputCol=f"{self._name}_vassembler_features", handleInvalid="keep"
+                )
+
+            LGBMBooster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
+
+            if full.task.name in ["binary", "multiclass"]:
+                params["rawPredictionCol"] = self._raw_prediction_col_name
+                params["probabilityCol"] = fold_prediction_column
+                params["predictionCol"] = self._prediction_col_name
+                params["isUnbalance"] = True
+            else:
+                params["predictionCol"] = fold_prediction_column
+
+            master_addr = train.spark_session.conf.get("spark.master")
+            if master_addr.startswith("local"):
+                cores_str = master_addr[len("local[") : -1]
+                cores = int(cores_str) if cores_str != "*" else multiprocessing.cpu_count()
+                params["numThreads"] = max(cores - 1, 1)
+            else:
+                params["numThreads"] = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
+
+            train_data = full.data
+            valid_size = train_data.where(F.col(self.validation_column) == 1).count()
+            max_val_size = self._max_validation_size
+            if valid_size > max_val_size:
+                warnings.warn(
+                    f"Maximum validation size for SparkBoostLGBM is exceeded: {valid_size} > {max_val_size}. "
+                    f"Reducing validation size down to maximum.",
+                    category=RuntimeWarning,
+                )
+                rest_cols = list(train_data.columns)
+                rest_cols.remove(self.validation_column)
+
+                replace_col = F.when(F.rand(self._seed) < max_val_size / valid_size, F.lit(True)).otherwise(F.lit(False))
+                val_filter_cond = F.when(F.col(self.validation_column) == 1, replace_col).otherwise(F.lit(True))
+
+                train_data = train_data.where(val_filter_cond)
+
+            valid_data = valid.data
+
+            lgbm = LGBMBooster(
+                **params,
+                featuresCol=self._assembler.getOutputCol(),
+                labelCol=full.target_column,
+                validationIndicatorCol=self.validation_column,
+                verbosity=verbose_eval,
+                useSingleDatasetMode=self._use_single_dataset_mode,
+                isProvideTrainingMetric=True,
+                chunkSize=self._chunk_size,
             )
 
-        LGBMBooster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
+            logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
 
-        if full.task.name in ["binary", "multiclass"]:
-            params["rawPredictionCol"] = self._raw_prediction_col_name
-            params["probabilityCol"] = fold_prediction_column
-            params["predictionCol"] = self._prediction_col_name
-            params["isUnbalance"] = True
-        else:
-            params["predictionCol"] = fold_prediction_column
+            if full.task.name == "reg":
+                lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
 
-        master_addr = train.spark_session.conf.get("spark.master")
-        if master_addr.startswith("local"):
-            cores_str = master_addr[len("local[") : -1]
-            cores = int(cores_str) if cores_str != "*" else multiprocessing.cpu_count()
-            params["numThreads"] = max(cores - 1, 1)
-        else:
-            params["numThreads"] = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
-
-        train_data = full.data
-        valid_size = train_data.where(F.col(self.validation_column) == 1).count()
-        max_val_size = self._max_validation_size
-        if valid_size > max_val_size:
-            warnings.warn(
-                f"Maximum validation size for SparkBoostLGBM is exceeded: {valid_size} > {max_val_size}. "
-                f"Reducing validation size down to maximum.",
-                category=RuntimeWarning,
-            )
-            rest_cols = list(train_data.columns)
-            rest_cols.remove(self.validation_column)
-
-            replace_col = F.when(F.rand(self._seed) < max_val_size / valid_size, F.lit(True)).otherwise(F.lit(False))
-            val_filter_cond = F.when(F.col(self.validation_column) == 1, replace_col).otherwise(F.lit(True))
-
-            train_data = train_data.where(val_filter_cond)
-
-        valid_data = valid.data
-
-        lgbm = LGBMBooster(
-            **params,
-            featuresCol=self._assembler.getOutputCol(),
-            labelCol=full.target_column,
-            validationIndicatorCol=self.validation_column,
-            verbosity=verbose_eval,
-            useSingleDatasetMode=self._use_single_dataset_mode,
-            isProvideTrainingMetric=True,
-            chunkSize=self._chunk_size,
-        )
-
-        logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
-
-        if full.task.name == "reg":
-            lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
-
-        ml_model = lgbm.fit(self._assembler.transform(train_data))
+            ml_model = lgbm.fit(self._assembler.transform(train_data))
+        except Exception as ex:
+            logger.error("Error during SparkBoostLGBM fitting", exc_info=True)
+            raise ex
 
         val_pred = ml_model.transform(self._assembler.transform(valid_data))
         val_pred = DropColumnsTransformer(
