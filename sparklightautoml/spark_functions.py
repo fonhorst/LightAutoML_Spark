@@ -1,9 +1,9 @@
 from importlib_metadata import version
 from packaging.version import parse
+from pyspark.sql.functions import countDistinct as count_distinct
 
 if parse(version('pyspark')) >= parse('3.1.0'):
     from pyspark.ml.functions import array_to_vector
-    from pyspark.sql.functions import countDistinct as count_distinct
     from pyspark.sql.functions import percentile_approx
     from pyspark.sql.functions import aggregate
     from pyspark.sql.functions import transform
