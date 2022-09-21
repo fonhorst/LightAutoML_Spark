@@ -35,4 +35,12 @@ object functions {
       )
     }
   }
+
+  private val test_udf = udf { value: String =>
+    value.length + 1
+  }
+
+  def test_scala_udf(v: Column): Column = {
+    test_udf(v)
+  }
 }

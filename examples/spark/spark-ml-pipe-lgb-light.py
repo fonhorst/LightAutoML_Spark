@@ -1,14 +1,18 @@
 import logging.config
 import logging.config
 
+from pyspark.ml import PipelineModel
+from pyspark.sql import functions as F
+
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
+from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
-from sparklightautoml.validation.iterators import SparkFoldsIterator, SparkHoldoutIterator
+from sparklightautoml.validation.iterators import SparkHoldoutIterator
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -66,6 +70,20 @@ if __name__ == "__main__":
         test_preds_ds = ml_pipe.predict(test_sds)
         test_score = score(test_preds_ds[:, spark_ml_algo.prediction_feature])
         logger.info(f"Test score (#1 way): {test_score}")
+
+        # 2. second way (Spark ML API, save-load-predict)
+        transformer = PipelineModel(stages=[sreader.make_transformer(add_array_attrs=True), ml_pipe.transformer])
+        transformer.write().overwrite().save("/tmp/reader_and_spark_ml_pipe_lgb")
+
+        pipeline_model = PipelineModel.load("/tmp/reader_and_spark_ml_pipe_lgb")
+        test_pred_df = pipeline_model.transform(test_df)
+        test_pred_df = test_pred_df.select(
+            SparkDataset.ID_COLUMN,
+            F.col(roles['target']).alias('target'),
+            F.col(spark_ml_algo.prediction_feature).alias('prediction')
+        )
+        test_score = score(test_pred_df)
+        logger.info(f"Test score (#3 way): {test_score}")
 
     logger.info("Finished")
 
