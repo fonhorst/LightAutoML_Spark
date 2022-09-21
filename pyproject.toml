@@ -34,12 +34,12 @@ classifiers = [
 python = "~3.8"
 
 poetry-core = "^1.0.0"
-lightautoml = "0.3.0"
+lightautoml = "0.3.7.1"
 
 # PySpark
-pyspark = "3.0.1"
+pyspark = "3.2.0"
 pyarrow = ">=1.0.0"
-synapseml = "0.9.4"
+synapseml = "0.9.5"
 toposort = "1.7"
 onnxmltools = "^1.11.0"
 
@@ -57,6 +57,7 @@ pre-commit = "*"
 notebook = "*"
 mypy = "^0.910"
 tox = "*"
+mlflow-skinny = "*"
 
 
 [tool.pytest.ini_options]
