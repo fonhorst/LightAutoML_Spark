@@ -231,11 +231,11 @@ class Cacher(Estimator):
         logger.info(f"Cacher {self._key} (RDD Id: {dataset.rdd.id()}). Starting to materialize data.")
 
         # using local checkpoints
-        ds = dataset.localCheckpoint(eager=True)
+        # ds = dataset.localCheckpoint(eager=True)
 
         # using plain caching
-        # ds = SparkSession.getActiveSession().createDataFrame(dataset.rdd, schema=dataset.schema).cache()
-        # ds.write.mode('overwrite').format('noop').save()
+        ds = SparkSession.getActiveSession().createDataFrame(dataset.rdd, schema=dataset.schema).cache()
+        ds.write.mode('overwrite').format('noop').save()
 
         logger.info(f"Cacher {self._key} (RDD Id: {ds.rdd.id()}). Finished data materialization.")
 
