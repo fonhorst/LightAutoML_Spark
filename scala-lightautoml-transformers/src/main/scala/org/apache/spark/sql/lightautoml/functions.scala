@@ -43,4 +43,14 @@ object functions {
   def test_scala_udf(v: Column): Column = {
     test_udf(v)
   }
+
+  private val delay_udf = udf { value: Float =>{
+      Thread.sleep(5000)
+      value + 1
+    }
+  }
+
+  def delay_scala_udf(v: Column): Column = {
+    test_udf(v)
+  }
 }
