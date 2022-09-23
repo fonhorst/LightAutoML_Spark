@@ -446,6 +446,8 @@ def from_pandas_to_spark(p: PandasDataset,
     obj_columns = list(pdf.select_dtypes(include=['object']))
     pdf[obj_columns] = pdf[obj_columns].astype(str)
     sdf = spark.createDataFrame(data=pdf)
+    # WARNING: this code can replace the None values 
+    # that were in the dataframe before the call to createDataFrame().
     if version("pyspark") == '3.0.1' or version("pyspark") == '3.1.1':
         sdf = sdf.na.fill(value=float("nan"))
 
