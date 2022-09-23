@@ -448,6 +448,7 @@ def from_pandas_to_spark(p: PandasDataset,
     sdf = spark.createDataFrame(data=pdf)
     # WARNING: this code can replace the None values 
     # that were in the dataframe before the call to createDataFrame().
+    # createDataFrame() from old pyspark versions converts NaN to None
     if version("pyspark") == '3.0.1' or version("pyspark") == '3.1.1':
         sdf = sdf.na.fill(value=float("nan"))
 
