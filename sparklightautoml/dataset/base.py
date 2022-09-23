@@ -255,13 +255,13 @@ class SparkDataset(LAMLDataset):
 
         if self.target_column is not None:
             target_series = df[self.target_column]
-            df = df.drop(self.target_column, 1)
+            df = df.drop(columns=self.target_column)
         else:
             target_series = None
 
         if self.folds_column is not None:
             folds_series = df[self.folds_column]
-            df = df.drop(self.folds_column, 1)
+            df = df.drop(columns=self.folds_column)
         else:
             folds_series = None
 
