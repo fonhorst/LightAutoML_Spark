@@ -87,6 +87,7 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         """
 
         # train and apply pre selection
+        # TODO: SLAMA join - remove
         input_roles = copy(train_valid.input_roles)
         full_train_roles = copy(train_valid.train.roles)
 
@@ -99,12 +100,15 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         # train and apply post selection
         train_valid = train_valid.apply_selector(self.post_selection)
 
+        # TODO: SLAMA join - checkpointing here?
+
         preds: Optional[SparkDataset] = None
         for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
             ml_algo = cast(SparkTabularMLAlgo, ml_algo)
             ml_algo, curr_preds = tune_and_fit_predict(ml_algo, param_tuner, train_valid, force_calc)
             if ml_algo is not None:
                 self.ml_algos.append(ml_algo)
+                # TODO: SLAMA join - collect preds to concat them later
                 preds = curr_preds
                 train_valid.train = preds
             else:
@@ -119,8 +123,10 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
 
         del self._ml_algos
 
+        # TODO: SLAMA join - remove
         self._output_roles = {ml_algo.prediction_feature: ml_algo.prediction_role for ml_algo in self.ml_algos}
 
+        # TODO: SLAMA join - remove
         # all out roles for the output dataset
         out_roles = copy(self._output_roles)
         # we need also add roles for predictions of previous pipe in this layer
@@ -134,6 +140,9 @@ class SparkMLPipeline(LAMAMLPipeline, OutputFeaturesAndRoles):
         # in case they were changed by SparkChangeRolesTransformer
         out_roles.update(input_roles)
 
+        # TODO: SLAMA join - add concatenation of prediction dataframes here
+
+        # TODO: SLAMA join - selector should be built from ml_algo_transformers' output columns (ml_algo.prediction_feature) + optionally target columns
         select_transformer = ColumnsSelectorTransformer(
             input_cols=[SparkDataset.ID_COLUMN, *list(out_roles.keys())],
             optional_cols=[train_valid.train.target_column] if train_valid.train.target_column else [],

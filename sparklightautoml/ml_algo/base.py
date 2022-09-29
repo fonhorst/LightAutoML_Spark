@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 SparkMLModel = PipelineModel
 
-
+# TODO: SLAMA join - remove InputFeaturesAndRoles
 class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
     """Machine learning algorithms that accepts numpy arrays as input."""
 

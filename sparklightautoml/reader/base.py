@@ -227,6 +227,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = self._create_unique_ids(train_data, cacher_key=self._cacher_key)
 
+        # TODO: SLAMA join - make bucketing here if dataset is not already bucketed
+
         if roles is None:
             roles = {}
 

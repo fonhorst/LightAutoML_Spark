@@ -23,6 +23,9 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
 
     TRAIN_VAL_COLUMN = VALIDATION_COLUMN
 
+    # TODO: SLAMA join - remove:
+    # 1. InputFeaturesAndRoles
+    # 2. input_roles
     def __init__(self, train: SparkDataset, input_roles: Optional[RolesDict] = None):
         assert train.folds_column in train.data.columns
         super().__init__(train)
@@ -61,6 +64,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
 
         """
         sel_train_valid = copy(self)
+        # TODO: SLAMA join - remove input_roles
         sel_train_valid.train = self.train[:, list(self.input_roles.keys())]
 
         if not selector.is_fitted:
@@ -70,6 +74,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
                 sfp.release_cache()
 
         train_valid = copy(self)
+        # TODO: SLAMA join - the subselecting is needed
         # we don't need to create transformer for subselecting
         # because train_valid.input_roles is used in fit_... methods
         # of features pipelines and ml_algo to define columns they work with
@@ -80,10 +85,12 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
     def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
         features_pipeline.input_roles = self.input_roles
         train_valid = cast(SparkBaseTrainValidIterator, super().apply_feature_pipeline(features_pipeline))
+        # TODO: SLAMA join - remove output_roles
         train_valid.input_roles = features_pipeline.output_roles
         return train_valid
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
+        # TODO: SLAMA join - joining by _id column of valid part should be performed
         # depending on train_valid logic there may be several ways of treating predictions results:
         # 1. for folds iterators - just union the results, it will yield the full train dataset
         # 2. for holdout iterators - create None predictions in train_part and union with valid part
