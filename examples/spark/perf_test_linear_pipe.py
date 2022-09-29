@@ -2,6 +2,7 @@ import functools
 import itertools
 import logging.config
 import logging.config
+import uuid
 from datetime import datetime
 from typing import Union, Dict, cast, Any, Tuple
 
@@ -62,7 +63,7 @@ def generate_placeholder_value(role: ColumnRole) -> Union[float, str, datetime]:
     raise Exception(f"Unsupported type of ColumnRole: {type(role)}")
 
 
-def generate_frame(cols: Union[Dict[str, int], int]) -> Tuple[SparkDataFrame, RolesDict]:
+def generate_frame(cols: Union[Dict[str, int], int], rows_count: int) -> Tuple[SparkDataFrame, RolesDict]:
     if isinstance(cols, int):
         cols_mapping = {col_enc: cols for col_enc in ['freq', 'ord', 'basediff', 'LE', 'ChRole', 'LE#2', 'DateSeasons', 'QB', 'regular']}
     else:
@@ -77,7 +78,13 @@ def generate_frame(cols: Union[Dict[str, int], int]) -> Tuple[SparkDataFrame, Ro
         dict()
     )
 
-    data = {col_name: generate_placeholder_value(col_role) for col_name, col_role in all_cols_mapping.items()}
+    data = [
+        {
+            "_id": str(uuid.uuid4()),
+            **{col_name: generate_placeholder_value(col_role) for col_name, col_role in all_cols_mapping.items()}
+        }
+        for _ in range(rows_count)
+    ]
 
     return spark.createDataFrame(data), all_cols_mapping
 
@@ -93,12 +100,13 @@ if __name__ == "__main__":
         'top_intersections': 4
     }
 
-    data = spark.createDataFrame()
+    sdf, roles = generate_frame(cols=10, rows_count=100)
 
-    in_ds = SparkDataset(data, roles=, task=SparkTask("binary"))
+    in_ds = SparkDataset(sdf, roles=roles, task=SparkTask("binary"))
 
     with log_exec_time():
         spark_features_pipeline = SparkLinearFeatures(cacher_key="main_cache", **ml_alg_kwargs)
+        spark_features_pipeline.input_roles = roles
         out_ds = spark_features_pipeline.fit_transform(in_ds)
 
     logger.info("Finished")
