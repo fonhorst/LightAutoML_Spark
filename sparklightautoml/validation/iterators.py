@@ -22,8 +22,8 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
     Simple one step iterator over train part of SparkDataset
     """
 
-    def __init__(self, train: SparkDataset, input_roles: Optional[RolesDict] = None):
-        super().__init__(train, input_roles)
+    def __init__(self, train: SparkDataset):
+        super().__init__(train)
         self._curr_idx = 0
 
     def __iter__(self) -> Iterable:
@@ -53,7 +53,7 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
 
         return train_ds, train_ds, train_ds
 
-    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
+    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
         assert len(val_preds) == 1
         return val_preds[0]
 
@@ -63,14 +63,14 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         sds = cast(SparkDataset, self.train)
         assert sds.folds_column is not None, "Cannot convert to Holdout iterator when folds_column is not defined"
-        return SparkHoldoutIterator(self.train, self.input_roles)
+        return SparkHoldoutIterator(self.train)
 
 
 class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     """Simple one step iterator over one fold of SparkDataset"""
 
-    def __init__(self, train: SparkDataset, input_roles: Optional[RolesDict] = None):
-        super().__init__(train, input_roles)
+    def __init__(self, train: SparkDataset):
+        super().__init__(train)
         self._curr_idx = 0
 
     def __iter__(self) -> Iterable:
@@ -102,24 +102,12 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         return self
 
-    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
+    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
         if len(val_preds) != 1:
             k = 0
         assert len(val_preds) == 1
 
-        if not include_train:
-            return val_preds[0]
-
-        val_pred_cols = set(val_preds[0].columns)
-        train_cols = set(self.train.columns)
-        assert len(train_cols.difference(val_pred_cols)) == 0
-        new_feats = val_pred_cols.difference(train_cols)
-
-        _, train_ds, _ = self._split_by_fold(0)
-        missing_cols = [F.lit(None).alias(f) for f in new_feats]
-        full_val_preds = train_ds.select("*", *missing_cols).unionByName(val_preds[0])
-
-        return full_val_preds
+        return val_preds[0]
 
 
 class SparkFoldsIterator(SparkBaseTrainValidIterator):
@@ -128,7 +116,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
     Folds should be defined in Reader, based on cross validation method.
     """
 
-    def __init__(self, train: SparkDataset, n_folds: Optional[int] = None, input_roles: Optional[RolesDict] = None):
+    def __init__(self, train: SparkDataset, n_folds: Optional[int] = None):
         """Creates iterator.
 
         Args:
@@ -136,7 +124,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
             n_folds: Number of folds.
 
         """
-        super().__init__(train, input_roles)
+        super().__init__(train)
 
         num_folds = train.data.select(F.max(train.folds_column).alias("max")).first()["max"]
         self.n_folds = num_folds + 1
@@ -201,19 +189,21 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
             new hold-out-iterator.
 
         """
-        return SparkHoldoutIterator(self.train, self.input_roles)
+        return SparkHoldoutIterator(self.train)
 
-    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
+    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
         assert len(val_preds) > 0
 
         if len(val_preds) == 1:
             return val_preds[0]
 
-        full_val_preds = functools.reduce(lambda x, y: x.unionByName(y), val_preds)
+        # we leave only service columns, e.g. id, fold, target columns
+        initial_df = cast(SparkDataFrame, self.get_validation_data()[:, []].data)
 
-        # This transformer is necessary to prevent uneven distribution of partitions after coalescing
-        # It assumes that the dataset sent in had been splitted before union corresponding to folds
-        # The transformer is very specific and shouldn't be used anywhere else
-        full_val_preds = BalancedUnionPartitionsCoalescerTransformer().transform(full_val_preds)
+        full_val_preds = functools.reduce(
+            lambda acc, x: acc.join(x, on=SparkDataset.ID_COLUMN, how='left'),
+            val_preds,
+            initial=initial_df
+        )
 
         return full_val_preds

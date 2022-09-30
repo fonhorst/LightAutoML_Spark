@@ -82,8 +82,6 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             output_categories=output_categories,
             ascending_by_cardinality=True,
         )
-        # self._input_features = input_features
-        # self._input_roles = input_roles
 
     def _get_input_features(self) -> Set[str]:
         return set(self.input_features)

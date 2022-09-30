@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 SparkMLModel = PipelineModel
 
-# TODO: SLAMA join - remove InputFeaturesAndRoles
-class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
+
+class SparkTabularMLAlgo(MLAlgo):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "SparkTabularMLAlgo"
@@ -86,10 +86,8 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         """
 
-        logger.info(f"Input columns for MLALgo: {sorted(train_valid_iterator.input_features)}")
+        logger.info(f"Input columns for MLALgo: {sorted(train_valid_iterator.train.features)}")
         logger.info(f"Train size for MLAlgo: {train_valid_iterator.train.data.count()}")
-
-        # log_data(f"spark_fit_predict_{type(self).__name__}", {"train": train_valid_iterator.train.to_pandas()})
 
         assert self.is_fitted is False, "Algo is already fitted"
         # init params on input if no params was set before
@@ -106,8 +104,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         valid_ds = cast(SparkDataset, train_valid_iterator.get_validation_data())
 
-        # spark
-        prob = train_valid_iterator.train.task.name in ["binary", "multiclass"]
         outp_dim = 1
         if self.task.name == "multiclass":
             outp_dim = valid_ds.data.select(F.max(valid_ds.target_column).alias("max")).first()
@@ -167,11 +163,12 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
         preds_dfs = [
             df.select(
-                "*", *[F.lit(neutral_element).alias(c) for c in self._models_prediction_columns if c not in df.columns]
+                SparkDataset.ID_COLUMN,
+                *[F.lit(neutral_element).alias(c) for c in self._models_prediction_columns if c not in df.columns]
             )
             for df in preds_dfs
         ]
-        full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs, include_train=False)
+        full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
 
         cacher = Cacher(key=self._cacher_key)
@@ -213,7 +210,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
 
     def predict_single_fold(self, model: SparkMLModel, dataset: SparkDataset) -> SparkDataFrame:
         raise NotImplementedError("Not supported for Spark. Use transformer property instead ")
-        pass
 
     def predict(self, dataset: SparkDataset) -> SparkDataset:
         sdf = self.transformer.transform(dataset.data)

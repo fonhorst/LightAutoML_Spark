@@ -122,7 +122,7 @@ class SelectTransformer(Transformer):
         return dataset.select(self.getColsToSelect())
 
 
-class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, FeaturesPipeline):
+class SparkFeaturesPipeline(FeaturesPipeline):
     """Abstract class.
 
     Analyze train dataset and create composite transformer
@@ -143,6 +143,7 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         self._cacher_key = cacher_key
         self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
         self._transformer: Optional[Transformer] = None
+        self._output_roles: Optional[RolesDict] = None
 
     @property
     def transformer(self) -> Optional[Transformer]:
@@ -172,18 +173,12 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
         """
         logger.info("SparkFeaturePipeline is started")
 
-        assert self.input_features is not None, "Input features should be provided before the fit_transform"
-        assert self.input_roles is not None, "Input roles should be provided before the fit_transform"
-
         fitted_pipe = self._merge_pipes(train)
         self._transformer = fitted_pipe.transformer
         self._output_roles = fitted_pipe.roles
 
-        features = train.features + self.output_features
-        roles = copy(train.roles)
-        roles.update(self._output_roles)
         transformed_ds = train.empty()
-        transformed_ds.set_data(fitted_pipe.sdf, features, roles)
+        transformed_ds.set_data(fitted_pipe.sdf, list(self._output_roles.keys()), self._output_roles)
 
         logger.info("SparkFeaturePipeline is finished")
 
@@ -192,11 +187,8 @@ class SparkFeaturesPipeline(InputFeaturesAndRoles, OutputFeaturesAndRoles, Featu
     def transform(self, test: LAMLDataset) -> LAMLDataset:
         sdf = self._transformer.transform(test.data)
 
-        roles = copy(test.roles)
-        roles.update(self.output_roles)
-
         transformed_ds = test.empty()
-        transformed_ds.set_data(sdf, self.output_features, roles)
+        transformed_ds.set_data(sdf, list(self._output_roles.keys()), self._output_roles)
 
         return transformed_ds
 
