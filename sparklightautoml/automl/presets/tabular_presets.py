@@ -31,6 +31,7 @@ from sparklightautoml.ml_algo.linear_pyspark import SparkLinearLBFGS
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
 from sparklightautoml.pipelines.features.linear_pipeline import SparkLinearFeatures
 from sparklightautoml.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
@@ -186,7 +187,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             score *= 0.5
         return score
 
-    def get_selector(self, cacher_key: str, n_level: Optional[int] = 1) -> SelectionPipeline:
+    def get_selector(self, cacher_key: str, n_level: Optional[int] = 1) -> SparkSelectionPipelineWrapper:
         selection_params = self.selection_params
         # lgb_params
         lgb_params = deepcopy(self.lgb_params)
@@ -242,7 +243,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
                 pre_selector = ComposedSelector([pre_selector, extra_selector])
 
-        return pre_selector
+        return SparkSelectionPipelineWrapper(pre_selector)
 
     def get_linear(
         self, cacher_key: str, n_level: int = 1, pre_selector: Optional[SelectionPipeline] = None

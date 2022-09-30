@@ -41,7 +41,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         """
         ...
 
-    def apply_selector(self, selector: SelectionPipeline) -> Tuple["SparkBaseTrainValidIterator", Transformer]:
+    def apply_selector(self, selector: SelectionPipeline) -> "SparkBaseTrainValidIterator":
         """Select features on train data.
 
         Check if selector is fitted.
@@ -67,14 +67,10 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
 
         train_valid = copy(self)
 
+        # TODO: SLAMA join - needs to be replaced with selector.select?
         train_valid.train = train[:, selector.selected_features]
 
-        # TODO: SLAMA join - move tp SparkDataset later?
-        sel_tr = ColumnsSelectorTransformer(
-            input_cols=[train.service_columns, *selector.selected_features]
-        )
-
-        return train_valid, sel_tr
+        return train_valid
 
     def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
         train_valid = cast(SparkBaseTrainValidIterator, super().apply_feature_pipeline(features_pipeline))
