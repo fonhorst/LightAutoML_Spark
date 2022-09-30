@@ -14,8 +14,6 @@ from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
-from ...transformers.base import ColumnsSelectorTransformer
-from ...utils import Cacher
 from ...validation.base import SparkBaseTrainValidIterator
 
 

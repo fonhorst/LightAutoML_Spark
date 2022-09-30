@@ -10,6 +10,7 @@ from lightautoml.pipelines.selection.base import SelectionPipeline
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
 from sparklightautoml.pipelines.features.base import FeaturesPipeline, SparkFeaturesPipeline
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 
 
 class SparkNestedTabularMLPipeline(SparkMLPipeline, LAMANestedTabularMLPipeline):
@@ -22,9 +23,9 @@ class SparkNestedTabularMLPipeline(SparkMLPipeline, LAMANestedTabularMLPipeline)
         cacher_key: str,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
-        pre_selection: Optional[SelectionPipeline] = None,
+        pre_selection: Optional[SparkSelectionPipelineWrapper] = None,
         features_pipeline: Optional[SparkFeaturesPipeline] = None,
-        post_selection: Optional[SelectionPipeline] = None,
+        post_selection: Optional[SparkSelectionPipelineWrapper] = None,
         cv: int = 1,
         n_folds: Optional[int] = None,
         inner_tune: bool = False,

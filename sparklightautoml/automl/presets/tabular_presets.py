@@ -246,7 +246,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         return SparkSelectionPipelineWrapper(pre_selector)
 
     def get_linear(
-        self, cacher_key: str, n_level: int = 1, pre_selector: Optional[SelectionPipeline] = None
+        self, cacher_key: str, n_level: int = 1, pre_selector: Optional[SparkSelectionPipelineWrapper] = None
     ) -> SparkNestedTabularMLPipeline:
 
         # linear model with l2
@@ -271,7 +271,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         self,
         keys: Sequence[str],
         n_level: int = 1,
-        pre_selector: Optional[SelectionPipeline] = None,
+        pre_selector: Optional[SparkSelectionPipelineWrapper] = None,
     ):
 
         gbm_feats = SparkLGBAdvancedPipeline(cacher_key=self._cacher_key, **self.gbm_pipeline_params)
