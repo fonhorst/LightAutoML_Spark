@@ -1,13 +1,10 @@
 import functools
+import warnings
 from collections import Counter
 from copy import copy
 from typing import Sequence, Any, Tuple, Union, Optional, List, cast, Dict, Set
 
 import pandas as pd
-from pyspark.ml.functions import vector_to_array
-from pyspark.sql import functions as F, Column
-from pyspark.sql.session import SparkSession
-
 from lightautoml.dataset.base import (
     LAMLDataset,
     IntIdx,
@@ -20,10 +17,14 @@ from lightautoml.dataset.base import (
 )
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset, NpRoles
 from lightautoml.dataset.roles import ColumnRole, NumericRole, DropRole
+from lightautoml.tasks import Task
+from pyspark.ml.functions import vector_to_array
+from pyspark.sql import functions as F, Column
+from pyspark.sql.session import SparkSession
+
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
-from lightautoml.tasks import Task
 
 
 class SparkDataset(LAMLDataset):
@@ -66,6 +67,12 @@ class SparkDataset(LAMLDataset):
         """
         assert len(datasets) > 0, "Cannot join an empty list of datasets"
 
+        if any(d.bucketized for d in datasets):
+            warnings.warn(
+                f"NOT bucketized datasets are requested to be joined. It may severaly affect perfrormance",
+                RuntimeWarning
+            )
+
         # we should join datasets only with unique features
         features = [feat for ds in datasets for feat in ds.features]
         feat_counter = Counter(features)
@@ -76,7 +83,7 @@ class SparkDataset(LAMLDataset):
         roles = {col: role for ds in datasets for col, role in ds.roles.items()}
 
         concatenated_sdf = functools.reduce(
-            lambda acc, sdf: acc.join(sdf, on=cls.ID_COLUMN, how='inner'),
+            lambda acc, sdf: acc.join(sdf, on=cls.ID_COLUMN, how='left'),
             (d.data for d in datasets)
         )
 
@@ -85,7 +92,11 @@ class SparkDataset(LAMLDataset):
 
         return output
 
-    def __init__(self, data: SparkDataFrame, roles: Optional[RolesDict], task: Optional[Task] = None, **kwargs: Any):
+    def __init__(self,
+                 data: SparkDataFrame,
+                 roles: Optional[RolesDict],
+                 task: Optional[Task] = None,
+                 bucketized: bool = False, **kwargs: Any):
 
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
@@ -113,6 +124,8 @@ class SparkDataset(LAMLDataset):
             for k, r in zip(valid_array_attributes, array_attr_roles):
                 if roles[f].name == r:
                     roles[f] = DropRole()
+
+        self._bucketized = bucketized
 
         super().__init__(data, None, roles, task, **kwargs)
 
@@ -179,6 +192,10 @@ class SparkDataset(LAMLDataset):
             self._roles = dict(((x, role) for x in self.features))
         else:
             raise ValueError()
+
+    @property
+    def bucketized(self) -> bool:
+        return self._bucketized
 
     @property
     def shape(self) -> Tuple[Optional[int], Optional[int]]:

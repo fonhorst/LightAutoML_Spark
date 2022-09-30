@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from pyspark.ml import Transformer
 from pyspark.ml.param import Param, Params
-from pyspark.sql import functions as F
+from pyspark.sql import functions as F, SparkSession
 from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
 from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
@@ -207,7 +207,12 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         self.params = kwargs
 
     def fit_read(
-        self, train_data: SparkDataFrame, features_names: Any = None, roles: UserDefinedRolesDict = None, **kwargs: Any
+            self,
+            train_data: SparkDataFrame,
+            features_names: Any = None,
+            roles: UserDefinedRolesDict = None,
+            bucketize_data: bool = True,
+            **kwargs: Any
     ) -> SparkDataset:
         """Get dataset with initial feature selection.
 
@@ -216,6 +221,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             features_names: Ignored. Just to keep signature.
             roles: Dict of features roles in format
               ``{RoleX: ['feat0', 'feat1', ...], RoleY: 'TARGET', ....}``.
+            bucketize_data: whatever or not to bucketize spark dataframe
             **kwargs: Can be used for target/group/weights.
 
         Returns:
@@ -227,7 +233,9 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = self._create_unique_ids(train_data, cacher_key=self._cacher_key)
 
-        # TODO: SLAMA join - make bucketing here if dataset is not already bucketed
+        if bucketize_data:
+            # TODO: SLAMA join - need to take bucket_nums from settings
+            train_data = self._bucketize_data(train_data, bucket_nums=100)
 
         if roles is None:
             roles = {}
@@ -699,6 +707,20 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             new_roles_dict = {**new_roles_dict, **{x: DropRole() for x in rejected}}
 
         return new_roles_dict
+
+    def _bucketize_data(self, train_data: SparkDataFrame, bucket_nums: int) -> SparkDataFrame:
+        spark = SparkSession.getActiveSession()
+        name = "SparkToSparkReaderTable"
+        # TODO: SLAMA join - need to identify correct setting  for bucket_nums if it is not provided
+        (
+            train_data
+            .repartition(bucket_nums, SparkDataset.ID_COLUMN)
+            .write
+            .mode('overwrite')
+            .bucketBy(bucket_nums, SparkDataset.ID_COLUMN).sortBy(SparkDataset.ID_COLUMN)
+            .saveAsTable(name, format='parquet', path=f"/tmp/{name}")
+        )
+        return spark.table(name)
 
 
 class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickleMLWritable, CommonPickleMLReadable):

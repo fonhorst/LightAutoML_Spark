@@ -3,6 +3,7 @@ from abc import ABC
 from copy import copy
 from typing import Tuple, cast, Optional, List, Sequence
 
+from pyspark.ml import Transformer
 from pyspark.sql import functions as F
 
 from lightautoml.pipelines.features.base import FeaturesPipeline
@@ -10,28 +11,23 @@ from lightautoml.pipelines.selection.base import SelectionPipeline
 from lightautoml.reader.base import RolesDict
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.transformers.base import ColumnsSelectorTransformer
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.pipelines.base import InputFeaturesAndRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from lightautoml.validation.base import TrainValidIterator
 
 
-class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC):
+class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
     """
     Implements applying selection pipeline and feature pipeline to SparkDataset.
     """
 
     TRAIN_VAL_COLUMN = VALIDATION_COLUMN
 
-    # TODO: SLAMA join - remove:
-    # 1. InputFeaturesAndRoles
-    # 2. input_roles
-    def __init__(self, train: SparkDataset, input_roles: Optional[RolesDict] = None):
+    def __init__(self, train: SparkDataset):
         assert train.folds_column in train.data.columns
         super().__init__(train)
-        if not input_roles:
-            input_roles = train.roles
-        self._input_roles = input_roles
 
     def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         """Define how to get next object.
@@ -45,11 +41,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
         """
         ...
 
-    @property
-    def features(self) -> List[str]:
-        return self.input_features
-
-    def apply_selector(self, selector: SelectionPipeline) -> "SparkBaseTrainValidIterator":
+    def apply_selector(self, selector: SelectionPipeline) -> Tuple["SparkBaseTrainValidIterator", Transformer]:
         """Select features on train data.
 
         Check if selector is fitted.
@@ -64,8 +56,8 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
 
         """
         sel_train_valid = copy(self)
-        # TODO: SLAMA join - remove input_roles
-        sel_train_valid.train = self.train[:, list(self.input_roles.keys())]
+
+        train = cast(SparkDataset, self.train)
 
         if not selector.is_fitted:
             selector.fit(sel_train_valid)
@@ -74,26 +66,24 @@ class SparkBaseTrainValidIterator(TrainValidIterator, InputFeaturesAndRoles, ABC
                 sfp.release_cache()
 
         train_valid = copy(self)
-        # TODO: SLAMA join - the subselecting is needed
-        # we don't need to create transformer for subselecting
-        # because train_valid.input_roles is used in fit_... methods
-        # of features pipelines and ml_algo to define columns they work with
-        train_valid.input_roles = {feat: self.input_roles[feat] for feat in selector.selected_features}
 
-        return train_valid
+        train_valid.train = train[:, selector.selected_features]
+
+        # TODO: SLAMA join - move tp SparkDataset later?
+        sel_tr = ColumnsSelectorTransformer(
+            input_cols=[train.service_columns, *selector.selected_features]
+        )
+
+        return train_valid, sel_tr
 
     def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
-        features_pipeline.input_roles = self.input_roles
         train_valid = cast(SparkBaseTrainValidIterator, super().apply_feature_pipeline(features_pipeline))
-        # TODO: SLAMA join - remove output_roles
-        train_valid.input_roles = features_pipeline.output_roles
         return train_valid
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame], include_train: bool = False) -> SparkDataFrame:
-        # TODO: SLAMA join - joining by _id column of valid part should be performed
         # depending on train_valid logic there may be several ways of treating predictions results:
-        # 1. for folds iterators - just union the results, it will yield the full train dataset
-        # 2. for holdout iterators - create None predictions in train_part and union with valid part
+        # 1. for folds iterators - join the results, it will yield the full train dataset
+        # 2. for holdout iterators - create None predictions in train_part and join with valid part
         # 3. for custom iterators which may put the same records in
         #   different folds: union + groupby + (optionally) union with None-fied train_part
         # 4. for dummy - do nothing

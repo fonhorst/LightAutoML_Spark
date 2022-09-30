@@ -1,30 +1,24 @@
 import logging
 from abc import ABC
 from copy import copy, deepcopy
-from typing import Dict, cast, Sequence, List, Set, Optional, Union
-
-from pyspark.sql import Column
-from pyspark.sql import functions as F
-from pyspark.ml.functions import array_to_vector
+from typing import Dict, cast, List, Optional, Union
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
-from lightautoml.dataset.utils import concatenate
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
-from sparklightautoml.utils import log_exec_time, SparkDataFrame
 from lightautoml.transformers.base import (
     LAMLTransformer,
-    ColumnsSelector as LAMAColumnsSelector,
-    ChangeRoles as LAMAChangeRoles,
 )
-from lightautoml.transformers.base import Roles
-
 from pyspark.ml import Transformer, Estimator
+from pyspark.ml.functions import array_to_vector
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols, TypeConverters
 from pyspark.ml.param.shared import Param, Params
 from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
+from pyspark.sql import Column
+from pyspark.sql import functions as F
 
+from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
+from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 

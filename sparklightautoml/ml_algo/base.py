@@ -101,8 +101,6 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
             logger.info("Start fitting \x1b[1m{}\x1b[0m ...".format(self._name))
             logger.debug(f"Training params: {self.params}")
 
-        # save features names
-        self._features = train_valid_iterator.features
         # get metric and loss if None
         self.task = train_valid_iterator.train.task
 
