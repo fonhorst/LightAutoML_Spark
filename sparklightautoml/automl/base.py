@@ -2,7 +2,7 @@
 import functools
 import logging
 from copy import copy
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Tuple, cast
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -206,24 +206,19 @@ class SparkAutoML:
         # current_level_roles = train_valid.train.roles
         pipes: List[SparkMLPipeline] = []
         self.levels = []
+        level_ds: Optional[SparkDataset] = None
         for leven_number, level in enumerate(self._levels, 1):
             pipes = []
             flg_last_level = leven_number == len(self._levels)
-            # initial_level_roles = current_level_roles
 
             logger.info(
                 f"Layer \x1b[1m{leven_number}\x1b[0m train process start. Time left {self.timer.time_left:.2f} secs"
             )
 
-            # level_predictions: Optional[SparkDataset] = None
             all_pipes_predictions: List[SparkDataset] = []
             for k, ml_pipe in enumerate(level):
-                # train_valid.input_roles = initial_level_roles
-                pipe_predictions = ml_pipe.fit_predict(train_valid)
+                pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(train_valid))
                 all_pipes_predictions.append(pipe_predictions)
-
-                # train_valid = self._create_validation_iterator(level_predictions, None, None, cv_iter=cv_iter)
-                # current_level_roles = level_predictions.roles
 
                 pipes.append(ml_pipe)
 
@@ -248,61 +243,25 @@ class SparkAutoML:
             logger.info("\x1b[1mLayer {} training completed.\x1b[0m\n".format(leven_number))
 
             if flg_last_level:
-                # TODO: SLAMA join - concat all predictions for this level
-                # level_ds = concat all_levels_predictions
+                level_ds = SparkDataset.concatenate(all_pipes_predictions)
                 break
 
             self.levels.append(pipes)
 
-            # TODO: SLAMA join - need to rework it through SparkDataset concat
-            level_dss = [train_valid.get_validation_data(), *all_pipes_predictions] if self.skip_conn else all_pipes_predictions
-            level_predictions = functools.reduce(
-                lambda acc, df: acc.join(df, on=SparkDataset.ID_COLUMN, how='inner'),
-                level_dss
-            )
+            level_dss = [train_valid.get_validation_data(),
+                         *all_pipes_predictions] if self.skip_conn else all_pipes_predictions
+            level_ds = SparkDataset.concatenate(level_dss)
+
             # TODO: SLAMA join - checkpointing
-            # TODO: SLAMA join - update train_dataset
-            # train_valid = create_validation_iterator(level_predictions, None, n_folds=None, cv_iter=None)
 
-            # # here is split on exit condition
-            # if flg_last_level or not self.skip_conn:
-            #     # we leave only prediction columns in the dataframe with this roles
-            #     roles = dict()
-            #     for p in pipes:
-            #         roles.update(p.output_roles)
-            #
-            #     sdf = level_predictions.data.select(*level_predictions.service_columns, *list(roles.keys()))
-            #     level_predictions = level_predictions.empty()
-            #     level_predictions.set_data(sdf, sdf.columns, roles)
+            train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
 
-            # only for demo purposes, copied from LAMA
-            # # here is split on exit condition
-            # if not flg_last_level:
-            #
-            #     self.levels.append(pipes)
-            #     level_predictions = concatenate(level_predictions)
-            #
-            #     if self.skip_conn:
-            #         valid_part = train_valid.get_validation_data()
-            #         try:
-            #             # convert to initital dataset type
-            #             level_predictions = valid_part.from_dataset(level_predictions)
-            #         except TypeError:
-            #             raise TypeError(
-            #                 "Can not convert prediction dataset type to input features. Set skip_conn=False"
-            #             )
-            #         level_predictions = concatenate([level_predictions, valid_part])
-            #     train_valid = create_validation_iterator(level_predictions, None, n_folds=None, cv_iter=None)
-            # else:
-            #     break
-
-        # blended_prediction, last_pipes = self.blender.fit_predict(level_predictions, pipes)
-        blended_prediction, last_pipes = self.blender.fit_predict(level_predictions, pipes)
+        blended_prediction, last_pipes = self.blender.fit_predict(level_ds, pipes)
         self.levels.append(last_pipes)
 
         del self._levels
 
-        oof_pred = level_predictions if self.return_all_predictions else blended_prediction
+        oof_pred = level_ds if self.return_all_predictions else blended_prediction
         return oof_pred
 
     def predict(

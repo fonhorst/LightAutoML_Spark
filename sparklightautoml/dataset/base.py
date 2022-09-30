@@ -1,3 +1,5 @@
+import functools
+from collections import Counter
 from copy import copy
 from typing import Sequence, Any, Tuple, Union, Optional, List, cast, Dict, Set
 
@@ -29,6 +31,14 @@ class SparkDataset(LAMLDataset):
     Implements a dataset that uses a ``pyspark.sql.DataFrame`` internally, stores some internal state (features, roles, ...) and provide methods to work with dataset.
     """
 
+    @staticmethod
+    def _get_rows(data, k: IntIdx) -> Any:
+        raise NotImplementedError("This method is not supported")
+
+    @staticmethod
+    def _set_col(data: Any, k: int, val: Any):
+        raise NotImplementedError("This method is not supported")
+
     _init_checks = ()
     _data_checks = ()
     _concat_checks = ()
@@ -56,19 +66,22 @@ class SparkDataset(LAMLDataset):
         """
         assert len(datasets) > 0, "Cannot join an empty list of datasets"
 
-        # requires presence of hidden "_id" column in each dataset
-        # that should be saved across all transformations
+        # we should join datasets only with unique features
         features = [feat for ds in datasets for feat in ds.features]
+        feat_counter = Counter(features)
+
+        assert all(count == 1 for el, count in feat_counter.items()), \
+            f"Different datasets being joined contain columns with the same names: {feat_counter}"
+
         roles = {col: role for ds in datasets for col, role in ds.roles.items()}
-        curr_sdf = datasets[0].data
 
-        for ds in datasets[1:]:
-            curr_sdf = curr_sdf.join(ds.data, cls.ID_COLUMN)
-
-        curr_sdf = curr_sdf.select(datasets[0].data[cls.ID_COLUMN], *features)
+        concatenated_sdf = functools.reduce(
+            lambda acc, sdf: acc.join(sdf, on=cls.ID_COLUMN, how='inner'),
+            (d.data for d in datasets)
+        )
 
         output = datasets[0].empty()
-        output.set_data(curr_sdf, features, roles)
+        output.set_data(concatenated_sdf, features, roles)
 
         return output
 
