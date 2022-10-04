@@ -95,9 +95,8 @@ def build_graph(begin: SparkEstOrTrans):
 
 @dataclass
 class FittedPipe:
-    sdf: SparkDataFrame
+    dataset: SparkDataset
     transformer: Transformer
-    roles: RolesDict
 
 
 class SelectTransformer(Transformer):
@@ -175,14 +174,11 @@ class SparkFeaturesPipeline(FeaturesPipeline):
 
         fitted_pipe = self._merge_pipes(train)
         self._transformer = fitted_pipe.transformer
-        self._output_roles = fitted_pipe.roles
-
-        transformed_ds = train.empty()
-        transformed_ds.set_data(fitted_pipe.sdf, list(self._output_roles.keys()), self._output_roles)
+        self._output_roles = fitted_pipe.dataset.roles
 
         logger.info("SparkFeaturePipeline is finished")
 
-        return transformed_ds
+        return fitted_pipe.dataset
 
     def transform(self, test: LAMLDataset) -> LAMLDataset:
         sdf = self._transformer.transform(test.data)
@@ -215,21 +211,14 @@ class SparkFeaturesPipeline(FeaturesPipeline):
             return self.pipes.pop(i)
 
     def _merge_pipes(self, data: SparkDataset) -> FittedPipe:
-        fitted_pipes = []
-        current_sdf = data.data
-        for pipe in self.pipes:
-            fp = self._optimize_and_fit(current_sdf, pipe(data))
-            current_sdf = fp.sdf
-            fitted_pipes.append(fp)
+        fitted_pipes = [self._optimize_and_fit(data, pipe(data)) for pipe in self.pipes]
 
+        processed_dataset = SparkDataset.concatenate([fp.dataset for fp in fitted_pipes])
         pipeline = PipelineModel(stages=[fp.transformer for fp in fitted_pipes])
-        out_roles = dict()
-        for fp in fitted_pipes:
-            out_roles.update(fp.roles)
 
-        return FittedPipe(sdf=current_sdf, transformer=pipeline, roles=out_roles)
+        return FittedPipe(dataset=processed_dataset, transformer=pipeline)
 
-    def _optimize_and_fit(self, train: SparkDataFrame, pipeline: SparkEstOrTrans) -> FittedPipe:
+    def _optimize_and_fit(self, train: SparkDataset, pipeline: SparkEstOrTrans) -> FittedPipe:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
 
@@ -237,7 +226,7 @@ class SparkFeaturesPipeline(FeaturesPipeline):
 
         fp_input_features = set(self.input_features)
 
-        current_train: SparkDataFrame = train
+        current_train_sdf: SparkDataFrame = train.data
         stages = []
         fp_output_cols: List[str] = []
         fp_output_roles: RolesDict = dict()
@@ -245,7 +234,7 @@ class SparkFeaturesPipeline(FeaturesPipeline):
             logger.debug(f"Calculating layer ({i + 1}/{len(tr_layers)}). The size of layer: {len(layer)}")
             cols_to_remove = []
             output_cols = []
-            layer_model = Pipeline(stages=layer).fit(current_train)
+            layer_model = Pipeline(stages=layer).fit(current_train_sdf)
             for j, tr in enumerate(layer):
                 logger.debug(f"Processing output columns for transformer ({j + 1}/{len(layer)}): {tr}")
                 tr = cast(SparkColumnsAndRoles, tr)
@@ -265,12 +254,15 @@ class SparkFeaturesPipeline(FeaturesPipeline):
 
             cacher = Cacher(self._cacher_key)
             pipe = Pipeline(stages=[layer_model, DropColumnsTransformer(list(cols_to_remove)), cacher])
-            stages.append(pipe.fit(current_train))
-            current_train = cacher.dataset
+            stages.append(pipe.fit(current_train_sdf))
+            current_train_sdf = cacher.dataset
 
         fp_output_roles = {f: fp_output_roles[f] for f in fp_output_cols}
 
-        return FittedPipe(current_train, PipelineModel(stages=stages), roles=fp_output_roles)
+        featurized_train = train.empty()
+        featurized_train.set_data(current_train_sdf, list(fp_output_roles.keys()), fp_output_roles)
+
+        return FittedPipe(dataset=featurized_train, transformer=PipelineModel(stages=stages))
 
     def release_cache(self):
         Cacher.release_cache_by_key(self._cacher_key)
