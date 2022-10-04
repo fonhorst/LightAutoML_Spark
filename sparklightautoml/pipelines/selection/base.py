@@ -8,7 +8,9 @@ from pandas import Series
 from pyspark.ml import Transformer
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
+from sparklightautoml.utils import CacheAware
 
 
 class SparkImportanceEstimator:
@@ -28,9 +30,11 @@ class SparkImportanceEstimator:
         return self.raw_importances
 
 
-class SparkSelectionPipelineWrapper(SelectionPipeline):
+class SparkSelectionPipelineWrapper(SelectionPipeline, CacheAware):
     def __init__(self, sel_pipe: SelectionPipeline):
         assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
+        assert isinstance(sel_pipe.features_pipeline, SparkFeaturesPipeline), \
+            "SelectionPipeline should have SparkFeaturePipeline as features_pipeline"
         self._sel_pipe = sel_pipe
         self._service_columns = None
         self._is_fitted = False
@@ -78,4 +82,6 @@ class SparkSelectionPipelineWrapper(SelectionPipeline):
     def get_features_score(self):
         return self._sel_pipe.get_features_score()
 
-
+    def release_cache(self):
+        fp = cast(SparkFeaturesPipeline, self._sel_pipe.features_pipeline)
+        fp.release_cache()

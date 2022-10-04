@@ -45,7 +45,7 @@ from sparklightautoml.transformers.categorical import (
 from sparklightautoml.transformers.categorical import SparkTargetEncoderEstimator
 from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
-from sparklightautoml.utils import NoOpTransformer, Cacher, EmptyCacher, warn_if_not_cached, SparkDataFrame
+from sparklightautoml.utils import NoOpTransformer, Cacher, EmptyCacher, warn_if_not_cached, SparkDataFrame, CacheAware
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class SelectTransformer(Transformer):
         return dataset.select(self.getColsToSelect())
 
 
-class SparkFeaturesPipeline(FeaturesPipeline):
+class SparkFeaturesPipeline(FeaturesPipeline, CacheAware):
     """Abstract class.
 
     Analyze train dataset and create composite transformer

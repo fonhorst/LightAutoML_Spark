@@ -11,6 +11,7 @@ from lightautoml.pipelines.selection.base import SelectionPipeline
 from lightautoml.reader.base import RolesDict
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.pipelines.base import InputFeaturesAndRoles
@@ -41,7 +42,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         """
         ...
 
-    def apply_selector(self, selector: SelectionPipeline) -> "SparkBaseTrainValidIterator":
+    def apply_selector(self, selector: SparkSelectionPipelineWrapper) -> "SparkBaseTrainValidIterator":
         """Select features on train data.
 
         Check if selector is fitted.
@@ -61,13 +62,10 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
 
         if not selector.is_fitted:
             selector.fit(sel_train_valid)
-            sfp = cast(SparkFeaturesPipeline, selector.features_pipeline)
-            if sfp is not None:
-                sfp.release_cache()
+            selector.release_cache()
 
         train_valid = copy(self)
 
-        # TODO: SLAMA join - needs to be replaced with selector.select?
         train_valid.train = train[:, selector.selected_features]
 
         return train_valid

@@ -14,10 +14,11 @@ from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
+from ...utils import CacheManager, CacheAware
 from ...validation.base import SparkBaseTrainValidIterator
 
 
-class SparkMLPipeline(LAMAMLPipeline):
+class SparkMLPipeline(LAMAMLPipeline, CacheAware):
     """Spark version of :class:`~lightautoml.pipelines.ml.base.MLPipeline`. Single ML pipeline.
 
     Merge together stage of building ML model
@@ -43,7 +44,7 @@ class SparkMLPipeline(LAMAMLPipeline):
 
     def __init__(
         self,
-        cacher_key: str,
+        cache_manager: CacheManager,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
         pre_selection: Optional[SparkSelectionPipelineWrapper] = None,
@@ -62,7 +63,8 @@ class SparkMLPipeline(LAMAMLPipeline):
 
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
-        self._cacher_key = cacher_key
+        self._cacher_manager = cache_manager
+        self._milestone_name = f"MLPipe_{self.name}"
         self._output_features = None
         self._output_roles = None
         self._transformer: Optional[Transformer] = None
@@ -101,7 +103,9 @@ class SparkMLPipeline(LAMAMLPipeline):
         # train and apply post selection
         train_valid = train_valid.apply_selector(self.post_selection)
 
-        # TODO: SLAMA join - checkpointing here?
+        # checkpointing
+        train_valid.data = self._cacher_manager.milestone(train_valid.data, name=self._milestone_name)
+        self.features_pipeline.release_cache()
 
         preds: List[SparkDataset] = []
         for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
@@ -132,6 +136,9 @@ class SparkMLPipeline(LAMAMLPipeline):
             *[ml_algo.transformer for ml_algo in self.ml_algos]
         ])
 
+        # potential checkpoint
+        # val_preds_ds = self._cacher_manager.milestone(val_preds_ds, name=self._milestone_name)
+
         return val_preds_ds
 
     def predict(self, dataset: SparkDataset) -> SparkDataset:
@@ -153,3 +160,8 @@ class SparkMLPipeline(LAMAMLPipeline):
         out_ds.set_data(out_sdf, list(out_roles.keys()), out_roles)
 
         return out_ds
+
+    def release_cache(self):
+        self._cacher_manager.remove_milestone(self._milestone_name)
+
+
