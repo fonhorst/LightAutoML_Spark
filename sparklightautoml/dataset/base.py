@@ -1,4 +1,5 @@
 import functools
+import uuid
 import warnings
 from collections import Counter
 from copy import copy
@@ -98,6 +99,8 @@ class SparkDataset(LAMLDataset):
                  task: Optional[Task] = None,
                  bucketized: bool = False, **kwargs: Any):
 
+        self._uid = str(uuid.uuid4())
+
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
             self._target_column: str = kwargs["target"]
@@ -128,6 +131,10 @@ class SparkDataset(LAMLDataset):
         self._bucketized = bucketized
 
         super().__init__(data, None, roles, task, **kwargs)
+
+    @property
+    def uid(self) -> str:
+        return self._uid
 
     @property
     def spark_session(self):

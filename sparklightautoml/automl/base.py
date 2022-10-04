@@ -17,6 +17,7 @@ from ..dataset.base import SparkDataset
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..transformers.base import ColumnsSelectorTransformer
+from ..utils import CacheManager, CacheAware
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 from lightautoml.reader.base import RolesDict
@@ -26,7 +27,7 @@ from lightautoml.utils.timer import PipelineTimer
 logger = logging.getLogger(__name__)
 
 
-class SparkAutoML:
+class SparkAutoML(CacheAware):
     """Class for compile full pipeline of AutoML task.
 
     AutoML steps:
@@ -102,6 +103,7 @@ class SparkAutoML:
         super().__init__()
         self.levels: Optional[Sequence[Sequence[SparkMLPipeline]]] = None
         self._transformer = None
+        self._cache_manager = CacheManager()
         self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
     def make_transformer(self, no_reader: bool = False, return_all_predictions: bool = False) -> Transformer:
@@ -200,6 +202,10 @@ class SparkAutoML:
             len(self._levels) <= 1 or valid_data is None
         ), "Not possible to fit more than 1 level with holdout validation"
 
+        main_milestone_name = "CurrentMainMilestone"
+        # checkpointing
+        train_dataset = self._cache_manager.milestone(train_dataset, name=main_milestone_name)
+
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
 
         train_valid = self._create_validation_iterator(train_dataset, valid_dataset, None, cv_iter=cv_iter)
@@ -244,6 +250,9 @@ class SparkAutoML:
 
             if flg_last_level:
                 level_ds = SparkDataset.concatenate(all_pipes_predictions)
+                # checkpointing
+                # TODO: clean ml_pipes caches
+                level_ds = self._cache_manager.milestone(level_ds, name=main_milestone_name)
                 break
 
             self.levels.append(pipes)
@@ -252,7 +261,9 @@ class SparkAutoML:
                          *all_pipes_predictions] if self.skip_conn else all_pipes_predictions
             level_ds = SparkDataset.concatenate(level_dss)
 
-            # TODO: SLAMA join - checkpointing
+            # checkpointing
+            # TODO: clean ml_pipes caches
+            level_ds = self._cache_manager.milestone(level_ds, name=main_milestone_name)
 
             train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
 
@@ -294,6 +305,9 @@ class SparkAutoML:
         sds.set_data(predictions, predictions.columns, roles)
 
         return sds
+
+    def release_cache(self):
+        self._cache_manager.remove_all()
 
     def collect_used_feats(self) -> List[str]:
         """Get feats that automl uses on inference.
