@@ -45,7 +45,8 @@ from sparklightautoml.transformers.categorical import (
 from sparklightautoml.transformers.categorical import SparkTargetEncoderEstimator
 from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
-from sparklightautoml.utils import NoOpTransformer, Cacher, EmptyCacher, warn_if_not_cached, SparkDataFrame, CacheAware
+from sparklightautoml.utils import NoOpTransformer, Cacher, EmptyCacher, warn_if_not_cached, SparkDataFrame
+from sparklightautoml.dataset.caching import CacheAware
 
 logger = logging.getLogger(__name__)
 
@@ -224,45 +225,83 @@ class SparkFeaturesPipeline(FeaturesPipeline, CacheAware):
 
         logger.info(f"Number of layers in the current feature pipeline {self}: {len(tr_layers)}")
 
-        fp_input_features = set(self.input_features)
+        def exit_nodes(graph: Dict) -> Set:
+            parents = set(el for v in graph.values() for el in v)
+            all_nodes = set(graph.keys())
+            exit_nodes = all_nodes.difference(parents)
+            return exit_nodes
 
-        current_train_sdf: SparkDataFrame = train.data
-        stages = []
-        fp_output_cols: List[str] = []
-        fp_output_roles: RolesDict = dict()
-        for i, layer in enumerate(tr_layers):
-            logger.debug(f"Calculating layer ({i + 1}/{len(tr_layers)}). The size of layer: {len(layer)}")
-            cols_to_remove = []
-            output_cols = []
-            layer_model = Pipeline(stages=layer).fit(current_train_sdf)
-            for j, tr in enumerate(layer):
-                logger.debug(f"Processing output columns for transformer ({j + 1}/{len(layer)}): {tr}")
-                tr = cast(SparkColumnsAndRoles, tr)
-                if tr.getDoReplaceColumns():
-                    # ChangeRoles, for instance, may return columns with the same name
-                    # thus we don't want to remove these columns
-                    self_out_cols = set(tr.getOutputCols())
-                    cols_to_remove.extend([f for f in tr.getInputCols() if f not in self_out_cols])
-                output_cols.extend(tr.getOutputCols())
-                fp_output_roles.update(tr.getOutputRoles())
-            fp_output_cols = [c for c in fp_output_cols if c not in cols_to_remove]
-            fp_output_cols.extend(output_cols)
+        def cum_outputs_layers(external_input: Set[str], layers):
+            available_inputs = [external_input]
+            for layer in layers:
+                outs = {col for est in layer for col in est.getOutputCols()}
+                available_inputs.append(available_inputs[-1].union(outs))
+            return available_inputs
 
-            # we cannot really remove input features thus we leave them in the dataframe
-            # but they won't in features and roles
-            cols_to_remove = set(c for c in cols_to_remove if c not in fp_input_features)
+        def cum_inputs_layers(layers):
+            layers = list(reversed(layers))
+            available_inputs = [{col for est in layers[0] for col in est.getOutputCols()}]
+            for layer in layers[1:]:
+                outs = {col for est in layer for col in est.getInputCols()}
+                available_inputs.append(available_inputs[-1].union(outs))
+            return list(reversed(available_inputs))
 
-            cacher = Cacher(self._cacher_key)
-            pipe = Pipeline(stages=[layer_model, DropColumnsTransformer(list(cols_to_remove)), cacher])
-            stages.append(pipe.fit(current_train_sdf))
-            current_train_sdf = cacher.dataset
+        enodes = exit_nodes(graph)
+        out_deps = cum_outputs_layers(set(train.features), tr_layers)
+        in_deps = cum_inputs_layers([*tr_layers, enodes])
+        cols_to_select_in_layers = [
+            list(out_feats.intersection(next_in_feats))
+            for out_feats, next_in_feats in zip(out_deps[1:], in_deps[1:])
+        ]
 
-        fp_output_roles = {f: fp_output_roles[f] for f in fp_output_cols}
+        dag_pipeline = Pipeline(stages=[
+            stage
+            for layer, cols in zip(tr_layers, cols_to_select_in_layers)
+            for stage in itertools.chain(layer, [SelectTransformer(cols), Cacher(self._cacher_key)])
+        ])
 
+        dag_transformer = dag_pipeline.fit(train.data)
+
+        feature_sdf = Cacher.get_dataset_by_key(self._cacher_key)
+        output_roles = {feat: role for est in enodes for feat, role in est.getOutputRoles().items()}
         featurized_train = train.empty()
-        featurized_train.set_data(current_train_sdf, list(fp_output_roles.keys()), fp_output_roles)
+        featurized_train.set_data(feature_sdf, list(output_roles.keys()), output_roles)
 
-        return FittedPipe(dataset=featurized_train, transformer=PipelineModel(stages=stages))
+        return FittedPipe(dataset=featurized_train, transformer=dag_transformer)
+        #
+        # current_train_sdf: SparkDataFrame = train.data
+        # stages = []
+        # fp_output_cols: List[str] = []
+        # fp_output_roles: RolesDict = dict()
+        # for i, layer in enumerate(tr_layers):
+        #     logger.debug(f"Calculating layer ({i + 1}/{len(tr_layers)}). The size of layer: {len(layer)}")
+        #     cols_to_remove = []
+        #     output_cols = []
+        #     layer_model = Pipeline(stages=layer).fit(current_train_sdf)
+        #     for j, tr in enumerate(layer):
+        #         logger.debug(f"Processing output columns for transformer ({j + 1}/{len(layer)}): {tr}")
+        #         tr = cast(SparkColumnsAndRoles, tr)
+        #         if tr.getDoReplaceColumns():
+        #             # ChangeRoles, for instance, may return columns with the same name
+        #             # thus we don't want to remove these columns
+        #             self_out_cols = set(tr.getOutputCols())
+        #             cols_to_remove.extend([f for f in tr.getInputCols() if f not in self_out_cols])
+        #         output_cols.extend(tr.getOutputCols())
+        #         fp_output_roles.update(tr.getOutputRoles())
+        #     fp_output_cols = [c for c in fp_output_cols if c not in cols_to_remove]
+        #     fp_output_cols.extend(output_cols)
+        #
+        #     cacher = Cacher(self._cacher_key)
+        #     pipe = Pipeline(stages=[layer_model, DropColumnsTransformer(list(cols_to_remove)), cacher])
+        #     stages.append(pipe.fit(current_train_sdf))
+        #     current_train_sdf = cacher.dataset
+        #
+        # fp_output_roles = {f: fp_output_roles[f] for f in fp_output_cols}
+        #
+        # featurized_train = train.empty()
+        # featurized_train.set_data(current_train_sdf, list(fp_output_roles.keys()), fp_output_roles)
+        #
+        # return FittedPipe(dataset=featurized_train, transformer=PipelineModel(stages=stages))
 
     def release_cache(self):
         Cacher.release_cache_by_key(self._cacher_key)
@@ -296,12 +335,9 @@ class SparkTabularDataFeatures:
         for k in kwargs:
             self.__dict__[k] = kwargs[k]
 
-    def _get_input_features(self) -> Set[str]:
-        raise NotImplementedError()
-
     def _cols_by_role(self, dataset: SparkDataset, role_name: str, **kwargs: Any) -> List[str]:
         cols = get_columns_by_role(dataset, role_name, **kwargs)
-        filtered_cols = [col for col in cols if col in self._get_input_features()]
+        filtered_cols = [col for col in cols]
         return filtered_cols
 
     def get_cols_for_datetime(self, train: SparkDataset) -> Tuple[List[str], List[str]]:

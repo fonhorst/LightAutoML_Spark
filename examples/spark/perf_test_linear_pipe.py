@@ -21,7 +21,7 @@ import numpy as np
 
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
-logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
+logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 # NOTE! This demo requires datasets to be downloaded into a local folder.

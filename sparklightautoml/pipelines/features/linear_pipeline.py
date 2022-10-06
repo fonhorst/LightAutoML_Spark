@@ -83,9 +83,6 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             ascending_by_cardinality=True,
         )
 
-    def _get_input_features(self) -> Set[str]:
-        return set(self.input_features)
-
     def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
         """Create linear pipeline.
 

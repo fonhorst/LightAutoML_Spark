@@ -14,7 +14,7 @@ from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
-from ...utils import CacheManager, CacheAware
+from ...dataset.caching import CacheAware, CacheManager
 from ...validation.base import SparkBaseTrainValidIterator
 
 
@@ -64,7 +64,6 @@ class SparkMLPipeline(LAMAMLPipeline, CacheAware):
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
         self._cacher_manager = cache_manager
-        self._milestone_name = f"MLPipe_{self.name}"
         self._output_features = None
         self._output_roles = None
         self._transformer: Optional[Transformer] = None
@@ -73,6 +72,7 @@ class SparkMLPipeline(LAMAMLPipeline, CacheAware):
         self.pre_selection = cast(SparkSelectionPipelineWrapper, self.pre_selection)
         self.post_selection = cast(SparkSelectionPipelineWrapper, self.post_selection)
         self.features_pipeline = cast(SparkFeaturesPipeline, self.features_pipeline)
+        self._milestone_name = f"MLPipe_{self._name}"
 
     @property
     def name(self) -> str:

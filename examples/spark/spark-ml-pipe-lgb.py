@@ -7,9 +7,11 @@ from pyspark.ml import PipelineModel
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.caching import CacheManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
@@ -47,21 +49,24 @@ if __name__ == "__main__":
         score = task.get_dataset_metric()
 
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
+
+        spark_ml_algo = SparkBoostLGBM(cacher_key=cacher_key, freeze_defaults=False)
+        spark_features_pipeline = SparkLGBAdvancedPipeline(cacher_key=cacher_key, **ml_alg_kwargs)
+        spark_selector = SparkSelectionPipelineWrapper(
+            ImportanceCutoffSelector(
+                cutoff=0.0,
+                feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),
+                ml_algo=SparkBoostLGBM(cacher_key='preselector', freeze_defaults=False),
+                imp_estimator=ModelBasedImportanceEstimator()
+            )
+        )
+
         sdataset = sreader.fit_read(train_df, roles=roles)
 
         iterator = SparkFoldsIterator(sdataset, n_folds=cv)
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key=cacher_key, freeze_defaults=False)
-        spark_features_pipeline = SparkLGBAdvancedPipeline(cacher_key=cacher_key, **ml_alg_kwargs)
-        spark_selector = ImportanceCutoffSelector(
-            cutoff=0.0,
-            feature_pipeline=SparkLGBSimpleFeatures(cacher_key='preselector'),
-            ml_algo=SparkBoostLGBM(cacher_key='preselector', freeze_defaults=False),
-            imp_estimator=ModelBasedImportanceEstimator()
-        )
-
         ml_pipe = SparkMLPipeline(
-            cacher_key=cacher_key,
+            cache_manager=CacheManager(),
             ml_algos=[spark_ml_algo],
             pre_selection=spark_selector,
             features_pipeline=spark_features_pipeline,

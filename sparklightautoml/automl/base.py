@@ -17,7 +17,7 @@ from ..dataset.base import SparkDataset
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..transformers.base import ColumnsSelectorTransformer
-from ..utils import CacheManager, CacheAware
+from ..dataset.caching import CacheAware, CacheManager
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 from lightautoml.reader.base import RolesDict

@@ -2,7 +2,7 @@
 from typing import Any, Optional, List, cast
 
 from lightautoml.dataset.base import LAMLDataset
-from lightautoml.pipelines.selection.base import SelectionPipeline
+from lightautoml.pipelines.selection.base import SelectionPipeline, EmptySelector
 from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
 from pyspark.ml import Transformer
@@ -10,7 +10,7 @@ from pyspark.ml import Transformer
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
-from sparklightautoml.utils import CacheAware
+from sparklightautoml.dataset.caching import CacheAware
 
 
 class SparkImportanceEstimator:
@@ -33,7 +33,7 @@ class SparkImportanceEstimator:
 class SparkSelectionPipelineWrapper(SelectionPipeline, CacheAware):
     def __init__(self, sel_pipe: SelectionPipeline):
         assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
-        assert isinstance(sel_pipe.features_pipeline, SparkFeaturesPipeline), \
+        assert isinstance(sel_pipe.features_pipeline, SparkFeaturesPipeline) or isinstance(sel_pipe, EmptySelector), \
             "SelectionPipeline should have SparkFeaturePipeline as features_pipeline"
         self._sel_pipe = sel_pipe
         self._service_columns = None
@@ -83,5 +83,7 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, CacheAware):
         return self._sel_pipe.get_features_score()
 
     def release_cache(self):
+        if isinstance(self._sel_pipe, EmptySelector):
+            return
         fp = cast(SparkFeaturesPipeline, self._sel_pipe.features_pipeline)
         fp.release_cache()

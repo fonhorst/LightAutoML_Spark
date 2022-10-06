@@ -30,9 +30,6 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
     def __init__(self, cacher_key: str = "default_cacher"):
         super().__init__(cacher_key)
 
-    def _get_input_features(self) -> Set[str]:
-        return set(self.input_features)
-
     def create_pipeline(self, train: SparkDataset) -> Union[SparkUnionTransformer, SparkSequentialTransformer]:
         """Create tree pipeline.
 
@@ -115,9 +112,6 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
             output_categories=output_categories,
             ascending_by_cardinality=False,
         )
-
-    def _get_input_features(self) -> Set[str]:
-        return set(self.input_features)
 
     def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
         """Create tree pipeline.
