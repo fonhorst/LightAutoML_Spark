@@ -104,7 +104,7 @@ class СommonPickleMLWriter(MLWriter):
             "defaultParamMap": None,
         }
 
-        return json.dumps(basicMetadata, separators=[",", ":"])
+        return json.dumps(basicMetadata, separators=(",", ":"))
 
 
 class СommonPickleMLReader(MLReader):
@@ -191,6 +191,7 @@ class ONNXModelWrapperMLWriter(MLWriter):
 
 
 class ONNXModelWrapperMLReader(MLWriter):
+    # noinspection PyMethodMayBeStatic
     def load(self, path):
         """Load the ML instance from the input path and wrap by ONNXModelWrapper()"""
 
@@ -200,6 +201,9 @@ class ONNXModelWrapperMLReader(MLWriter):
         model_wrapper.model = ONNXModel.load(os.path.join(path, "model"))
 
         return model_wrapper
+
+    def saveImpl(self, path):
+        raise NotImplementedError("Not yet implemented")
 
 
 class LightGBMModelWrapperMLWriter(MLWriter):
@@ -263,7 +267,7 @@ class LightGBMModelWrapperMLWriter(MLWriter):
             "modelClass": model_cls,
         }
 
-        return json.dumps(basicMetadata, separators=[",", ":"])
+        return json.dumps(basicMetadata, separators=(",", ":"))
 
 
 class LightGBMModelWrapperMLReader(MLReader):

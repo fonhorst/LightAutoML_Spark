@@ -109,8 +109,8 @@ class SparkMLPipeline(LAMAMLPipeline, CacheAware):
 
         preds: List[SparkDataset] = []
         for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
-            ml_algo = cast(SparkTabularMLAlgo, ml_algo)
             ml_algo, curr_preds = tune_and_fit_predict(ml_algo, param_tuner, train_valid, force_calc)
+            ml_algo = cast(SparkTabularMLAlgo, ml_algo)
             if ml_algo is not None:
                 curr_preds = cast(SparkDataset, curr_preds)
                 self.ml_algos.append(ml_algo)

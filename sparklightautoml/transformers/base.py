@@ -165,6 +165,7 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, ABC):
 
     _transform_checks = ()
 
+    # noinspection PyMethodMayBeStatic
     def _make_output_df(self, input_df: SparkDataFrame, cols_to_add: List[Union[str, Column]]):
         return input_df.select("*", *cols_to_add)
 
@@ -192,6 +193,7 @@ class SparkUnionTransformer:
     def transformers(self) -> List[SparkEstOrTrans]:
         return self._transformer_list
 
+    # noinspection PyMethodMayBeStatic
     def _find_last_stage(self, stage):
         if isinstance(stage, SparkSequentialTransformer):
             stage = stage.transformers[-1]
@@ -349,7 +351,7 @@ class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultPara
         probability_cols = self.getOrDefault(self.probabilityCols)
         other_cols = [c for c in dataset.columns if c not in probability_cols]
         probability_cols = [
-            array_to_vector(F.array([F.col(c).getItem(i) for i in range(num_classes)])).alias(c)
+            array_to_vector(F.array(*[F.col(c).getItem(i) for i in range(num_classes)])).alias(c)
             for c in probability_cols
         ]
         dataset = dataset.select(*other_cols, *probability_cols)

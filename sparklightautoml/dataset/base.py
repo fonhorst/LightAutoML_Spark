@@ -129,6 +129,7 @@ class SparkDataset(LAMLDataset):
                     roles[f] = DropRole()
 
         self._bucketized = bucketized
+        self._roles = None
 
         super().__init__(data, None, roles, task, **kwargs)
 

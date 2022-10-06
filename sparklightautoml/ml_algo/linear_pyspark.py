@@ -266,14 +266,11 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         logger.info("Starting LinearLGBFS")
         self.timer.start()
 
-        self.input_roles = train_valid_iterator.input_roles
-        cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name == "Category"]
-        # self._ohe = OneHotEncoder(inputCols=cat_feats, outputCols=[f"{f}_{self._name}_ohe" for f in cat_feats])
-        # self._ohe = self._ohe.fit(train_valid_iterator.train.data)
+        cat_feats = [feat for feat, role in train_valid_iterator.train.roles if role.name == "Category"]
+        non_cat_feats = [feat for feat, role in train_valid_iterator.train.roles if role.name != "Category"]
 
-        non_cat_feats = [feat for feat in self.input_features if self.input_roles[feat].name != "Category"]
         self._assembler = VectorAssembler(
-            inputCols=non_cat_feats + cat_feats,  # self._ohe.getOutputCols(),
+            inputCols=non_cat_feats + cat_feats,
             outputCol=f"{self._name}_vassembler_features",
         )
 

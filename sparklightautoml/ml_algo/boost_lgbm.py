@@ -2,14 +2,20 @@ import logging
 import multiprocessing
 import warnings
 from copy import copy
-from typing import Dict, Optional, Tuple, Union, cast
+from typing import Dict, Optional, Tuple, Union, cast, List
 
+import lightgbm as lgb
 import pandas as pd
 import pyspark.sql.functions as F
+from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
+from lightautoml.pipelines.selection.base import ImportanceEstimator
+from lightautoml.utils.timer import TaskTimer
+from lightautoml.validation.base import TrainValidIterator
+from lightgbm import Booster
 from pandas import Series
 from pyspark.ml import Transformer, PipelineModel
-from pyspark.ml.util import MLWritable, MLReadable, MLWriter
 from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.util import MLWritable, MLReadable, MLWriter
 from synapse.ml.lightgbm import (
     LightGBMClassifier,
     LightGBMRegressor,
@@ -17,14 +23,8 @@ from synapse.ml.lightgbm import (
     LightGBMClassificationModel,
 )
 from synapse.ml.onnx import ONNXModel
-import lightgbm as lgb
-from lightgbm import Booster, LGBMClassifier
 
-
-from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
-from lightautoml.pipelines.selection.base import ImportanceEstimator
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.mlwriters import (
     LightGBMModelWrapperMLReader,
@@ -37,9 +37,8 @@ from sparklightautoml.transformers.base import (
     PredictionColsTransformer,
     ProbabilityColsTransformer,
 )
+from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
-from lightautoml.utils.timer import TaskTimer
-from lightautoml.validation.base import TrainValidIterator
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +61,7 @@ class LightGBMModelWrapper(Transformer, MLWritable, MLReadable):
         """Returns an MLReader instance for this class."""
         return LightGBMModelWrapperMLReader()
 
-    def _transform(self, dataset: SparkDataset) -> SparkDataset:
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return self.model.transform(dataset)
 
 
@@ -84,7 +83,7 @@ class ONNXModelWrapper(Transformer, MLWritable, MLReadable):
         """Returns an MLReader instance for this class."""
         return ONNXModelWrapperMLReader()
 
-    def _transform(self, dataset: SparkDataset) -> SparkDataset:
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return self.model.transform(dataset)
 
 
@@ -144,7 +143,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         default_params: Optional[dict] = None,
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
-        optimization_search_space: Optional[dict] = {},
+        optimization_search_space: Optional[dict] = None,
         use_single_dataset_mode: bool = True,
         max_validation_size: int = 10_000,
         chunk_size: int = 4_000_000,
@@ -152,6 +151,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         mini_batch_size: int = 5000,
         seed: int = 42,
     ):
+        optimization_search_space = optimization_search_space if optimization_search_space else dict()
         SparkTabularMLAlgo.__init__(self, cacher_key, default_params, freeze_defaults, timer, optimization_search_space)
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
@@ -369,10 +369,12 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         if self._assembler is None:
             self._assembler = VectorAssembler(
-                inputCols=self.input_features, outputCol=f"{self._name}_vassembler_features", handleInvalid="keep"
+                inputCols=full.features,
+                outputCol=f"{self._name}_vassembler_features",
+                handleInvalid="keep"
             )
 
-        LGBMBooster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
+        lgbm_booster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
 
         if full.task.name in ["binary", "multiclass"]:
             params["rawPredictionCol"] = self._raw_prediction_col_name
@@ -384,7 +386,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         master_addr = train.spark_session.conf.get("spark.master")
         if master_addr.startswith("local"):
-            cores_str = master_addr[len("local[") : -1]
+            cores_str = master_addr[len("local["): -1]
             cores = int(cores_str) if cores_str != "*" else multiprocessing.cpu_count()
             params["numThreads"] = max(cores - 1, 1)
         else:
@@ -409,7 +411,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         valid_data = valid.data
 
-        lgbm = LGBMBooster(
+        lgbm = lgbm_booster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=full.target_column,
@@ -439,7 +441,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             logger.info("Model convert is started")
             booster_model_str = ml_model.getLightGBMBooster().modelStr().get()
             booster = lgb.Booster(model_str=booster_model_str)
-            model_payload_ml = self._convertModel(booster, len(self.input_features))
+            model_payload_ml = self._convert_model(booster, len(full.features))
 
             onnx_ml = ONNXModel().setModelPayload(model_payload_ml)
 
@@ -479,7 +481,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return result
 
     @staticmethod
-    def _convertModel(lgbm_model: Booster, input_size: int) -> bytes:
+    def _convert_model(lgbm_model: Booster, input_size: int) -> bytes:
         from onnxmltools.convert import convert_lightgbm
         from onnxconverter_common.data_types import FloatTensorType
 
@@ -493,7 +495,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             wrapped_models = [ONNXModelWrapper(m) for m in self.models]
         else:
             wrapped_models = [LightGBMModelWrapper(m) for m in self.models]
-        models = [
+        models: List[Transformer] = [
             el
             for m in wrapped_models
             for el in [
@@ -548,8 +550,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         """
         logger.info("Starting LGBM fit")
         self.timer.start()
-
-        self.input_roles = train_valid_iterator.input_roles
 
         res = super().fit_predict(train_valid_iterator)
 

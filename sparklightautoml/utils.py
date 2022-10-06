@@ -188,7 +188,7 @@ class NoOpTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable)
         super().__init__()
         self._name = name
 
-    def _transform(self, dataset):
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset
 
 
@@ -197,7 +197,7 @@ class DebugTransformer(Transformer):
         super().__init__()
         self._name = name
 
-    def _transform(self, dataset):
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         dataset = dataset.cache()
         dataset.write.mode("overwrite").format("noop").save()
         return dataset

@@ -90,6 +90,7 @@ class SparkBlender(ABC):
     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
         raise NotImplementedError()
 
+    # noinspection PyMethodMayBeStatic
     def split_models(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]) -> List[Tuple[str, int, int]]:
         """Split predictions by single model prediction datasets.
 

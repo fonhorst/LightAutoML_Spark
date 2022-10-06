@@ -79,6 +79,9 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 
         return ml_model, pred_df, fold_prediction_column
 
+    def predict_single_fold(self, model: SparkMLModel, dataset: SparkDataset) -> SparkDataFrame:
+        raise NotImplementedError("")
+
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
         fake_ops = [

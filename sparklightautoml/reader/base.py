@@ -708,6 +708,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         return new_roles_dict
 
+    # noinspection PyMethodMayBeStatic
     def _bucketize_data(self, train_data: SparkDataFrame, bucket_nums: int) -> SparkDataFrame:
         spark = SparkSession.getActiveSession()
         name = "SparkToSparkReaderTable"

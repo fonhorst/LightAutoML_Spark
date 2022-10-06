@@ -23,10 +23,6 @@ DEFAULT_TARGET_COL_NAME = "target"
 DEFAULT_PROBABILITY_COL_NAME = "probability"
 
 
-def argmax_in_vector(vec: pd.Series) -> pd.Series:
-    vec.transform()
-
-
 class SparkMetric(LAMLMetric):
     """
     Spark version of metric function that implements function assessing prediction error.

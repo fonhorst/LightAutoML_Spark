@@ -335,6 +335,7 @@ class SparkTabularDataFeatures:
         for k in kwargs:
             self.__dict__[k] = kwargs[k]
 
+    # noinspection PyMethodMayBeStatic
     def _cols_by_role(self, dataset: SparkDataset, role_name: str, **kwargs: Any) -> List[str]:
         cols = get_columns_by_role(dataset, role_name, **kwargs)
         filtered_cols = [col for col in cols]
@@ -608,6 +609,7 @@ class SparkTabularDataFeatures:
 
         return cat_processing
 
+    # noinspection PyMethodMayBeStatic
     def get_uniques_cnt(self, train: SparkDataset, feats: List[str]) -> Series:
         """Get unique values cnt.
 
@@ -698,5 +700,5 @@ class SparkNoOpTransformer(SparkBaseTransformer):
     def __init__(self):
         super().__init__(input_cols=[], output_cols=[], input_roles=dict(), output_roles=dict())
 
-    def _transform(self, dataset):
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset

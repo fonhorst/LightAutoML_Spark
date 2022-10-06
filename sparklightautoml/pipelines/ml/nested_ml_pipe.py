@@ -7,6 +7,8 @@ from lightautoml.pipelines.ml.nested_ml_pipe import (
     NestedTabularMLAlgo,
 )
 from lightautoml.pipelines.selection.base import SelectionPipeline
+
+from sparklightautoml.dataset.caching import CacheManager
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
 from sparklightautoml.pipelines.features.base import FeaturesPipeline, SparkFeaturesPipeline
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -20,7 +22,7 @@ class SparkNestedTabularMLPipeline(SparkMLPipeline, LAMANestedTabularMLPipeline)
 
     def __init__(
         self,
-        cacher_key: str,
+        cache_manager: CacheManager,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
         pre_selection: Optional[SparkSelectionPipelineWrapper] = None,
@@ -47,4 +49,4 @@ class SparkNestedTabularMLPipeline(SparkMLPipeline, LAMANestedTabularMLPipeline)
                     new_ml_algos.append((NestedTabularMLAlgo(mod, None, True, cv, n_folds), tuner))
 
             ml_algos = new_ml_algos
-        super().__init__(cacher_key, ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
+        super().__init__(cache_manager, ml_algos, force_calc, pre_selection, features_pipeline, post_selection)

@@ -415,6 +415,7 @@ class SparkCatIntersectionsHelper:
 
     _fname_prefix = "inter"
 
+    # noinspection PyMethodMayBeStatic
     def _make_col_name(self, cols: Sequence[str]) -> str:
         return f"({'__'.join(cols)})"
 
