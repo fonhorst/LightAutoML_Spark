@@ -250,7 +250,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, CacheAware):
         out_deps = cum_outputs_layers(set(train.features), tr_layers)
         in_deps = cum_inputs_layers([*tr_layers, enodes])
         cols_to_select_in_layers = [
-            list(out_feats.intersection(next_in_feats))
+            [*train.service_columns, *out_feats.intersection(next_in_feats)]
             for out_feats, next_in_feats in zip(out_deps[1:], in_deps[1:])
         ]
 

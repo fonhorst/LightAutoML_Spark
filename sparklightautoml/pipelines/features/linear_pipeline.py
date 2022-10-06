@@ -211,7 +211,7 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             )
             fill_na_median_stage = SparkFillnaMedianEstimator(
                 input_cols=fill_inf_stage.getOutputCols(),
-                input_roles=fill_inf_stage.getOutputCols(),
+                input_roles=fill_inf_stage.getOutputRoles(),
                 do_replace_columns=True,
             )
             standerd_scaler_stage = SparkStandardScalerEstimator(

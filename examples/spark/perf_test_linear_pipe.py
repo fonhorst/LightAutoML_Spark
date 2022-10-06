@@ -4,7 +4,7 @@ import logging.config
 import logging.config
 import uuid
 from datetime import datetime
-from typing import Union, Dict, cast, Any, Tuple
+from typing import Union, Dict, cast, Any, Tuple, List
 
 from pyspark.sql import DataFrame as SparkDataFrame
 
@@ -21,7 +21,7 @@ import numpy as np
 
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
-logging.basicConfig(level=logging.INFO, format=VERBOSE_LOGGING_FORMAT)
+logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 # NOTE! This demo requires datasets to be downloaded into a local folder.
@@ -52,6 +52,7 @@ def generate_columns(col_enc: str, col_count: int) -> RolesDict:
 
     return columns
 
+
 def generate_placeholder_value(role: ColumnRole) -> Union[float, str, datetime]:
     if isinstance(role, NumericRole):
         return 42.0
@@ -63,9 +64,11 @@ def generate_placeholder_value(role: ColumnRole) -> Union[float, str, datetime]:
     raise Exception(f"Unsupported type of ColumnRole: {type(role)}")
 
 
-def generate_frame(cols: Union[Dict[str, int], int], rows_count: int) -> Tuple[SparkDataFrame, RolesDict]:
+def generate_frame(cols: Union[Dict[str, int], int], rows_count: int,
+                   col_encs: List[str] = ('freq', 'ord', 'LE', 'ChRole', 'LE#2', 'DateSeasons', 'QB', 'regular')) -> Tuple[SparkDataFrame, RolesDict]:
     if isinstance(cols, int):
-        cols_mapping = {col_enc: cols for col_enc in ['freq', 'ord', 'basediff', 'LE', 'ChRole', 'LE#2', 'DateSeasons', 'QB', 'regular']}
+        # cols_mapping = {col_enc: cols for col_enc in ['freq', 'ord', 'basediff', 'LE', 'ChRole', 'LE#2', 'DateSeasons', 'QB', 'regular']}
+        cols_mapping = {col_enc: cols for col_enc in col_encs}
     else:
         cols_mapping = cast(Dict[str, int], cols)
 
@@ -100,7 +103,7 @@ if __name__ == "__main__":
         'top_intersections': 4
     }
 
-    sdf, roles = generate_frame(cols=10, rows_count=100)
+    sdf, roles = generate_frame(cols=100, rows_count=100, col_encs=['LE#2'])
 
     in_ds = SparkDataset(sdf, roles=roles, task=SparkTask("binary"))
 
