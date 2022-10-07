@@ -2,6 +2,9 @@ import logging
 from typing import Tuple, cast, List, Optional
 
 import numpy as np
+from lightautoml.dataset.roles import NumericRole, ColumnRole
+from lightautoml.ml_algo.base import MLAlgo
+from lightautoml.utils.timer import TaskTimer
 from pyspark.ml import PipelineModel, Transformer
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.param import Params
@@ -10,14 +13,10 @@ from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType
 
-from lightautoml.dataset.roles import NumericRole, ColumnRole
-from lightautoml.ml_algo.base import MLAlgo
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
-from sparklightautoml.pipelines.base import InputFeaturesAndRoles
 from sparklightautoml.utils import Cacher, SparkDataFrame
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
-from lightautoml.utils.timer import TaskTimer
 
 logger = logging.getLogger(__name__)
 

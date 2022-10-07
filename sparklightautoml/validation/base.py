@@ -1,22 +1,16 @@
-import functools
+from abc import ABC
 from abc import ABC
 from copy import copy
-from typing import Tuple, cast, Optional, List, Sequence
+from typing import Tuple, cast, Sequence
 
-from pyspark.ml import Transformer
+from lightautoml.validation.base import TrainValidIterator
 from pyspark.sql import functions as F
 
-from lightautoml.pipelines.features.base import FeaturesPipeline
-from lightautoml.pipelines.selection.base import SelectionPipeline
-from lightautoml.reader.base import RolesDict
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
-from sparklightautoml.transformers.base import ColumnsSelectorTransformer
-from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.pipelines.base import InputFeaturesAndRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
-from lightautoml.validation.base import TrainValidIterator
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
+from sparklightautoml.utils import SparkDataFrame
 
 
 class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
