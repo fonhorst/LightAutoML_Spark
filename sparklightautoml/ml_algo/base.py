@@ -55,6 +55,7 @@ class SparkTabularMLAlgo(MLAlgo, InputFeaturesAndRoles):
         # return self._prediction_col
         return f"prediction_{self._name}"
 
+
     @property
     def prediction_role(self) -> ColumnRole:
         return self._prediction_role
@@ -367,19 +368,24 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
                 .alias(c)
                 for c in pred_cols
             ]
-            arr_fields_summ = transform(F.arrays_zip(*normalized_cols), lambda x: aggregate(
-                F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]),
-                F.lit(0.0),
-                lambda acc, x: acc + x
-            ) / non_null_count_col)
+            arr_fields_summ = F.transform(
+                F.arrays_zip(*normalized_cols),
+                lambda x: F.aggregate(
+                    F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]), F.lit(0.0), lambda acc, x: acc + x
+                )
+                / non_null_count_col,
+            )
 
             out_col = array_to_vector(arr_fields_summ) if self.getConvertToArrayFirst() else arr_fields_summ
         else:
-            scalar_fields_summ = aggregate(
-                F.array(*[F.col(c) * F.lit(weights[c]) for c in pred_cols]),
-                F.lit(0.0),
-                lambda acc, x: acc + F.when(F.isnull(x), F.lit(0.0)).otherwise(x)
-            ) / non_null_count_col
+            scalar_fields_summ = (
+                F.aggregate(
+                    F.array(*[F.col(c) * F.lit(weights[c]) for c in pred_cols]),
+                    F.lit(0.0),
+                    lambda acc, x: acc + F.when(F.isnull(x), F.lit(0.0)).otherwise(x),
+                )
+                / non_null_count_col
+            )
 
             out_col = scalar_fields_summ
 
