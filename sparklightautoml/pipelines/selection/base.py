@@ -1,8 +1,9 @@
 """Base class for selection pipelines."""
+from abc import ABC
 from typing import Any, Optional, List, cast
 
 from lightautoml.dataset.base import LAMLDataset
-from lightautoml.pipelines.selection.base import SelectionPipeline, EmptySelector
+from lightautoml.pipelines.selection.base import SelectionPipeline, EmptySelector, ImportanceEstimator
 from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
 from pyspark.ml import Transformer
@@ -13,21 +14,9 @@ from sparklightautoml.transformers.base import ColumnsSelectorTransformer
 from sparklightautoml.dataset.caching import CacheAware
 
 
-class SparkImportanceEstimator:
-    """
-    Abstract class, that estimates feature importances.
-    """
-
+class SparkImportanceEstimator(ImportanceEstimator, ABC):
     def __init__(self):
-        self.raw_importances = None
-
-    # Change signature here to be compatible with MLAlgo
-    def fit(self, *args: Any, **kwargs: Any):
-        raise NotImplementedError
-
-    def get_features_score(self) -> SparkDataset:
-
-        return self.raw_importances
+        super(SparkImportanceEstimator, self).__init__()
 
 
 class SparkSelectionPipelineWrapper(SelectionPipeline, CacheAware):

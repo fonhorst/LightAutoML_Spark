@@ -12,6 +12,7 @@ from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.caching import CacheManager
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -84,7 +85,7 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        fake_ops = [
+        fake_ops: List[Transformer] = [
             FakeOpTransformer(cols_to_generate=[mcol], n_classes=self.n_classes)
             for mcol in self._models_prediction_columns
         ]
@@ -106,10 +107,10 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 class DummySparkMLPipeline(SparkMLPipeline):
     def __init__(
         self,
-        cacher_key: str = "",
+        cache_manager: CacheManager,
         name: str = "dummy_pipe"
     ):
-        super().__init__(cacher_key, [], force_calc=[True], name=name)
+        super().__init__(cache_manager, [], force_calc=[True], name=name)
 
     def fit_predict(self, train_valid: SparkBaseTrainValidIterator) -> SparkDataset:
         val_ds = train_valid.get_validation_data()
@@ -161,17 +162,17 @@ class DummyTabularAutoML(SparkAutoMLPreset):
         # initialize
         reader = DummyReader(self.task)
 
-        cacher_key = "main_cache"
+        cache_manager = CacheManager()
 
         # first_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_0_Pipe_{i}") for i in range(3)]
         # second_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_1_Pipe_{i}") for i in range(2)]
 
         first_level = [
-            SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
+            SparkMLPipeline(cache_manager, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
             for i in range(3)
         ]
         second_level = [
-            SparkMLPipeline(cacher_key, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
+            SparkMLPipeline(cache_manager, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
             for i in range(1)
         ]
 

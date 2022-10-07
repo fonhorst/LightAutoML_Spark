@@ -1,26 +1,25 @@
-import time
+from copy import copy
 from copy import copy
 from typing import Tuple, get_args, cast, List, Optional, Dict, Union
 
 import numpy as np
 import pandas as pd
 import pytest
+from lightautoml.dataset.base import LAMLDataset
+from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
+from lightautoml.dataset.roles import ColumnRole
+from lightautoml.transformers.base import LAMLTransformer
+from lightautoml.transformers.numeric import NumpyTransformable
 from pyspark.ml import Estimator
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-from lightautoml.dataset.base import LAMLDataset
-from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
-from lightautoml.dataset.roles import ColumnRole, CategoryRole
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.transformers.base import ObsoleteSparkTransformer, SparkBaseEstimator, SparkBaseTransformer, \
     SparkColumnsAndRoles
 from sparklightautoml.utils import log_exec_time
-from lightautoml.transformers.base import LAMLTransformer
-from lightautoml.transformers.numeric import NumpyTransformable
-
 
 # NOTE!!!
 # All tests require PYSPARK_PYTHON env variable to be set
@@ -182,7 +181,6 @@ def compare_sparkml_transformers_results(spark: SparkSession,
         ds: a dataset to be transformered by LAMA and Spark transformers
         t_lama: LAMA's version of the transformer
         t_spark: spark's version of the transformer
-        compare_metadata_only: if True comapre only metadata of the resulting pair of datasets - columns
         count and their labels (e.g. features), roles and shapez
 
     Returns:

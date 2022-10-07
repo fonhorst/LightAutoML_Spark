@@ -1,5 +1,4 @@
 """Base AutoML class."""
-import functools
 import logging
 from copy import copy
 from typing import Any, Callable, Tuple, cast
@@ -9,20 +8,20 @@ from typing import List
 from typing import Optional
 from typing import Sequence
 
+from lightautoml.reader.base import RolesDict
+from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
+from lightautoml.utils.timer import PipelineTimer
 from pyspark.ml import PipelineModel, Transformer
 from pyspark.sql import functions as F
 
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset
+from ..dataset.caching import CacheAware, CacheManager
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..transformers.base import ColumnsSelectorTransformer
-from ..dataset.caching import CacheAware, CacheManager
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
-from lightautoml.reader.base import RolesDict
-from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
-from lightautoml.utils.timer import PipelineTimer
 
 logger = logging.getLogger(__name__)
 

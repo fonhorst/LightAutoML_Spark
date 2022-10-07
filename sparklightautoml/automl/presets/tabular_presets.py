@@ -2,22 +2,22 @@ import logging
 import os
 from copy import deepcopy, copy
 from typing import Optional, Sequence, Iterable, Union, Tuple, List
+
 import numpy as np
-
-from pyspark.ml import PipelineModel
-from pyspark.sql import SparkSession
-from pyspark.sql import functions as F, types as SparkTypes, Window
-from tqdm import tqdm
-
 from lightautoml.automl.presets.base import upd_params
 from lightautoml.automl.presets.utils import plot_pdp_with_distribution
 from lightautoml.dataset.base import RolesDict
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
-from lightautoml.pipelines.selection.base import SelectionPipeline, ComposedSelector
+from lightautoml.pipelines.selection.base import ComposedSelector
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
 from lightautoml.pipelines.selection.permutation_importance_based import NpIterativeFeatureSelector
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
-from sparklightautoml.automl.blend import SparkWeightedBlender, SparkBestModelSelector
+from pyspark.ml import PipelineModel, Transformer
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F, types as SparkTypes, Window
+from tqdm import tqdm
+
+from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.automl.presets.utils import (
     calc_feats_permutation_imps,
@@ -608,7 +608,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
     def get_pdp_data_numeric_feature(
         df: SparkDataFrame,
         feature_name: str,
-        model: PipelineModel,
+        model: Transformer,
         prediction_col: str,
         n_bins: int,
         ice_fraction: float = 1.0,
@@ -662,7 +662,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
     def get_pdp_data_categorical_feature(
         df: SparkDataFrame,
         feature_name: str,
-        model: PipelineModel,
+        model: Transformer,
         prediction_col: str,
         n_top_cats: int,
         ice_fraction: float = 1.0,
@@ -763,7 +763,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
     def get_pdp_data_datetime_feature(
         df: SparkDataFrame,
         feature_name: str,
-        model: PipelineModel,
+        model: Transformer,
         prediction_col: str,
         datetime_level: str,
         reader,
