@@ -10,6 +10,7 @@ from pyspark.sql import DataFrame as SparkDataFrame
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, DatetimeRole, NumericRole, ColumnRole
+from pyspark.sql.pandas.functions import pandas_udf
 
 from examples_utils import get_spark_session, get_dataset_attrs
 from sparklightautoml.dataset.base import SparkDataset
@@ -18,6 +19,7 @@ from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
 
 import numpy as np
+import pandas as pd
 
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
@@ -91,9 +93,13 @@ def generate_frame(cols: Union[Dict[str, int], int], rows_count: int,
 
     return spark.createDataFrame(data), all_cols_mapping
 
+spark = get_spark_session()
+
+@pandas_udf('string')
+def test_add(s: pd.Series) -> pd.Series:
+    return s.map(lambda x: f"{x}-{uuid.uuid4()}")
 
 if __name__ == "__main__":
-    spark = get_spark_session()
 
     ml_alg_kwargs = {
         'auto_unique_co': 10,
@@ -103,7 +109,15 @@ if __name__ == "__main__":
         'top_intersections': 4
     }
 
-    sdf, roles = generate_frame(cols=100, rows_count=100, col_encs=['LE#2'])
+    sdf, roles = generate_frame(cols=600, rows_count=100, col_encs=['LE#2'])
+
+    # pcols = [test_add(c).alias(c) for c in sdf.columns if c not in {'_id'}]
+    #
+    # with log_exec_time():
+    #     new_sdf = sdf.select('_id', *pcols).cache()
+    #     new_sdf = new_sdf.select('_id', *pcols).cache()
+    #     new_sdf = new_sdf.select('_id', *pcols).cache()
+    #     new_sdf.write.mode('overwrite').format('noop').save()
 
     in_ds = SparkDataset(sdf, roles=roles, task=SparkTask("binary"))
 
