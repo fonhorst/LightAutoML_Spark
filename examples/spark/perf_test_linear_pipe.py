@@ -17,6 +17,7 @@ from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.linear_pipeline import SparkLinearFeatures
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
+from pyspark.sql import functions as F
 
 import numpy as np
 import pandas as pd
@@ -91,13 +92,27 @@ def generate_frame(cols: Union[Dict[str, int], int], rows_count: int,
         for _ in range(rows_count)
     ]
 
-    return spark.createDataFrame(data), all_cols_mapping
+    sdf = spark.createDataFrame(data)
+
+    h = 1.0 / 5
+    folds_col = 'folds'
+    target_col = 'target'
+    sdf = sdf.select(
+        "*",
+        F.floor(F.rand(42) / h).alias(folds_col),
+        F.when(F.rand(42) <= 0.5, F.lit(0.0)).otherwise(F.lit(1.0)).alias(target_col)
+    )
+
+    return sdf, all_cols_mapping
+
 
 spark = get_spark_session()
+
 
 @pandas_udf('string')
 def test_add(s: pd.Series) -> pd.Series:
     return s.map(lambda x: f"{x}-{uuid.uuid4()}")
+
 
 if __name__ == "__main__":
 
@@ -109,7 +124,11 @@ if __name__ == "__main__":
         'top_intersections': 4
     }
 
-    sdf, roles = generate_frame(cols=600, rows_count=100, col_encs=['LE#2'])
+    sdf, roles = generate_frame(cols=1000, rows_count=100, col_encs=['LE#2'])
+
+    with log_exec_time('initial_caching'):
+        sdf = sdf.cache()
+        sdf.write.mode('overwrite').format('noop').save()
 
     # pcols = [test_add(c).alias(c) for c in sdf.columns if c not in {'_id'}]
     #
@@ -119,7 +138,7 @@ if __name__ == "__main__":
     #     new_sdf = new_sdf.select('_id', *pcols).cache()
     #     new_sdf.write.mode('overwrite').format('noop').save()
 
-    in_ds = SparkDataset(sdf, roles=roles, task=SparkTask("binary"))
+    in_ds = SparkDataset(sdf, roles=roles, task=SparkTask("binary"), folds='folds', target='target')
 
     with log_exec_time():
         spark_features_pipeline = SparkLinearFeatures(cacher_key="main_cache", **ml_alg_kwargs)
