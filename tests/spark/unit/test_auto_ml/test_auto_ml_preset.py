@@ -1,6 +1,4 @@
-import logging
 import logging.config
-import time
 
 from pyspark.sql import SparkSession
 

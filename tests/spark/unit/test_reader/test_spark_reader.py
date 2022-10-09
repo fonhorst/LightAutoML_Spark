@@ -1,22 +1,20 @@
-import logging
 import logging.config
-import os
 from typing import Dict, Any
 
 import pandas as pd
 import pytest
+from lightautoml.dataset.roles import CategoryRole
+from lightautoml.reader.base import PandasToPandasReader
+from lightautoml.tasks import Task
 from pyspark.sql import SparkSession
 from pyspark.sql.types import NumericType
 
-from lightautoml.dataset.roles import CategoryRole
-from lightautoml.reader.base import PandasToPandasReader
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
-from lightautoml.tasks import Task
 from .. import spark as spark_sess
-from ..dataset_utils import get_test_datasets, prepared_datasets
+from ..dataset_utils import get_test_datasets
 
 spark = spark_sess
 

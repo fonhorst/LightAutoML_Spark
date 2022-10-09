@@ -1,16 +1,14 @@
 from typing import Union, Tuple, Optional, Sequence
 
-from lightautoml.dataset.base import RolesDict
 from lightautoml.ml_algo.tuning.base import ParamsTuner, DefaultTuner
 from lightautoml.pipelines.ml.nested_ml_pipe import (
     NestedTabularMLPipeline as LAMANestedTabularMLPipeline,
     NestedTabularMLAlgo,
 )
-from lightautoml.pipelines.selection.base import SelectionPipeline
 
 from sparklightautoml.dataset.caching import CacheManager
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
-from sparklightautoml.pipelines.features.base import FeaturesPipeline, SparkFeaturesPipeline
+from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 

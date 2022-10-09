@@ -24,15 +24,17 @@ from lightautoml.pipelines.selection.importance_based import (
     ModelBasedImportanceEstimator,
 )
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.caching import CacheManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.validation.iterators import SparkFoldsIterator
 
 from examples_utils import get_spark_session
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 from pyspark.ml import PipelineModel
 
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
@@ -65,7 +67,9 @@ if __name__ == "__main__":
 
     # Fix dates and convert to date type
     logger.info("Fix dates and convert to date type")
-    data["BIRTH_DATE"] = (np.datetime64("2018-01-01") + data["DAYS_BIRTH"].astype(np.dtype("timedelta64[D]"))).astype(str)
+    data["BIRTH_DATE"] = (
+        (np.datetime64("2018-01-01") + data["DAYS_BIRTH"].astype(np.dtype("timedelta64[D]"))).astype(str)
+    )
     data["EMP_DATE"] = (
         np.datetime64("2018-01-01") + np.clip(data["DAYS_EMPLOYED"], None, 0).astype(np.dtype("timedelta64[D]"))
     ).astype(str)
@@ -82,10 +86,10 @@ if __name__ == "__main__":
     dataset_sdf = spark.createDataFrame(data)
     dataset_sdf = dataset_sdf.select(
         '*',
-        F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN)
+        sf.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN)
     ).cache()
     dataset_sdf.write.mode('overwrite').format('noop').save()
-    dataset_sdf = dataset_sdf.select(F.col("__fold__").cast("int").alias("__fold__"), *[c for c in dataset_sdf.columns if c != "__fold__"])
+    dataset_sdf = dataset_sdf.select(sf.col("__fold__").cast("int").alias("__fold__"), *[c for c in dataset_sdf.columns if c != "__fold__"])
 
     # # Set roles for columns
     logger.info("Set roles for columns")
@@ -156,9 +160,9 @@ if __name__ == "__main__":
     logger.info("Tuner2 and model2 created")
 
     total = SparkMLPipeline(
-        cacher_key=cacher_key,
+        cache_manager=CacheManager(),
         ml_algos=[(model1, params_tuner1), (model2, params_tuner2)],
-        pre_selection=selector,
+        pre_selection=SparkSelectionPipelineWrapper(selector),
         features_pipeline=pipe,
         post_selection=None,
     )

@@ -2,17 +2,11 @@ import functools
 import logging
 from typing import Optional, cast, Tuple, Iterable, Sequence
 
-from lightautoml.dataset.base import LAMLDataset, RolesDict
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.transformers.scala_wrappers.balanced_union_partitions_coalescer import (
-    BalancedUnionPartitionsCoalescerTransformer,
-)
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator
-from lightautoml.validation.base import TrainValidIterator, HoldoutIterator
-
 from pyspark.sql import functions as F
 
+from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.utils import SparkDataFrame
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)
 

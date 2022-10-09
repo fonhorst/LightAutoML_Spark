@@ -1,15 +1,15 @@
-import time
+import numpy as np
 import numpy as np
 import pandas as pd
 import pytest
-from pyspark.sql import SparkSession
-
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import NumericRole
+from lightautoml.transformers.numeric import NaNFlags, FillnaMedian, StandardScaler, LogOdds, QuantileBinning, FillInf
+from pyspark.sql import SparkSession
+
 from sparklightautoml.transformers.numeric import SparkFillInfTransformer, SparkLogOddsTransformer, \
     SparkNaNFlagsEstimator, SparkFillnaMedianEstimator, SparkQuantileBinningEstimator, SparkStandardScalerEstimator
-from lightautoml.transformers.numeric import NaNFlags, FillnaMedian, StandardScaler, LogOdds, QuantileBinning, FillInf
-from .. import DatasetForTest, spark, compare_by_content, compare_by_metadata, compare_sparkml_by_content, \
+from .. import DatasetForTest, compare_sparkml_by_content, \
     compare_sparkml_by_metadata
 
 # Note:

@@ -7,11 +7,13 @@ from pyspark.ml import PipelineModel
 from examples_utils import get_spark_session, get_dataset_attrs, prepare_test_and_train
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.caching import CacheManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.ml_algo.linear_pyspark import SparkLinearLBFGS
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.features.linear_pipeline import SparkLinearFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
@@ -63,9 +65,9 @@ if __name__ == "__main__":
         )
 
         ml_pipe = SparkMLPipeline(
-            cacher_key=cacher_key,
+            cache_manager=CacheManager(),
             ml_algos=[spark_ml_algo],
-            pre_selection=spark_selector,
+            pre_selection=SparkSelectionPipelineWrapper(spark_selector),
             features_pipeline=spark_features_pipeline,
             post_selection=None
         )

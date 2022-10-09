@@ -1,16 +1,14 @@
 import os
 import pickle
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Union, Callable
+from typing import Any, Dict, List, Optional, Tuple
 
+import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
-
-import pyspark.sql.functions as F
-
 
 DUMP_METADATA_NAME = "metadata.pickle"
 DUMP_DATA_NAME = "data.parquet"

@@ -30,7 +30,7 @@ class SparkAutoMLPreset(SparkAutoML):
 
     Example:
 
-        >>> automl = SomePreset(SparkTask('binary'), timeout=3600)
+        >>> automl = SparkAutoMLPreset(SparkTask('binary'), timeout=3600)
         >>> automl.fit_predict(data, roles={'target': 'TARGET'})
 
     """
@@ -249,7 +249,7 @@ class SparkAutoMLPreset(SparkAutoML):
         level = verbosity_to_loglevel(verbose)
         set_stdout_level(level)
 
-        logger.info(f"Stdout logging level is {logging._levelToName[level]}.")
+        logger.info(f"Stdout logging level is {logging.getLevelName(level)}.")
 
     @staticmethod
     def set_logfile(filename: str):

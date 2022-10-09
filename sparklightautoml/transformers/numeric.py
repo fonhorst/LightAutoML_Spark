@@ -2,21 +2,17 @@ import logging
 from typing import Optional, Dict, List
 
 import numpy as np
-import pandas as pd
-from pyspark.ml import Transformer
-from pyspark.ml.feature import QuantileDiscretizer, Bucketizer
-from pyspark.sql import functions as F
-from pyspark.sql.pandas.functions import pandas_udf, PandasUDFType
-from pyspark.sql.types import FloatType, IntegerType
 from lightautoml.dataset.base import RolesDict
-
 from lightautoml.dataset.roles import ColumnRole, NumericRole, CategoryRole
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
-from sparklightautoml.transformers.base import SparkBaseEstimator, SparkBaseTransformer, ObsoleteSparkTransformer
 from lightautoml.transformers.numeric import numeric_check
+from pyspark.ml import Transformer
+from pyspark.ml.feature import QuantileDiscretizer
+from pyspark.sql import functions as F
+from pyspark.sql.types import FloatType, IntegerType
 
+from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
+from sparklightautoml.transformers.base import SparkBaseEstimator, SparkBaseTransformer
+from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +63,10 @@ class SparkNaNFlagsEstimator(SparkBaseEstimator):
 
         return SparkNaNFlagsTransformer(
             input_cols=self.getInputCols(),
-            input_roles=self.getInputRoles(),
+            input_roles=self.get_input_roles(),
             output_cols=self.getOutputCols(),
-            output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns(),
+            output_roles=self.get_output_roles(),
+            do_replace_columns=self.get_do_replace_columns(),
         )
 
 
@@ -195,10 +191,10 @@ class SparkFillnaMedianEstimator(SparkBaseEstimator):
         return SparkFillnaMedianTransformer(
             input_cols=self.getInputCols(),
             output_cols=self.getOutputCols(),
-            input_roles=self.getInputRoles(),
-            output_roles=self.getOutputRoles(),
+            input_roles=self.get_input_roles(),
+            output_roles=self.get_output_roles(),
             meds=self._meds,
-            do_replace_columns=self.getDoReplaceColumns(),
+            do_replace_columns=self.get_do_replace_columns(),
         )
 
 
@@ -323,10 +319,10 @@ class SparkStandardScalerEstimator(SparkBaseEstimator):
         return SparkStandardScalerTransformer(
             input_cols=self.getInputCols(),
             output_cols=self.getOutputCols(),
-            input_roles=self.getInputRoles(),
-            output_roles=self.getOutputRoles(),
+            input_roles=self.get_input_roles(),
+            output_roles=self.get_output_roles(),
             means_and_stds=self._means_and_stds,
-            do_replace_columns=self.getDoReplaceColumns(),
+            do_replace_columns=self.get_do_replace_columns(),
         )
 
 
@@ -413,10 +409,10 @@ class SparkQuantileBinningEstimator(SparkBaseEstimator):
             self._nbins,
             self._bucketizer,
             input_cols=self.getInputCols(),
-            input_roles=self.getInputRoles(),
+            input_roles=self.get_input_roles(),
             output_cols=self.getOutputCols(),
-            output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns(),
+            output_roles=self.get_output_roles(),
+            do_replace_columns=self.get_do_replace_columns(),
         )
 
 

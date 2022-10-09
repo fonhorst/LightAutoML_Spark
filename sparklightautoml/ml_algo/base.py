@@ -37,8 +37,9 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         default_params: Optional[dict] = None,
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
-        optimization_search_space: Optional[dict] = {},
+        optimization_search_space: Optional[dict] = None,
     ):
+        optimization_search_space = optimization_search_space if optimization_search_space else dict()
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
         self._cacher_key = cacher_key
         self.n_classes: Optional[int] = None
@@ -282,7 +283,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
     def __init__(
         self,
         task_name: str = None,
-        input_cols: List[str] = [],
+        input_cols: Optional[List[str]] = None,
         output_col: str = "averaged_values",
         remove_cols: Optional[List[str]] = None,
         convert_to_array_first: bool = False,
@@ -300,6 +301,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
             dim_num (int, optional): Dimension of input columns. Defaults to 1.
         """
         super().__init__()
+        input_cols = input_cols if input_cols else []
         self.set(self.taskName, task_name)
         self.set(self.inputCols, input_cols)
         self.set(self.outputCol, output_col)

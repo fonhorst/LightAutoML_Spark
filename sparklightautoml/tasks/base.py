@@ -1,22 +1,20 @@
 from typing import Optional, Union, cast
 
+import numpy as np
+import pandas as pd
+from lightautoml.tasks import Task as LAMATask
+from lightautoml.tasks.base import LAMLMetric, _default_losses
 from pyspark.ml.evaluation import (
     BinaryClassificationEvaluator,
     RegressionEvaluator,
     MulticlassClassificationEvaluator,
-    Evaluator,
 )
 from pyspark.ml.functions import vector_to_array
 from pyspark.sql.pandas.functions import pandas_udf
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.tasks.losses.base import SparkLoss
-from lightautoml.tasks import Task as LAMATask
-from lightautoml.tasks.base import LAMLMetric, _default_losses
-
-import pandas as pd
-import numpy as np
+from sparklightautoml.utils import SparkDataFrame
 
 DEFAULT_PREDICTION_COL_NAME = "prediction"
 DEFAULT_TARGET_COL_NAME = "target"

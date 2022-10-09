@@ -514,11 +514,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             if self.task.name in ["binary", "multiclass"]:
                 models.append(
                     ProbabilityColsTransformer(
-                        probability_сols=self._models_prediction_columns, num_classes=self.n_classes
+                        probability_cols=self._models_prediction_columns, num_classes=self.n_classes
                     )
                 )
             else:
-                models.append(PredictionColsTransformer(prediction_сols=self._models_prediction_columns))
+                models.append(PredictionColsTransformer(prediction_cols=self._models_prediction_columns))
         averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
         return averaging_model
 

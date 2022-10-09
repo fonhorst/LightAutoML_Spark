@@ -1,9 +1,9 @@
-from typing import Optional, Set, Union
+from typing import Optional, Union
 
 import numpy as np
-
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
+
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline, SparkTabularDataFeatures
 from sparklightautoml.transformers.base import (
@@ -12,9 +12,8 @@ from sparklightautoml.transformers.base import (
     SparkSequentialTransformer,
     SparkEstOrTrans,
 )
-
 # Same comments as for spark.pipelines.features.base
-from sparklightautoml.transformers.categorical import SparkOHEEncoderEstimator, SparkLabelEncoderEstimator
+from sparklightautoml.transformers.categorical import SparkLabelEncoderEstimator
 from sparklightautoml.transformers.numeric import (
     SparkFillInfTransformer,
     SparkFillnaMedianEstimator,
@@ -135,7 +134,7 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         if te_part is not None:
             target_encoder_stage = target_encoder(
                 input_cols=te_part.getOutputCols(),
-                input_roles=te_part.getOutputRoles(),
+                input_roles=te_part.get_output_roles(),
                 task_name=train.task.name,
                 folds_column=train.folds_column,
                 target_column=train.target_column,
@@ -150,7 +149,7 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             if target_encoder is not None:
                 target_encoder_stage = target_encoder(
                     input_cols=intersections.getOutputCols(),
-                    input_roles=intersections.getOutputRoles(),
+                    input_roles=intersections.get_output_roles(),
                     task_name=train.task.name,
                     folds_column=train.folds_column,
                     target_column=train.target_column,
@@ -166,7 +165,7 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         if seas_cats is not None:
             # sparse_list.append(SequentialTransformer([seas_cats, LabelEncoder()]))
             label_encoder_stage = SparkLabelEncoderEstimator(
-                input_cols=seas_cats.getOutputCols(), input_roles=seas_cats.getOutputRoles(), do_replace_columns=True
+                input_cols=seas_cats.getOutputCols(), input_roles=seas_cats.get_output_roles(), do_replace_columns=True
             )
             sparse_list.append(SparkSequentialTransformer([seas_cats, label_encoder_stage]))
 
@@ -211,12 +210,12 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             )
             fill_na_median_stage = SparkFillnaMedianEstimator(
                 input_cols=fill_inf_stage.getOutputCols(),
-                input_roles=fill_inf_stage.getOutputRoles(),
+                input_roles=fill_inf_stage.get_output_roles(),
                 do_replace_columns=True,
             )
             standerd_scaler_stage = SparkStandardScalerEstimator(
                 input_cols=fill_na_median_stage.getOutputCols(),
-                input_roles=fill_na_median_stage.getOutputRoles(),
+                input_roles=fill_na_median_stage.get_output_roles(),
                 do_replace_columns=True,
             )
 

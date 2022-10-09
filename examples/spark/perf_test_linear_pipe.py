@@ -1,27 +1,22 @@
 import functools
-import itertools
 import logging.config
 import logging.config
 import uuid
 from datetime import datetime
-from typing import Union, Dict, cast, Any, Tuple, List
+from typing import Union, Dict, cast, Tuple, List
 
-from pyspark.sql import DataFrame as SparkDataFrame
-
+import pandas as pd
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, DatetimeRole, NumericRole, ColumnRole
+from pyspark.sql import DataFrame as SparkDataFrame
+from pyspark.sql import functions as F
 from pyspark.sql.pandas.functions import pandas_udf
 
-from examples_utils import get_spark_session, get_dataset_attrs
+from examples_utils import get_spark_session
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.linear_pipeline import SparkLinearFeatures
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
-from pyspark.sql import functions as F
-
-import numpy as np
-import pandas as pd
-
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -142,7 +137,6 @@ if __name__ == "__main__":
 
     with log_exec_time():
         spark_features_pipeline = SparkLinearFeatures(cacher_key="main_cache", **ml_alg_kwargs)
-        spark_features_pipeline.input_roles = roles
         out_ds = spark_features_pipeline.fit_transform(in_ds)
 
     logger.info("Finished")

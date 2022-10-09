@@ -1,26 +1,18 @@
 """Iterative feature selector."""
 
 import logging
-
-from copy import deepcopy
 from typing import Optional, cast, Iterator
 
 import numpy as np
-
+import pandas as pd
+from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
-
-from pyspark.sql import functions as F
-from pyspark.sql.functions import shuffle
 from pyspark.sql.pandas.functions import pandas_udf
 from pyspark.sql.types import StructField
 
-from lightautoml.validation.base import TrainValidIterator
-
+from sparklightautoml.pipelines.selection.base import SparkImportanceEstimator
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import MLAlgo
-from sparklightautoml.pipelines.selection.base import SparkImportanceEstimator
-
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 

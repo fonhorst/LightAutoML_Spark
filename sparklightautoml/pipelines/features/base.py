@@ -162,11 +162,6 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         return list(self.output_roles.keys())
 
     @property
-    def used_features(self) -> List[str]:
-        # TODO: SLAMA - implement it later
-        raise NotImplementedError("Unsupported operation")
-
-    @property
     def input_roles(self) -> RolesDict:
         return self._input_roles
 
@@ -293,7 +288,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         dag_transformer = dag_pipeline.fit(train.data)
 
         feature_sdf = Cacher.get_dataset_by_key(self._cacher_key)
-        output_roles = {feat: role for est in enodes for feat, role in est.getOutputRoles().items()}
+        output_roles = {feat: role for est in enodes for feat, role in est.get_output_roles().items()}
         featurized_train = train.empty()
         featurized_train.set_data(feature_sdf, list(output_roles.keys()), output_roles)
 

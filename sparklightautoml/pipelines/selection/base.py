@@ -1,19 +1,19 @@
 """Base class for selection pipelines."""
 from abc import ABC
 from copy import copy
-from typing import Any, Optional, List, cast
+from typing import Optional, List, cast
 
-from lightautoml.dataset.base import LAMLDataset, RolesDict
+from lightautoml.dataset.base import RolesDict
 from lightautoml.pipelines.selection.base import SelectionPipeline, EmptySelector, ImportanceEstimator
 from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
 from pyspark.ml import Transformer
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.caching import CacheAware
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
-from sparklightautoml.dataset.caching import CacheAware
 
 
 class SparkImportanceEstimator(ImportanceEstimator, ABC):

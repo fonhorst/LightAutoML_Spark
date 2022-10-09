@@ -194,7 +194,7 @@ def get_numeric_roles_stat(
     quantile_binning = SparkQuantileBinningEstimator(input_cols=train.features, input_roles=train.roles)
     target_encoder = encoder(
         input_cols=quantile_binning.getOutputCols(),
-        input_roles=quantile_binning.getOutputRoles(),
+        input_roles=quantile_binning.get_output_roles(),
         task_name=train.task.name,
         folds_column=train.folds_column,
         target_column=train.target_column,
@@ -208,11 +208,11 @@ def get_numeric_roles_stat(
         input_cols=train.features, input_roles=train.roles, role=CategoryRole(np.float32)
     )
     label_encoder = SparkLabelEncoderEstimator(
-        input_cols=change_roles.getOutputCols(), input_roles=change_roles.getOutputRoles(), random_state=random_state
+        input_cols=change_roles.getOutputCols(), input_roles=change_roles.get_output_roles(), random_state=random_state
     )
     target_encoder = encoder(
         input_cols=label_encoder.getOutputCols(),
-        input_roles=label_encoder.getOutputRoles(),
+        input_roles=label_encoder.get_output_roles(),
         task_name=train.task.name,
         folds_column=train.folds_column,
         target_column=train.target_column,
@@ -226,7 +226,7 @@ def get_numeric_roles_stat(
         input_cols=train.features, input_roles=train.roles, role=CategoryRole(np.float32)
     )
     freq_encoder = SparkFreqEncoderEstimator(
-        input_cols=change_roles.getOutputCols(), input_roles=change_roles.getOutputRoles()
+        input_cols=change_roles.getOutputCols(), input_roles=change_roles.get_output_roles()
     )
     trf = Pipeline(stages=[change_roles, freq_encoder])
     res["freq_scores"] = get_score_from_pipe(train, pipe=trf)
@@ -312,7 +312,7 @@ def get_category_roles_stat(
     )
     target_encoder = encoder(
         input_cols=label_encoder.getOutputCols(),
-        input_roles=label_encoder.getOutputRoles(),
+        input_roles=label_encoder.get_output_roles(),
         task_name=train.task.name,
         folds_column=train.folds_column,
         target_column=train.target_column,

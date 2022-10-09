@@ -1,26 +1,21 @@
+from collections import OrderedDict
 from copy import deepcopy
-from typing import Dict, Iterator, Optional, Sequence, List
-from collections import defaultdict, OrderedDict
-from itertools import chain, combinations
 from datetime import datetime
+from typing import Iterator, Optional, Sequence, List
+
 import holidays
 import numpy as np
 import pandas as pd
-from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame
+from lightautoml.dataset.base import RolesDict
+from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
+from lightautoml.transformers.datetime import datetime_check, date_attrs
+from pyspark.ml.param.shared import Param, Params
+from pyspark.sql import functions as F, DataFrame as SparkDataFrame
 from pyspark.sql.pandas.functions import pandas_udf
 from pyspark.sql.types import IntegerType
 
-from lightautoml.dataset.base import RolesDict
-from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
-from lightautoml.transformers.datetime import datetime_check, date_attrs
-
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.transformers.base import ObsoleteSparkTransformer, SparkBaseTransformer
-
-from pyspark.ml import Transformer, Estimator
-from pyspark.ml.param.shared import HasInputCols, HasOutputCols
-from pyspark.ml.param.shared import TypeConverters, Param, Params
+from sparklightautoml.transformers.base import SparkBaseTransformer
 
 
 def get_unit_of_timestamp_column(seas: str, col: str):
@@ -214,7 +209,7 @@ class SparkDateSeasonsTransformer(
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         df = dataset
-        roles = self.getInputRoles()
+        roles = self.get_input_roles()
 
         new_cols = []
         for col in self.getInputCols():
@@ -236,7 +231,7 @@ class SparkDateSeasonsTransformer(
                 def is_holiday(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
                     for x in arrs:
                         x = x.apply(lambda d: datetime.fromtimestamp(d)).dt.normalize()
-                        _holidays = holidays.CountryHoliday(
+                        _holidays = holidays.country_holidays(
                             years=np.unique(x.dt.year.values),
                             country=roles[col].country,
                             prov=roles[col].prov,

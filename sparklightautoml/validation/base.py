@@ -1,5 +1,4 @@
 from abc import ABC
-from abc import ABC
 from copy import copy
 from typing import Tuple, cast, Sequence
 

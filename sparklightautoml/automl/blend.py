@@ -1,29 +1,22 @@
 import logging
 from abc import ABC
 from copy import copy
-from typing import List, Optional, Sequence, Tuple, cast, Callable
+from typing import List, Optional, Sequence, Tuple, cast
 
 import numpy as np
-from lightautoml.transformers.base import EmptyTransformer
-from pyspark.ml import Transformer
-from pyspark.ml.param import Params
-from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
-from pyspark.ml.util import MLWritable
-from pyspark.sql import functions as F
-from pyspark.sql.functions import isnan
-
 from lightautoml.automl.blend import WeightedBlender
-from lightautoml.dataset.np_pd_dataset import NumpyDataset
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.reader.base import RolesDict
+from lightautoml.transformers.base import EmptyTransformer
+from pyspark.ml import Transformer
+from pyspark.sql import functions as F
+
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import AveragingTransformer
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.tasks.base import DEFAULT_PREDICTION_COL_NAME, SparkTask
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
-
 
 logger = logging.getLogger(__name__)
 

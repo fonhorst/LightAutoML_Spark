@@ -19,14 +19,14 @@ from pyspark import RDD
 from pyspark.ml.functions import vector_to_array
 from pyspark.mllib.evaluation import BinaryClassificationMetrics, RegressionMetrics, MulticlassMetrics
 from pyspark.mllib.linalg import DenseMatrix
-from pyspark.sql import SparkSession, Column
+from pyspark.sql import Column
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql.pandas.functions import pandas_udf
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.report.handy_spark_utils import call2
 from sparklightautoml.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
+from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -919,7 +919,7 @@ class SparkReportDeco:
 
         if self.task == "binary":
             # filling for html
-            self._inference_content = {}
+            self._inference_content = dict()
             self._inference_content["roc_curve"] = "test_roc_curve_{}.png".format(self._n_test_sample)
             self._inference_content["pr_curve"] = "test_pr_curve_{}.png".format(self._n_test_sample)
             self._inference_content["pie_f1_metric"] = "test_pie_f1_metric_{}.png".format(self._n_test_sample)
@@ -957,7 +957,7 @@ class SparkReportDeco:
 
             predictions_col_name = scores_col_name
 
-            self._inference_content = {}
+            self._inference_content = dict()
             self._inference_content["target_distribution"] = "test_target_distribution_{}.png".format(
                 self._n_test_sample
             )
@@ -1232,14 +1232,13 @@ class SparkReportDeco:
         # +-----------------+------------+-----+------------+------------+
 
         for feature_name in numerical_features:
-            item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0])
-            item["min"] = stat_data[f"min_{feature_name}"][0]
-            item["quantile_25"] = stat_data[f"perc0.25_{feature_name}"][0]
-            item["average"] = stat_data[f"avg_{feature_name}"][0]
-            item["median"] = stat_data[f"perc0.5_{feature_name}"][0]
-            item["quantile_75"] = stat_data[f"perc0.75_{feature_name}"][0]
-            item["max"] = stat_data[f"max_{feature_name}"][0]
+            item = {
+                "Feature name": feature_name,
+                "NaN ratio": "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0]),
+                "min": stat_data[f"min_{feature_name}"][0], "quantile_25": stat_data[f"perc0.25_{feature_name}"][0],
+                "average": stat_data[f"avg_{feature_name}"][0], "median": stat_data[f"perc0.5_{feature_name}"][0],
+                "quantile_75": stat_data[f"perc0.75_{feature_name}"][0], "max": stat_data[f"max_{feature_name}"][0]
+            }
             numerical_features_df.append(item)
         if len(numerical_features_df) == 0:
             self._numerical_features_table = None
@@ -1270,13 +1269,15 @@ class SparkReportDeco:
                 if pair[0] is not None and pair[0] != "None"
             ]
 
-            item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0])
-            item["Number of unique values"] = len(sorted_enc)
-            item["Most frequent value"] = sorted_enc[0][0]
-            item["Occurance of most frequent"] = "{:.1f}%".format(100 * (int(sorted_enc[0][1]) / float(total_count)))
-            item["Least frequent value"] = sorted_enc[-1][0]
-            item["Occurance of least frequent"] = "{:.1f}%".format(100 * (int(sorted_enc[-1][1]) / float(total_count)))
+            item = {
+                "Feature name": feature_name,
+                "NaN ratio": "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0]),
+                "Number of unique values": len(sorted_enc),
+                "Most frequent value": sorted_enc[0][0],
+                "Occurance of most frequent": "{:.1f}%".format(100 * (int(sorted_enc[0][1]) / float(total_count))),
+                "Least frequent value": sorted_enc[-1][0],
+                "Occurance of least frequent": "{:.1f}%".format(100 * (int(sorted_enc[-1][1]) / float(total_count)))
+            }
             categorical_features_df.append(item)
         if len(categorical_features_df) == 0:
             self._categorical_features_table = None
@@ -1288,11 +1289,12 @@ class SparkReportDeco:
         # datetime roles
         datetime_features_df = []
         for feature_name in datetime_features:
-            item = {"Feature name": feature_name}
-            item["NaN ratio"] = "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0])
-            item["min"] = stat_data[f"min_{feature_name}"][0]
-            item["min"] = stat_data[f"max_{feature_name}"][0]
-            item["base_date"] = self._model.reader._roles[feature_name].base_date
+            item = {
+                "Feature name": feature_name,
+                "NaN ratio": "{:.4f}".format(stat_data[f"nanratio_{feature_name}"][0]),
+                "min": stat_data[f"max_{feature_name}"][0],
+                "base_date": self._model.reader._roles[feature_name].base_date
+            }
             datetime_features_df.append(item)
         if len(datetime_features_df) == 0:
             self._datetime_features_table = None

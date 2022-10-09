@@ -6,9 +6,10 @@ from typing import Tuple, Optional, List
 from typing import Union
 
 import numpy as np
+from lightautoml.utils.timer import TaskTimer
 from pyspark.ml import Pipeline, Transformer, PipelineModel, Estimator
 from pyspark.ml.classification import LogisticRegression, LogisticRegressionModel
-from pyspark.ml.feature import VectorAssembler, OneHotEncoder
+from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import LinearRegression, LinearRegressionModel
 from pyspark.sql import functions as F
 
@@ -16,8 +17,7 @@ from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, Aver
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 from ..dataset.base import SparkDataset
 from ..transformers.base import DropColumnsTransformer
-from ..utils import DebugTransformer, SparkDataFrame
-from lightautoml.utils.timer import TaskTimer
+from ..utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +86,9 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         default_params: Optional[dict] = None,
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
-        optimization_search_space: Optional[dict] = {},
+        optimization_search_space: Optional[dict] = None,
     ):
+        optimization_search_space = optimization_search_space if optimization_search_space else dict()
         super().__init__(cacher_key, default_params, freeze_defaults, timer, optimization_search_space)
 
         self._prediction_col = f"prediction_{self._name}"

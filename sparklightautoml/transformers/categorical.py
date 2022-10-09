@@ -7,15 +7,20 @@ from typing import Optional, Sequence, List, Tuple, Dict, Any
 
 import numpy as np
 import pandas as pd
+from lightautoml.dataset.base import RolesDict
+from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
+from lightautoml.transformers.categorical import (
+    categorical_check,
+    encoding_check,
+    oof_task_check,
+    multiclass_task_check,
+)
 from pandas import Series
 from pyspark.ml import Transformer
 from pyspark.ml.feature import OneHotEncoder
-from pyspark.ml.param.shared import Param, Params
 from pyspark.sql import functions as F, types as SparkTypes, DataFrame as SparkDataFrame, Window, Column
 from sklearn.utils.murmurhash import murmurhash3_32
 
-from lightautoml.dataset.base import RolesDict
-from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.mlwriters import (
     CommonPickleMLReadable,
@@ -24,13 +29,6 @@ from sparklightautoml.mlwriters import (
     SparkLabelEncoderTransformerMLWritable,
 )
 from sparklightautoml.transformers.base import SparkBaseEstimator, SparkBaseTransformer
-from lightautoml.transformers.categorical import (
-    categorical_check,
-    encoding_check,
-    oof_task_check,
-    multiclass_task_check,
-)
-
 from sparklightautoml.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
 
 logger = logging.getLogger(__name__)
@@ -143,7 +141,7 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
             output_role = CategoryRole(np.int32, label_encoded=True)
         super().__init__(input_cols, input_roles, do_replace_columns=do_replace_columns, output_role=output_role)
         self._input_intermediate_columns = self.getInputCols()
-        self._input_intermediate_roles = self.getInputRoles()
+        self._input_intermediate_roles = self.get_input_roles()
 
     def _fit(self, dataset: SparkDataFrame) -> "SparkLabelEncoderTransformer":
         logger.info(f"[{type(self)} (LE)] fit is started")
@@ -170,9 +168,9 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
         return SparkLabelEncoderTransformer(
             input_cols=self.getInputCols(),
             output_cols=self.getOutputCols(),
-            input_roles=self.getInputRoles(),
-            output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns(),
+            input_roles=self.get_input_roles(),
+            output_roles=self.get_output_roles(),
+            do_replace_columns=self.get_do_replace_columns(),
             indexer_model=self.indexer_model,
         )
 
@@ -274,9 +272,9 @@ class SparkOrdinalEncoderEstimator(SparkLabelEncoderEstimator):
         return SparkOrdinalEncoderTransformer(
             input_cols=self.getInputCols(),
             output_cols=self.getOutputCols(),
-            input_roles=self.getInputRoles(),
-            output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns(),
+            input_roles=self.get_input_roles(),
+            output_roles=self.get_output_roles(),
+            do_replace_columns=self.get_do_replace_columns(),
             indexer_model=self.indexer_model,
         )
 
@@ -377,9 +375,9 @@ class SparkFreqEncoderEstimator(SparkLabelEncoderEstimator):
         return SparkFreqEncoderTransformer(
             input_cols=self.getInputCols(),
             output_cols=self.getOutputCols(),
-            input_roles=self.getInputRoles(),
-            output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns(),
+            input_roles=self.get_input_roles(),
+            output_roles=self.get_output_roles(),
+            do_replace_columns=self.get_do_replace_columns(),
             indexer_model=self.indexer_model,
         )
 
@@ -472,7 +470,7 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
         self._input_roles = {
             f"{self._make_col_name(comb)}": CategoryRole(
                 np.int32,
-                unknown=max((self.getInputRoles()[x].unknown for x in comb)),
+                unknown=max((self.get_input_roles()[x].unknown for x in comb)),
                 label_encoded=True,
             )
             for comb in self.intersections
@@ -497,9 +495,9 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
         return SparkCatIntersectionsTransformer(
             input_cols=self.getInputCols(),
             output_cols=self.getOutputCols(),
-            input_roles=self.getInputRoles(),
-            output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns(),
+            input_roles=self.get_input_roles(),
+            output_roles=self.get_output_roles(),
+            do_replace_columns=self.get_do_replace_columns(),
             indexer_model=self.indexer_model,
             intersections=self.intersections,
         )
@@ -612,7 +610,7 @@ class SparkOHEEncoderEstimator(SparkBaseEstimator):
             transformer,
             input_cols=self.getInputCols(),
             output_cols=self.getOutputCols(),
-            input_roles=self.getInputRoles(),
+            input_roles=self.get_input_roles(),
             output_roles=roles,
         )
 
@@ -820,10 +818,10 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         return SparkTargetEncoderTransformer(
             encodings=self.encodings,
             input_cols=self.getInputCols(),
-            input_roles=self.getInputRoles(),
+            input_roles=self.get_input_roles(),
             output_cols=self.getOutputCols(),
-            output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns(),
+            output_roles=self.get_output_roles(),
+            do_replace_columns=self.get_do_replace_columns(),
             oof_feats_encoding=oof_feats_encoding,
         )
 
@@ -1057,10 +1055,10 @@ class SparkMulticlassTargetEncoderEstimator(SparkBaseEstimator):
         return SparkMultiTargetEncoderTransformer(
             encodings=self.encodings,
             input_cols=self.getInputCols(),
-            input_roles=self.getInputRoles(),
+            input_roles=self.get_input_roles(),
             output_cols=self.getOutputCols(),
-            output_roles=self.getOutputRoles(),
-            do_replace_columns=self.getDoReplaceColumns(),
+            output_roles=self.get_output_roles(),
+            do_replace_columns=self.get_do_replace_columns(),
         )
 
 

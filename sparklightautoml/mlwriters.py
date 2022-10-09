@@ -3,23 +3,20 @@ import logging
 import os
 import pickle
 import time
-
-from pathlib import Path
-from typing import Union
 from collections import namedtuple
+from typing import Union
 
 from pyspark import SparkContext
-from pyspark.sql.session import SparkSession
 from pyspark.ml.common import inherit_doc
 from pyspark.ml.util import DefaultParamsReader
 from pyspark.ml.util import MLReadable
 from pyspark.ml.util import MLReader
 from pyspark.ml.util import MLWritable
 from pyspark.ml.util import MLWriter
+from pyspark.sql.session import SparkSession
 from synapse.ml.lightgbm import LightGBMClassificationModel
 from synapse.ml.lightgbm import LightGBMRegressionModel
 from synapse.ml.onnx import ONNXModel
-
 
 logger = logging.getLogger(__name__)
 

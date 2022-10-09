@@ -733,7 +733,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                     key = remainder
                 return other_categories_dict[key]
 
-            get_category_udf = F.udf(get_category_by_row_num, SparkTypes.StringType())
+            get_category_udf = F.udf(get_category_by_row_num, returnType=StringType())
 
             # add row number to main dataframe and exclude feature_name column
             sdf = sample_df.select("*", F.row_number().over(w).alias("row_num"))
@@ -841,7 +841,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
     ):
         assert feature_name in self.reader._roles
         assert datetime_level in ["year", "month", "dayofweek"]
-        assert ice_fraction > 0 and ice_fraction <= 1.0
+        assert 0 < ice_fraction <= 1.0
 
         pipeline_model = self.transformer()
 
@@ -896,7 +896,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         rows_count = test_data.count()
         if rows_count > HISTOGRAM_DATA_ROWS_LIMIT:
             fraction = HISTOGRAM_DATA_ROWS_LIMIT / rows_count
-            test_data = test_data.sample(fraction=fraction)
+            test_data = test_data.sample(frac=fraction)
         if self.reader._roles[feature_name].name == "Numeric":
             test_data = test_data.select(F.col(feature_name).cast("double")).toPandas()
         else:

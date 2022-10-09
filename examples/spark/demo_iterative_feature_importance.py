@@ -6,9 +6,6 @@ import time
 
 import numpy as np
 import pandas as pd
-
-from sklearn.model_selection import train_test_split
-
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.pipelines.selection.base import ComposedSelector
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector
@@ -18,17 +15,18 @@ from lightautoml.pipelines.selection.importance_based import (
 from lightautoml.pipelines.selection.permutation_importance_based import (
     NpIterativeFeatureSelector,
 )
+from sklearn.model_selection import train_test_split
+
+from examples_utils import get_spark_session
 from sparklightautoml.automl.base import SparkAutoML
+from sparklightautoml.dataset.caching import CacheManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
-
-from examples_utils import get_spark_session
-from pyspark.sql import functions as F
-
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
@@ -132,9 +130,9 @@ if __name__ == "__main__":
 
     logger.info("\t Pipeline1...")
     pipeline_lvl1 = SparkMLPipeline(
-        cacher_key=cacher_key,
+        cache_manager= CacheManager(),
         ml_algos=[(model1, params_tuner1), model2],
-        pre_selection=selector,
+        pre_selection=SparkSelectionPipelineWrapper(selector),
         features_pipeline=pipe,
         post_selection=None,
     )
@@ -159,7 +157,7 @@ if __name__ == "__main__":
 
     logger.info("\t Pipeline2...")
     pipeline_lvl2 = SparkMLPipeline(
-        cacher_key=cacher_key,
+        cache_manager=CacheManager(),
         ml_algos=[model],
         pre_selection=None,
         features_pipeline=pipe1,
