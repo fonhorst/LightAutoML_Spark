@@ -4,12 +4,14 @@ import warnings
 from copy import copy
 from typing import List, cast, Sequence, Union, Tuple, Optional
 
+from lightautoml.dataset.base import RolesDict
 from lightautoml.ml_algo.tuning.base import ParamsTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from lightautoml.pipelines.selection.base import EmptySelector
 from pyspark.ml import Transformer, PipelineModel
 
+from ..base import InputOutputRoles
 from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset
@@ -18,7 +20,7 @@ from ...dataset.caching import CacheAware, CacheManager
 from ...validation.base import SparkBaseTrainValidIterator
 
 
-class SparkMLPipeline(LAMAMLPipeline, CacheAware):
+class SparkMLPipeline(LAMAMLPipeline, InputOutputRoles, CacheAware):
     """Spark version of :class:`~lightautoml.pipelines.ml.base.MLPipeline`. Single ML pipeline.
 
     Merge together stage of building ML model
@@ -73,6 +75,16 @@ class SparkMLPipeline(LAMAMLPipeline, CacheAware):
         self.post_selection = cast(SparkSelectionPipelineWrapper, self.post_selection)
         self.features_pipeline = cast(SparkFeaturesPipeline, self.features_pipeline)
         self._milestone_name = f"MLPipe_{self._name}"
+        self._input_roles: Optional[RolesDict] = None
+        self._output_roles: Optional[RolesDict] = None
+
+    @property
+    def input_roles(self) -> RolesDict:
+        return self._input_roles
+
+    @property
+    def output_roles(self) -> RolesDict:
+        return self._output_roles
 
     @property
     def name(self) -> str:
@@ -135,6 +147,9 @@ class SparkMLPipeline(LAMAMLPipeline, CacheAware):
             self.post_selection.transformer,
             *[ml_algo.transformer for ml_algo in self.ml_algos]
         ])
+
+        self._input_roles = copy(train_valid.train.roles)
+        self._output_roles = copy(val_preds_ds.roles)
 
         # potential checkpoint
         # val_preds_ds = self._cacher_manager.milestone(val_preds_ds, name=self._milestone_name)

@@ -240,10 +240,10 @@ class Cacher(Estimator):
         logger.info(f"Cacher {self._key} (RDD Id: {ds.rdd.id()}, Column nums: {len(ds.columns)}). Finished data materialization.")
 
         previous_ds = self._cacher_dict.get(self._key, None)
-        # if previous_ds is not None and ds != previous_ds:
-        #     logger.info(f"Removing cache for key: {self._key} (RDD Id: {previous_ds.rdd.id()}).")
-        #     previous_ds.unpersist()
-        #     del previous_ds
+        if previous_ds is not None and ds != previous_ds:
+            logger.info(f"Removing cache for key: {self._key} (RDD Id: {previous_ds.rdd.id()}).")
+            previous_ds.unpersist()
+            del previous_ds
 
         self._cacher_dict[self._key] = ds
 

@@ -17,6 +17,7 @@ from pyspark.sql import functions as F
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset
 from ..dataset.caching import CacheAware, CacheManager
+from ..pipelines.base import InputOutputRoles
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..transformers.base import ColumnsSelectorTransformer
@@ -26,7 +27,7 @@ from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, Spa
 logger = logging.getLogger(__name__)
 
 
-class SparkAutoML(CacheAware):
+class SparkAutoML(InputOutputRoles, CacheAware):
     """Class for compile full pipeline of AutoML task.
 
     AutoML steps:
@@ -64,7 +65,6 @@ class SparkAutoML(CacheAware):
         >>> automl.fit_predict(data, roles={'target': 'TARGET'})
 
     """
-
     def __init__(
         self,
         reader: SparkToSparkReader,
@@ -103,7 +103,17 @@ class SparkAutoML(CacheAware):
         self.levels: Optional[Sequence[Sequence[SparkMLPipeline]]] = None
         self._transformer = None
         self._cache_manager = CacheManager()
+        self._input_roles: Optional[RolesDict] = None
+        self._output_roles: Optional[RolesDict] = None
         self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
+
+    @property
+    def input_roles(self) -> RolesDict:
+        return self._input_roles
+
+    @property
+    def output_roles(self) -> RolesDict:
+        return self._output_roles
 
     def make_transformer(self, no_reader: bool = False, return_all_predictions: bool = False) -> Transformer:
 
@@ -272,6 +282,10 @@ class SparkAutoML(CacheAware):
         del self._levels
 
         oof_pred = level_ds if self.return_all_predictions else blended_prediction
+
+        self._input_roles = copy(train_dataset.roles)
+        self._output_roles = copy(oof_pred.roles)
+
         return oof_pred
 
     def predict(

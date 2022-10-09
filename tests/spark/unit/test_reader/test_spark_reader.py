@@ -124,4 +124,4 @@ def test_spark_reader_advanced_guess_roles(spark: SparkSession, config: Dict[str
            and srole.encoding_type != prole.encoding_type
     ]
 
-    # assert len(not_equal_encoding_types) == 0, f"Encoding types are different: {not_equal_encoding_types}"
+    assert len(not_equal_encoding_types) == 0, f"Encoding types are different: {not_equal_encoding_types}"

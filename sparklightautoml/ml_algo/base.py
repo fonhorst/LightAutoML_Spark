@@ -1,7 +1,8 @@
 import logging
-from typing import Tuple, cast, List, Optional
+from typing import Tuple, cast, List, Optional, Sequence
 
 import numpy as np
+from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import NumericRole, ColumnRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.utils.timer import TaskTimer
@@ -15,6 +16,7 @@ from pyspark.sql.types import IntegerType
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
+from sparklightautoml.pipelines.base import InputOutputRoles
 from sparklightautoml.utils import Cacher, SparkDataFrame
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 
@@ -23,7 +25,7 @@ logger = logging.getLogger(__name__)
 SparkMLModel = PipelineModel
 
 
-class SparkTabularMLAlgo(MLAlgo):
+class SparkTabularMLAlgo(MLAlgo, InputOutputRoles):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "SparkTabularMLAlgo"
@@ -44,13 +46,31 @@ class SparkTabularMLAlgo(MLAlgo):
         self._models_prediction_columns: Optional[List[str]] = None
         self._transformer: Optional[Transformer] = None
 
-        # self._prediction_col = f"prediction_{self._name}"
-        self._prediction_role = None
+        self._prediction_role: Optional[ColumnRole] = None
+        self._input_roles: Optional[RolesDict] = None
+
+    @property
+    def features(self) -> List[str]:
+        """Get list of features."""
+        return list(self._input_roles.keys())
+
+    @features.setter
+    def features(self, val: Sequence[str]):
+        """List of features."""
+        raise NotImplementedError("Unsupported operation")
+
+    @property
+    def input_roles(self) -> RolesDict:
+        return self._input_roles
+
+    @property
+    def output_roles(self) -> RolesDict:
+        return {self.prediction_feature: self.prediction_role}
 
     @property
     def prediction_feature(self) -> str:
         # return self._prediction_col
-        return f"prediction_{self._name}"
+        return f"{self._name}_prediction"
 
     @property
     def prediction_role(self) -> ColumnRole:
@@ -103,27 +123,9 @@ class SparkTabularMLAlgo(MLAlgo):
 
         valid_ds = cast(SparkDataset, train_valid_iterator.get_validation_data())
 
-        outp_dim = 1
-        if self.task.name == "multiclass":
-            outp_dim = valid_ds.data.select(F.max(valid_ds.target_column).alias("max")).first()
-            outp_dim = outp_dim["max"] + 1
-            self._prediction_role = NumericVectorOrArrayRole(
-                outp_dim, f"{self.prediction_feature}" + "_{}", np.float32, force_input=True, prob=True
-            )
-        elif self.task.name == "binary":
-            outp_dim = 2
-            self._prediction_role = NumericVectorOrArrayRole(
-                outp_dim, f"{self.prediction_feature}" + "_{}", np.float32, force_input=True, prob=True
-            )
-        else:
-            self._prediction_role = NumericRole(np.float32, force_input=True, prob=False)
-
-        self.n_classes = outp_dim
+        self._infer_and_set_prediction_role(valid_ds)
 
         preds_dfs: List[SparkDataFrame] = []
-
-        pred_col_prefix = self._predict_feature_name()
-
         self._models_prediction_columns = []
         for n, (full, train, valid) in enumerate(train_valid_iterator):
             if iterator_len > 1:
@@ -132,7 +134,7 @@ class SparkTabularMLAlgo(MLAlgo):
                 )
             self.timer.set_control_point()
 
-            model_prediction_col = f"{pred_col_prefix}_{n}"
+            model_prediction_col = f"{self.prediction_feature}_{n}"
             model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, full, train, valid)
 
             self._models_prediction_columns.append(model_prediction_col)
@@ -177,7 +179,8 @@ class SparkTabularMLAlgo(MLAlgo):
         # create Spark MLlib Transformer and save to property var
         self._transformer = self._build_transformer()
 
-        pred_ds = self._set_prediction(valid_ds.empty(), full_preds_df)
+        pred_ds = valid_ds.empty()
+        pred_ds.set_data(full_preds_df, list(self.output_roles.keys()), self.output_roles)
 
         if iterator_len > 1:
             single_pred_ds = self._make_single_prediction_dataset(pred_ds)
@@ -214,9 +217,27 @@ class SparkTabularMLAlgo(MLAlgo):
         sdf = self.transformer.transform(dataset.data)
 
         ds = dataset.empty()
-        ds.set_data(sdf, [self.prediction_feature], self.prediction_role)
+        ds.set_data(sdf, list(self.output_roles.keys()), self.output_roles)
 
         return ds
+
+    def _infer_and_set_prediction_role(self, valid_ds: SparkDataset):
+        outp_dim = 1
+        if self.task.name == "multiclass":
+            outp_dim = valid_ds.data.select(F.max(valid_ds.target_column).alias("max")).first()
+            outp_dim = outp_dim["max"] + 1
+            self._prediction_role = NumericVectorOrArrayRole(
+                outp_dim, f"{self.prediction_feature}" + "_{}", np.float32, force_input=True, prob=True
+            )
+        elif self.task.name == "binary":
+            outp_dim = 2
+            self._prediction_role = NumericVectorOrArrayRole(
+                outp_dim, f"{self.prediction_feature}" + "_{}", np.float32, force_input=True, prob=True
+            )
+        else:
+            self._prediction_role = NumericRole(np.float32, force_input=True, prob=False)
+
+        self.n_classes = outp_dim
 
     @staticmethod
     def _get_predict_column(model: SparkMLModel) -> str:
@@ -230,36 +251,6 @@ class SparkTabularMLAlgo(MLAlgo):
 
     def _predict_feature_name(self):
         return f"{self._name}_prediction"
-
-    def _set_prediction(self, dataset: SparkDataset, preds: SparkDataFrame) -> SparkDataset:
-        """Insert predictions to dataset with. Inplace transformation.
-
-        Args:
-            dataset: Dataset to transform.
-            preds: A spark dataframe  with predicted values.
-
-        Returns:
-            Transformed dataset.
-
-        """
-
-        prob = self.task.name in ["binary", "multiclass"]
-
-        if self.task.name in ["binary", "multiclass"]:
-            role = NumericVectorOrArrayRole(
-                size=self.n_classes,
-                element_col_name_template=self._predict_feature_name() + "_{}",
-                dtype=np.float32,
-                force_input=True,
-                prob=prob,
-            )
-        else:
-            role = NumericRole(dtype=np.float32, force_input=True, prob=prob)
-
-        output: SparkDataset = dataset.empty()
-        output.set_data(preds, [self._predict_feature_name()], role)
-
-        return output
 
     def _build_transformer(self) -> Transformer:
         raise NotImplementedError()

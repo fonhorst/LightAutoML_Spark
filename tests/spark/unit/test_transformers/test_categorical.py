@@ -110,7 +110,7 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
 
     target = pd.Series(np.random.choice(a=[0, 1], size=dataset.dataset.shape[0], p=[0.5, 0.5]))
     folds = pd.Series(np.random.choice(a=[i for i in range(CV)],
-                                       size=dataset.dataset.shape[0], p=[1.0 / CV for i in range(CV)]))
+                                       size=dataset.dataset.shape[0], p=[1.0 / CV for _ in range(CV)]))
 
     train_ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"), target=target, folds=folds)
 

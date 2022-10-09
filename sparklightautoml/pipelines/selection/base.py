@@ -1,14 +1,16 @@
 """Base class for selection pipelines."""
 from abc import ABC
+from copy import copy
 from typing import Any, Optional, List, cast
 
-from lightautoml.dataset.base import LAMLDataset
+from lightautoml.dataset.base import LAMLDataset, RolesDict
 from lightautoml.pipelines.selection.base import SelectionPipeline, EmptySelector, ImportanceEstimator
 from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
 from pyspark.ml import Transformer
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.pipelines.base import InputOutputRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
 from sparklightautoml.dataset.caching import CacheAware
@@ -19,7 +21,7 @@ class SparkImportanceEstimator(ImportanceEstimator, ABC):
         super(SparkImportanceEstimator, self).__init__()
 
 
-class SparkSelectionPipelineWrapper(SelectionPipeline, CacheAware):
+class SparkSelectionPipelineWrapper(SelectionPipeline, InputOutputRoles, CacheAware):
     def __init__(self, sel_pipe: SelectionPipeline):
         assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
         assert isinstance(sel_pipe.features_pipeline, SparkFeaturesPipeline) or isinstance(sel_pipe, EmptySelector), \
@@ -27,6 +29,8 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, CacheAware):
         self._sel_pipe = sel_pipe
         self._service_columns = None
         self._is_fitted = False
+        self._input_roles: Optional[RolesDict] = None
+        self._output_roles: Optional[RolesDict] = None
         super().__init__()
 
     @property
@@ -37,6 +41,14 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, CacheAware):
         return ColumnsSelectorTransformer(
             input_cols=[self._service_columns, *self._sel_pipe.selected_features]
         )
+
+    @property
+    def input_roles(self) -> RolesDict:
+        return self._input_roles
+
+    @property
+    def output_roles(self) -> RolesDict:
+        return self._output_roles
 
     @property
     def is_fitted(self) -> bool:
@@ -61,6 +73,13 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, CacheAware):
         self._service_columns = cast(SparkDataset, train_valid.train).service_columns
         self._sel_pipe.fit(train_valid)
         self._is_fitted = True
+
+        self._input_roles = copy(train_valid.train.roles)
+        self._output_roles = {
+            feat: role
+            for feat, role in self._input_roles.items()
+            if feat in self._sel_pipe.selected_features
+        }
 
     def select(self, dataset: SparkDataset) -> SparkDataset:
         return cast(SparkDataset, self._sel_pipe.select(dataset))

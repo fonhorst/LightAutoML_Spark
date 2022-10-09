@@ -33,7 +33,7 @@ class FakeOpTransformer(Transformer):
         return dataset.select(
             '*',
             *[
-                array_to_vector(F.array(*[F.rand() for i in range(self._n_classes)])).alias(f)
+                array_to_vector(F.array(*[F.rand() for _ in range(self._n_classes)])).alias(f)
                 for f in self._cos_to_generate
             ]
         )

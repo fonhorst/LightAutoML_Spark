@@ -3,37 +3,35 @@ import itertools
 import logging
 from copy import copy
 from dataclasses import dataclass
-from typing import Any, Callable, cast, Set, Union, Dict
+from typing import Any, Callable, Set, Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
 
 import numpy as np
 import toposort
+from lightautoml.dataset.base import RolesDict, LAMLDataset
+from lightautoml.dataset.roles import ColumnRole, NumericRole
+from lightautoml.pipelines.features.base import FeaturesPipeline
+from lightautoml.pipelines.utils import get_columns_by_role
 from pandas import DataFrame
 from pandas import Series
 from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
 from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as F
 
-from lightautoml.dataset.base import RolesDict, LAMLDataset
-from lightautoml.dataset.roles import ColumnRole, NumericRole
-from lightautoml.pipelines.features.base import FeaturesPipeline
-from lightautoml.pipelines.utils import get_columns_by_role
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.pipelines.base import InputFeaturesAndRoles, OutputFeaturesAndRoles
-from sparklightautoml.transformers.base import (
-    SparkChangeRolesTransformer,
-    ColumnsSelectorTransformer,
-    DropColumnsTransformer,
-)
+from sparklightautoml.dataset.caching import CacheAware
+from sparklightautoml.pipelines.base import InputOutputRoles
 from sparklightautoml.transformers.base import (
     SparkBaseEstimator,
     SparkBaseTransformer,
     SparkUnionTransformer,
     SparkSequentialTransformer,
     SparkEstOrTrans,
-    SparkColumnsAndRoles,
+)
+from sparklightautoml.transformers.base import (
+    SparkChangeRolesTransformer,
 )
 from sparklightautoml.transformers.categorical import (
     SparkCatIntersectionsEstimator,
@@ -45,8 +43,7 @@ from sparklightautoml.transformers.categorical import (
 from sparklightautoml.transformers.categorical import SparkTargetEncoderEstimator
 from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
-from sparklightautoml.utils import NoOpTransformer, Cacher, EmptyCacher, warn_if_not_cached, SparkDataFrame
-from sparklightautoml.dataset.caching import CacheAware
+from sparklightautoml.utils import Cacher, warn_if_not_cached, SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +119,7 @@ class SelectTransformer(Transformer):
         return dataset.select(self.getColsToSelect())
 
 
-class SparkFeaturesPipeline(FeaturesPipeline, CacheAware):
+class SparkFeaturesPipeline(FeaturesPipeline, InputOutputRoles, CacheAware):
     """Abstract class.
 
     Analyze train dataset and create composite transformer
@@ -143,7 +140,39 @@ class SparkFeaturesPipeline(FeaturesPipeline, CacheAware):
         self._cacher_key = cacher_key
         self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
         self._transformer: Optional[Transformer] = None
+        self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
+
+    @property
+    def input_features(self) -> List[str]:
+        return list(self.input_roles.keys())
+
+    @input_features.setter
+    def input_features(self, val: List[str]):
+        """Setter for input_features.
+
+        Args:
+            val: List of strings.
+
+        """
+        raise NotImplementedError("Unsupported operation")
+
+    @property
+    def output_features(self) -> List[str]:
+        return list(self.output_roles.keys())
+
+    @property
+    def used_features(self) -> List[str]:
+        # TODO: SLAMA - implement it later
+        raise NotImplementedError("Unsupported operation")
+
+    @property
+    def input_roles(self) -> RolesDict:
+        return self._input_roles
+
+    @property
+    def output_roles(self) -> RolesDict:
+        return self._output_roles
 
     @property
     def transformer(self) -> Optional[Transformer]:
@@ -175,7 +204,8 @@ class SparkFeaturesPipeline(FeaturesPipeline, CacheAware):
 
         fitted_pipe = self._merge_pipes(train)
         self._transformer = fitted_pipe.transformer
-        self._output_roles = fitted_pipe.dataset.roles
+        self._input_roles = copy(train.roles)
+        self._output_roles = copy(fitted_pipe.dataset.roles)
 
         logger.info("SparkFeaturePipeline is finished")
 
@@ -185,7 +215,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, CacheAware):
         sdf = self._transformer.transform(test.data)
 
         transformed_ds = test.empty()
-        transformed_ds.set_data(sdf, list(self._output_roles.keys()), self._output_roles)
+        transformed_ds.set_data(sdf, list(self.output_roles.keys()), self.output_roles)
 
         return transformed_ds
 
@@ -268,40 +298,6 @@ class SparkFeaturesPipeline(FeaturesPipeline, CacheAware):
         featurized_train.set_data(feature_sdf, list(output_roles.keys()), output_roles)
 
         return FittedPipe(dataset=featurized_train, transformer=dag_transformer)
-        #
-        # current_train_sdf: SparkDataFrame = train.data
-        # stages = []
-        # fp_output_cols: List[str] = []
-        # fp_output_roles: RolesDict = dict()
-        # for i, layer in enumerate(tr_layers):
-        #     logger.debug(f"Calculating layer ({i + 1}/{len(tr_layers)}). The size of layer: {len(layer)}")
-        #     cols_to_remove = []
-        #     output_cols = []
-        #     layer_model = Pipeline(stages=layer).fit(current_train_sdf)
-        #     for j, tr in enumerate(layer):
-        #         logger.debug(f"Processing output columns for transformer ({j + 1}/{len(layer)}): {tr}")
-        #         tr = cast(SparkColumnsAndRoles, tr)
-        #         if tr.getDoReplaceColumns():
-        #             # ChangeRoles, for instance, may return columns with the same name
-        #             # thus we don't want to remove these columns
-        #             self_out_cols = set(tr.getOutputCols())
-        #             cols_to_remove.extend([f for f in tr.getInputCols() if f not in self_out_cols])
-        #         output_cols.extend(tr.getOutputCols())
-        #         fp_output_roles.update(tr.getOutputRoles())
-        #     fp_output_cols = [c for c in fp_output_cols if c not in cols_to_remove]
-        #     fp_output_cols.extend(output_cols)
-        #
-        #     cacher = Cacher(self._cacher_key)
-        #     pipe = Pipeline(stages=[layer_model, DropColumnsTransformer(list(cols_to_remove)), cacher])
-        #     stages.append(pipe.fit(current_train_sdf))
-        #     current_train_sdf = cacher.dataset
-        #
-        # fp_output_roles = {f: fp_output_roles[f] for f in fp_output_cols}
-        #
-        # featurized_train = train.empty()
-        # featurized_train.set_data(current_train_sdf, list(fp_output_roles.keys()), fp_output_roles)
-        #
-        # return FittedPipe(dataset=featurized_train, transformer=PipelineModel(stages=stages))
 
     def release_cache(self):
         Cacher.release_cache_by_key(self._cacher_key)

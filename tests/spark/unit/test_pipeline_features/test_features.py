@@ -144,7 +144,7 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     slama_pipeline = slama_clazz(**ml_alg_kwargs)
     slama_pipeline.input_roles = spark_train_ds.roles
     slama_feats = slama_pipeline.fit_transform(spark_train_ds)
-    slama_lf_pds = cast(PandasDataset, slama_feats.to_pandas())
+    # slama_lf_pds = cast(PandasDataset, slama_feats.to_pandas())
 
     # now process test part of the data
     slama_test_feats = slama_pipeline.transform(spark_test_ds)
