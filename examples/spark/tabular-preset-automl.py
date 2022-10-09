@@ -59,7 +59,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
     logger.info(f"score for out-of-fold predictions: {metric_value}")
 
-    transformer = automl.make_transformer()
+    transformer = automl.transformer()
 
     automl.release_cache()
 
@@ -72,7 +72,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
         logger.info(f"score for test predictions: {test_metric_value}")
 
     with log_exec_timer("spark-lama predicting on test (#2 way)"):
-        te_pred = automl.make_transformer().transform(test_data_dropped)
+        te_pred = automl.transformer().transform(test_data_dropped)
 
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
         score = task.get_dataset_metric()

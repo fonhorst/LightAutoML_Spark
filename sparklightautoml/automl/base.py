@@ -17,7 +17,7 @@ from pyspark.sql import functions as F
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset
 from ..dataset.caching import CacheAware, CacheManager
-from ..pipelines.base import InputOutputRoles
+from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..transformers.base import ColumnsSelectorTransformer
@@ -27,7 +27,7 @@ from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, Spa
 logger = logging.getLogger(__name__)
 
 
-class SparkAutoML(InputOutputRoles, CacheAware):
+class SparkAutoML(TransformerInputOutputRoles, CacheAware):
     """Class for compile full pipeline of AutoML task.
 
     AutoML steps:
@@ -115,7 +115,7 @@ class SparkAutoML(InputOutputRoles, CacheAware):
     def output_roles(self) -> RolesDict:
         return self._output_roles
 
-    def make_transformer(self, no_reader: bool = False, return_all_predictions: bool = False) -> Transformer:
+    def transformer(self, no_reader: bool = False, return_all_predictions: bool = False) -> Transformer:
 
         automl_transformer, _ = self._build_transformer(no_reader, return_all_predictions)
 

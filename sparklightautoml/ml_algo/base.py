@@ -16,7 +16,7 @@ from pyspark.sql.types import IntegerType
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
-from sparklightautoml.pipelines.base import InputOutputRoles
+from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import Cacher, SparkDataFrame
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 SparkMLModel = PipelineModel
 
 
-class SparkTabularMLAlgo(MLAlgo, InputOutputRoles):
+class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "SparkTabularMLAlgo"
@@ -81,7 +81,7 @@ class SparkTabularMLAlgo(MLAlgo, InputOutputRoles):
         return self._default_validation_col_name
 
     @property
-    def transformer(self) -> Transformer:
+    def transformer(self, *args, **kwargs) -> Transformer:
         """Returns Spark MLlib Transformer.
         Represents a Transformer with fitted models."""
 

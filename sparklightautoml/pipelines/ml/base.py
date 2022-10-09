@@ -11,7 +11,7 @@ from lightautoml.pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from lightautoml.pipelines.selection.base import EmptySelector
 from pyspark.ml import Transformer, PipelineModel
 
-from ..base import InputOutputRoles
+from ..base import TransformerInputOutputRoles
 from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset
@@ -20,7 +20,7 @@ from ...dataset.caching import CacheAware, CacheManager
 from ...validation.base import SparkBaseTrainValidIterator
 
 
-class SparkMLPipeline(LAMAMLPipeline, InputOutputRoles, CacheAware):
+class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
     """Spark version of :class:`~lightautoml.pipelines.ml.base.MLPipeline`. Single ML pipeline.
 
     Merge together stage of building ML model

@@ -10,7 +10,7 @@ from pandas import Series
 from pyspark.ml import Transformer
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.pipelines.base import InputOutputRoles
+from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
 from sparklightautoml.dataset.caching import CacheAware
@@ -21,7 +21,7 @@ class SparkImportanceEstimator(ImportanceEstimator, ABC):
         super(SparkImportanceEstimator, self).__init__()
 
 
-class SparkSelectionPipelineWrapper(SelectionPipeline, InputOutputRoles, CacheAware):
+class SparkSelectionPipelineWrapper(SelectionPipeline, TransformerInputOutputRoles, CacheAware):
     def __init__(self, sel_pipe: SelectionPipeline):
         assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
         assert isinstance(sel_pipe.features_pipeline, SparkFeaturesPipeline) or isinstance(sel_pipe, EmptySelector), \
@@ -34,7 +34,7 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, InputOutputRoles, CacheAw
         super().__init__()
 
     @property
-    def transformer(self) -> Optional[Transformer]:
+    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         if not self._sel_pipe.is_fitted:
             return None
 

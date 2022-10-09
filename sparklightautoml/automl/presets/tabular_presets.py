@@ -843,7 +843,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         assert datetime_level in ["year", "month", "dayofweek"]
         assert ice_fraction > 0 and ice_fraction <= 1.0
 
-        pipeline_model = self.make_transformer()
+        pipeline_model = self.transformer()
 
         # Numerical features
         if self.reader._roles[feature_name].name == "Numeric":

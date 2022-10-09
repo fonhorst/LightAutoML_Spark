@@ -22,7 +22,7 @@ from pyspark.sql import functions as F
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.caching import CacheAware
-from sparklightautoml.pipelines.base import InputOutputRoles
+from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.transformers.base import (
     SparkBaseEstimator,
     SparkBaseTransformer,
@@ -119,7 +119,7 @@ class SelectTransformer(Transformer):
         return dataset.select(self.getColsToSelect())
 
 
-class SparkFeaturesPipeline(FeaturesPipeline, InputOutputRoles, CacheAware):
+class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, CacheAware):
     """Abstract class.
 
     Analyze train dataset and create composite transformer
@@ -175,7 +175,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, InputOutputRoles, CacheAware):
         return self._output_roles
 
     @property
-    def transformer(self) -> Optional[Transformer]:
+    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         return self._transformer
 
     def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:

@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     logger.info(f"score for out-of-fold predictions: {metric_value}")
 
-    transformer = automl.make_transformer()
+    transformer = automl.transformer()
 
     del preds
     automl.release_cache()
