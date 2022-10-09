@@ -127,7 +127,7 @@ class DummySparkMLPipeline(SparkMLPipeline):
             for i in range(3)
         }
 
-        self._transformer = FakeOpTransformer(cols_to_generate=self.output_features, n_classes=n_classes)
+        self._transformer = FakeOpTransformer(cols_to_generate=list(self.output_roles.keys()), n_classes=n_classes)
 
         sdf = cast(SparkDataFrame, val_ds.data)
         sdf = sdf.select(

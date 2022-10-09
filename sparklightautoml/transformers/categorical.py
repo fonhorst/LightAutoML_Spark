@@ -143,8 +143,8 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
         columns = self._input_intermediate_columns
 
         if self._fname_prefix == "inter":
-            roles = self._input_roles
-            columns = self._input_columns
+            roles = self.get_input_roles()
+            columns = self.getInputCols()
 
         indexer = LAMLStringIndexer(
             inputCols=columns,
@@ -200,7 +200,7 @@ class SparkLabelEncoderTransformer(
         columns = self.getInputCols()
         out_columns = self.getOutputCols()
         if self._fname_prefix == "inter":
-            columns = self._input_columns
+            columns = self.getInputCols()
             out_columns = sorted(out_columns)
 
         model: LAMLStringIndexerModel = (
@@ -546,7 +546,7 @@ class SparkOHEEncoderEstimator(SparkBaseEstimator):
     @property
     def features(self) -> List[str]:
         """Features list."""
-        return self._features
+        return self.getInputCols()
 
     def __init__(
         self,
@@ -578,7 +578,7 @@ class SparkOHEEncoderEstimator(SparkBaseEstimator):
         """Calc output shapes.
         Automatically do ohe in sparse form if approximate fill_rate < `0.2`.
         Args:
-            dataset: Pandas or Numpy dataset of categorical features.
+            sdf: Spark dataframe of categorical features.
         Returns:
             self.
         """
@@ -621,7 +621,7 @@ class OHEEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable, Common
     @property
     def features(self) -> List[str]:
         """Features list."""
-        return self._features
+        return self.getInputCols()
 
     def __init__(
         self,
@@ -638,7 +638,7 @@ class OHEEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable, Common
     def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
         """Transform categorical dataset to ohe.
         Args:
-            dataset: Pandas or Numpy dataset of categorical features.
+            sdf: Spark dataframe of categorical features.
         Returns:
             Numpy dataset with encoded labels.
         """

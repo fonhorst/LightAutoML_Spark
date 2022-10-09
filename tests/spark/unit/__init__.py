@@ -411,8 +411,7 @@ def from_pandas_to_spark(p: PandasDataset,
                          target: Optional[pd.Series] = None,
                          folds: Optional[pd.Series] = None,
                          task: Optional[SparkTask] = None,
-                         to_vector: bool = False,
-                         fill_folds_with_zeros_if_not_present: bool = False) -> SparkDataset:
+                         to_vector: bool = False) -> SparkDataset:
     pdf = cast(pd.DataFrame, p.data)
     pdf = pdf.copy()
     pdf[SparkDataset.ID_COLUMN] = pdf.index

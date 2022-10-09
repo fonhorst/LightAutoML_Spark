@@ -271,6 +271,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = self._create_target(train_data, target_col=self.target_col)
 
+        # TODO: SLAMA - fix this sampling
         total_number = train_data.count()
         # if self.samples is not None:
         #     if self.samples > total_number:

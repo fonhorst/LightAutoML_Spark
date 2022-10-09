@@ -163,7 +163,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             Target predictions for valid dataset.
 
         """
-        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(self.input_features)} ")
+        logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(self.input_roles.keys())} ")
 
         if self.task is None:
             self.task = train.task

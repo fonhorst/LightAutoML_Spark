@@ -1,13 +1,13 @@
 from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime
-from typing import Iterator, Optional, Sequence, List
+from typing import Iterator, Optional, Sequence, List, cast
 
 import holidays
 import numpy as np
 import pandas as pd
 from lightautoml.dataset.base import RolesDict
-from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
+from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole, DatetimeRole
 from lightautoml.transformers.datetime import datetime_check, date_attrs
 from pyspark.ml.param.shared import Param, Params
 from pyspark.sql import functions as sf, DataFrame as SparkDataFrame
@@ -196,11 +196,12 @@ class SparkDateSeasonsTransformer(
         self.transformations = OrderedDict()
         output_cols = []
         for col in input_cols:
-            seas = input_roles[col].seasonality
+            rdt = cast(DatetimeRole, input_roles[col])
+            seas = rdt.seasonality
             self.transformations[col] = seas
             for s in seas:
                 output_cols.append(f"{self._fname_prefix}_{s}__{col}")
-            if input_roles[col].country is not None:
+            if rdt.country is not None:
                 output_cols.append(f"{self._fname_prefix}_hol__{col}")
 
         output_roles = {f: deepcopy(self.output_role) for f in output_cols}

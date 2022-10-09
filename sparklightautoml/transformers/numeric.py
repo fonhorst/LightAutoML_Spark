@@ -164,7 +164,7 @@ class SparkFillnaMedianEstimator(SparkBaseEstimator):
         """Approximately estimates medians.
 
         Args:
-            dataset: SparkDataFrame with numerical features.
+            sdf: SparkDataFrame with numerical features.
 
         Returns:
             Spark MLlib Transformer
@@ -230,7 +230,7 @@ class SparkFillnaMedianTransformer(SparkBaseTransformer, CommonPickleMLWritable,
         """Transform - fillna with medians.
 
         Args:
-            dataset: SparkDataFrame of numerical features
+            sdf: SparkDataFrame of numerical features
 
         Returns:
             SparkDataFrame with replaced NaN with medians
@@ -270,7 +270,7 @@ class SparkLogOddsTransformer(SparkBaseTransformer, CommonPickleMLWritable, Comm
         """Transform - convert num values to logodds.
 
         Args:
-            dataset: SparkDataFrame dataset of categorical features.
+            sdf: SparkDataFrame dataset of categorical features.
 
         Returns:
             SparkDataFrame with encoded labels.

@@ -337,7 +337,6 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
         logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
 
         pred_cols = self.getInputCols()
-        dim_size = self.getInputCols()
         weights = {c: w for w, c in zip(self.get_weights(), pred_cols)}
         non_null_count_col = sf.lit(len(pred_cols)) - sum(sf.isnull(c).astype(IntegerType()) for c in pred_cols)
 

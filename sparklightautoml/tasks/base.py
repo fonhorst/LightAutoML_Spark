@@ -132,8 +132,9 @@ class SparkTask(LAMATask):
         # add losses
         # if None - infer from task
         self.losses = {}
-        if loss is None:
-            loss = _default_losses[self.name]
+        # TODO: SLAMA - check working with loss functions
+        # if loss is None:
+        #     loss = _default_losses[self.name]
         # SparkLoss actualy does nothing, but it is there
         # to male TabularAutoML work
         self.losses = {"lgb": SparkLoss(), "linear_l2": SparkLoss()}
