@@ -228,10 +228,9 @@ class LightGBMModelWrapperMLWriter(MLWriter):
 
         Parameters
         ----------
-        extraMetadata : dict, optional
-            Extra metadata to be saved at same level as uid, paramMap, etc.
-        paramMap : dict, optional
-            If given, this is saved in the "paramMap" field.
+        instance : Spark ML Transformer to be saved
+        path : local or HDFS path to save the transformer
+        sc : SparkContext
         """
         metadataPath = os.path.join(path, "metadata")
         metadataJson = LightGBMModelWrapperMLWriter._get_metadata_to_save(instance, sc)

@@ -356,18 +356,18 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
                 lambda x: sf.aggregate(
                     sf.array(*[x[c] * sf.lit(weights[c]) for c in pred_cols]), sf.lit(0.0), lambda acc, y: acc + y
                 )
-                          / non_null_count_col,
+                / non_null_count_col,
             )
 
             out_col = array_to_vector(arr_fields_summ) if self.get_convert_to_array_first() else arr_fields_summ
         else:
             scalar_fields_summ = (
-                    sf.aggregate(
+                sf.aggregate(
                     sf.array(*[sf.col(c) * sf.lit(weights[c]) for c in pred_cols]),
                     sf.lit(0.0),
                     lambda acc, x: acc + sf.when(sf.isnull(x), sf.lit(0.0)).otherwise(x),
                 )
-                    / non_null_count_col
+                / non_null_count_col
             )
 
             out_col = scalar_fields_summ

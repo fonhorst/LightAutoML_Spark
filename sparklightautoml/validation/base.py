@@ -79,7 +79,8 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
     def _split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         train = cast(SparkDataset, self.train)
         is_val_col = (
-            sf.when(sf.col(self.train.folds_column) != fold, sf.lit(0)).otherwise(sf.lit(1)).alias(self.TRAIN_VAL_COLUMN)
+            sf.when(sf.col(self.train.folds_column) != fold, sf.lit(0)).otherwise(sf.lit(1))
+            .alias(self.TRAIN_VAL_COLUMN)
         )
 
         sdf = train.data.select("*", is_val_col)
