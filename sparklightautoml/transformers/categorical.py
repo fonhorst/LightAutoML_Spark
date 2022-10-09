@@ -89,14 +89,6 @@ class TypesHelper:
     _spark_numeric_types_str = ("ShortType", "IntegerType", "LongType", "FloatType", "DoubleType", "DecimalType")
 
 
-def pandas_dict_udf(broadcasted_dict):
-    def f(s: Series) -> Series:
-        values_dict = broadcasted_dict.value
-        return s.map(values_dict)
-
-    return sf.pandas_udf(f, "double")
-
-
 def pandas_1d_mapping_udf(broadcasted_arr):
     def f(s: Series) -> Series:
         s_na = s.isna()

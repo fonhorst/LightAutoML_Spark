@@ -61,11 +61,11 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         raise NotImplementedError("Unsupported operation")
 
     @property
-    def input_roles(self) -> RolesDict:
+    def input_roles(self) -> Optional[RolesDict]:
         return self._input_roles
 
     @property
-    def output_roles(self) -> RolesDict:
+    def output_roles(self) -> Optional[RolesDict]:
         return {self.prediction_feature: self.prediction_role}
 
     @property

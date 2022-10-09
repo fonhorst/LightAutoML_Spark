@@ -14,6 +14,7 @@ from pyspark.sql import functions as sf
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import AveragingTransformer
+from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.tasks.base import DEFAULT_PREDICTION_COL_NAME, SparkTask
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
@@ -21,7 +22,7 @@ from sparklightautoml.transformers.base import ColumnsSelectorTransformer
 logger = logging.getLogger(__name__)
 
 
-class SparkBlender(ABC):
+class SparkBlender(ABC, TransformerInputOutputRoles):
     """Basic class for blending.
 
     Blender learns how to make blend
@@ -34,13 +35,19 @@ class SparkBlender(ABC):
         self._transformer = None
         self._single_prediction_col_name = DEFAULT_PREDICTION_COL_NAME
         self._pred_role: Optional[ColumnRole] = None
+        self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
         self._task: Optional[SparkTask] = None
 
-    # @property
-    # def output_roles(self) -> RolesDict:
-    #     assert self._output_roles is not None, "Blender has not been fitted yet"
-    #     return self._output_roles
+    @property
+    def input_roles(self) -> Optional[RolesDict]:
+        """Returns dict of input roles"""
+        return self._input_roles
+
+    @property
+    def output_roles(self) -> Optional[RolesDict]:
+        """Returns dict of output roles"""
+        return self._output_roles
 
     @property
     def transformer(self) -> Transformer:

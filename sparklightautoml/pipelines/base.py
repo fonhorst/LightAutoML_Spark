@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from lightautoml.dataset.base import RolesDict
 from pyspark.ml import Transformer
@@ -14,13 +15,13 @@ class TransformerInputOutputRoles(ABC):
 
     @property
     @abstractmethod
-    def input_roles(self) -> RolesDict:
+    def input_roles(self) -> Optional[RolesDict]:
         """Returns dict of input roles"""
         ...
 
     @property
     @abstractmethod
-    def output_roles(self) -> RolesDict:
+    def output_roles(self) -> Optional[RolesDict]:
         """Returns dict of output roles"""
         ...
 

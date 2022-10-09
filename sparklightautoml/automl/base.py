@@ -108,11 +108,11 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
     @property
-    def input_roles(self) -> RolesDict:
+    def input_roles(self) -> Optional[RolesDict]:
         return self._input_roles
 
     @property
-    def output_roles(self) -> RolesDict:
+    def output_roles(self) -> Optional[RolesDict]:
         return self._output_roles
 
     def transformer(self, no_reader: bool = False, return_all_predictions: bool = False) -> Transformer:

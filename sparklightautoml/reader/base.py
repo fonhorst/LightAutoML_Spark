@@ -1,7 +1,7 @@
 import logging
 from copy import copy
 from copy import deepcopy
-from typing import Optional, Any, List, Dict, Tuple
+from typing import Optional, Any, List, Dict, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -296,9 +296,10 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 r = parsed_roles[feat]
                 # handle datetimes
                 if r.name == "Datetime":
+                    rdt = cast(DatetimeRole, r)
                     # try if it's ok to infer date with given params
                     result = subsample.select(
-                        sf.sum(sf.to_timestamp(feat, format=r.format).isNotNull().astype(IntegerType())).alias(
+                        sf.sum(sf.to_timestamp(feat, format=rdt.format).isNotNull().astype(IntegerType())).alias(
                             f"{feat}_dt"
                         ),
                         sf.count("*").alias("count"),
@@ -451,7 +452,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         """Validate target column and create class mapping if needed
 
         Args:
-            target: Column with target values.
+            sdf: DataFrame to add target column
+            target_col: Column name that will contain target values.
 
         Returns:
             Transformed target.
@@ -521,7 +523,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         Else category.
 
         Args:
-            feature: Column from dataset.
+            data: Spark DataFrame containing data
+            features: dataset columns to make guessing for.
 
         Returns:
             Feature role.
@@ -591,7 +594,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         """Check if column is filled well to be a feature.
 
         Args:
-            feature: Column from dataset.
+            train_data: Spark DataFrame containing data
+            features: dataset columns to check.
 
         Returns:
             ``True`` if nan ratio and freqency are not high.

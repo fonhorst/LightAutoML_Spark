@@ -1,5 +1,4 @@
 from copy import copy
-from copy import copy
 from typing import Tuple, get_args, cast, List, Optional, Dict, Union
 
 import numpy as np
@@ -242,7 +241,7 @@ def compare_sparkml_by_metadata(
         ds: PandasDataset,
         t_lama: LAMLTransformer,
         t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
-        compare_feature_distributions: bool = False) -> Tuple[NumpyDataset, NumpyDataset]:
+        compare_feature_distributions: bool = False):
     """
         Args:
             spark: session to be used for calculating the example

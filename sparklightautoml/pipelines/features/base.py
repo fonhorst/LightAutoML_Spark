@@ -3,7 +3,7 @@ import itertools
 import logging
 from copy import copy
 from dataclasses import dataclass
-from typing import Any, Callable, Set, Dict
+from typing import Any, Callable, Set, Dict, cast
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -11,7 +11,7 @@ from typing import Tuple
 import numpy as np
 import toposort
 from lightautoml.dataset.base import RolesDict, LAMLDataset
-from lightautoml.dataset.roles import ColumnRole, NumericRole
+from lightautoml.dataset.roles import ColumnRole, NumericRole, DatetimeRole
 from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
 from pandas import DataFrame
@@ -162,11 +162,11 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         return list(self.output_roles.keys())
 
     @property
-    def input_roles(self) -> RolesDict:
+    def input_roles(self) -> Optional[RolesDict]:
         return self._input_roles
 
     @property
-    def output_roles(self) -> RolesDict:
+    def output_roles(self) -> Optional[RolesDict]:
         return self._output_roles
 
     @property
@@ -384,7 +384,8 @@ class SparkTabularDataFeatures:
         """
         _, datetimes = self.get_cols_for_datetime(train)
         for col in copy(datetimes):
-            if len(train.roles[col].seasonality) == 0 and train.roles[col].country is None:
+            role = cast(DatetimeRole, train.roles[col])
+            if len(role.seasonality) == 0 and role.country is None:
                 datetimes.remove(col)
 
         if len(datetimes) == 0:

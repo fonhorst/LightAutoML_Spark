@@ -79,11 +79,11 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
         self._output_roles: Optional[RolesDict] = None
 
     @property
-    def input_roles(self) -> RolesDict:
+    def input_roles(self) -> Optional[RolesDict]:
         return self._input_roles
 
     @property
-    def output_roles(self) -> RolesDict:
+    def output_roles(self) -> Optional[RolesDict]:
         return self._output_roles
 
     @property

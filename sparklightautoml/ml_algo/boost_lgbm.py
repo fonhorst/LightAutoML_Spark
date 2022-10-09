@@ -287,11 +287,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     def _get_default_search_spaces(self, suggested_params: Dict, estimated_n_trials: int) -> Dict:
         """Train on train dataset and predict on holdout dataset.
 
-        Args:
-            fold_prediction_column: column name for predictions made for this fold
-            full: Full dataset that include train and valid parts and a bool column that delimits records
-            train: Train Dataset.
-            valid: Validation Dataset.
+        Args:.
+            suggested_params: suggested params
+            estimated_n_trials: Number of trials.
 
         Returns:
             Target predictions for valid dataset.

@@ -37,14 +37,10 @@ class SparkMetric(LAMLMetric):
         """
 
         Args:
-            metric: Specifies metric. Format:
-                ``func(y_true, y_false, Optional[sample_weight], **kwargs)`` -> `float`.
             name: Name of metric.
+            target_col: Name of column that stores targets
+            prediction_col: Name of column that stores predictions
             greater_is_better: Whether or not higher metric value is better.
-            one_dim: `True` for single class, False for multiclass.
-            weighted: Weights of classes.
-            **kwargs: Other parameters for metric.
-
         """
         self._name = name
         self._metric_name = metric_name
