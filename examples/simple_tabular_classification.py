@@ -27,5 +27,6 @@ if __name__ == "__main__":
     te_pred = automl.predict(test_data)
 
     # calculate scores
-    print(f"Score for out-of-fold predictions: {roc_auc_score(train_data['TARGET'].values, oof_predictions.data[:, 0])}")
+    print(f"Score for out-of-fold predictions: "
+          f"{roc_auc_score(train_data['TARGET'].values, oof_predictions.data[:, 0])}")
     print(f"Score for hold-out: {roc_auc_score(test_data['TARGET'].values, te_pred.data[:, 0])}")

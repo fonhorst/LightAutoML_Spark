@@ -47,7 +47,8 @@ if __name__ == "__main__":
     logger.info("Data loaded")
 
     logger.info("Features modification from user side...")
-    data["BIRTH_DATE"] = (np.datetime64("2018-01-01") + data["DAYS_BIRTH"].astype(np.dtype("timedelta64[D]"))).astype(str)
+    data["BIRTH_DATE"] = \
+        (np.datetime64("2018-01-01") + data["DAYS_BIRTH"].astype(np.dtype("timedelta64[D]"))).astype(str)
     data["EMP_DATE"] = (
         np.datetime64("2018-01-01") + np.clip(data["DAYS_EMPLOYED"], None, 0).astype(np.dtype("timedelta64[D]"))
     ).astype(str)
@@ -130,7 +131,7 @@ if __name__ == "__main__":
 
     logger.info("\t Pipeline1...")
     pipeline_lvl1 = SparkMLPipeline(
-        cache_manager= CacheManager(),
+        cache_manager=CacheManager(),
         ml_algos=[(model1, params_tuner1), model2],
         pre_selection=SparkSelectionPipelineWrapper(selector),
         features_pipeline=pipe,
@@ -182,22 +183,20 @@ if __name__ == "__main__":
     oof_pred = automl.fit_predict(train_data_sdf, roles={"target": "TARGET"})
     logger.info("AutoML pipeline fitted and predicted. Time = {:.3f} sec".format(time.time() - start_time))
 
-    logger.info("Feature importances of selector:\n{}".format(selector.get_features_score()))
+    logger.info(f"Feature importances of selector:\n{selector.get_features_score()}")
 
-    logger.info("oof_pred:\n{}\nShape = {}".format(oof_pred, oof_pred.shape))
+    logger.info(f"oof_pred:\n{oof_pred}\nShape = {oof_pred.shape}")
 
-    logger.info("Feature importances of top level algorithm:\n{}".format(automl.levels[-1][0].ml_algos[0].get_features_score()))
+    logger.info(f"Feature importances of top level algorithm:\n{automl.levels[-1][0].ml_algos[0].get_features_score()}")
 
     logger.info(
-        "Feature importances of lowest level algorithm - model 0:\n{}".format(
-            automl.levels[0][0].ml_algos[0].get_features_score()
-        )
+        f"Feature importances of lowest level algorithm "
+        f"- model 0:\n{automl.levels[0][0].ml_algos[0].get_features_score()}"
     )
 
     logger.info(
-        "Feature importances of lowest level algorithm - model 1:\n{}".format(
-            automl.levels[0][0].ml_algos[1].get_features_score()
-        )
+        f"Feature importances of lowest level algorithm "
+        f"- model 1:\n{automl.levels[0][0].ml_algos[1].get_features_score()}"
     )
 
     test_pred = automl.predict(test_data_sdf, add_reader_attrs=True)

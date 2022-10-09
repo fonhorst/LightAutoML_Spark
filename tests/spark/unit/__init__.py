@@ -12,7 +12,7 @@ from lightautoml.transformers.base import LAMLTransformer
 from lightautoml.transformers.numeric import NumpyTransformable
 from pyspark.ml import Estimator
 from pyspark.sql import SparkSession
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
@@ -82,7 +82,7 @@ def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
     for col in columns:
         if col not in list(spark_df):
             print(col)
-            spark_df = spark_df.rename(columns={'oof__'+col:col})
+            spark_df = spark_df.rename(columns={'oof__' + col: col})
             spark_df_stats = spark_df.describe()
 
         lama_col_uniques = lama_df[col].unique()
@@ -98,9 +98,11 @@ def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
             print('Spark: ', spark_col_uniques)
             print()
         for stats_col in stats_names:
-            if abs(lama_df_stats[col][stats_col] - spark_df_stats[col][stats_col]) > abs(lama_df_stats[col][stats_col] * diff_proc):
+            if abs(lama_df_stats[col][stats_col] - spark_df_stats[col][stats_col]) \
+                    > abs(lama_df_stats[col][stats_col] * diff_proc):
                 found_difference = True
-                print(f'Difference in col {col} and stats {stats_col} between {lama_df_stats[col][stats_col]} (lama) and {spark_df_stats[col][stats_col]} (spark)')
+                print(f'Difference in col {col} and stats {stats_col} between {lama_df_stats[col][stats_col]}'
+                      f' (lama) and {spark_df_stats[col][stats_col]} (spark)')
 
     assert not found_difference
 
@@ -181,7 +183,10 @@ def compare_sparkml_transformers_results(spark: SparkSession,
         ds: a dataset to be transformered by LAMA and Spark transformers
         t_lama: LAMA's version of the transformer
         t_spark: spark's version of the transformer
-        count and their labels (e.g. features), roles and shapez
+        compare_feature_distributions: whatever or not
+          to compare statistics of individual features between spark and lama
+        compare_content: whatever or not to compare content of resulting data frames
+        rtol: tolerance level when comparing by content
 
     Returns:
         A tuple of (LAMA transformed dataset, Spark transformed dataset)
@@ -211,17 +216,20 @@ def compare_sparkml_transformers_results(spark: SparkSession,
     compare_datasets(ds, transformed_ds, transformed_sds, compare_feature_distributions, compare_content, rtol)
 
 
-def compare_sparkml_by_content(spark: SparkSession,
-                       ds: PandasDataset,
-                       t_lama: LAMLTransformer,
-                       t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
-                       rtol: float = 1.e-5):
+def compare_sparkml_by_content(
+        spark: SparkSession,
+        ds: PandasDataset,
+        t_lama: LAMLTransformer,
+        t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
+        rtol: float = 1.e-5
+):
     """
         Args:
             spark: session to be used for calculating the example
             ds: a dataset to be transformered by LAMA and Spark transformers
             t_lama: LAMA's version of the transformer
             t_spark: spark's version of the transformer
+            rtol: tolerance level when comparing by content
 
         Returns:
             A tuple of (LAMA transformed dataset, Spark transformed dataset)
@@ -229,17 +237,20 @@ def compare_sparkml_by_content(spark: SparkSession,
     compare_sparkml_transformers_results(spark, ds, t_lama, t_spark, rtol=rtol)
 
 
-def compare_sparkml_by_metadata(spark: SparkSession,
-                                ds: PandasDataset,
-                                t_lama: LAMLTransformer,
-                                t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
-                                compare_feature_distributions: bool = False) -> Tuple[NumpyDataset, NumpyDataset]:
+def compare_sparkml_by_metadata(
+        spark: SparkSession,
+        ds: PandasDataset,
+        t_lama: LAMLTransformer,
+        t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
+        compare_feature_distributions: bool = False) -> Tuple[NumpyDataset, NumpyDataset]:
     """
         Args:
             spark: session to be used for calculating the example
             ds: a dataset to be transformered by LAMA and Spark transformers
             t_lama: LAMA's version of the transformer
             t_spark: spark's version of the transformer
+            compare_feature_distributions: whatever or not
+            to compare statistics of individual features between spark and lama
 
         Returns:
             A tuple of (LAMA transformed dataset, Spark transformed dataset)
@@ -434,7 +445,7 @@ def from_pandas_to_spark(p: PandasDataset,
     if to_vector:
         cols = [c for c in pdf.columns if c != SparkDataset.ID_COLUMN]
         general_feat = cols[0]
-        sdf = sdf.select(SparkDataset.ID_COLUMN, F.array(*cols).alias(general_feat))
+        sdf = sdf.select(SparkDataset.ID_COLUMN, sf.array(*cols).alias(general_feat))
         roles = {general_feat: NumericVectorOrArrayRole(len(cols), f"{general_feat}_{{}}", dtype=roles[cols[0]].dtype)}
 
     if task:
@@ -477,8 +488,14 @@ def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):
     #     f"\n\nLAMA: \n{lama_data}" \
     #     f"\n\nSpark: \n{spark_data}"
 
-    lama_feature_column_ids = {feature: i for i, feature in sorted(enumerate(lama_np_ds.features), key=lambda x: x[1]) }
-    spark_feature_column_ids = {feature: i for i, feature in sorted(enumerate(spark_np_ds.features), key=lambda x: x[1]) }
+    lama_feature_column_ids = {
+        feature: i
+        for i, feature in sorted(enumerate(lama_np_ds.features), key=lambda x: x[1])
+    }
+    spark_feature_column_ids = {
+        feature: i
+        for i, feature in sorted(enumerate(spark_np_ds.features), key=lambda x: x[1])
+    }
     for feature in lama_feature_column_ids.keys():
         lama_column_id = [lama_feature_column_ids[feature]]
         spark_column_id = [spark_feature_column_ids[feature]]
@@ -488,6 +505,7 @@ def compare_obtained_datasets(lama_ds: NumpyDataset, spark_ds: SparkDataset):
         )
         # print(f"feature: {feature}, result: {result}")
         assert result, \
-            f"Results of the LAMA's transformer column '{feature}' and the Spark based transformer column '{feature}' are not equal: " \
+            f"Results of the LAMA's transformer column '{feature}' and " \
+            f"the Spark based transformer column '{feature}' are not equal: " \
             f"\n\nLAMA: \n{lama_data[:, lama_column_id]}" \
             f"\n\nSpark: \n{spark_data[:, spark_column_id]}"

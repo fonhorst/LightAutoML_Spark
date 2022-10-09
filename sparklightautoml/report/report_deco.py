@@ -5,16 +5,16 @@ import math
 import os
 import warnings
 from operator import itemgetter
-from typing import Optional
+from typing import Optional, Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pyspark.sql.functions as F
 import seaborn as sns
 from jinja2 import Environment
 from jinja2 import FileSystemLoader
 from json2html import json2html
+from lightautoml.dataset.roles import ColumnRole
 from pyspark import RDD
 from pyspark.ml.functions import vector_to_array
 from pyspark.mllib.evaluation import BinaryClassificationMetrics, RegressionMetrics, MulticlassMetrics
@@ -22,6 +22,7 @@ from pyspark.mllib.linalg import DenseMatrix
 from pyspark.sql import Column
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql.pandas.functions import pandas_udf
+from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.report.handy_spark_utils import call2
@@ -63,7 +64,7 @@ def get_data_for_roc_and_pr_curve(input_data, scores_col_name, true_labels_col_n
 
     metrics = BinaryClassificationMetrics(
         scoreAndLabels=data.select(
-            F.col(f"{scores_col_name}_rounded").astype("double"), F.col(true_labels_col_name).astype("double")
+            sf.col(f"{scores_col_name}_rounded").astype("double"), sf.col(true_labels_col_name).astype("double")
         ).rdd
     )
 
@@ -93,17 +94,17 @@ def plot_curves(input_data, scores_col_name, positive_rate, true_labels_col_name
 
 def round_score_col(input_data, scores_col_name, true_labels_col_name, min_co=0.01, max_co=0.99, step=0.01):
 
-    scores = F.col(scores_col_name)
-    _id_col = F.col(SparkDataset.ID_COLUMN)
-    true_labels = F.col(true_labels_col_name)
+    scores = sf.col(scores_col_name)
+    _id_col = sf.col(SparkDataset.ID_COLUMN)
+    true_labels = sf.col(true_labels_col_name)
 
     return input_data.select(
-        _id_col, true_labels, (F.ceil(scores / step) * step).alias("_scores_prepared_value")
+        _id_col, true_labels, (sf.ceil(scores / step) * step).alias("_scores_prepared_value")
     ).select(
         _id_col,
         true_labels,
-        F.when(F.col("_scores_prepared_value") < min_co, min_co)
-        .otherwise(F.when(F.col("_scores_prepared_value") > max_co, max_co).otherwise(F.col("_scores_prepared_value")))
+        sf.when(sf.col("_scores_prepared_value") < min_co, min_co)
+        .otherwise(sf.when(sf.col("_scores_prepared_value") > max_co, max_co).otherwise(sf.col("_scores_prepared_value")))
         .alias(f"{scores_col_name}_rounded"),
     )
 
@@ -196,8 +197,8 @@ def plot_distribution_of_logits(input_data, path, scores_col_name, true_labels_c
     )
 
     logits_col_name = f"{scores_col_name}_rounded"
-    logits_col = F.col(logits_col_name)
-    true_labels_col = F.col(true_labels_col_name)
+    logits_col = sf.col(logits_col_name)
+    true_labels_col = sf.col(true_labels_col_name)
 
     data = prep_data.select(true_labels_col, logits_col).groupby(true_labels_col, logits_col).count().toPandas()
 
@@ -221,7 +222,7 @@ def plot_distribution_of_logits(input_data, path, scores_col_name, true_labels_c
 def plot_pie_f1_metric(data: RDD, path):
     metrics = MulticlassMetrics(predictionAndLabels=data)
     tn, fp, fn, tp = metrics.confusionMatrix().values
-    F1 = metrics.fMeasure(1.0)
+    f1 = metrics.fMeasure(1.0)
     prec = metrics.precision(1.0)
     rec = metrics.recall(1.0)
 
@@ -258,20 +259,20 @@ def plot_pie_f1_metric(data: RDD, path):
 
     ax.set_title(
         "Trained model: Precision = {:.2f}%, Recall = {:.2f}%, F1-Score = {:.2f}%".format(
-            prec * 100, rec * 100, F1 * 100
+            prec * 100, rec * 100, f1 * 100
         )
     )
     plt.savefig(path, bbox_inches="tight")
     plt.close()
-    return prec, rec, F1
+    return prec, rec, f1
 
 
 def f1_score_w_co(input_data, true_labels_col_name, scores_col_name, min_co=0.01, max_co=0.99, step=0.01):
 
-    true_labels = F.col(true_labels_col_name)
-    scores = F.col(scores_col_name)
+    true_labels = sf.col(true_labels_col_name)
+    scores = sf.col(scores_col_name)
     rounded_scores_col_name = f"{scores_col_name}_rounded"
-    rounded_scores = F.col(rounded_scores_col_name)
+    rounded_scores = sf.col(rounded_scores_col_name)
 
     data = round_score_col(
         input_data=input_data,
@@ -284,7 +285,7 @@ def f1_score_w_co(input_data, true_labels_col_name, scores_col_name, min_co=0.01
 
     _grp = (
         data.groupby(rounded_scores)
-        .agg(F.sum(true_labels).alias("sum"), F.count(true_labels).alias("count"))
+        .agg(sf.sum(true_labels).alias("sum"), sf.count(true_labels).alias("count"))
         .toPandas()
     )
     pos = _grp["sum"].sum()
@@ -313,7 +314,7 @@ def f1_score_w_co(input_data, true_labels_col_name, scores_col_name, min_co=0.01
 
 def get_bins_table(data: DataFrame, n_bins=20):
     df: pd.DataFrame = (
-        data.groupby(F.col("y_pred"), F.col("y_true"))
+        data.groupby(sf.col("y_pred"), sf.col("y_true"))
         .count()
         .toPandas()
         .sort_values(by=["y_pred", "y_true"], ascending=[False, False])
@@ -412,7 +413,8 @@ def plot_feature_importance(feat_imp, path, features_max=100):
 
 class SparkReportDeco:
     """
-    Decorator to wrap :class:`~lightautoml.automl.base.AutoML` class to generate html report on ``fit_predict`` and ``predict``.
+    Decorator to wrap :class:`~lightautoml.automl.base.AutoML` class to generate html
+    report on ``fit_predict`` and ``predict``.
 
     Example:
 
@@ -452,7 +454,7 @@ class SparkReportDeco:
     def task(self):
         return self._model.reader.task._name
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *_, **kwargs):
         """
 
         Note:
@@ -481,6 +483,13 @@ class SparkReportDeco:
             "ice_fraction": 1.0,
             "ice_fraction_seed": 42,
         }
+
+        self._target: Optional[ColumnRole] = None
+        self._inference_content: Optional[Dict[str, str]] = None
+        self._F1_thresh = None
+        self._N_classes = None
+        self._model_summary: Optional[pd.DataFrame] = None
+        self._train_data_overview = None
 
         fi_input_params = kwargs.get("fi_params", {})
         self.fi_params.update(fi_input_params)
@@ -550,9 +559,9 @@ class SparkReportDeco:
     def _binary_classification_details(
         self, data, positive_rate, true_labels_col_name, scores_col_name, predicted_labels_col_name
     ):
-        prec, rec, F1 = plot_pie_f1_metric(
+        prec, rec, f1 = plot_pie_f1_metric(
             data.select(
-                F.col(predicted_labels_col_name).astype("double"), F.col(true_labels_col_name).astype("double")
+                sf.col(predicted_labels_col_name).astype("double"), sf.col(true_labels_col_name).astype("double")
             ).rdd,
             path=os.path.join(self.output_path, self._inference_content["pie_f1_metric"]),
         )
@@ -575,20 +584,20 @@ class SparkReportDeco:
             true_labels_col_name=true_labels_col_name,
         )
 
-        return auc_score, prec, rec, F1
+        return auc_score, prec, rec, f1
 
     def _regression_details(self, data, true_values_col_name, predictions_col_name):
 
-        true_col = F.col(true_values_col_name)
-        pred_col = F.col(predictions_col_name)
+        true_col = sf.col(true_values_col_name)
+        pred_col = sf.col(predictions_col_name)
 
         true_max, pred_max, variance_y_true = data.select(
-            F.max(F.abs(true_col)), F.max(F.abs(pred_col)), F.var_pop(true_col)
+            sf.max(sf.abs(true_col)), sf.max(sf.abs(pred_col)), sf.var_pop(true_col)
         ).first()
 
         _data = data.select(
-            (F.round(true_col / float(true_max), 3) * true_max).alias(true_values_col_name),
-            (F.round(pred_col / float(pred_max), 3) * pred_max).alias(predictions_col_name),
+            (sf.round(true_col / float(true_max), 3) * true_max).alias(true_values_col_name),
+            (sf.round(pred_col / float(pred_max), 3) * pred_max).alias(predictions_col_name),
         ).cache()
 
         _pred = _data.groupBy(pred_col).count().toPandas()
@@ -609,12 +618,12 @@ class SparkReportDeco:
 
         errs = data.select((pred_col - true_col).alias("err"))
 
-        err_max, err_min = errs.select(F.max(F.col("err")), F.min(F.col("err"))).first()
+        err_max, err_min = errs.select(sf.max(sf.col("err")), sf.min(sf.col("err"))).first()
 
         val = err_max if abs(err_max) > abs(err_min) else err_min
 
         err_data = (
-            errs.select((F.round(F.col("err") / val, 3) * val).alias("err")).groupBy(F.col("err")).count().toPandas()
+            errs.select((sf.round(sf.col("err") / val, 3) * val).alias("err")).groupBy(sf.col("err")).count().toPandas()
         )
 
         plot_error_hist(
@@ -635,15 +644,15 @@ class SparkReportDeco:
         # metrics
         metrics = RegressionMetrics(
             predictionAndObservations=data.select(
-                F.col(predictions_col_name).astype("double"), F.col(true_values_col_name).astype("double")
+                sf.col(predictions_col_name).astype("double"), sf.col(true_values_col_name).astype("double")
             ).rdd
         )
 
         mean_ae = metrics.meanAbsoluteError
 
         median_ae = data.select(
-            F.percentile_approx(
-                F.abs(F.col(predictions_col_name).astype("double") - F.col(true_values_col_name).astype("double")), 0.5
+            sf.percentile_approx(
+                sf.abs(sf.col(predictions_col_name).astype("double") - sf.col(true_values_col_name).astype("double")), 0.5
             )
         ).first()[0]
 
@@ -663,11 +672,11 @@ class SparkReportDeco:
 
     def _multiclass_details(self, data, predicted_labels_col_name, true_labels_col_name):
 
-        true_labels_col = F.col(true_labels_col_name)
+        true_labels_col = sf.col(true_labels_col_name)
 
         metrics = MulticlassMetrics(
             predictionAndLabels=data.select(
-                F.col(predicted_labels_col_name).astype("double"), true_labels_col.astype("double")
+                sf.col(predicted_labels_col_name).astype("double"), true_labels_col.astype("double")
             ).rdd
         )
 
@@ -752,18 +761,18 @@ class SparkReportDeco:
             return s.map(np.argmax)
 
         if preds.task.name == "multiclass":
-            raw_prediction_col = vector_to_array(raw_pred_col).alias(raw_predictions_col_name)
+            raw_prediction_col = vector_to_array(sf.col(raw_pred_col)).alias(raw_predictions_col_name)
             prediction_col = argmax(vector_to_array(raw_pred_col)).alias(predictions_col_name)
         elif preds.task.name == "binary":
-            raw_prediction_col = vector_to_array(raw_pred_col).getItem(1).alias(raw_predictions_col_name)
+            raw_prediction_col = vector_to_array(sf.col(raw_pred_col)).getItem(1).alias(raw_predictions_col_name)
             prediction_col = argmax(vector_to_array(raw_pred_col)).alias(predictions_col_name)
         else:
-            raw_prediction_col = F.col(raw_pred_col).alias(raw_predictions_col_name)
-            prediction_col = F.col(raw_pred_col).alias(predictions_col_name)
+            raw_prediction_col = sf.col(raw_pred_col).alias(raw_predictions_col_name)
+            prediction_col = sf.col(raw_pred_col).alias(predictions_col_name)
 
-        df = preds.data.where(~F.isnull(raw_pred_col)).select(
-            F.col(SparkDataset.ID_COLUMN),
-            F.col(preds.target_column).alias(true_values_col_name),
+        df = preds.data.where(~sf.isnull(raw_pred_col)).select(
+            sf.col(SparkDataset.ID_COLUMN),
+            sf.col(preds.target_column).alias(true_values_col_name),
             raw_prediction_col,
             prediction_col,
         )
@@ -802,19 +811,19 @@ class SparkReportDeco:
         else:
             data = self._collect_data(preds, valid_data, true_values_col_name, scores_col_name, predictions_col_name)
 
-        self._inference_content = {}
         if self.task == "binary":
             # filling for html
-            self._inference_content = dict()
-            self._inference_content["roc_curve"] = "valid_roc_curve.png"
-            self._inference_content["pr_curve"] = "valid_pr_curve.png"
-            self._inference_content["pie_f1_metric"] = "valid_pie_f1_metric.png"
-            self._inference_content["distribution_of_logits"] = "valid_distribution_of_logits.png"
+            self._inference_content = {
+                "roc_curve": "valid_roc_curve.png",
+                "pr_curve": "valid_pr_curve.png",
+                "pie_f1_metric": "valid_pie_f1_metric.png",
+                "distribution_of_logits": "valid_distribution_of_logits.png"
+            }
             # graphics and metrics
             _, self._F1_thresh, positive_rate = f1_score_w_co(
                 data, true_labels_col_name=true_values_col_name, scores_col_name=scores_col_name
             )
-            auc_score, prec, rec, F1 = self._binary_classification_details(
+            auc_score, prec, rec, f1 = self._binary_classification_details(
                 data,
                 positive_rate,
                 true_labels_col_name=true_values_col_name,
@@ -826,14 +835,16 @@ class SparkReportDeco:
             self._model_summary = pd.DataFrame(
                 {
                     "Evaluation parameter": evaluation_parameters,
-                    "Validation sample": [auc_score, prec, rec, F1],
+                    "Validation sample": [auc_score, prec, rec, f1],
                 }
             )
         elif self.task == "reg":
             # filling for html
-            self._inference_content["target_distribution"] = "valid_target_distribution.png"
-            self._inference_content["error_hist"] = "valid_error_hist.png"
-            self._inference_content["scatter_plot"] = "valid_scatter_plot.png"
+            self._inference_content = {
+                "target_distribution": "valid_target_distribution.png",
+                "error_hist": "valid_error_hist.png",
+                "scatter_plot": "valid_scatter_plot.png"
+            }
             # graphics and metrics
 
             mean_ae, median_ae, mse, r2, evs = self._regression_details(
@@ -854,9 +865,11 @@ class SparkReportDeco:
                 }
             )
         elif self.task == "multiclass":
-            self._N_classes = train_data.select(F.count_distinct(F.col(self._target))).first()[0]
+            self._N_classes = train_data.select(sf.count_distinct(sf.col(self._target))).first()[0]
 
-            self._inference_content["confusion_matrix"] = "valid_confusion_matrix.png"
+            self._inference_content = {
+                "confusion_matrix": "valid_confusion_matrix.png"
+            }
 
             index_names = np.array([["Precision", "Recall", "F1-score"], ["micro", "macro", "weighted"]])
             index = pd.MultiIndex.from_product(index_names, names=["Evaluation metric", "Average"])
@@ -919,22 +932,19 @@ class SparkReportDeco:
 
         if self.task == "binary":
             # filling for html
-            self._inference_content = dict()
-            self._inference_content["roc_curve"] = "test_roc_curve_{}.png".format(self._n_test_sample)
-            self._inference_content["pr_curve"] = "test_pr_curve_{}.png".format(self._n_test_sample)
-            self._inference_content["pie_f1_metric"] = "test_pie_f1_metric_{}.png".format(self._n_test_sample)
-            self._inference_content["bins_preds"] = "test_bins_preds_{}.png".format(self._n_test_sample)
-            self._inference_content["preds_distribution_by_bins"] = "test_preds_distribution_by_bins_{}.png".format(
-                self._n_test_sample
-            )
-            self._inference_content["distribution_of_logits"] = "test_distribution_of_logits_{}.png".format(
-                self._n_test_sample
-            )
+            self._inference_content = {
+                "roc_curve": f"test_roc_curve_{self._n_test_sample}.png",
+                "pr_curve": f"test_pr_curve_{self._n_test_sample}.png",
+                "pie_f1_metric": f"test_pie_f1_metric_{self._n_test_sample}.png",
+                "bins_preds": f"test_bins_preds_{self._n_test_sample}.png",
+                "preds_distribution_by_bins": f"test_preds_distribution_by_bins_{self._n_test_sample}.png",
+                "distribution_of_logits": f"test_distribution_of_logits_{self._n_test_sample}.png"
+            }
             # graphics and metrics
-            true_values_col = F.col(true_values_col_name)
+            true_values_col = sf.col(true_values_col_name)
 
-            positive_rate = data.select(F.sum(true_values_col) / F.count(true_values_col)).first()[0]
-            auc_score, prec, rec, F1 = self._binary_classification_details(
+            positive_rate = data.select(sf.sum(true_values_col) / sf.count(true_values_col)).first()[0]
+            auc_score, prec, rec, f1 = self._binary_classification_details(
                 data,
                 positive_rate=positive_rate,
                 true_labels_col_name=true_values_col_name,
@@ -947,22 +957,21 @@ class SparkReportDeco:
                     auc_score,
                     prec,
                     rec,
-                    F1,
+                    f1,
                 ]
             else:
-                self._model_summary["Test sample"] = [auc_score, prec, rec, F1]
+                self._model_summary["Test sample"] = [auc_score, prec, rec, f1]
 
         elif self.task == "reg":
             # filling for html
 
             predictions_col_name = scores_col_name
 
-            self._inference_content = dict()
-            self._inference_content["target_distribution"] = "test_target_distribution_{}.png".format(
-                self._n_test_sample
-            )
-            self._inference_content["error_hist"] = "test_error_hist_{}.png".format(self._n_test_sample)
-            self._inference_content["scatter_plot"] = "test_scatter_plot_{}.png".format(self._n_test_sample)
+            self._inference_content = {
+                "target_distribution": f"test_target_distribution_{self._n_test_sample}.png",
+                "error_hist": f"test_error_hist_{self._n_test_sample}.png",
+                "scatter_plot": f"test_scatter_plot_{self._n_test_sample}.png"
+            }
             # graphics
             mean_ae, median_ae, mse, r2, evs = self._regression_details(
                 data, true_values_col_name, predictions_col_name
@@ -980,7 +989,9 @@ class SparkReportDeco:
                 self._model_summary["Test sample"] = [mean_ae, median_ae, mse, r2, evs]
 
         elif self.task == "multiclass":
-            self._inference_content["confusion_matrix"] = "test_confusion_matrix_{}.png".format(self._n_test_sample)
+            self._inference_content = {
+                "confusion_matrix": f"test_confusion_matrix_{self._n_test_sample}.png"
+            }
             test_summary = self._multiclass_details(
                 data, predicted_labels_col_name=predictions_col_name, true_labels_col_name=true_values_col_name
             )
@@ -991,7 +1002,7 @@ class SparkReportDeco:
 
         # layout depends on number of test samples
         if self._n_test_sample >= 2:
-            self._inference_content["title"] = "Results on test sample {}".format(self._n_test_sample)
+            self._inference_content["title"] = f"Results on test sample {self._n_test_sample}"
 
         else:
             self._inference_content["title"] = "Results on test sample"
@@ -1081,14 +1092,14 @@ class SparkReportDeco:
             ice_fraction_seed=self.interpretation_params["ice_fraction_seed"],
         )
 
-        HISTOGRAM_DATA_ROWS_LIMIT = 2000
+        histogram_data_rows_limit = 2000
         rows_count = test_data.count()
-        if rows_count > HISTOGRAM_DATA_ROWS_LIMIT:
-            fraction = HISTOGRAM_DATA_ROWS_LIMIT / rows_count
+        if rows_count > histogram_data_rows_limit:
+            fraction = histogram_data_rows_limit / rows_count
             test_data = test_data.sample(fraction=fraction)
 
         if self._model.reader._roles[feature_name].name == "Numeric":
-            test_data: pd.DataFrame = test_data.select(F.col(feature_name).cast("double")).toPandas()
+            test_data: pd.DataFrame = test_data.select(sf.col(feature_name).cast("double")).toPandas()
         else:
             test_data: pd.DataFrame = test_data.select(feature_name).toPandas()
 
@@ -1157,35 +1168,35 @@ class SparkReportDeco:
 
     def _get_column_nan_ratio(self, column: Column, column_name: str, total_count: int) -> Column:
         return (
-            F.sum(F.when(F.isnan(column), 1).otherwise(F.when(F.isnull(column), 1).otherwise(0))) / total_count
+                sf.sum(sf.when(sf.isnan(column), 1).otherwise(sf.when(sf.isnull(column), 1).otherwise(0))) / total_count
         ).alias(
             f"nanratio_{column_name}"
         )  # column._jc.toString()
 
     def _exclude_nan_values(self, column: Column) -> Column:
-        return F.when(F.isnan(column), None).otherwise(column)
+        return sf.when(sf.isnan(column), None).otherwise(column)
 
     def _get_column_min(self, column: Column, column_name: str, astype: Optional[str] = None) -> Column:
         if astype:
             column = column.astype(astype)
-        return F.min(column).alias(f"min_{column_name}")
+        return sf.min(column).alias(f"min_{column_name}")
 
     def _get_column_percentile(
         self, column: Column, column_name: str, percentile: float, astype: Optional[str] = None
     ) -> Column:
         if astype:
             column = column.astype(astype)
-        return F.percentile_approx(column, percentile).alias(f"perc{percentile}_{column_name}")
+        return sf.percentile_approx(column, percentile).alias(f"perc{percentile}_{column_name}")
 
     def _get_column_avg(self, column: Column, column_name: str, astype: Optional[str] = None) -> Column:
         if astype:
             column = column.astype(astype)
-        return F.avg(column).alias(f"avg_{column_name}")
+        return sf.avg(column).alias(f"avg_{column_name}")
 
     def _get_column_max(self, column: Column, column_name: str, astype: Optional[str] = None) -> Column:
         if astype:
             column = column.astype(astype)
-        return F.max(column).alias(f"max_{column_name}")
+        return sf.max(column).alias(f"max_{column_name}")
 
     def _describe_roles(self, train_data):
 
@@ -1202,7 +1213,7 @@ class SparkReportDeco:
         columns_to_select = list()
 
         for feature_name in numerical_features:
-            column = F.col(feature_name)
+            column = sf.col(feature_name)
             columns_to_select.append(self._get_column_nan_ratio(column, feature_name, total_count))
 
             filtered_column = self._exclude_nan_values(column)
@@ -1214,10 +1225,10 @@ class SparkReportDeco:
             columns_to_select.append(self._get_column_max(filtered_column, feature_name, astype="double"))
 
         for feature_name in categorical_features:
-            columns_to_select.append(self._get_column_nan_ratio(F.col(feature_name), feature_name, total_count))
+            columns_to_select.append(self._get_column_nan_ratio(sf.col(feature_name), feature_name, total_count))
 
         for feature_name in datetime_features:
-            column = F.col(feature_name)
+            column = sf.col(feature_name)
             columns_to_select.append(self._get_column_nan_ratio(column, feature_name, total_count))
 
             filtered_column = self._exclude_nan_values(column)
@@ -1314,12 +1325,12 @@ class SparkReportDeco:
             dropped_nan_ratio = train_data.select(
                 *[
                     (
-                        F.sum(
-                            F.when(F.isnan(F.col(col_name)), 1).otherwise(
-                                F.when(F.isnull(F.col(col_name)), 1).otherwise(0)
+                            sf.sum(
+                            sf.when(sf.isnan(sf.col(col_name)), 1).otherwise(
+                                sf.when(sf.isnull(sf.col(col_name)), 1).otherwise(0)
                             )
                         )
-                        / total_count
+                            / total_count
                     ).alias(col_name)
                     for col_name in dropped_list
                 ]

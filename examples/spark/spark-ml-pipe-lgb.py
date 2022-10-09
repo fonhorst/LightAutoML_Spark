@@ -1,7 +1,7 @@
 import logging.config
 import logging.config
 
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from pyspark.ml import PipelineModel
 
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
@@ -88,8 +88,8 @@ if __name__ == "__main__":
         test_pred_df = transformer.transform(test_df)
         test_pred_df = test_pred_df.select(
             SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(spark_ml_algo.prediction_feature).alias('prediction')
+            sf.col(roles['target']).alias('target'),
+            sf.col(spark_ml_algo.prediction_feature).alias('prediction')
         )
         test_score = score(test_pred_df)
         logger.info(f"Test score (#2 way): {test_score}")
@@ -101,8 +101,8 @@ if __name__ == "__main__":
         test_pred_df = pipeline_model.transform(test_df)
         test_pred_df = test_pred_df.select(
             SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(spark_ml_algo.prediction_feature).alias('prediction')
+            sf.col(roles['target']).alias('target'),
+            sf.col(spark_ml_algo.prediction_feature).alias('prediction')
         )
         test_score = score(test_pred_df)
         logger.info(f"Test score (#3 way): {test_score}")

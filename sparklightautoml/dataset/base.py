@@ -20,7 +20,7 @@ from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset, NpRol
 from lightautoml.dataset.roles import ColumnRole, NumericRole, DropRole
 from lightautoml.tasks import Task
 from pyspark.ml.functions import vector_to_array
-from pyspark.sql import functions as F, Column
+from pyspark.sql import functions as sf, Column
 from pyspark.sql.session import SparkSession
 
 from sparklightautoml import VALIDATION_COLUMN
@@ -30,7 +30,8 @@ from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
 
 class SparkDataset(LAMLDataset):
     """
-    Implements a dataset that uses a ``pyspark.sql.DataFrame`` internally, stores some internal state (features, roles, ...) and provide methods to work with dataset.
+    Implements a dataset that uses a ``pyspark.sql.DataFrame`` internally,
+    stores some internal state (features, roles, ...) and provide methods to work with dataset.
     """
 
     @staticmethod
@@ -270,7 +271,7 @@ class SparkDataset(LAMLDataset):
                     return vector_to_array(column)
                 return column
 
-            arr = [to_array(F.col(col))[i].alias(vrole.feature_name_at(i)) for i in range(vrole.size)]
+            arr = [to_array(sf.col(col))[i].alias(vrole.feature_name_at(i)) for i in range(vrole.size)]
 
             return arr, NumericRole(dtype=vrole.dtype)
 

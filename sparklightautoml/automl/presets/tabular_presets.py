@@ -14,7 +14,8 @@ from lightautoml.pipelines.selection.permutation_importance_based import NpItera
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from pyspark.ml import PipelineModel, Transformer
 from pyspark.sql import SparkSession
-from pyspark.sql import functions as F, types as SparkTypes, Window
+from pyspark.sql import functions as sf, Window
+from pyspark.sql.types import DateType, StringType
 from tqdm import tqdm
 
 from sparklightautoml.automl.blend import SparkWeightedBlender
@@ -480,10 +481,10 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             data: Dataset to perform inference.
             features_names: Optional features names,
               if cannot be inferred from `train_data`.
-            batch_size: Batch size or ``None``.
-            n_jobs: Number of jobs.
             return_all_predictions: if True,
               returns all model predictions from last level
+            add_reader_attrs: if True,
+              the reader's attributes will be added to the SparkDataset
 
         Returns:
             Dataset with predictions.
@@ -596,8 +597,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
     def get_histogram(data: SparkDataFrame, column: str, n_bins: int) -> Tuple[List, np.ndarray]:
         assert n_bins >= 2, "n_bins must be equal 2 or more"
         bin_edges, counts = (
-            data.select(F.col(column).cast("double"))
-            .where(F.col(column).isNotNull())
+            data.select(sf.col(column).cast("double"))
+            .where(sf.col(column).isNotNull())
             .rdd.map(lambda x: x[0])
             .histogram(n_bins)
         )
@@ -622,7 +623,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             model (PipelineModel): Spark Pipeline Model
             prediction_col (str): prediction column to be created by the `model`
             n_bins (int): The number of bins to produce. Raises exception if n_bins < 2.
-            ice_fraction (float, optional): What fraction of the input dataframe will be used to make predictions. Useful for very large dataframe. Defaults to 1.0.
+            ice_fraction (float, optional): What fraction of the input dataframe will be used to make predictions.
+                Useful for very large dataframe. Defaults to 1.0.
             ice_fraction_seed (int, optional): Seed for `ice_fraction`. Defaults to 42.
 
         Returns:
@@ -641,7 +643,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         )
         for i in tqdm(grid):
             # replace feature column values with constant
-            sdf = sample_df.select("*", F.lit(i).alias(feature_name))
+            sdf = sample_df.select("*", sf.lit(i).alias(feature_name))
 
             # infer via transformer
             preds = model.transform(sdf)
@@ -676,7 +678,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             model (PipelineModel): Spark Pipeline Model
             prediction_col (str): prediction column to be created by the `model`
             n_top_cats (int): param to selection top n categories
-            ice_fraction (float, optional): What fraction of the input dataframe will be used to make predictions. Useful for very large dataframe. Defaults to 1.0.
+            ice_fraction (float, optional): What fraction of the input dataframe will be used to make predictions.
+                Useful for very large dataframe. Defaults to 1.0.
             ice_fraction_seed (int, optional): Seed for `ice_fraction`. Defaults to 42.
 
         Returns:
@@ -686,7 +689,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             `counts` is numbers of values by category
         """
         feature_cnt = (
-            df.where(F.col(feature_name).isNotNull()).groupBy(feature_name).count().orderBy(F.desc("count")).collect()
+            df.where(sf.col(feature_name).isNotNull()).groupBy(feature_name).count().orderBy(sf.desc("count")).collect()
         )
         grid = [row[feature_name] for row in feature_cnt[:n_top_cats]]
         counts = [row["count"] for row in feature_cnt[:n_top_cats]]
@@ -697,7 +700,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             .cache()
         )
         for i in tqdm(grid):
-            sdf = sample_df.select("*", F.lit(i).alias(feature_name))
+            sdf = sample_df.select("*", sf.lit(i).alias(feature_name))
             preds = model.transform(sdf)
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter
             prediction_col = next(c for c in preds.columns if c.startswith("prediction"))
@@ -713,11 +716,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             unique_other_categories = [row[feature_name] for row in feature_cnt[n_top_cats:]]
 
             # get non-top categories, natural distributions is important here
-            w = Window().orderBy(F.lit("A"))  # window without sorting
+            w = Window().orderBy(sf.lit("A"))  # window without sorting
             other_categories_collection = (
                 df.select(feature_name)
-                .filter(F.col(feature_name).isin(unique_other_categories))
-                .select(F.row_number().over(w).alias("row_num"), feature_name)
+                .filter(sf.col(feature_name).isin(unique_other_categories))
+                .select(sf.row_number().over(w).alias("row_num"), feature_name)
                 .collect()
             )
 
@@ -733,13 +736,13 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                     key = remainder
                 return other_categories_dict[key]
 
-            get_category_udf = F.udf(get_category_by_row_num, returnType=StringType())
+            get_category_udf = sf.udf(get_category_by_row_num, StringType())
 
             # add row number to main dataframe and exclude feature_name column
-            sdf = sample_df.select("*", F.row_number().over(w).alias("row_num"))
+            sdf = sample_df.select("*", sf.row_number().over(w).alias("row_num"))
 
             all_columns_except_row_num = [f for f in sdf.columns if f != "row_num"]
-            feature_col = get_category_udf(F.col("row_num")).alias(feature_name)
+            feature_col = get_category_udf(sf.col("row_num")).alias(feature_name)
             # exclude row number from dataframe
             # and add back feature_name column filled with other categories same distribution
             sdf = sdf.select(*all_columns_except_row_num, feature_col)
@@ -779,7 +782,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             prediction_col (str): prediction column to be created by the `model`
             datetime_level (str): Unit of time that will be modified to calculate dependence: "year", "month" or "dayofweek"
             reader (_type_): Automl reader to transform input dataframe before `model` inferring.
-            ice_fraction (float, optional): What fraction of the input dataframe will be used to make predictions. Useful for very large dataframe. Defaults to 1.0.
+            ice_fraction (float, optional): What fraction of the input dataframe will be used to make predictions.
+                Useful for very large dataframe. Defaults to 1.0.
             ice_fraction_seed (int, optional): Seed for `ice_fraction`. Defaults to 42.
 
         Returns:
@@ -790,32 +794,32 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         """
         df = reader.read(df).data
         if datetime_level == "year":
-            feature_cnt = df.groupBy(F.year(feature_name).alias("year")).count().orderBy(F.asc("year")).collect()
+            feature_cnt = df.groupBy(sf.year(feature_name).alias("year")).count().orderBy(sf.asc("year")).collect()
             grid = [x["year"] for x in feature_cnt]
             counts = [row["count"] for row in feature_cnt]
-            replace_date_element_udf = F.udf(replace_year_in_date, SparkTypes.DateType())
+            replace_date_element_udf = sf.udf(replace_year_in_date, DateType())
         elif datetime_level == "month":
-            feature_cnt = df.groupBy(F.month(feature_name).alias("month")).count().orderBy(F.asc("month")).collect()
+            feature_cnt = df.groupBy(sf.month(feature_name).alias("month")).count().orderBy(sf.asc("month")).collect()
             grid = np.arange(1, 13)
             grid = grid.tolist()
             counts = [0] * 12
             for row in feature_cnt:
                 counts[row["month"] - 1] = row["count"]
-            replace_date_element_udf = F.udf(replace_month_in_date, SparkTypes.DateType())
+            replace_date_element_udf = sf.udf(replace_month_in_date, DateType())
         else:
             feature_cnt = (
-                df.groupBy(F.dayofweek(feature_name).alias("dayofweek")).count().orderBy(F.asc("dayofweek")).collect()
+                df.groupBy(sf.dayofweek(feature_name).alias("dayofweek")).count().orderBy(sf.asc("dayofweek")).collect()
             )
             grid = np.arange(7)
             grid = grid.tolist()
             counts = [0] * 7
             for row in feature_cnt:
                 counts[row["dayofweek"] - 1] = row["count"]
-            replace_date_element_udf = F.udf(replace_dayofweek_in_date, SparkTypes.DateType())
+            replace_date_element_udf = sf.udf(replace_dayofweek_in_date, DateType())
         ys = []
         sample_df = df.sample(fraction=ice_fraction, seed=ice_fraction_seed).cache()
         for i in tqdm(grid):
-            feature_col = replace_date_element_udf(F.col(feature_name), F.lit(i)).alias(feature_name)
+            feature_col = replace_date_element_udf(sf.col(feature_name), sf.lit(i)).alias(feature_name)
             sdf = sample_df.select(*[c for c in sample_df.columns if c != feature_name], feature_col)
             preds = model.transform(sdf)
             # TODO: SPARK-LAMA remove this line after passing the "prediction_col" parameter
@@ -892,13 +896,13 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             ice_fraction_seed=ice_fraction_seed,
         )
 
-        HISTOGRAM_DATA_ROWS_LIMIT = 2000
+        histogram_data_rows_limit = 2000
         rows_count = test_data.count()
-        if rows_count > HISTOGRAM_DATA_ROWS_LIMIT:
-            fraction = HISTOGRAM_DATA_ROWS_LIMIT / rows_count
+        if rows_count > histogram_data_rows_limit:
+            fraction = histogram_data_rows_limit / rows_count
             test_data = test_data.sample(frac=fraction)
         if self.reader._roles[feature_name].name == "Numeric":
-            test_data = test_data.select(F.col(feature_name).cast("double")).toPandas()
+            test_data = test_data.select(sf.col(feature_name).cast("double")).toPandas()
         else:
             test_data = test_data.select(feature_name).toPandas()
         plot_pdp_with_distribution(

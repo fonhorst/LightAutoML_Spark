@@ -24,6 +24,7 @@ logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv,agr", [(ds, 5, False) for ds in get_test_datasets(setting="all-tasks")])
 def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int, agr: bool):
     def checks(sds: SparkDataset, check_target_and_folds: bool = True):
@@ -89,6 +90,7 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int, agr:
     assert len(not_equal_encoding_types) == 0, f"Encoding types are different: {not_equal_encoding_types}"
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, 5) for ds in get_test_datasets(dataset='used_cars_dataset_no_cols_limit')])
 def test_spark_reader_advanced_guess_roles(spark: SparkSession, config: Dict[str, Any], cv: int):
     task_type = config['task_type']
@@ -118,8 +120,11 @@ def test_spark_reader_advanced_guess_roles(spark: SparkSession, config: Dict[str
     # two checks on CategoryRole to make PyCharm field resolution happy
     not_equal_encoding_types = [
         feat for feat, srole, prole in feat_and_roles
-        if isinstance(srole, CategoryRole) and isinstance(prole, CategoryRole)
-           and srole.encoding_type != prole.encoding_type
+        if (
+                isinstance(srole, CategoryRole)
+                and isinstance(prole, CategoryRole)
+                and srole.encoding_type != prole.encoding_type
+        )
     ]
 
     assert len(not_equal_encoding_types) == 0, f"Encoding types are different: {not_equal_encoding_types}"

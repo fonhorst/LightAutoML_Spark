@@ -2,7 +2,7 @@ import logging.config
 
 import pytest
 from pyspark.ml import PipelineModel
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
@@ -67,8 +67,8 @@ if __name__ == "__main__":
         score = task.get_dataset_metric()
         expected_metric_value = score(te_pred.select(
             SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(pred_column).alias('prediction')
+            sf.col(roles['target']).alias('target'),
+            sf.col(pred_column).alias('prediction')
         ))
 
         logger.info(f"score for test predictions: {expected_metric_value}")
@@ -86,8 +86,8 @@ if __name__ == "__main__":
         score = task.get_dataset_metric()
         actual_metric_value = score(te_pred.select(
             SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(pred_column).alias('prediction')
+            sf.col(roles['target']).alias('target'),
+            sf.col(pred_column).alias('prediction')
         ))
         logger.info(f"score for test predictions via loaded pipeline: {actual_metric_value}")
 

@@ -2,7 +2,7 @@ import functools
 import logging
 from typing import Optional, cast, Tuple, Iterable, Sequence
 
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.utils import SparkDataFrame
@@ -40,7 +40,7 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
         self._curr_idx += 1
 
         sdf = cast(SparkDataFrame, self.train.data)
-        sdf = sdf.withColumn(self.TRAIN_VAL_COLUMN, F.lit(0))
+        sdf = sdf.withColumn(self.TRAIN_VAL_COLUMN, sf.lit(0))
 
         train_ds = cast(SparkDataset, self.train.empty())
         train_ds.set_data(sdf, self.train.features, self.train.roles)
@@ -120,7 +120,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         """
         super().__init__(train)
 
-        num_folds = train.data.select(F.max(train.folds_column).alias("max")).first()["max"]
+        num_folds = train.data.select(sf.max(train.folds_column).alias("max")).first()["max"]
         self.n_folds = num_folds + 1
         if n_folds is not None:
             self.n_folds = min(self.n_folds, n_folds)

@@ -13,6 +13,7 @@ logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyShadowingNames
 def test_automl_preset(spark: SparkSession):
     n_classes = 10
 

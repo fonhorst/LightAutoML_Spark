@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from pyspark.ml import Transformer
 from pyspark.ml.param import Param, Params
-from pyspark.sql import functions as F, SparkSession
+from pyspark.sql import functions as sf, SparkSession
 from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
 from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
@@ -76,7 +76,7 @@ class SparkReaderHelper:
         logger.debug("SparkReaderHelper._create_unique_ids() is started")
 
         if SparkDataset.ID_COLUMN not in train_data.columns:
-            train_data = train_data.select("*", F.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN))
+            train_data = train_data.select("*", sf.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN))
 
         if cacher_key is not None:
             cacher = Cacher(key=cacher_key)
@@ -90,12 +90,12 @@ class SparkReaderHelper:
     @staticmethod
     def _convert_column(feat: str, role: ColumnRole):
         if isinstance(role, DatetimeRole):
-            result_column = F.to_timestamp(feat, role.format).alias(feat)
+            result_column = sf.to_timestamp(feat, role.format).alias(feat)
         elif isinstance(role, NumericRole):
             typ = dtype2Stype[role.dtype.__name__]
-            result_column = F.when(F.isnull(feat), float("nan")).otherwise(F.col(feat).astype(typ)).alias(feat)
+            result_column = sf.when(sf.isnull(feat), float("nan")).otherwise(sf.col(feat).astype(typ)).alias(feat)
         else:
-            result_column = F.col(feat)
+            result_column = sf.col(feat)
 
         return result_column
 
@@ -110,7 +110,7 @@ class SparkReaderHelper:
 
         cols = copy(sdf.columns)
         cols.remove(target_col)
-        sdf = sdf.select(*cols, F.col(target_col).astype(to_type).alias(target_col))
+        sdf = sdf.select(*cols, sf.col(target_col).astype(to_type).alias(target_col))
 
         return sdf
 
@@ -298,10 +298,10 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 if r.name == "Datetime":
                     # try if it's ok to infer date with given params
                     result = subsample.select(
-                        F.sum(F.to_timestamp(feat, format=r.format).isNotNull().astype(IntegerType())).alias(
+                        sf.sum(sf.to_timestamp(feat, format=r.format).isNotNull().astype(IntegerType())).alias(
                             f"{feat}_dt"
                         ),
-                        F.count("*").alias("count"),
+                        sf.count("*").alias("count"),
                     ).first()
 
                     if result[f"{feat}_dt"] != result["count"]:
@@ -351,7 +351,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         kwargs["target"] = self.target_col
 
         ff = [
-            F.when(F.isnull(f), float("nan")).otherwise(F.col(f).astype(FloatType())).alias(f)
+            sf.when(sf.isnull(f), float("nan")).otherwise(sf.col(f).astype(FloatType())).alias(f)
             if isinstance(self.roles[f], NumericRole)
             else f
             for f in self.used_features
@@ -444,7 +444,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         h = 1.0 / self.cv
         folds_col = self.DEFAULT_READER_FOLD_COL
-        sdf_with_folds = sdf.select("*", F.floor(F.rand(self.random_state) / h).alias(folds_col))
+        sdf_with_folds = sdf.select("*", sf.floor(sf.rand(self.random_state) / h).alias(folds_col))
         return sdf_with_folds, folds_col
 
     def _create_target(self, sdf: SparkDataFrame, target_col: str = "target") -> SparkDataFrame:
@@ -461,7 +461,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         self.class_mapping = None
 
-        nan_count = sdf.where(F.isnan(target_col)).count()
+        nan_count = sdf.where(sf.isnan(target_col)).count()
         assert nan_count == 0, "Nan in target detected"
 
         if self.task.name != "reg":
@@ -554,26 +554,26 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 guessed_cols[feature] = NumericRole(num_dtype)
                 continue
 
-            fcol = F.col(feature)
+            fcol = sf.col(feature)
 
             can_cast_to_numeric = (
-                F.when(F.isnull(fcol), True)
+                sf.when(sf.isnull(fcol), True)
                 .otherwise(fcol.cast(dtype2Stype[num_dtype.__name__]).isNotNull())
                 .astype(IntegerType())
             )
 
             # TODO: utc handling here?
-            can_cast_to_datetime = F.to_timestamp(feature, format=date_format).isNotNull().astype(IntegerType())
+            can_cast_to_datetime = sf.to_timestamp(feature, format=date_format).isNotNull().astype(IntegerType())
 
             cols_to_check.append((feature, num_dtype, date_format))
             check_columns.extend(
                 [
-                    F.sum(can_cast_to_numeric).alias(f"{feature}_num"),
-                    F.sum(can_cast_to_datetime).alias(f"{feature}_dt"),
+                    sf.sum(can_cast_to_numeric).alias(f"{feature}_num"),
+                    sf.sum(can_cast_to_datetime).alias(f"{feature}_dt"),
                 ]
             )
 
-        result = data.select(*check_columns, F.count("*").alias("count")).first()
+        result = data.select(*check_columns, sf.count("*").alias("count")).first()
 
         for feature, num_dtype, date_format in cols_to_check:
             if result[f"{feature}_num"] == result["count"]:
@@ -600,14 +600,14 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         logger.debug("SparkToSparkReader._ok_features() is started")
 
         row = train_data.select(
-            F.count("*").alias("count"),
+            sf.count("*").alias("count"),
             *[
-                F.mean((F.isnull(feature) | F.isnan(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
+                sf.mean((sf.isnull(feature) | sf.isnan(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
                 for feature in features
                 if isinstance(train_data.schema[feature].dataType, NumericType)
             ],
             *[
-                F.mean((F.isnull(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
+                sf.mean((sf.isnull(feature)).astype(IntegerType())).alias(f"{feature}_nan_rate")
                 for feature in features
                 if not isinstance(train_data.schema[feature].dataType, NumericType)
             ],
@@ -622,8 +622,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             # TODO: this part may be optimized using sampling
             crow = (
                 train_data.groupby(feat)
-                .agg(F.count("*").alias("count"))
-                .select((F.max("count")).alias("count"))
+                .agg(sf.count("*").alias("count"))
+                .select((sf.max("count")).alias("count"))
                 .first()
             )
             if crow["count"] / row["count"] >= self.max_constant_rate:
@@ -750,31 +750,31 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickle
         self.set(self.roles, roles)
         self.set(self.addArrayAttrs, add_array_attrs)
 
-    def getTaskName(self) -> str:
+    def get_task_name(self) -> str:
         return self.getOrDefault(self.taskName)
 
-    def getClassMapping(self) -> Optional[Dict]:
+    def get_class_mapping(self) -> Optional[Dict]:
         return self.getOrDefault(self.classMapping)
 
-    def getRoles(self) -> Dict[str, ColumnRole]:
+    def get_roles(self) -> Dict[str, ColumnRole]:
         return self.getOrDefault(self.roles)
 
-    def getUsedArrayAttrs(self) -> Dict[str, str]:
+    def get_used_array_attrs(self) -> Dict[str, str]:
         return self.getOrDefault(self.usedArrayAttrs)
 
-    def getAddArrayAttrs(self) -> bool:
+    def get_add_array_attrs(self) -> bool:
         return self.getOrDefault(self.addArrayAttrs)
 
-    def setAddArrayAttrs(self, value: bool):
+    def set_add_array_attrs(self, value: bool):
         return self.set(self.addArrayAttrs, value)
 
     def _transform(self, data: SparkDataFrame) -> SparkDataFrame:
         service_columns = []
 
-        used_array_attrs = self.getUsedArrayAttrs()
-        roles = self.getRoles()
+        used_array_attrs = self.get_used_array_attrs()
+        roles = self.get_roles()
 
-        if self.getAddArrayAttrs():
+        if self.get_add_array_attrs():
             for array_attr in used_array_attrs:
                 col_name = used_array_attrs[array_attr]
 
@@ -782,7 +782,7 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickle
                     continue
 
                 if array_attr == "target":
-                    data = self._process_target_column(self.getTaskName(), self.getClassMapping(), data, col_name)
+                    data = self._process_target_column(self.get_task_name(), self.get_class_mapping(), data, col_name)
 
                 service_columns.append(col_name)
 

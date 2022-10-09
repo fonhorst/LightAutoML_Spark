@@ -23,6 +23,7 @@ def spark_session(
 ) -> SparkSession:
     """
     Args:
+        session_args: additional arguments to be add to SparkSession using .config() method
         master: address of the master
             to run locally - "local[1]"
 
@@ -113,7 +114,7 @@ class log_exec_timer:
         self._start = datetime.now()
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, typ, value, traceback):
         self._duration = (datetime.now() - self._start).total_seconds()
         msg = f"Exec time of {self.name}: {self._duration}" if self.name else f"Exec time: {self._duration}"
         logger.info(msg)
@@ -237,7 +238,8 @@ class Cacher(Estimator):
         ds = SparkSession.getActiveSession().createDataFrame(dataset.rdd, schema=dataset.schema).cache()
         ds.write.mode('overwrite').format('noop').save()
 
-        logger.info(f"Cacher {self._key} (RDD Id: {ds.rdd.id()}, Column nums: {len(ds.columns)}). Finished data materialization.")
+        logger.info(f"Cacher {self._key} (RDD Id: {ds.rdd.id()}, Column nums: {len(ds.columns)}). "
+                    f"Finished data materialization.")
 
         previous_ds = self._cacher_dict.get(self._key, None)
         if previous_ds is not None and ds != previous_ds:

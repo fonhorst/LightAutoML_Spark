@@ -85,7 +85,7 @@ def get_dataset_attrs(name: str):
     )
 
 
-def prepare_test_and_train(spark: SparkSession, path:str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
+def prepare_test_and_train(spark: SparkSession, path: str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
     execs = int(spark.conf.get('spark.executor.instances', '1'))
     cores = int(spark.conf.get('spark.executor.cores', '8'))
 

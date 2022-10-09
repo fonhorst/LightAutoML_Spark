@@ -18,7 +18,7 @@ from pandas import DataFrame
 from pandas import Series
 from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
 from pyspark.ml.param import Param, Params
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.caching import CacheAware
@@ -112,11 +112,11 @@ class SelectTransformer(Transformer):
         super().__init__()
         self.set(self.colsToSelect, cols_to_select)
 
-    def getColsToSelect(self) -> List[str]:
+    def get_cols_to_select(self) -> List[str]:
         return self.getOrDefault(self.colsToSelect)
 
     def _transform(self, dataset):
-        return dataset.select(self.getColsToSelect())
+        return dataset.select(self.get_cols_to_select())
 
 
 class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, CacheAware):
@@ -250,11 +250,11 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
 
         logger.info(f"Number of layers in the current feature pipeline {self}: {len(tr_layers)}")
 
-        def exit_nodes(graph: Dict) -> Set:
-            parents = set(el for v in graph.values() for el in v)
-            all_nodes = set(graph.keys())
-            exit_nodes = all_nodes.difference(parents)
-            return exit_nodes
+        def exit_nodes(gr: Dict) -> Set:
+            parents = set(el for v in gr.values() for el in v)
+            all_nodes = set(gr.keys())
+            found_exit_nodes = all_nodes.difference(parents)
+            return found_exit_nodes
 
         def cum_outputs_layers(external_input: Set[str], layers):
             available_inputs = [external_input]
@@ -479,11 +479,11 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in feats_to_select}
 
-        ord = SparkOrdinalEncoderEstimator(
+        ord_est = SparkOrdinalEncoderEstimator(
             input_cols=feats_to_select, input_roles=roles, subs=self.subsample, random_state=self.random_state
         )
 
-        return ord
+        return ord_est
 
     def get_categorical_raw(
         self, train: SparkDataset, feats_to_select: Optional[List[str]] = None
@@ -530,7 +530,7 @@ class SparkTabularDataFeatures:
             if train.task.name in ["binary", "reg"]:
                 target_encoder = SparkTargetEncoderEstimator
             else:
-                result = train.data.select(F.max(train.target_column).alias("max")).first()
+                result = train.data.select(sf.max(train.target_column).alias("max")).first()
                 n_classes = result["max"] + 1
 
                 if n_classes <= self.multiclass_te_co:
@@ -622,7 +622,7 @@ class SparkTabularDataFeatures:
         # if self.subsample:
         #     sdf = sdf.sample(withReplacement=False, fraction=self.subsample, seed=self.random_state)
 
-        sdf = sdf.select([F.approx_count_distinct(col).alias(col) for col in feats])
+        sdf = sdf.select([sf.approx_count_distinct(col).alias(col) for col in feats])
         result = sdf.collect()[0]
 
         uns = [result[col] for col in feats]

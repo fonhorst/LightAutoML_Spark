@@ -39,7 +39,7 @@ seed = 42
 # otherwise holdout is used
 USE_FOLDS_VALIDATION = True
 
-ml_alg_kwargs = {
+basic_ml_alg_kwargs = {
     'auto_unique_co': 10,
     'max_intersection_depth': 3,
     'multiclass_te_co': 3,
@@ -53,6 +53,7 @@ logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyShadowingNames
 def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: Dict[str, Any],
                                          fp_lama_clazz, ml_algo_lama_clazz,
                                          ml_alg_kwargs: Dict[str, Any], pipeline_name: str):
@@ -92,7 +93,8 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
     train_pdf = pd.read_csv(config['train_path'], **read_csv_args)
     test_pdf = pd.read_csv(config['test_path'], **read_csv_args)
     # train_pdf, test_pdf = train_test_split(pdf, test_size=0.2, random_state=100)
-    reader = PandasToPandasReader(task=Task(train_valid.train.task.name), cv=cv, advanced_roles=False, random_state=seed)
+    reader = PandasToPandasReader(task=Task(train_valid.train.task.name), cv=cv,
+                                  advanced_roles=False, random_state=seed)
     train_ds = reader.fit_read(train_pdf, roles=config['roles'])
     test_ds = reader.read(test_pdf, add_array_attrs=True)
     lama_pipeline = fp_lama_clazz(**ml_alg_kwargs)
@@ -115,13 +117,15 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
 
     max_diff_in_percents = 0.05
 
-    # assert spark_based_oof_metric > lama_oof_metric or abs((lama_oof_metric - spark_based_oof_metric) / max(lama_oof_metric, spark_based_oof_metric)) < max_diff_in_percents
-    # assert spark_based_oof_metric > lama_oof_metric or abs((lama_oof_metric - spark_based_oof_metric) / min(lama_oof_metric, spark_based_oof_metric)) < max_diff_in_percents
+    assert spark_based_test_metric > lama_test_metric or \
+           abs((lama_test_metric - spark_based_test_metric) / max(lama_test_metric, spark_based_test_metric)) \
+           < max_diff_in_percents
+    assert spark_based_test_metric > lama_test_metric or \
+           abs((lama_test_metric - spark_based_test_metric) / min(lama_test_metric, spark_based_test_metric)) \
+           < max_diff_in_percents
 
-    assert spark_based_test_metric > lama_test_metric or abs((lama_test_metric - spark_based_test_metric) / max(lama_test_metric, spark_based_test_metric)) < max_diff_in_percents
-    assert spark_based_test_metric > lama_test_metric or abs((lama_test_metric - spark_based_test_metric) / min(lama_test_metric, spark_based_test_metric)) < max_diff_in_percents
 
-
+# noinspection PyShadowingNames
 def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str, Any],
                               lama_clazz, slama_clazz, ml_alg_kwargs: Dict[str, Any], pipeline_name: str):
     checkpoint_fp_dir = '/opt/test_checkpoints/feature_pipelines'
@@ -164,8 +168,7 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     not_equal_roles = [
         feat
         for feat, prole in lf_pds.roles.items()
-        if not feat.startswith('nanflg_') and
-           not (type(prole) == type(slama_pipeline.output_roles[feat]) == type(slama_feats.roles[feat]))
+        if not feat.startswith('nanflg_') and not (type(prole) == type(slama_pipeline.output_roles[feat]) == type(slama_feats.roles[feat]))
     ]
     assert len(not_equal_roles) == 0, f"Roles are different: {not_equal_roles}"
 
@@ -173,6 +176,7 @@ def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str,
     assert slama_feats.roles == slama_test_feats.roles
 
 
+# noinspection PyShadowingNames
 def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, Any],
                                fp_lama_clazz, ml_algo_lama_clazz, ml_algo_spark_clazz,
                                pipeline_name: str, ml_alg_kwargs,
@@ -250,54 +254,63 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
                                                            spark_based_test_metric)) < max_diff_in_percents
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_linear_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LinearFeatures, SparkLinearFeatures,
-                              ml_alg_kwargs, 'linear_features')
+                              basic_ml_alg_kwargs, 'linear_features')
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_lgbadv_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBAdvancedPipeline, SparkLGBAdvancedPipeline,
-                              ml_alg_kwargs, 'lgbadv_features')
+                              basic_ml_alg_kwargs, 'lgbadv_features')
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("ds_config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_lgbsimple_features(spark: SparkSession, ds_config: Dict[str, Any], cv: int):
     compare_feature_pipelines(spark, cv, ds_config, LGBSimpleFeatures, SparkLGBSimpleFeatures,
                               dict(), 'lgbsimple_features')
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_linear_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS,
-                                         ml_alg_kwargs, 'linear_features')
+                                         basic_ml_alg_kwargs, 'linear_features')
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_lgbadv_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM,
-                                         ml_alg_kwargs, 'lgbadv_features')
+                                         basic_ml_alg_kwargs, 'lgbadv_features')
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_lgbsimple_features(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_feature_pipelines_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM,
                                          dict(), 'lgbsimple_features')
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_mlalgo_linearlgbfs(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LinearFeatures, LinearLBFGS, SparkLinearLBFGS, 'linear_features',
-                               ml_alg_kwargs)
+                               basic_ml_alg_kwargs)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_mlalgo_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBAdvancedPipeline, BoostLGBM, SparkBoostLGBM, 'lgbadv_features',
-                               ml_alg_kwargs)
+                               basic_ml_alg_kwargs)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(**DATASETS_ARG)])
 def test_quality_mlalgo_simple_features_boostlgbm(spark: SparkSession, config: Dict[str, Any], cv: int):
     compare_mlalgos_by_quality(spark, cv, config, LGBSimpleFeatures, BoostLGBM, SparkBoostLGBM, 'lgbsimple_features',

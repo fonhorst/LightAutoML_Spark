@@ -22,6 +22,7 @@ logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyShadowingNames
 def test_weighted_blender(spark: SparkSession):
     target_col = "some_target"
     folds_col = "folds"

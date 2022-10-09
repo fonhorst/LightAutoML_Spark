@@ -11,7 +11,7 @@ from pyspark.ml import Pipeline, Transformer, PipelineModel, Estimator
 from pyspark.ml.classification import LogisticRegression, LogisticRegressionModel
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import LinearRegression, LinearRegressionModel
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
@@ -186,7 +186,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             ml_model = pipeline.fit(train_sdf)
             val_pred = ml_model.transform(val_sdf)
             preds_to_score = val_pred.select(
-                F.col(fold_prediction_column).alias("prediction"), F.col(valid.target_column).alias("target")
+                sf.col(fold_prediction_column).alias("prediction"), sf.col(valid.target_column).alias("target")
             )
             current_score = self.score(preds_to_score)
             if current_score > best_score:

@@ -3,7 +3,7 @@ from copy import copy
 from typing import Tuple, cast, Sequence
 
 from lightautoml.validation.base import TrainValidIterator
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.base import SparkDataset
@@ -79,12 +79,12 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
     def _split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         train = cast(SparkDataset, self.train)
         is_val_col = (
-            F.when(F.col(self.train.folds_column) != fold, F.lit(0)).otherwise(F.lit(1)).alias(self.TRAIN_VAL_COLUMN)
+            sf.when(sf.col(self.train.folds_column) != fold, sf.lit(0)).otherwise(sf.lit(1)).alias(self.TRAIN_VAL_COLUMN)
         )
 
         sdf = train.data.select("*", is_val_col)
-        train_part_sdf = sdf.where(F.col(self.TRAIN_VAL_COLUMN) == 0).drop(self.TRAIN_VAL_COLUMN)
-        valid_part_sdf = sdf.where(F.col(self.TRAIN_VAL_COLUMN) == 1).drop(self.TRAIN_VAL_COLUMN)
+        train_part_sdf = sdf.where(sf.col(self.TRAIN_VAL_COLUMN) == 0).drop(self.TRAIN_VAL_COLUMN)
+        valid_part_sdf = sdf.where(sf.col(self.TRAIN_VAL_COLUMN) == 1).drop(self.TRAIN_VAL_COLUMN)
 
         train_ds = cast(SparkDataset, self.train.empty())
         train_ds.set_data(sdf, self.train.features, self.train.roles)

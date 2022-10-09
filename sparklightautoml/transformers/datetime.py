@@ -10,7 +10,7 @@ from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from lightautoml.transformers.datetime import datetime_check, date_attrs
 from pyspark.ml.param.shared import Param, Params
-from pyspark.sql import functions as F, DataFrame as SparkDataFrame
+from pyspark.sql import functions as sf, DataFrame as SparkDataFrame
 from pyspark.sql.pandas.functions import pandas_udf
 from pyspark.sql.types import IntegerType
 
@@ -27,24 +27,24 @@ def get_unit_of_timestamp_column(seas: str, col: str):
         col (str): column name with datetime values
     """
     if seas == "y":
-        return F.year(F.to_timestamp(F.col(col)))
+        return sf.year(sf.to_timestamp(sf.col(col)))
     elif seas == "m":
-        return F.month(F.to_timestamp(F.col(col)))
+        return sf.month(sf.to_timestamp(sf.col(col)))
     elif seas == "d":
-        return F.dayofmonth(F.to_timestamp(F.col(col)))
+        return sf.dayofmonth(sf.to_timestamp(sf.col(col)))
     # TODO SPARK-LAMA: F.dayofweek() starts numbering from another day.
     # Differs from pandas.Timestamp.weekday.
     # elif seas == 'wd':
     #     return F.dayofweek(F.to_timestamp(F.col(col)))
     elif seas == "hour":
-        return F.hour(F.to_timestamp(F.col(col)))
+        return sf.hour(sf.to_timestamp(sf.col(col)))
     elif seas == "min":
-        return F.minute(F.to_timestamp(F.col(col)))
+        return sf.minute(sf.to_timestamp(sf.col(col)))
     elif seas == "sec":
-        return F.second(F.to_timestamp(F.col(col)))
+        return sf.second(sf.to_timestamp(sf.col(col)))
     else:
 
-        @pandas_udf(returnType=IntegerType())
+        @pandas_udf(IntegerType())
         def get_timestamp_attr(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
             for x in arrs:
 
@@ -58,7 +58,7 @@ def get_unit_of_timestamp_column(seas: str, col: str):
                 x = x.apply(lambda d: convert_to_datetime(d))
                 yield getattr(x.dt, date_attrs[seas])
 
-        return get_timestamp_attr(F.to_timestamp(F.col(col)).cast("long"))
+        return get_timestamp_attr(sf.to_timestamp(sf.col(col)).cast("long"))
 
 
 class SparkDatetimeHelper:
@@ -107,7 +107,7 @@ class SparkTimeToNumTransformer(
         new_cols = []
         for i, out_col in zip(self.getInputCols(), self.getOutputCols()):
             new_col = (
-                (F.to_timestamp(F.col(i)).cast("long") - F.to_timestamp(F.lit(self.basic_time)).cast("long"))
+                (sf.to_timestamp(sf.col(i)).cast("long") - sf.to_timestamp(sf.lit(self.basic_time)).cast("long"))
                 / self._interval_mapping[self.basic_interval]
             ).alias(out_col)
             new_cols.append(new_col)
@@ -161,7 +161,7 @@ class SparkBaseDiffTransformer(
 
         new_cols = [
             (
-                (F.to_timestamp(F.col(dif)).cast("long") - F.to_timestamp(F.col(base)).cast("long"))
+                (sf.to_timestamp(sf.col(dif)).cast("long") - sf.to_timestamp(sf.col(base)).cast("long"))
                 / self._interval_mapping[self.basic_interval]
             ).alias(f"{self._fname_prefix}_{base}__{dif}")
             for base in self.base_names
@@ -213,10 +213,10 @@ class SparkDateSeasonsTransformer(
 
         new_cols = []
         for col in self.getInputCols():
-            fcol = F.to_timestamp(F.col(col)).cast("long")
+            fcol = sf.to_timestamp(sf.col(col)).cast("long")
             seas_cols = [
                 (
-                    F.when(F.isnan(fcol) | F.isnull(fcol), None)
+                    sf.when(sf.isnan(fcol) | sf.isnull(fcol), None)
                     .otherwise(get_unit_of_timestamp_column(seas, col))
                     .alias(f"{self._fname_prefix}_{seas}__{col}")
                 )
@@ -227,7 +227,7 @@ class SparkDateSeasonsTransformer(
 
             if roles[col].country is not None:
 
-                @pandas_udf(returnType=IntegerType())
+                @pandas_udf(IntegerType())
                 def is_holiday(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
                     for x in arrs:
                         x = x.apply(lambda d: datetime.fromtimestamp(d)).dt.normalize()

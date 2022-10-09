@@ -9,7 +9,7 @@ from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.reader.base import RolesDict
 from lightautoml.transformers.base import EmptyTransformer
 from pyspark.ml import Transformer
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
@@ -89,6 +89,7 @@ class SparkBlender(ABC):
 
         Args:
             predictions: Dataset with predictions.
+            pipes: ml pipelines to be associated with the predictions
 
         Returns:
             Each tuple in the list is:
@@ -117,7 +118,7 @@ class SparkBlender(ABC):
 
     def _make_single_pred_ds(self, predictions: SparkDataset, pred_col: str) -> SparkDataset:
         pred_sdf = predictions.data.select(
-            SparkDataset.ID_COLUMN, predictions.target_column, F.col(pred_col).alias(self._single_prediction_col_name)
+            SparkDataset.ID_COLUMN, predictions.target_column, sf.col(pred_col).alias(self._single_prediction_col_name)
         )
         pred_roles = {c: predictions.roles[c] for c in pred_sdf.columns}
         pred_ds = predictions.empty()

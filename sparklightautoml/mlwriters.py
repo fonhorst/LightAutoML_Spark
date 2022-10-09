@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class CommonPickleMLWritable(MLWritable):
     def write(self) -> MLWriter:
-        "Returns MLWriter instance that can save the Transformer instance."
+        """Returns MLWriter instance that can save the Transformer instance."""
         return СommonPickleMLWriter(self)
 
 
@@ -65,15 +65,12 @@ class СommonPickleMLWriter(MLWriter):
         - sparkVersion
         - uid
         - paramMap
-        - defaultParamMap (since 2.4.0)
-        - (optionally, extra metadata)
 
         Parameters
         ----------
-        extraMetadata : dict, optional
-            Extra metadata to be saved at same level as uid, paramMap, etc.
-        paramMap : dict, optional
-            If given, this is saved in the "paramMap" field.
+        instance : Spark ML Transformer to be saved
+        path : local or HDFS path to save the transformer
+        sc : SparkContext
         """
         metadataPath = os.path.join(path, "metadata")
         metadataJson = СommonPickleMLWriter._get_metadata_to_save(instance, sc)
@@ -118,7 +115,7 @@ class СommonPickleMLReader(MLReader):
 
 class SparkLabelEncoderTransformerMLWritable(MLWritable):
     def write(self) -> MLWriter:
-        "Returns MLWriter instance that can save the Transformer instance."
+        """Returns MLWriter instance that can save the Transformer instance."""
         return SparkLabelEncoderTransformerMLWriter(self)
 
 

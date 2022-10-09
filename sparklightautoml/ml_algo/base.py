@@ -11,7 +11,7 @@ from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.param import Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
 from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 from pyspark.sql.types import IntegerType
 
 from sparklightautoml.dataset.base import SparkDataset
@@ -166,7 +166,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         preds_dfs = [
             df.select(
                 SparkDataset.ID_COLUMN,
-                *[F.lit(neutral_element).alias(c) for c in self._models_prediction_columns if c not in df.columns]
+                *[sf.lit(neutral_element).alias(c) for c in self._models_prediction_columns if c not in df.columns]
             )
             for df in preds_dfs
         ]
@@ -225,7 +225,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     def _infer_and_set_prediction_role(self, valid_ds: SparkDataset):
         outp_dim = 1
         if self.task.name == "multiclass":
-            outp_dim = valid_ds.data.select(F.max(valid_ds.target_column).alias("max")).first()
+            outp_dim = valid_ds.data.select(sf.max(valid_ds.target_column).alias("max")).first()
             outp_dim = outp_dim["max"] + 1
             self._prediction_role = NumericVectorOrArrayRole(
                 outp_dim, f"{self.prediction_feature}" + "_{}", np.float32, force_input=True, prob=True
@@ -296,7 +296,8 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
             input_cols (List[str], optional): List of input columns.
             output_col (str, optional): Output column name. Defaults to "averaged_values".
             remove_cols (Optional[List[str]], optional): Columns need to remove. Defaults to None.
-            convert_to_array_first (bool, optional): If `True` then will be convert input vectors to arrays. Defaults to False.
+            convert_to_array_first (bool, optional): If `True` then will be convert input vectors to arrays.
+                Defaults to False.
             weights (Optional[List[int]], optional): List of weights to scaling output values. Defaults to None.
             dim_num (int, optional): Dimension of input columns. Defaults to 1.
         """
@@ -317,19 +318,19 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
         self.set(self.weights, weights)
         self.set(self.dimNum, dim_num)
 
-    def getTaskName(self) -> str:
+    def get_task_name(self) -> str:
         return self.getOrDefault(self.taskName)
 
-    def getRemoveCols(self) -> List[str]:
+    def get_remove_cols(self) -> List[str]:
         return self.getOrDefault(self.removeCols)
 
-    def getConvertToArrayFirst(self) -> bool:
+    def get_convert_to_array_first(self) -> bool:
         return self.getOrDefault(self.convertToArrayFirst)
 
-    def getWeights(self) -> List[int]:
+    def get_weights(self) -> List[int]:
         return self.getOrDefault(self.weights)
 
-    def getDimNum(self) -> int:
+    def get_dim_num(self) -> int:
         return self.getOrDefault(self.dimNum)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
@@ -337,42 +338,42 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
 
         pred_cols = self.getInputCols()
         dim_size = self.getInputCols()
-        weights = {c: w for w, c in zip(self.getWeights(), pred_cols)}
-        non_null_count_col = F.lit(len(pred_cols)) - sum(F.isnull(c).astype(IntegerType()) for c in pred_cols)
+        weights = {c: w for w, c in zip(self.get_weights(), pred_cols)}
+        non_null_count_col = sf.lit(len(pred_cols)) - sum(sf.isnull(c).astype(IntegerType()) for c in pred_cols)
 
-        if self.getTaskName() in ["binary", "multiclass"]:
+        if self.get_task_name() in ["binary", "multiclass"]:
 
             def convert_column(c):
-                return vector_to_array(c).alias(c) if self.getConvertToArrayFirst() else F.col(c)
+                return vector_to_array(c).alias(c) if self.get_convert_to_array_first() else sf.col(c)
 
             normalized_cols = [
-                F.when(F.isnull(c), F.array(*[F.lit(0.0) for _ in range(self.getDimNum())]))
+                sf.when(sf.isnull(c), sf.array(*[sf.lit(0.0) for _ in range(self.get_dim_num())]))
                 .otherwise(convert_column(c))
                 .alias(c)
                 for c in pred_cols
             ]
-            arr_fields_summ = F.transform(
-                F.arrays_zip(*normalized_cols),
-                lambda x: F.aggregate(
-                    F.array(*[x[c] * F.lit(weights[c]) for c in pred_cols]), F.lit(0.0), lambda acc, x: acc + x
+            arr_fields_summ = sf.transform(
+                sf.arrays_zip(*normalized_cols),
+                lambda x: sf.aggregate(
+                    sf.array(*[x[c] * sf.lit(weights[c]) for c in pred_cols]), sf.lit(0.0), lambda acc, y: acc + y
                 )
-                / non_null_count_col,
+                          / non_null_count_col,
             )
 
-            out_col = array_to_vector(arr_fields_summ) if self.getConvertToArrayFirst() else arr_fields_summ
+            out_col = array_to_vector(arr_fields_summ) if self.get_convert_to_array_first() else arr_fields_summ
         else:
             scalar_fields_summ = (
-                F.aggregate(
-                    F.array(*[F.col(c) * F.lit(weights[c]) for c in pred_cols]),
-                    F.lit(0.0),
-                    lambda acc, x: acc + F.when(F.isnull(x), F.lit(0.0)).otherwise(x),
+                    sf.aggregate(
+                    sf.array(*[sf.col(c) * sf.lit(weights[c]) for c in pred_cols]),
+                    sf.lit(0.0),
+                    lambda acc, x: acc + sf.when(sf.isnull(x), sf.lit(0.0)).otherwise(x),
                 )
-                / non_null_count_col
+                    / non_null_count_col
             )
 
             out_col = scalar_fields_summ
 
-        cols_to_remove = set(self.getRemoveCols())
+        cols_to_remove = set(self.get_remove_cols())
         cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
         out_df = dataset.select(*cols_to_select, out_col.alias(self.getOutputCol()))
 

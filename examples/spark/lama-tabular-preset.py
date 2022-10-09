@@ -86,7 +86,7 @@ def main(dataset_name: str, seed: int):
 
 
 def multirun(dataset_name: str):
-    seeds = [ 1, 5, 42, 100, 777]
+    seeds = [1, 5, 42, 100, 777]
     results = [main(dataset_name, seed) for seed in seeds]
 
     df = pd.DataFrame(results)

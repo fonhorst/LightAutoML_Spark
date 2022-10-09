@@ -3,7 +3,7 @@ import pickle
 import shutil
 from typing import Any, Dict, List, Optional, Tuple
 
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from pyspark.sql import SparkSession
 
 from sparklightautoml.dataset.base import SparkDataset
@@ -35,7 +35,7 @@ def dump_data(path: str, ds: SparkDataset, **meta_kwargs):
         pickle.dump(metadata, f)
 
     cols_to_rename = [
-        F.col(c).alias(c.replace("(", "[").replace(")", "]"))
+        sf.col(c).alias(c.replace("(", "[").replace(")", "]"))
         for c in ds.data.columns
     ]
 
@@ -58,7 +58,7 @@ def load_dump_if_exist(spark: SparkSession, path: Optional[str] = None) -> Optio
     df = spark.read.parquet(data_file)
 
     cols_to_rename = [
-        F.col(c).alias(c.replace("[", "(").replace("]", ")"))
+        sf.col(c).alias(c.replace("[", "(").replace("]", ")"))
         for c in df.columns
     ]
 

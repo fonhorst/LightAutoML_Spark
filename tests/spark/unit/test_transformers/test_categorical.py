@@ -47,6 +47,7 @@ DATASETS = [
 ]
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_sparkml_label_encoder(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
@@ -58,6 +59,7 @@ def test_sparkml_label_encoder(spark: SparkSession, dataset: DatasetForTest):
     compare_sparkml_by_metadata(spark, ds, LabelEncoder(), transformer, compare_feature_distributions=True)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_freq_encoder(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
@@ -69,6 +71,7 @@ def test_freq_encoder(spark: SparkSession, dataset: DatasetForTest):
     compare_sparkml_by_content(spark, ds, FreqEncoder(), transformer)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_ordinal_encoder(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
@@ -80,6 +83,7 @@ def test_ordinal_encoder(spark: SparkSession, dataset: DatasetForTest):
     compare_sparkml_by_content(spark, ds, OrdinalEncoder(), transformer)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_cat_intersections(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles)
@@ -103,6 +107,7 @@ def test_cat_intersections(spark: SparkSession, dataset: DatasetForTest):
     # compare_sparkml_by_content(spark, ds, CatIntersectstions(), transformer)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     # reader = PandasToPandasReader(task=Task("binary"), cv=CV, advanced_roles=False)
@@ -129,6 +134,7 @@ def test_target_encoder(spark: SparkSession, dataset: DatasetForTest):
     compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer, compare_feature_distributions=True)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset="used_cars_dataset")])
 def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any], cv: int):
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
@@ -155,6 +161,7 @@ def test_target_encoder_real_datasets(spark: SparkSession, config: Dict[str, Any
     compare_sparkml_by_metadata(spark, train_ds, TargetEncoder(), transformer, compare_feature_distributions=True)
 
 
+# noinspection PyShadowingNames
 @pytest.mark.parametrize("config,cv", [(ds, CV) for ds in get_test_datasets(dataset='ipums_97')])
 def test_multi_target_encoder(spark: SparkSession, config: Dict[str, Any], cv: int):
     read_csv_args = {'dtype': config['dtype']} if 'dtype' in config else dict()
@@ -178,4 +185,10 @@ def test_multi_target_encoder(spark: SparkSession, config: Dict[str, Any], cv: i
         folds_column='folds'
     )
 
-    compare_sparkml_by_metadata(spark, train_ds, MultiClassTargetEncoder(), transformer, compare_feature_distributions=True)
+    compare_sparkml_by_metadata(
+        spark,
+        train_ds,
+        MultiClassTargetEncoder(),
+        transformer,
+        compare_feature_distributions=True
+    )

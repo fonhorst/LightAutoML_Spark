@@ -6,7 +6,7 @@ from typing import Dict, Optional, Tuple, Union, cast, List
 
 import lightgbm as lgb
 import pandas as pd
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.utils.timer import TaskTimer
@@ -44,7 +44,8 @@ logger = logging.getLogger(__name__)
 
 
 class LightGBMModelWrapper(Transformer, MLWritable, MLReadable):
-    """Simple wrapper for `synapse.ml.lightgbm.[LightGBMRegressionModel|LightGBMClassificationModel]` to fix issue with loading model from saved composite pipeline.
+    """Simple wrapper for `synapse.ml.lightgbm.[LightGBMRegressionModel|LightGBMClassificationModel]`
+    to fix issue with loading model from saved composite pipeline.
 
     For more details see: https://github.com/microsoft/SynapseML/issues/614.
     """
@@ -92,8 +93,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     default_params: All available parameters listed in synapse.ml documentation:
 
-        - https://mmlspark.blob.core.windows.net/docs/0.9.5/pyspark/synapse.ml.lightgbm.html#module-synapse.ml.lightgbm.LightGBMClassifier
-        - https://mmlspark.blob.core.windows.net/docs/0.9.5/pyspark/synapse.ml.lightgbm.html#module-synapse.ml.lightgbm.LightGBMRegressor
+    - https://mmlspark.blob.core.windows.net/docs/0.9.5/pyspark/synapse.ml.lightgbm.html#module-synapse.ml.lightgbm.LightGBMClassifier
+    - https://mmlspark.blob.core.windows.net/docs/0.9.5/pyspark/synapse.ml.lightgbm.html#module-synapse.ml.lightgbm.LightGBMRegressor
 
     freeze_defaults:
 
@@ -393,7 +394,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             params["numThreads"] = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
 
         train_data = full.data
-        valid_size = train_data.where(F.col(self.validation_column) == 1).count()
+        valid_size = train_data.where(sf.col(self.validation_column) == 1).count()
         max_val_size = self._max_validation_size
         if valid_size > max_val_size:
             warnings.warn(
@@ -404,8 +405,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             rest_cols = list(train_data.columns)
             rest_cols.remove(self.validation_column)
 
-            replace_col = F.when(F.rand(self._seed) < max_val_size / valid_size, F.lit(True)).otherwise(F.lit(False))
-            val_filter_cond = F.when(F.col(self.validation_column) == 1, replace_col).otherwise(F.lit(True))
+            replace_col = sf.when(sf.rand(self._seed) < max_val_size / valid_size, sf.lit(True)).otherwise(sf.lit(False))
+            val_filter_cond = sf.when(sf.col(self.validation_column) == 1, replace_col).otherwise(sf.lit(True))
 
             train_data = train_data.where(val_filter_cond)
 

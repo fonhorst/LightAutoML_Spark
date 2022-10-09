@@ -9,7 +9,7 @@ import pandas as pd
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, DatetimeRole, NumericRole, ColumnRole
 from pyspark.sql import DataFrame as SparkDataFrame
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 from pyspark.sql.pandas.functions import pandas_udf
 
 from examples_utils import get_spark_session
@@ -62,10 +62,11 @@ def generate_placeholder_value(role: ColumnRole) -> Union[float, str, datetime]:
     raise Exception(f"Unsupported type of ColumnRole: {type(role)}")
 
 
-def generate_frame(cols: Union[Dict[str, int], int], rows_count: int,
-                   col_encs: List[str] = ('freq', 'ord', 'LE', 'ChRole', 'LE#2', 'DateSeasons', 'QB', 'regular')) -> Tuple[SparkDataFrame, RolesDict]:
+def generate_frame(
+        cols: Union[Dict[str, int], int], rows_count: int,
+        col_encs: List[str] = ('freq', 'ord', 'LE', 'ChRole', 'LE#2', 'DateSeasons', 'QB', 'regular')
+) -> Tuple[SparkDataFrame, RolesDict]:
     if isinstance(cols, int):
-        # cols_mapping = {col_enc: cols for col_enc in ['freq', 'ord', 'basediff', 'LE', 'ChRole', 'LE#2', 'DateSeasons', 'QB', 'regular']}
         cols_mapping = {col_enc: cols for col_enc in col_encs}
     else:
         cols_mapping = cast(Dict[str, int], cols)
@@ -87,18 +88,18 @@ def generate_frame(cols: Union[Dict[str, int], int], rows_count: int,
         for _ in range(rows_count)
     ]
 
-    sdf = spark.createDataFrame(data)
+    data_sdf = spark.createDataFrame(data)
 
     h = 1.0 / 5
     folds_col = 'folds'
     target_col = 'target'
-    sdf = sdf.select(
+    data_sdf = data_sdf.select(
         "*",
-        F.floor(F.rand(42) / h).alias(folds_col),
-        F.when(F.rand(42) <= 0.5, F.lit(0.0)).otherwise(F.lit(1.0)).alias(target_col)
+        sf.floor(sf.rand(42) / h).alias(folds_col),
+        sf.when(sf.rand(42) <= 0.5, sf.lit(0.0)).otherwise(sf.lit(1.0)).alias(target_col)
     )
 
-    return sdf, all_cols_mapping
+    return data_sdf, all_cols_mapping
 
 
 spark = get_spark_session()

@@ -1,5 +1,4 @@
 import numpy as np
-import numpy as np
 import pandas as pd
 import pytest
 from lightautoml.dataset.np_pd_dataset import PandasDataset
@@ -115,7 +114,8 @@ def test_logodds(spark: SparkSession):
 
     ds = PandasDataset(source_data, roles={name: NumericRole(np.float32) for name in source_data.columns})
     # TODO: Change `rtol` when lama improves LogOdds() algorithm
-    # Floating point errors: https://github.com/sb-ai-lab/LightAutoML/blob/master/lightautoml/transformers/numeric.py#L214
+    # Floating point errors:
+    # https://github.com/sb-ai-lab/LightAutoML/blob/master/lightautoml/transformers/numeric.py#L214
     compare_sparkml_by_content(spark, ds, LogOdds(),
                                SparkLogOddsTransformer(input_cols=ds.features, input_roles=ds.roles),
                                rtol=1.e-1)

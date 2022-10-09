@@ -2,7 +2,7 @@ from copy import copy
 from typing import List, cast, Optional, Any, Tuple, Callable
 
 import numpy as np
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from pyspark.ml import Transformer, PipelineModel
 from pyspark.ml.functions import array_to_vector
 
@@ -33,7 +33,7 @@ class FakeOpTransformer(Transformer):
         return dataset.select(
             '*',
             *[
-                array_to_vector(F.array(*[F.rand() for _ in range(self._n_classes)])).alias(f)
+                array_to_vector(sf.array(*[sf.rand() for _ in range(self._n_classes)])).alias(f)
                 for f in self._cos_to_generate
             ]
         )
@@ -71,7 +71,7 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 
     def fit_predict_single_fold(self, fold_prediction_column: str, full: SparkDataset, train: SparkDataset,
                                 valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
-        prediction = array_to_vector(F.array(*[F.lit(10*10 + j) for j in range(self.n_classes)]))\
+        prediction = array_to_vector(sf.array(*[sf.lit(10 * 10 + j) for j in range(self.n_classes)]))\
             .alias(fold_prediction_column)
         pred_df = valid.data.select('*', prediction)
 
@@ -133,7 +133,7 @@ class DummySparkMLPipeline(SparkMLPipeline):
         sdf = sdf.select(
             '*',
             *[
-                array_to_vector(F.array(*[F.lit(i*10 + j) for j in range(n_classes)])).alias(name)
+                array_to_vector(sf.array(*[sf.lit(i * 10 + j) for j in range(n_classes)])).alias(name)
                 for i, name in enumerate(self._output_roles.keys())
             ]
         )

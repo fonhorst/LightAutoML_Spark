@@ -12,7 +12,7 @@ from lightautoml.reader.base import RolesDict
 from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
 from lightautoml.utils.timer import PipelineTimer
 from pyspark.ml import PipelineModel, Transformer
-from pyspark.sql import functions as F
+from pyspark.sql import functions as sf
 
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset
@@ -303,6 +303,8 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
               if cannot be inferred from `train_data`.
             return_all_predictions: if True,
               returns all model predictions from last level
+            add_reader_attrs: if True,
+              adds reader attributes to the dataset
         Returns:
             Dataset with predictions.
 
@@ -418,10 +420,10 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         folds_col = train.folds_column if train.folds_column else SparkToSparkReader.DEFAULT_READER_FOLD_COL
 
         # fold #1
-        tdf = train.data.select(*tcols, F.lit(1).alias(folds_col))
+        tdf = train.data.select(*tcols, sf.lit(1).alias(folds_col))
         # fold #0
         # In SparkHoldoutIterator we always use fold #0 as validation
-        vdf = valid.data.select(*vcols, F.lit(0).alias(folds_col))
+        vdf = valid.data.select(*vcols, sf.lit(0).alias(folds_col))
         sdf = tdf.unionByName(vdf).coalesce(tdf.rdd.getNumPartitions())
 
         dataset = train.empty()

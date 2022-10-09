@@ -3,7 +3,7 @@ import os
 import uuid
 
 import pandas as pd
-import pyspark.sql.functions as F
+import pyspark.sql.functions as sf
 from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
@@ -78,8 +78,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
         score = task.get_dataset_metric()
         test_metric_value = score(te_pred.select(
             SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(pred_column).alias('prediction')
+            sf.col(roles['target']).alias('target'),
+            sf.col(pred_column).alias('prediction')
         ))
 
         logger.info(f"score for test predictions: {test_metric_value}")
@@ -101,8 +101,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
         score = task.get_dataset_metric()
         test_metric_value = score(te_pred.select(
             SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(pred_column).alias('prediction')
+            sf.col(roles['target']).alias('target'),
+            sf.col(pred_column).alias('prediction')
         ))
 
     logger.info(f"score for test predictions via loaded pipeline: {test_metric_value}")
