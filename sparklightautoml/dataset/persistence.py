@@ -1,10 +1,12 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import Dict, Optional, Callable, Union, cast
+from typing import Dict, Optional, Callable, Union, cast, List
 
 from pyspark.sql import SparkSession
 
 from sparklightautoml.dataset.base import SparkDataset
+
+PersistenceIdentifable = Union[str, SparkDataset]
 
 
 class CacheAware(ABC):
@@ -21,9 +23,11 @@ class PersistedDataset:
 
 # TODO: SLAMA - add documentation
 class PersistenceManager:
-    def __init__(self):
+    def __init__(self, parent: Optional['PersistenceManager'] = None):
         self._persistence_registry: Dict[str, PersistedDataset] = dict()
         self._persisted_datasets: Dict[str, str] = dict()
+        self._parent = parent
+        self._children: List['PersistenceManager'] = []
 
     def persist(self, dataset: Union[SparkDataset, PersistedDataset], *, name: str) -> SparkDataset:
         assert name is not None, "Name cannot be None"
@@ -49,7 +53,7 @@ class PersistenceManager:
 
         return persisted_dataset.dataset
 
-    def unpersist(self, name_or_dataset: Union[str, SparkDataset]):
+    def unpersist(self, name_or_dataset: PersistenceIdentifable):
         name = name_or_dataset if isinstance(name_or_dataset, str) \
             else self._persisted_datasets.get(name_or_dataset.uid, None)
 
@@ -66,6 +70,29 @@ class PersistenceManager:
         del self._persisted_datasets[persisted_dataset.dataset.uid]
         del self._persistence_registry[name]
 
-    def unpersist_all(self):
-        for name in self._persistence_registry:
+    def unpersist_all(self, exceptions: Optional[Union[PersistenceIdentifable, List[PersistenceIdentifable]]] = None):
+        if exceptions:
+            if not isinstance(exceptions, list):
+                exceptions = [exceptions]
+
+            names_to_save = {
+                ex if isinstance(ex, str) else self._persisted_datasets.get(ex.uid, None)
+                for ex in exceptions
+            }
+            names = [name for name in self._persistence_registry if name not in names_to_save]
+        else:
+            names = list(self._persistence_registry)
+
+        self.unpersist_children()
+
+        for name in names:
             self.unpersist(name)
+
+    def unpersist_children(self):
+        for child in self._children:
+            child.unpersist_all()
+
+    def child(self) -> 'PersistenceManager':
+        a_child = PersistenceManager(self)
+        self._children.append(a_child)
+        return a_child

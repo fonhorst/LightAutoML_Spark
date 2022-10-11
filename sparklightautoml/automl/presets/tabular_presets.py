@@ -98,8 +98,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         cb_params: Optional[dict] = None,
         linear_l2_params: Optional[dict] = None,
         gbm_pipeline_params: Optional[dict] = None,
-        linear_pipeline_params: Optional[dict] = None,
-        persistence_manager: Optional[PersistenceManager] = None
+        linear_pipeline_params: Optional[dict] = None
     ):
         if config_path is None:
             config_path = os.path.join(base_dir, self._default_config_path)

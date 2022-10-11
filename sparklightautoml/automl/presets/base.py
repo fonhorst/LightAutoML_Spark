@@ -39,7 +39,6 @@ class SparkAutoMLPreset(SparkAutoML):
 
     def __init__(
         self,
-        persistence_manager: PersistenceManager,
         task: SparkTask,
         timeout: int = 3600,
         memory_limit: int = 16,
@@ -77,7 +76,7 @@ class SparkAutoMLPreset(SparkAutoML):
             **kwargs: Not used.
 
         """
-        super().__init__(persistence_manager)
+        super().__init__()
 
         self._set_config(config_path)
 

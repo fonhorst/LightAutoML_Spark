@@ -67,7 +67,6 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
     """
     def __init__(
         self,
-        persistence_manager: PersistenceManager,
         reader: Optional[SparkToSparkReader] = None,
         levels: Optional[Sequence[Sequence[SparkMLPipeline]]] = None,
         timer: Optional[PipelineTimer] = None,
@@ -103,7 +102,6 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         super().__init__()
         self.levels: Optional[Sequence[Sequence[SparkMLPipeline]]] = None
         self._transformer = None
-        self._persistence_manager = persistence_manager
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
         if reader and levels:
@@ -181,6 +179,7 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         valid_data: Optional[Any] = None,
         valid_features: Optional[Sequence[str]] = None,
         verbose: int = 0,
+        persistence_manager: Optional[PersistenceManager] = None
     ) -> SparkDataset:
         """Fit on input data and make prediction on validation part.
 
@@ -203,7 +202,9 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         set_stdout_level(verbosity_to_loglevel(verbose))
         self.timer.start()
 
-        train_dataset = self.reader.fit_read(train_data, train_features, roles)
+        persistence_manager = persistence_manager or PersistenceManager()
+
+        train_dataset = self.reader.fit_read(train_data, train_features, roles, persistence_manager)
 
         assert (
             len(self._levels) <= 1 or train_dataset.folds is not None
@@ -214,8 +215,6 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         ), "Not possible to fit more than 1 level with holdout validation"
 
         main_milestone_name = "CurrentMainMilestone"
-        # checkpointing
-        train_dataset = self._persistence_manager.persist(train_dataset, name=main_milestone_name)
 
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
 
@@ -234,7 +233,8 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
 
             all_pipes_predictions: List[SparkDataset] = []
             for k, ml_pipe in enumerate(level):
-                pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(train_valid))
+                # TODO: SLAMA - add persistence_manager
+                pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(train_valid, persistence_manager.child()))
                 all_pipes_predictions.append(pipe_predictions)
 
                 pipes.append(ml_pipe)
@@ -260,21 +260,21 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
             logger.info("\x1b[1mLayer {} training completed.\x1b[0m\n".format(leven_number))
 
             if flg_last_level:
-                level_ds = SparkDataset.concatenate(all_pipes_predictions)
                 # checkpointing
-                # TODO: clean ml_pipes caches
-                level_ds = self._persistence_manager.persist(level_ds, name=main_milestone_name)
+                level_ds = SparkDataset.concatenate(all_pipes_predictions)
+                level_ds = persistence_manager.persist(level_ds, name=main_milestone_name)
+                persistence_manager.unpersist_children()
                 break
 
             self.levels.append(pipes)
 
             level_dss = [train_valid.get_validation_data(),
                          *all_pipes_predictions] if self.skip_conn else all_pipes_predictions
-            level_ds = SparkDataset.concatenate(level_dss)
 
             # checkpointing
-            # TODO: clean ml_pipes caches
-            level_ds = self._persistence_manager.persist(level_ds, name=main_milestone_name)
+            level_ds = SparkDataset.concatenate(level_dss)
+            level_ds = persistence_manager.persist(level_ds, name=main_milestone_name)
+            persistence_manager.unpersist_children()
 
             train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
 
@@ -287,6 +287,9 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
 
         self._input_roles = copy(train_dataset.roles)
         self._output_roles = copy(oof_pred.roles)
+
+        oof_pred = persistence_manager.persist(oof_pred, name=main_milestone_name)
+        persistence_manager.unpersist_all(exceptions=oof_pred)
 
         return oof_pred
 
@@ -322,9 +325,6 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         sds.set_data(predictions, predictions.columns, roles)
 
         return sds
-
-    def release_cache(self):
-        self._persistence_manager.unpersist_all()
 
     def collect_used_feats(self) -> List[str]:
         """Get feats that automl uses on inference.
