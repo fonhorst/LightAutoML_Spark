@@ -16,7 +16,7 @@ from pyspark.sql import functions as sf
 
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset
-from ..dataset.caching import CacheAware, PersistenceManager
+from ..dataset.persistence import CacheAware, PersistenceManager
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
@@ -67,8 +67,9 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
     """
     def __init__(
         self,
-        reader: SparkToSparkReader,
-        levels: Sequence[Sequence[SparkMLPipeline]],
+        persistence_manager: PersistenceManager,
+        reader: Optional[SparkToSparkReader] = None,
+        levels: Optional[Sequence[Sequence[SparkMLPipeline]]] = None,
         timer: Optional[PipelineTimer] = None,
         blender: Optional[SparkBlender] = None,
         skip_conn: bool = False,
@@ -102,10 +103,11 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         super().__init__()
         self.levels: Optional[Sequence[Sequence[SparkMLPipeline]]] = None
         self._transformer = None
-        self._cache_manager = PersistenceManager()
+        self._persistence_manager = persistence_manager
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
-        self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
+        if reader and levels:
+            self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
@@ -213,7 +215,7 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
 
         main_milestone_name = "CurrentMainMilestone"
         # checkpointing
-        train_dataset = self._cache_manager.persist(train_dataset, name=main_milestone_name)
+        train_dataset = self._persistence_manager.persist(train_dataset, name=main_milestone_name)
 
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
 
@@ -261,7 +263,7 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
                 level_ds = SparkDataset.concatenate(all_pipes_predictions)
                 # checkpointing
                 # TODO: clean ml_pipes caches
-                level_ds = self._cache_manager.persist(level_ds, name=main_milestone_name)
+                level_ds = self._persistence_manager.persist(level_ds, name=main_milestone_name)
                 break
 
             self.levels.append(pipes)
@@ -272,7 +274,7 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
 
             # checkpointing
             # TODO: clean ml_pipes caches
-            level_ds = self._cache_manager.persist(level_ds, name=main_milestone_name)
+            level_ds = self._persistence_manager.persist(level_ds, name=main_milestone_name)
 
             train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
 
@@ -322,7 +324,7 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
         return sds
 
     def release_cache(self):
-        self._cache_manager.unpersist_all()
+        self._persistence_manager.unpersist_all()
 
     def collect_used_feats(self) -> List[str]:
         """Get feats that automl uses on inference.

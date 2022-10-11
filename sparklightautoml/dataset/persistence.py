@@ -19,6 +19,7 @@ class PersistedDataset:
     callback: Optional[Callable] = None
 
 
+# TODO: SLAMA - add documentation
 class PersistenceManager:
     def __init__(self):
         self._persistence_registry: Dict[str, PersistedDataset] = dict()
