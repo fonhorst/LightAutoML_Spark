@@ -12,7 +12,7 @@ from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import CacheManager
+from sparklightautoml.dataset.caching import PersistenceManager
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -49,14 +49,14 @@ class DummyReader(SparkToSparkReader):
         self.target_col = roles["target"]
         self._roles = {c: NumericRole() for c in train_data.columns if c != self.target_col}
 
-        train_data = self._create_unique_ids(train_data, cacher_key='main_cache')
+        train_data = self._create_unique_ids(train_data)
         train_data, folds_col = self._create_folds(train_data, kwargs={})
 
         sds = SparkDataset(train_data, self._roles, task=self.task, target=self.target_col, folds=folds_col)
         return sds
 
     def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
-        data = self._create_unique_ids(data, cacher_key='main_cache')
+        data = self._create_unique_ids(data)
         sds = SparkDataset(data, self._roles, task=self.task, target=self.target_col)
         return sds
 
@@ -107,7 +107,7 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 class DummySparkMLPipeline(SparkMLPipeline):
     def __init__(
         self,
-        cache_manager: CacheManager,
+        cache_manager: PersistenceManager,
         name: str = "dummy_pipe"
     ):
         super().__init__(cache_manager, [], force_calc=[True], name=name)
@@ -162,7 +162,7 @@ class DummyTabularAutoML(SparkAutoMLPreset):
         # initialize
         reader = DummyReader(self.task)
 
-        cache_manager = CacheManager()
+        cache_manager = PersistenceManager()
 
         # first_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_0_Pipe_{i}") for i in range(3)]
         # second_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_1_Pipe_{i}") for i in range(2)]

@@ -16,7 +16,7 @@ from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
-from ...dataset.caching import CacheAware, CacheManager
+from ...dataset.caching import CacheAware, PersistenceManager
 from ...validation.base import SparkBaseTrainValidIterator
 
 
@@ -46,7 +46,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
 
     def __init__(
         self,
-        cache_manager: CacheManager,
+        cache_manager: PersistenceManager,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
         pre_selection: Optional[SparkSelectionPipelineWrapper] = None,
@@ -116,7 +116,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
         train_valid = train_valid.apply_selector(self.post_selection)
 
         # checkpointing
-        train_valid.data = self._cacher_manager.milestone(train_valid.data, name=self._milestone_name)
+        train_valid.data = self._cacher_manager.persist(train_valid.data, name=self._milestone_name)
         self.features_pipeline.release_cache()
 
         preds: List[SparkDataset] = []
@@ -177,6 +177,6 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
         return out_ds
 
     def release_cache(self):
-        self._cacher_manager.remove_milestone(self._milestone_name)
+        self._cacher_manager.unpersist(self._milestone_name)
 
 

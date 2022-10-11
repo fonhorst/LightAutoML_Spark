@@ -12,7 +12,7 @@ from sparklightautoml.tasks.base import SparkTask
 from lightautoml.utils.logging import verbosity_to_loglevel, set_stdout_level, add_filehandler
 from lightautoml.utils.timer import PipelineTimer
 
-from sparklightautoml.dataset.caching import CacheManager
+from sparklightautoml.dataset.caching import PersistenceManager
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ class SparkAutoMLPreset(SparkAutoML):
             self.gpu_ids = ",".join(map(str, range(torch.cuda.device_count())))
         self.task = task
 
-        self._cache_manager = CacheManager()
+        self._cache_manager = PersistenceManager()
 
     def _set_config(self, path):
         self.config_path = path

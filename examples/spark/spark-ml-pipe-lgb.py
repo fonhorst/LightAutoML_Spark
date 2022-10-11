@@ -7,7 +7,7 @@ from pyspark.ml import PipelineModel
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import CacheManager
+from sparklightautoml.dataset.caching import PersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -66,7 +66,7 @@ if __name__ == "__main__":
         iterator = SparkFoldsIterator(sdataset, n_folds=cv)
 
         ml_pipe = SparkMLPipeline(
-            cache_manager=CacheManager(),
+            cache_manager=PersistenceManager(),
             ml_algos=[spark_ml_algo],
             pre_selection=spark_selector,
             features_pipeline=spark_features_pipeline,

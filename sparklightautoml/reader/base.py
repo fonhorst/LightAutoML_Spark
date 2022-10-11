@@ -5,11 +5,6 @@ from typing import Optional, Any, List, Dict, Tuple, cast
 
 import numpy as np
 import pandas as pd
-from pyspark.ml import Transformer
-from pyspark.ml.param import Param, Params
-from pyspark.sql import functions as sf, SparkSession
-from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
-
 from lightautoml.dataset.base import array_attr_roles, valid_array_attributes
 from lightautoml.dataset.roles import ColumnRole, DropRole, NumericRole, DatetimeRole, CategoryRole
 from lightautoml.dataset.utils import roles_parser
@@ -20,11 +15,17 @@ from lightautoml.reader.guess_roles import (
     calc_category_rules,
     rule_based_cat_handler_guess,
 )
+from lightautoml.tasks import Task
+from pyspark.ml import Transformer
+from pyspark.ml.param import Param, Params
+from pyspark.sql import functions as sf, SparkSession
+from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
+
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.caching import PersistenceManager, PersistedDataset
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
-from sparklightautoml.utils import Cacher, SparkDataFrame
-from lightautoml.tasks import Task
+from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -72,16 +73,16 @@ class SparkReaderHelper:
     """
 
     @staticmethod
-    def _create_unique_ids(train_data: SparkDataFrame, cacher_key: Optional[str] = None) -> SparkDataFrame:
+    def _create_unique_ids(train_data: SparkDataFrame) -> SparkDataFrame:
         logger.debug("SparkReaderHelper._create_unique_ids() is started")
 
         if SparkDataset.ID_COLUMN not in train_data.columns:
             train_data = train_data.select("*", sf.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN))
 
-        if cacher_key is not None:
-            cacher = Cacher(key=cacher_key)
-            cacher.fit(train_data)
-            train_data = cacher.dataset
+        # if cacher_key is not None:
+        #     cacher = Cacher(key=cacher_key)
+        #     cacher.fit(train_data)
+        #     train_data = cacher.dataset
 
         logger.debug("SparkReaderHelper._create_unique_ids() is finished")
 
@@ -133,6 +134,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
     def __init__(
         self,
+        persistence_manager: PersistenceManager,
         task: Task,
         samples: Optional[int] = 100000,
         max_nan_rate: float = 0.999,
@@ -150,7 +152,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         max_score_rate: float = 0.2,
         abs_score_val: float = 0.04,
         drop_score_co: float = 0.01,
-        cacher_key: str = "default_cacher",
         **kwargs: Any,
     ):
         """
@@ -202,7 +203,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             "drop_score_co": drop_score_co,
         }
 
-        self._cacher_key = cacher_key
+        self._persistence_manager = persistence_manager
 
         self.params = kwargs
 
@@ -231,11 +232,14 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         logger.info("Reader starting fit_read")
         logger.info(f"\x1b[1mTrain data columns: {train_data.columns}\x1b[0m\n")
 
-        train_data = self._create_unique_ids(train_data, cacher_key=self._cacher_key)
+        train_data = self._create_unique_ids(train_data)
 
         if bucketize_data:
             # TODO: SLAMA join - need to take bucket_nums from settings
             train_data = self._bucketize_data(train_data, bucket_nums=100)
+
+        initial_train_data = train_data.cache()
+        train_data = initial_train_data
 
         if roles is None:
             roles = {}
@@ -373,6 +377,14 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             dataset = SparkDataset(
                 train_data.select(SparkDataset.ID_COLUMN, *self.used_features), self.roles, task=self.task, **kwargs
             )
+
+        # checkpointing
+        persisted_dataset = PersistedDataset(
+            dataset,
+            custom_persistence=True,
+            callback=lambda: initial_train_data.unpersist()
+        )
+        dataset = self._persistence_manager.persist(persisted_dataset, name="SparkToSparkReaderDataset")
 
         logger.info("Reader finished fit_read")
 

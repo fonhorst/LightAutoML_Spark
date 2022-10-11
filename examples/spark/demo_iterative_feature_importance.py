@@ -19,7 +19,7 @@ from sklearn.model_selection import train_test_split
 
 from examples_utils import get_spark_session
 from sparklightautoml.automl.base import SparkAutoML
-from sparklightautoml.dataset.caching import CacheManager
+from sparklightautoml.dataset.caching import PersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     logger.info("\t Pipeline1...")
     pipeline_lvl1 = SparkMLPipeline(
-        cache_manager=CacheManager(),
+        cache_manager=PersistenceManager(),
         ml_algos=[(model1, params_tuner1), model2],
         pre_selection=SparkSelectionPipelineWrapper(selector),
         features_pipeline=pipe,
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
     logger.info("\t Pipeline2...")
     pipeline_lvl2 = SparkMLPipeline(
-        cache_manager=CacheManager(),
+        cache_manager=PersistenceManager(),
         ml_algos=[model],
         pre_selection=None,
         features_pipeline=pipe1,

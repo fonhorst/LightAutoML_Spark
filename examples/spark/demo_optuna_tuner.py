@@ -24,7 +24,7 @@ from lightautoml.pipelines.selection.importance_based import (
     ModelBasedImportanceEstimator,
 )
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import CacheManager
+from sparklightautoml.dataset.caching import PersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     logger.info("Tuner2 and model2 created")
 
     total = SparkMLPipeline(
-        cache_manager=CacheManager(),
+        cache_manager=PersistenceManager(),
         ml_algos=[(model1, params_tuner1), (model2, params_tuner2)],
         pre_selection=SparkSelectionPipelineWrapper(selector),
         features_pipeline=pipe,
