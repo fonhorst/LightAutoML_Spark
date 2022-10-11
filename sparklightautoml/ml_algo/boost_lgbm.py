@@ -25,6 +25,7 @@ from synapse.ml.lightgbm import (
 from synapse.ml.onnx import ONNXModel
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.mlwriters import (
     LightGBMModelWrapperMLReader,
@@ -140,7 +141,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     def __init__(
         self,
-        cacher_key: str,
+        persistence_manager: PersistenceManager,
         default_params: Optional[dict] = None,
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
@@ -153,7 +154,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         seed: int = 42,
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
-        SparkTabularMLAlgo.__init__(self, cacher_key, default_params, freeze_defaults, timer, optimization_search_space)
+        SparkTabularMLAlgo.__init__(self, persistence_manager, default_params, freeze_defaults, timer, optimization_search_space)
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
         self._raw_prediction_col_name = "raw_prediction"

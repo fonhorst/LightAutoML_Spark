@@ -22,6 +22,8 @@ from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.caching import CacheAware
+
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.transformers.base import (
     SparkBaseEstimator,
@@ -135,9 +137,10 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
 
     """
 
-    def __init__(self, cacher_key: str = "default_cacher", **kwargs):
+    def __init__(self, persistence_manager: PersistenceManager, **kwargs):
         super().__init__(**kwargs)
         self._cacher_key = cacher_key
+        self._persistence_manager = persistence_manager
         self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
         self._transformer: Optional[Transformer] = None
         self._input_roles: Optional[RolesDict] = None

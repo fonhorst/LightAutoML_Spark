@@ -6,6 +6,7 @@ from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline, SparkTabularDataFeatures
 from sparklightautoml.transformers.base import (
     SparkChangeRolesTransformer,
@@ -78,6 +79,7 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
 
     def __init__(
         self,
+        persistence_manager: PersistenceManager,
         feats_imp: Optional[ImportanceEstimator] = None,
         top_intersections: int = 5,
         max_intersection_depth: int = 3,
@@ -85,7 +87,6 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
         multiclass_te_co: int = 3,
         auto_unique_co: int = 10,
         output_categories: bool = False,
-        cacher_key: str = "default_cacher",
         **kwargs
     ):
         """

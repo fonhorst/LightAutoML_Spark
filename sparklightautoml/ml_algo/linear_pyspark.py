@@ -16,6 +16,7 @@ from pyspark.sql import functions as sf
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 from ..dataset.base import SparkDataset
+from ..dataset.persistence import PersistenceManager
 from ..transformers.base import DropColumnsTransformer
 from ..utils import SparkDataFrame
 
@@ -82,14 +83,14 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
     def __init__(
         self,
-        cacher_key: str,
+        persistence_manager: PersistenceManager,
         default_params: Optional[dict] = None,
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
         optimization_search_space: Optional[dict] = None,
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
-        super().__init__(cacher_key, default_params, freeze_defaults, timer, optimization_search_space)
+        super().__init__(persistence_manager, default_params, freeze_defaults, timer, optimization_search_space)
 
         self._prediction_col = f"prediction_{self._name}"
         self.task = None

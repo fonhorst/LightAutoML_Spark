@@ -15,6 +15,7 @@ from pyspark.sql import functions as sf
 from pyspark.sql.types import IntegerType
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import Cacher, SparkDataFrame
@@ -33,7 +34,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
     def __init__(
         self,
-        cacher_key: str,
+        persistence_manager: PersistenceManager,
         default_params: Optional[dict] = None,
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
@@ -41,7 +42,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
-        self._cacher_key = cacher_key
+        self._persistence_manager = persistence_manager
         self.n_classes: Optional[int] = None
         # names of columns that should contain predictions of individual models
         self._models_prediction_columns: Optional[List[str]] = None
@@ -172,16 +173,13 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         ]
         full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
-
-        cacher = Cacher(key=self._cacher_key)
-        cacher.fit(full_preds_df)
-        full_preds_df = cacher.dataset
-
         # create Spark MLlib Transformer and save to property var
         self._transformer = self._build_transformer()
 
         pred_ds = valid_ds.empty()
         pred_ds.set_data(full_preds_df, list(self.output_roles.keys()), self.output_roles)
+
+        pred_ds = self._persistence_manager.persist(pred_ds, name=f"{self.name}")
 
         if iterator_len > 1:
             single_pred_ds = self._make_single_prediction_dataset(pred_ds)

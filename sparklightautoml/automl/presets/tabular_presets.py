@@ -27,7 +27,7 @@ from sparklightautoml.automl.presets.utils import (
     replace_year_in_date,
 )
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import PersistenceManager
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.ml_algo.linear_pyspark import SparkLinearLBFGS
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
@@ -99,14 +99,14 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         linear_l2_params: Optional[dict] = None,
         gbm_pipeline_params: Optional[dict] = None,
         linear_pipeline_params: Optional[dict] = None,
-        cache_manager: Optional[PersistenceManager] = None
+        persistence_manager: Optional[PersistenceManager] = None
     ):
         if config_path is None:
             config_path = os.path.join(base_dir, self._default_config_path)
         super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path)
 
         self._cacher_key = "main_cache"
-        self._cacher_manager = cache_manager or PersistenceManager()
+        self._persistence_manager = persistence_manager or PersistenceManager()
 
         self._spark = spark
         # upd manual params
@@ -250,19 +250,19 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         return SparkSelectionPipelineWrapper(pre_selector)
 
     def get_linear(
-        self, cacher_key: str, n_level: int = 1, pre_selector: Optional[SparkSelectionPipelineWrapper] = None
+        self, n_level: int = 1, pre_selector: Optional[SparkSelectionPipelineWrapper] = None
     ) -> SparkNestedTabularMLPipeline:
 
         # linear model with l2
         time_score = self.get_time_score(n_level, "linear_l2")
         linear_l2_timer = self.timer.get_task_timer("reg_l2", time_score)
-        linear_l2_model = SparkLinearLBFGS(cacher_key=cacher_key, timer=linear_l2_timer, **self.linear_l2_params)
+        linear_l2_model = SparkLinearLBFGS(self._persistence_manager, timer=linear_l2_timer, **self.linear_l2_params)
         linear_l2_feats = SparkLinearFeatures(
             output_categories=True, cacher_key=self._cacher_key, **self.linear_pipeline_params
         )
 
         linear_l2_pipe = SparkNestedTabularMLPipeline(
-            self._cacher_manager,
+            self._persistence_manager,
             [linear_l2_model],
             force_calc=True,
             pre_selection=pre_selector,
@@ -288,7 +288,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             time_score = self.get_time_score(n_level, key)
             gbm_timer = self.timer.get_task_timer(algo_key, time_score)
             if algo_key == "lgb":
-                gbm_model = SparkBoostLGBM(cacher_key=self._cacher_key, timer=gbm_timer, **self.lgb_params)
+                gbm_model = SparkBoostLGBM(self._persistence_manager, timer=gbm_timer, **self.lgb_params)
             elif algo_key == "cb":
                 raise NotImplementedError("Not supported yet")
             else:
@@ -306,7 +306,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             force_calc.append(force)
 
         gbm_pipe = SparkNestedTabularMLPipeline(
-            self._cacher_manager,
+            self._persistence_manager,
             ml_algos,
             force_calc,
             pre_selection=pre_selector,
@@ -327,7 +327,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         multilevel_avail = fit_args["valid_data"] is None and fit_args["cv_iter"] is None
 
         self.infer_auto_params(train_data, multilevel_avail)
-        reader = SparkToSparkReader(cacher_key=self._cacher_key, task=self.task, **self.reader_params)
+        reader = SparkToSparkReader(self._persistence_manager, task=self.task, **self.reader_params)
 
         pre_selector = self.get_selector(cacher_key="selector_cache")
 
@@ -342,7 +342,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                     self.general_params["skip_conn"] or n == 0
                 ):
                     selector = pre_selector
-                lvl.append(self.get_linear(self._cacher_key, n + 1, selector))
+                lvl.append(self.get_linear(n + 1, selector))
 
             gbm_models = [
                 x for x in ["lgb", "lgb_tuned", "cb", "cb_tuned"] if x in names and x.split("_")[0] in self.task.losses

@@ -12,7 +12,7 @@ from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import PersistenceManager
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -66,7 +66,7 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 
     def __init__(self, n_classes: int, name: str):
         self._name = name
-        super().__init__(cacher_key='dummy_ml_algo')
+        super().__init__(PersistenceManager())
         self.n_classes = n_classes
 
     def fit_predict_single_fold(self, fold_prediction_column: str, full: SparkDataset, train: SparkDataset,
