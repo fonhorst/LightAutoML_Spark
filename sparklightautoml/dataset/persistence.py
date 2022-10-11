@@ -9,11 +9,6 @@ from sparklightautoml.dataset.base import SparkDataset
 PersistenceIdentifable = Union[str, SparkDataset]
 
 
-class CacheAware(ABC):
-    def release_cache(self):
-        ...
-
-
 @dataclass(frozen=True)
 class PersistedDataset:
     dataset: SparkDataset
@@ -91,6 +86,7 @@ class PersistenceManager:
     def unpersist_children(self):
         for child in self._children:
             child.unpersist_all()
+        self._children = []
 
     def child(self) -> 'PersistenceManager':
         a_child = PersistenceManager(self)

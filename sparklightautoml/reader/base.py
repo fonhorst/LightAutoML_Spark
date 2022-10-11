@@ -22,7 +22,7 @@ from pyspark.sql import functions as sf, SparkSession
 from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import PersistenceManager, PersistedDataset
+from sparklightautoml.dataset.persistence import PersistenceManager, PersistedDataset
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from sparklightautoml.utils import SparkDataFrame
@@ -134,7 +134,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
     def __init__(
         self,
-        persistence_manager: PersistenceManager,
         task: Task,
         samples: Optional[int] = 100000,
         max_nan_rate: float = 0.999,
@@ -203,8 +202,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             "drop_score_co": drop_score_co,
         }
 
-        self._persistence_manager = persistence_manager
-
         self.params = kwargs
 
     def fit_read(
@@ -213,6 +210,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             features_names: Any = None,
             roles: UserDefinedRolesDict = None,
             bucketize_data: bool = True,
+            persistence_manager: Optional[PersistenceManager] = None,
             **kwargs: Any
     ) -> SparkDataset:
         """Get dataset with initial feature selection.
@@ -231,6 +229,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         """
         logger.info("Reader starting fit_read")
         logger.info(f"\x1b[1mTrain data columns: {train_data.columns}\x1b[0m\n")
+
+        persistence_manager = persistence_manager or PersistenceManager()
 
         train_data = self._create_unique_ids(train_data)
 
@@ -384,7 +384,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             custom_persistence=True,
             callback=lambda: initial_train_data.unpersist()
         )
-        dataset = self._persistence_manager.persist(persisted_dataset, name="SparkToSparkReaderDataset")
+        dataset = persistence_manager.persist(persisted_dataset, name="SparkToSparkReaderDataset")
 
         logger.info("Reader finished fit_read")
 

@@ -1,4 +1,5 @@
 """Base class for selection pipelines."""
+import functools
 from abc import ABC
 from copy import copy
 from typing import Optional, List, cast
@@ -10,10 +11,11 @@ from pandas import Series
 from pyspark.ml import Transformer
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import CacheAware
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 
 
 class SparkImportanceEstimator(ImportanceEstimator, ABC):
@@ -21,7 +23,7 @@ class SparkImportanceEstimator(ImportanceEstimator, ABC):
         super(SparkImportanceEstimator, self).__init__()
 
 
-class SparkSelectionPipelineWrapper(SelectionPipeline, TransformerInputOutputRoles, CacheAware):
+class SparkSelectionPipelineWrapper(SelectionPipeline, TransformerInputOutputRoles):
     def __init__(self, sel_pipe: SelectionPipeline):
         assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
         assert isinstance(sel_pipe.features_pipeline, SparkFeaturesPipeline) or isinstance(sel_pipe, EmptySelector), \
@@ -31,6 +33,7 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, TransformerInputOutputRol
         self._is_fitted = False
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
+        self._feature_pipeline = cast(SparkFeaturesPipeline, self._sel_pipe.features_pipeline)
         super().__init__()
 
     @property
@@ -69,9 +72,16 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, TransformerInputOutputRol
     def perform_selection(self, train_valid: Optional[TrainValidIterator]):
         self._sel_pipe.perform_selection(train_valid)
 
-    def fit(self, train_valid: TrainValidIterator):
-        self._service_columns = cast(SparkDataset, train_valid.train).service_columns
+    def fit(self, train_valid: SparkBaseTrainValidIterator, persistence_manager: Optional[PersistenceManager] = None):
+        self._service_columns = train_valid.train.service_columns
+
+        base_fit_transform = self._feature_pipeline.fit_transform
+        self._feature_pipeline.fit_transform = functools.partialmethod(
+            base_fit_transform,
+            persistence_manager=persistence_manager
+        )
         self._sel_pipe.fit(train_valid)
+        self._feature_pipeline.fit_transform = base_fit_transform
         self._is_fitted = True
 
         self._input_roles = copy(train_valid.train.roles)
@@ -89,9 +99,3 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, TransformerInputOutputRol
 
     def get_features_score(self):
         return self._sel_pipe.get_features_score()
-
-    def release_cache(self):
-        if isinstance(self._sel_pipe, EmptySelector):
-            return
-        fp = cast(SparkFeaturesPipeline, self._sel_pipe.features_pipeline)
-        fp.release_cache()

@@ -15,12 +15,12 @@ from ..base import TransformerInputOutputRoles
 from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset
+from ...dataset.persistence import PersistenceManager
 from ...ml_algo.base import SparkTabularMLAlgo
-from ...dataset.caching import CacheAware, PersistenceManager
 from ...validation.base import SparkBaseTrainValidIterator
 
 
-class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
+class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
     """Spark version of :class:`~lightautoml.pipelines.ml.base.MLPipeline`. Single ML pipeline.
 
     Merge together stage of building ML model
@@ -46,13 +46,13 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
 
     def __init__(
         self,
-        cache_manager: PersistenceManager,
         ml_algos: Sequence[Union[SparkTabularMLAlgo, Tuple[SparkTabularMLAlgo, ParamsTuner]]],
         force_calc: Union[bool, Sequence[bool]] = True,
         pre_selection: Optional[SparkSelectionPipelineWrapper] = None,
         features_pipeline: Optional[SparkFeaturesPipeline] = None,
         post_selection: Optional[SparkSelectionPipelineWrapper] = None,
         name: Optional[str] = None,
+        persist_before_ml_algo: bool = False
     ):
         if features_pipeline is None:
             features_pipeline = SparkEmptyFeaturePipeline()
@@ -65,7 +65,6 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
 
         super().__init__(ml_algos, force_calc, pre_selection, features_pipeline, post_selection)
 
-        self._cacher_manager = cache_manager
         self._output_features = None
         self._output_roles = None
         self._transformer: Optional[Transformer] = None
@@ -77,6 +76,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
         self._milestone_name = f"MLPipe_{self._name}"
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
+        self._persist_before_ml_algo = persist_before_ml_algo
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
@@ -95,7 +95,11 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
         assert self._transformer is not None, f"{type(self)} seems to be not fitted"
         return self._transformer
 
-    def fit_predict(self, train_valid: SparkBaseTrainValidIterator) -> LAMLDataset:
+    def fit_predict(
+            self,
+            train_valid: SparkBaseTrainValidIterator,
+            persistence_manager: Optional[PersistenceManager] = None
+    ) -> LAMLDataset:
         """Fit on train/valid iterator and transform on validation part.
 
         Args:
@@ -107,17 +111,18 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
         """
 
         # train and apply pre selection
-        train_valid = train_valid.apply_selector(self.pre_selection)
+        train_valid = train_valid.apply_selector(self.pre_selection, persistence_manager.child())
 
         # apply features pipeline
-        train_valid = train_valid.apply_feature_pipeline(self.features_pipeline)
+        train_valid = train_valid.apply_feature_pipeline(self.features_pipeline, persistence_manager.child())
 
         # train and apply post selection
-        train_valid = train_valid.apply_selector(self.post_selection)
+        train_valid = train_valid.apply_selector(self.post_selection, persistence_manager.child())
 
-        # checkpointing
-        train_valid.data = self._cacher_manager.persist(train_valid.data, name=self._milestone_name)
-        self.features_pipeline.release_cache()
+        # this checkpoint may be important for some algorithms that submits many jobs during training like LinearLGBFS
+        if self._persist_before_ml_algo:
+            train_valid.data = persistence_manager.persist(train_valid.data, name=self._milestone_name)
+            persistence_manager.unpersist_children()
 
         preds: List[SparkDataset] = []
         for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
@@ -151,8 +156,9 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
         self._input_roles = copy(train_valid.train.roles)
         self._output_roles = copy(val_preds_ds.roles)
 
-        # potential checkpoint
-        # val_preds_ds = self._cacher_manager.milestone(val_preds_ds, name=self._milestone_name)
+        # checkpointing
+        val_preds_ds = persistence_manager.persist(val_preds_ds, name=self._milestone_name)
+        persistence_manager.unpersist_all(exceptions=val_preds_ds)
 
         return val_preds_ds
 
@@ -175,8 +181,3 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles, CacheAware):
         out_ds.set_data(out_sdf, list(out_roles.keys()), out_roles)
 
         return out_ds
-
-    def release_cache(self):
-        self._cacher_manager.unpersist(self._milestone_name)
-
-

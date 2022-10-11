@@ -137,10 +137,9 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
 
     """
 
-    def __init__(self, persistence_manager: PersistenceManager, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._cacher_key = cacher_key
-        self._persistence_manager = persistence_manager
+        self._cacher_key = "SparkFeaturePipeline"
         self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
         self._transformer: Optional[Transformer] = None
         self._input_roles: Optional[RolesDict] = None
@@ -188,7 +187,11 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         """
         raise NotImplementedError
 
-    def fit_transform(self, train: SparkDataset) -> SparkDataset:
+    def fit_transform(
+            self,
+            train: SparkDataset,
+            persistence_manager: Optional[PersistenceManager] = None
+    ) -> SparkDataset:
         """Create pipeline and then fit on train data and then transform.
 
         Args:
@@ -200,7 +203,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         """
         logger.info("SparkFeaturePipeline is started")
 
-        fitted_pipe = self._merge_pipes(train)
+        fitted_pipe = self._merge_pipes(train, persistence_manager)
         self._transformer = fitted_pipe.transformer
         self._input_roles = copy(train.roles)
         self._output_roles = copy(fitted_pipe.dataset.roles)
@@ -239,15 +242,19 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         if len(self.pipes) > 1:
             return self.pipes.pop(i)
 
-    def _merge_pipes(self, data: SparkDataset) -> FittedPipe:
-        fitted_pipes = [self._optimize_and_fit(data, pipe(data)) for pipe in self.pipes]
+    def _merge_pipes(self, data: SparkDataset, persistence_manager: PersistenceManager) -> FittedPipe:
+        fitted_pipes = [self._optimize_and_fit(data, pipe(data, persistence_manager.child())) for pipe in self.pipes]
 
         processed_dataset = SparkDataset.concatenate([fp.dataset for fp in fitted_pipes])
         pipeline = PipelineModel(stages=[fp.transformer for fp in fitted_pipes])
 
         return FittedPipe(dataset=processed_dataset, transformer=pipeline)
 
-    def _optimize_and_fit(self, train: SparkDataset, pipeline: SparkEstOrTrans) -> FittedPipe:
+    def _optimize_and_fit(
+            self,
+            train: SparkDataset,
+            pipeline: SparkEstOrTrans,
+            persistence_manager: PersistenceManager) -> FittedPipe:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
 
@@ -295,10 +302,10 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         featurized_train = train.empty()
         featurized_train.set_data(feature_sdf, list(output_roles.keys()), output_roles)
 
-        return FittedPipe(dataset=featurized_train, transformer=dag_transformer)
+        # TODO: SLAMA - it is already persisted, need to handle such a case
+        featurized_train = persistence_manager.persist(featurized_train, name="in_pipe")
 
-    def release_cache(self):
-        Cacher.release_cache_by_key(self._cacher_key)
+        return FittedPipe(dataset=featurized_train, transformer=dag_transformer)
 
 
 class SparkTabularDataFeatures:

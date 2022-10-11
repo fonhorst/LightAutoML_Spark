@@ -1,12 +1,13 @@
 from abc import ABC
 from copy import copy
-from typing import Tuple, cast, Sequence
+from typing import Tuple, cast, Sequence, Optional
 
 from lightautoml.validation.base import TrainValidIterator
 from pyspark.sql import functions as sf
 
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.utils import SparkDataFrame
@@ -35,7 +36,8 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         """
         ...
 
-    def apply_selector(self, selector: SparkSelectionPipelineWrapper) -> "SparkBaseTrainValidIterator":
+    def apply_selector(self, selector: SparkSelectionPipelineWrapper,
+                       persistence_manager: Optional[PersistenceManager] = None) -> "SparkBaseTrainValidIterator":
         """Select features on train data.
 
         Check if selector is fitted.
@@ -54,17 +56,22 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         train = cast(SparkDataset, self.train)
 
         if not selector.is_fitted:
-            selector.fit(sel_train_valid)
-            selector.release_cache()
+            selector.fit(sel_train_valid, persistence_manager)
+            persistence_manager.unpersist_all()
 
         train_valid = copy(self)
 
-        train_valid.train = train[:, selector.selected_features]
+        train_valid.train = selector.select(train)
 
         return train_valid
 
-    def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
-        train_valid = cast(SparkBaseTrainValidIterator, super().apply_feature_pipeline(features_pipeline))
+    def apply_feature_pipeline(
+            self,
+            features_pipeline: SparkFeaturesPipeline,
+            persistence_manager: Optional[PersistenceManager] = None
+    ) -> "SparkBaseTrainValidIterator":
+        train_valid = copy(self)
+        train_valid.train = features_pipeline.fit_transform(train_valid.train, persistence_manager)
         return train_valid
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:

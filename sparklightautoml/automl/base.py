@@ -16,7 +16,7 @@ from pyspark.sql import functions as sf
 
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset
-from ..dataset.persistence import CacheAware, PersistenceManager
+from ..dataset.persistence import PersistenceManager
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
@@ -27,7 +27,7 @@ from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, Spa
 logger = logging.getLogger(__name__)
 
 
-class SparkAutoML(TransformerInputOutputRoles, CacheAware):
+class SparkAutoML(TransformerInputOutputRoles):
     """Class for compile full pipeline of AutoML task.
 
     AutoML steps:
@@ -204,7 +204,7 @@ class SparkAutoML(TransformerInputOutputRoles, CacheAware):
 
         persistence_manager = persistence_manager or PersistenceManager()
 
-        train_dataset = self.reader.fit_read(train_data, train_features, roles, persistence_manager)
+        train_dataset = self.reader.fit_read(train_data, train_features, roles, persistence_manager=persistence_manager)
 
         assert (
             len(self._levels) <= 1 or train_dataset.folds is not None
