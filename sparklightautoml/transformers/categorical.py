@@ -700,7 +700,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
         assert self._target_column in dataset.columns, "Target should be presented in the dataframe"
         assert self._folds_column in dataset.columns, "Folds should be presented in the dataframe"
 
-        self.encodings: Dict[str, Dict[int, float]] = dict()
+        self.encodings: Dict[str, np.ndarray] = dict()
         oof_feats_encoding: Dict[str, OOfFeatsMapping] = dict()
 
         sdf = dataset
