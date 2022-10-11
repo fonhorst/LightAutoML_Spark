@@ -249,6 +249,12 @@ class SparkDataset(LAMLDataset):
     def __setitem__(self, k: str, val: Any):
         raise NotImplementedError(f"The method is not supported by {self._dataset_type}")
 
+    def __eq__(self, o: object) -> bool:
+        return isinstance(o, SparkDataset) and o.uid == self.uid
+
+    def __hash__(self) -> int:
+        return hash(self.uid)
+
     def _validate_dataframe(self, sdf: SparkDataFrame) -> None:
         assert (
             self.ID_COLUMN in sdf.columns
