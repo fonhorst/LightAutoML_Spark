@@ -123,15 +123,15 @@ class SparkBlender(ABC, TransformerInputOutputRoles):
         self._score = predictions.task.get_dataset_metric()
         self._task = predictions.task
 
-    def _make_single_pred_ds(self, predictions: SparkDataset, pred_col: str) -> SparkDataset:
-        pred_sdf = predictions.data.select(
-            SparkDataset.ID_COLUMN, predictions.target_column, sf.col(pred_col).alias(self._single_prediction_col_name)
-        )
-        pred_roles = {c: predictions.roles[c] for c in pred_sdf.columns}
-        pred_ds = predictions.empty()
-        pred_ds.set_data(pred_sdf, pred_sdf.columns, pred_roles)
-
-        return pred_ds
+    # def _make_single_pred_ds(self, predictions: SparkDataset, pred_col: str) -> SparkDataset:
+    #     pred_sdf = predictions.data.select(
+    #         SparkDataset.ID_COLUMN, predictions.target_column, sf.col(pred_col).alias(self._single_prediction_col_name)
+    #     )
+    #     pred_roles = {c: predictions.roles[c] for c in pred_sdf.columns}
+    #     pred_ds = predictions.empty()
+    #     pred_ds.set_data(pred_sdf, pred_sdf.columns, pred_roles)
+    #
+    #     return pred_ds
 
     def score(self, dataset: SparkDataset) -> float:
         """Score metric for blender.
@@ -231,7 +231,12 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         weighted_preds_sdf = avr.transform(self._predictions_dataset.data)
 
         wpreds_sds = self._predictions_dataset.empty()
-        wpreds_sds.set_data(weighted_preds_sdf, list(self.output_roles.keys()), self.output_roles)
+        wpreds_sds.set_data(
+            weighted_preds_sdf,
+            list(self.output_roles.keys()),
+            self.output_roles,
+            dependencies=[self._predictions_dataset]
+        )
 
         return wpreds_sds
 

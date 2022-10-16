@@ -71,7 +71,8 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
             train_valid.train.data,
             train_valid.train.features,
             train_valid.train.roles,
-            persistence_manager=child_manager
+            persistence_manager=child_manager,
+            dependencies=None
         )
         train_valid.train = train
 

@@ -90,7 +90,7 @@ class SparkDataset(LAMLDataset):
         )
 
         output = datasets[0].empty()
-        output.set_data(concatenated_sdf, features, roles)
+        output.set_data(concatenated_sdf, features, roles, dependencies=list(datasets))
 
         return output
 
@@ -106,6 +106,7 @@ class SparkDataset(LAMLDataset):
         self._uid = str(uuid.uuid4())
         self._persistence_manager = persistence_manager
         self._dependencies = dependencies
+        self._frozen = False
 
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
@@ -331,6 +332,9 @@ class SparkDataset(LAMLDataset):
 
     def empty(self) -> "SparkDataset":
         dataset = cast(SparkDataset, super().empty())
+        dataset._dependencies = [self]
+        dataset._uid = str(uuid.uuid4())
+        dataset._frozen = False
         return dataset
 
     def set_data(
@@ -338,7 +342,8 @@ class SparkDataset(LAMLDataset):
             data: SparkDataFrame,
             features: List[str],
             roles: NpRoles = None,
-            dependencies: Optional[List[Dependency]] = None
+            dependencies: Optional[List[Dependency]] = None,
+            uid: Optional[str] = None
     ):
         """Inplace set data, features, roles for empty dataset.
 
@@ -346,38 +351,43 @@ class SparkDataset(LAMLDataset):
             data: Table with features.
             features: `ignored, always None. just for same interface.
             roles: Dict with roles.
+            dependencies:
+            uid:
         """
         self._validate_dataframe(data)
         super().set_data(data, None, roles)
         self._dependencies = dependencies
+        self._uid = uid
 
-    def persist(self, level: str):
+    def persist(self, level: str) -> 'SparkDataset':
         """
         Materializes current Spark DataFrame and unpersists all its dependencies
         Args:
             level:
 
         Returns:
-
+            a new SparkDataset that is persisted and materialized
         """
         # TODO: SLAMA - raise warning if the dataset is already persisted but with a different level in comparison with 'level' arg
-        raise NotImplementedError()
+        # TODO: SLAMA - send level
+        return self.persistence_manager.persist(self).to_dataset()
 
     def unpersist(self):
         """
-        Unpersist current dataframe if it is persisted and all its dependencies
-        Returns:
-
+        Unpersist current dataframe if it is persisted and all its dependencies.
+        Does nothing if the dataset is frozen
         """
-        raise NotImplementedError()
+        if self.frozen:
+            return
+        self.persistence_manager.unpersist(self)
 
     @property
     def frozen(self) -> bool:
-        raise NotImplementedError()
+        return self._frozen
 
     @frozen.setter
     def frozen(self, val: bool):
-        raise NotImplementedError()
+        self._frozen = val
 
     def to_pandas(self) -> PandasDataset:
         data, target_data, folds_data, roles = self._materialize_to_pandas()

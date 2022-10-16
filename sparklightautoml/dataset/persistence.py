@@ -4,7 +4,7 @@ from typing import Dict, Optional, Callable, Union, cast, List
 
 from pyspark.sql import SparkSession
 
-from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.base import SparkDataset, Dependency
 from sparklightautoml.utils import SparkDataFrame
 
 PersistenceIdentifable = Union[str, SparkDataset]
@@ -30,13 +30,18 @@ class PersistableDataFrame:
     def to_dataset(self) -> SparkDataset:
         assert self.base_dataset
         ds = self.base_dataset.empty()
-        ds.set_data(self.sdf, self.base_dataset.features, self.base_dataset.roles, self.base_dataset.dependencies)
+        ds.set_data(
+            self.sdf,
+            self.base_dataset.features,
+            self.base_dataset.roles,
+            dependencies=self.base_dataset.dependencies,
+            uid=self.uid
+        )
         return ds
 
 
 # TODO: SLAMA - add documentation
 class PersistenceManager:
-
     @staticmethod
     def to_persistable_dataframe(dataset: SparkDataset) -> PersistableDataFrame:
         # we intentially create new uid to use to distinguish a persisted and unpersisted dataset
@@ -54,9 +59,12 @@ class PersistenceManager:
         if persisted_dataframe.uid in self._persistence_registry:
             return self._persistence_registry[persisted_dataframe.uid]
 
-        if not persisted_dataframe.callback:
+        persisted_dataframe = self._persist(persisted_dataframe)
+
+        if persisted_dataframe.callback:
+            persisted_dataframe.callback()
+        elif persisted_dataframe.base_dataset and persisted_dataframe.base_dataset.dependencies:
             deps = persisted_dataframe.base_dataset.dependencies
-            persisted_dataframe = self._persist(persisted_dataframe)
             for dep in deps:
                 self.unpersist(dep)
 
@@ -64,18 +72,31 @@ class PersistenceManager:
 
         return persisted_dataframe
 
-    def unpersist(self, uid: str):
-        persisted_dataset = self._persistence_registry.get(uid, None)
-
-        if not persisted_dataset:
+    def unpersist(self, dep: Dependency):
+        if isinstance(dep, str):
+            uid = cast(str, dep)
+        elif isinstance(dep, SparkDataset) and dep.frozen:
+            return
+        elif isinstance(dep, SparkDataset):
+            uid = dep.uid
+        elif isinstance(dep, PersistableDataFrame):
+            uid = dep.uid
+        else:
+            dep()
             return
 
-        if persisted_dataset.callback:
-            persisted_dataset.callback()
-        else:
-            self._unpersist(persisted_dataset)
+        persisted_dataframe = self._persistence_registry.get(uid, None)
 
-        del self._persistence_registry[persisted_dataset.uid]
+        if not persisted_dataframe:
+            return
+
+        self._unpersist(persisted_dataframe)
+
+        del self._persistence_registry[persisted_dataframe.uid]
+
+        if isinstance(dep, SparkDataset):
+            for dep in (dep.dependencies or []):
+                self.unpersist(dep)
 
     def unpersist_all(self):
         self.unpersist_children()
