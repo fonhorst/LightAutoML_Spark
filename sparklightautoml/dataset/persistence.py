@@ -34,7 +34,7 @@ class PersistableDataFrame:
             self.sdf,
             self.base_dataset.features,
             self.base_dataset.roles,
-            dependencies=self.base_dataset.dependencies,
+            dependencies=list(self.base_dataset.dependencies),
             uid=self.uid
         )
         return ds
@@ -60,31 +60,11 @@ class PersistenceManager:
             return self._persistence_registry[persisted_dataframe.uid]
 
         persisted_dataframe = self._persist(persisted_dataframe)
-
-        if persisted_dataframe.callback:
-            persisted_dataframe.callback()
-        elif persisted_dataframe.base_dataset and persisted_dataframe.base_dataset.dependencies:
-            deps = persisted_dataframe.base_dataset.dependencies
-            for dep in deps:
-                self.unpersist(dep)
-
         self._persistence_registry[persisted_dataframe.uid] = persisted_dataframe
 
         return persisted_dataframe
 
-    def unpersist(self, dep: Dependency):
-        if isinstance(dep, str):
-            uid = cast(str, dep)
-        elif isinstance(dep, SparkDataset) and dep.frozen:
-            return
-        elif isinstance(dep, SparkDataset):
-            uid = dep.uid
-        elif isinstance(dep, PersistableDataFrame):
-            uid = dep.uid
-        else:
-            dep()
-            return
-
+    def unpersist(self, uid: str):
         persisted_dataframe = self._persistence_registry.get(uid, None)
 
         if not persisted_dataframe:
@@ -94,9 +74,6 @@ class PersistenceManager:
 
         del self._persistence_registry[persisted_dataframe.uid]
 
-        if isinstance(dep, SparkDataset):
-            for dep in (dep.dependencies or []):
-                self.unpersist(dep)
 
     def unpersist_all(self):
         self.unpersist_children()

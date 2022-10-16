@@ -29,7 +29,7 @@ from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
 
 # TODO: SLAMA - refactor it to remove cyclic dependency on PersistedDataset
-Dependency = Union[str, 'SparkDataset', 'PersistableDataFrame', Callable]
+Dependency = Union[str, 'SparkDataset', Callable]
 DepIdentifable = Union[str, 'SparkDataset']
 
 
@@ -374,12 +374,21 @@ class SparkDataset(LAMLDataset):
 
     def unpersist(self):
         """
-        Unpersist current dataframe if it is persisted and all its dependencies.
-        Does nothing if the dataset is frozen
+        Unpersists current dataframe if it is persisted and all its dependencies.
+        It does nothing if the dataset is frozen
         """
         if self.frozen:
             return
-        self.persistence_manager.unpersist(self)
+
+        self.persistence_manager.unpersist(self.uid)
+
+        for dep in (self.dependencies or []):
+            if isinstance(dep, str):
+                self.persistence_manager.unpersist(dep)
+            elif isinstance(dep, SparkDataset):
+                dep.unpersist()
+            else:
+                dep()
 
     @property
     def frozen(self) -> bool:

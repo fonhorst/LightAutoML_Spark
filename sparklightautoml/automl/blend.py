@@ -234,8 +234,7 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         wpreds_sds.set_data(
             weighted_preds_sdf,
             list(self.output_roles.keys()),
-            self.output_roles,
-            dependencies=[self._predictions_dataset]
+            self.output_roles
         )
 
         return wpreds_sds
