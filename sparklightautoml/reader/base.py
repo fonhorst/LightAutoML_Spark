@@ -1,4 +1,5 @@
 import logging
+import uuid
 from copy import copy
 from copy import deepcopy
 from typing import Optional, Any, List, Dict, Tuple, cast
@@ -22,7 +23,7 @@ from pyspark.sql import functions as sf, SparkSession
 from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager, PersistableDataset
+from sparklightautoml.dataset.persistence import PersistenceManager, PersistableDataFrame
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from sparklightautoml.utils import SparkDataFrame
@@ -234,14 +235,10 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = self._create_unique_ids(train_data)
 
-        persistence_manager.persist()
+        # bucketing should happen here
+        initial_train_data_pdf = persistence_manager.persist(PersistableDataFrame(train_data, uid=str(uuid.uuid4())))
 
-        if bucketize_data:
-            # TODO: SLAMA join - need to take bucket_nums from settings
-            train_data = self._bucketize_data(train_data, bucket_nums=100)
-
-        initial_train_data = train_data.cache()
-        train_data = initial_train_data
+        train_data = initial_train_data_pdf.sdf
 
         if roles is None:
             roles = {}
@@ -367,7 +364,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = train_data.select(SparkDataset.ID_COLUMN, self.target_col, folds_col, *ff)
 
-        dataset = SparkDataset(train_data, self.roles, task=self.task, **kwargs)
+        deps = [lambda: persistence_manager.unpersist(initial_train_data_pdf.uid)]
+        dataset = SparkDataset(train_data, self.roles, task=self.task, dependencies=deps, **kwargs)
 
         if self.advanced_roles:
             new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
@@ -377,16 +375,16 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             self._roles = {x: new_roles[x] for x in new_roles if x not in droplist}
 
             dataset = SparkDataset(
-                train_data.select(SparkDataset.ID_COLUMN, *self.used_features), self.roles, task=self.task, **kwargs
+                train_data.select(SparkDataset.ID_COLUMN, *self.used_features),
+                self.roles,
+                persistence_manager=persistence_manager,
+                task=self.task,
+                dependencies=deps,
+                **kwargs
             )
 
-        # checkpointing
-        persisted_dataset = PersistableDataset(
-            dataset,
-            custom_persistence=True,
-            callback=lambda: initial_train_data.unpersist()
-        )
-        dataset = persistence_manager.persist(persisted_dataset)
+        # TODO: SLAMA - do we need checkpoint here?
+        dataset.persist()
 
         logger.info("Reader finished fit_read")
 

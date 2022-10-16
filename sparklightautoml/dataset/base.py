@@ -29,7 +29,7 @@ from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
 
 # TODO: SLAMA - refactor it to remove cyclic dependency on PersistedDataset
-Dependency = Union[str, 'SparkDataset', 'PersistedDataset', SparkDataFrame, Callable]
+Dependency = Union[str, 'SparkDataset', 'PersistableDataFrame', Callable]
 DepIdentifable = Union[str, 'SparkDataset']
 
 
