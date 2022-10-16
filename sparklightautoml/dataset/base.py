@@ -227,6 +227,10 @@ class SparkDataset(LAMLDataset):
     def service_columns(self) -> List[str]:
         return [sc for sc in self._service_columns if sc in self.data.columns]
 
+    @property
+    def persistence_manager(self) -> PersistenceManager:
+        return self._persistence_manager
+
     def __repr__(self):
         return f"SparkDataset ({self.data})"
 

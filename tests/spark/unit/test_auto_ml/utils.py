@@ -69,7 +69,7 @@ class DummyMLAlgo(SparkTabularMLAlgo):
         super().__init__(PersistenceManager())
         self.n_classes = n_classes
 
-    def fit_predict_single_fold(self, fold_prediction_column: str, full: SparkDataset, train: SparkDataset,
+    def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset,
                                 valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         prediction = array_to_vector(sf.array(*[sf.lit(10 * 10 + j) for j in range(self.n_classes)]))\
             .alias(fold_prediction_column)

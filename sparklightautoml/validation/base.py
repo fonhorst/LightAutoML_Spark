@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from copy import copy
 from typing import Tuple, cast, Sequence
 
@@ -10,6 +11,8 @@ from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.utils import SparkDataFrame
+
+TrainVal = Tuple[SparkDataset, SparkDataset]
 
 
 class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
@@ -24,12 +27,11 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         super().__init__(train)
         self.train = cast(SparkDataset, train)
 
-    def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
+    def __next__(self) -> TrainVal:
         """Define how to get next object.
 
         Returns:
             a tuple with:
-            - full dataset (both train and valid parts with column containing the bool feature),
             - train part of the dataset
             - validation part of the dataset.
 
@@ -60,13 +62,22 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
     def unpersist(self):
         ...
 
-    @abstractmethod
-    def _set_child_persistence_context(self):
-        ...
+    @contextmanager
+    def _child_persistence_context(self) -> 'SparkBaseTrainValidIterator':
+        train_valid = copy(self)
+        train = train_valid.train.empty()
+        child_manager = train_valid.train.persistence_manager.child()
+        train.set_data(
+            train_valid.train.data,
+            train_valid.train.features,
+            train_valid.train.roles,
+            persistence_manager=child_manager
+        )
+        train_valid.train = train
 
-    @abstractmethod
-    def _destroy_child_persistence_context(self):
-        ...
+        yield train_valid
+
+        child_manager.unpersist_all()
 
     def apply_selector(self, selector: SparkSelectionPipelineWrapper) -> "SparkBaseTrainValidIterator":
         """Select features on train data.
@@ -82,18 +93,12 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
             Dataset with selected features.
 
         """
-        sel_train_valid = copy(self)
-        sel_train_valid._set_child_persistence_context()
-
-        train = cast(SparkDataset, self.train)
-
         if not selector.is_fitted:
-            selector.fit(sel_train_valid)
-            sel_train_valid._destroy_child_persistence_context()
+            with self._child_persistence_context() as sel_train_valid:
+                selector.fit(sel_train_valid)
 
         train_valid = copy(self)
-
-        train_valid.train = selector.select(train)
+        train_valid.train = selector.select(cast(SparkDataset, self.train))
 
         return train_valid
 

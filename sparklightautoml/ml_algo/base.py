@@ -193,13 +193,12 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         return pred_ds
 
     def fit_predict_single_fold(
-        self, fold_prediction_column: str, full: SparkDataset, train: SparkDataset, valid: SparkDataset
+        self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset
     ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
         Args:
             fold_prediction_column: column name for predictions made for this fold
-            full: Full dataset that include train and valid parts and a bool column that delimits records
             train: Train Dataset.
             valid: Validation Dataset.
 

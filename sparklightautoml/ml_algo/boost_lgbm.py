@@ -355,28 +355,28 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return pred
 
     def fit_predict_single_fold(
-        self, fold_prediction_column: str, full: SparkDataset, train: SparkDataset, valid: SparkDataset
+        self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset
     ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
-        assert self.validation_column in full.data.columns, "Train should contain validation column"
+        assert self.validation_column in train.data.columns, "Train should contain validation column"
 
         if self.task is None:
-            self.task = full.task
+            self.task = train.task
 
         (params, verbose_eval) = self._infer_params()
 
-        logger.info(f"Input cols for the vector assembler: {full.features}")
+        logger.info(f"Input cols for the vector assembler: {train.features}")
         logger.info(f"Running lgb with the following params: {params}")
 
         if self._assembler is None:
             self._assembler = VectorAssembler(
-                inputCols=full.features,
+                inputCols=train.features,
                 outputCol=f"{self._name}_vassembler_features",
                 handleInvalid="keep"
             )
 
-        lgbm_booster = LightGBMRegressor if full.task.name == "reg" else LightGBMClassifier
+        lgbm_booster = LightGBMRegressor if train.task.name == "reg" else LightGBMClassifier
 
-        if full.task.name in ["binary", "multiclass"]:
+        if train.task.name in ["binary", "multiclass"]:
             params["rawPredictionCol"] = self._raw_prediction_col_name
             params["probabilityCol"] = fold_prediction_column
             params["predictionCol"] = self._prediction_col_name
@@ -392,7 +392,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         else:
             params["numThreads"] = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
 
-        train_data = full.data
+        train_data = train.data
         valid_size = train_data.where(sf.col(self.validation_column) == 1).count()
         max_val_size = self._max_validation_size
         if valid_size > max_val_size:
@@ -414,7 +414,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         lgbm = lgbm_booster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
-            labelCol=full.target_column,
+            labelCol=train.target_column,
             validationIndicatorCol=self.validation_column,
             verbosity=verbose_eval,
             useSingleDatasetMode=self._use_single_dataset_mode,
@@ -424,7 +424,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         logger.info(f"Use single dataset mode: {lgbm.getUseSingleDatasetMode()}. NumThreads: {lgbm.getNumThreads()}")
 
-        if full.task.name == "reg":
+        if train.task.name == "reg":
             lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
 
         ml_model = lgbm.fit(self._assembler.transform(train_data))
@@ -441,11 +441,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             logger.info("Model convert is started")
             booster_model_str = ml_model.getLightGBMBooster().modelStr().get()
             booster = lgb.Booster(model_str=booster_model_str)
-            model_payload_ml = self._convert_model(booster, len(full.features))
+            model_payload_ml = self._convert_model(booster, len(train.features))
 
             onnx_ml = ONNXModel().setModelPayload(model_payload_ml)
 
-            if full.task.name == "reg":
+            if train.task.name == "reg":
                 onnx_ml = (
                     onnx_ml.setDeviceType("CPU")
                     .setFeedDict({"input": f"{self._name}_vassembler_features"})

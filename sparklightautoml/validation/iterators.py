@@ -1,12 +1,12 @@
 import functools
 import logging
-from typing import Optional, cast, Tuple, Iterable, Sequence
+from typing import Optional, cast, Iterable, Sequence
 
 from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,10 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
         super().__init__(train)
         self._curr_idx = 0
 
+        self._base_train_frozen = train.frozen
+        self._train_frozen = train.frozen
+        self._val_frozen = train.frozen
+
     def __iter__(self) -> Iterable:
         self._curr_idx = 0
         return self
@@ -27,7 +31,7 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
     def __len__(self) -> Optional[int]:
         return 1
 
-    def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
+    def __next__(self) -> TrainVal:
         """Define how to get next object.
 
         Returns:
@@ -45,7 +49,28 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
         train_ds = cast(SparkDataset, self.train.empty())
         train_ds.set_data(sdf, self.train.features, self.train.roles)
 
-        return train_ds, train_ds, train_ds
+        return train_ds, train_ds
+
+    @property
+    def train_frozen(self) -> bool:
+        return self._train_frozen
+
+    @property
+    def val_frozen(self) -> bool:
+        return self._val_frozen
+
+    @train_frozen.setter
+    def train_frozen(self, val: bool):
+        self._train_frozen = val
+        self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
+
+    @val_frozen.setter
+    def val_frozen(self, val: bool):
+        self._val_frozen = val
+        self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
+
+    def unpersist(self):
+        self.train.unpersist()
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
         assert len(val_preds) == 1
@@ -68,6 +93,11 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         self._valid = valid
         self._curr_idx = 0
 
+        self._base_train_frozen = train.frozen
+        self._base_valid_frozen = valid.frozen
+        self._train_frozen = train.frozen
+        self._val_frozen = valid.frozen
+
     def __iter__(self) -> Iterable:
         self._curr_idx = 0
         return self
@@ -75,7 +105,7 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def __len__(self) -> Optional[int]:
         return 1
 
-    def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
+    def __next__(self) -> TrainVal:
         """Define how to get next object.
 
         Returns:
@@ -88,18 +118,29 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         # full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
         self._curr_idx += 1
 
-        return None, self.train, self._valid
+        return self.train, self._valid
 
     @property
     def train_frozen(self) -> bool:
-        pass
+        return self._train_frozen
 
     @property
     def val_frozen(self) -> bool:
-        pass
+        return self._val_frozen
+
+    @train_frozen.setter
+    def train_frozen(self, val: bool):
+        self._train_frozen = val
+        self.train.frozen = self._base_train_frozen or self._train_frozen
+
+    @val_frozen.setter
+    def val_frozen(self, val: bool):
+        self._val_frozen = val
+        self._valid.frozen = self._base_valid_frozen or self._val_frozen
 
     def unpersist(self):
-        pass
+        self.train.unpersist()
+        self._valid.unpersist()
 
     def get_validation_data(self) -> SparkDataset:
         # full_ds, train_part_ds, valid_part_ds = self._split_by_fold(fold=0)
@@ -109,8 +150,6 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         return self
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
-        if len(val_preds) != 1:
-            k = 0
         assert len(val_preds) == 1
 
         return val_preds[0]
@@ -137,6 +176,10 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         if n_folds is not None:
             self.n_folds = min(self.n_folds, n_folds)
 
+        self._base_train_frozen = train.frozen
+        self._train_frozen = self._base_train_frozen
+        self._val_frozen = self._base_train_frozen
+
     def __len__(self) -> int:
         """Get len of iterator.
 
@@ -159,7 +202,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
 
         return self
 
-    def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
+    def __next__(self) -> TrainVal:
         """Define how to get next object.
 
         Returns:
@@ -175,15 +218,30 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
         self._curr_idx += 1
 
-        return full_ds, train_part_ds, valid_part_ds
+        return train_part_ds, valid_part_ds
+
+    @property
+    def train_frozen(self) -> bool:
+        return self._train_frozen
+
+    @property
+    def val_frozen(self) -> bool:
+        return self._val_frozen
+
+    @train_frozen.setter
+    def train_frozen(self, val: bool):
+        self._base_train_frozen = val
+        self.train.frozen = self._base_train_frozen or self._base_train_frozen or self._val_frozen
+
+    @val_frozen.setter
+    def val_frozen(self, val: bool):
+        self._val_frozen = val
+        self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
+
+    def unpersist(self):
+        self.train.unpersist()
 
     def get_validation_data(self) -> SparkDataset:
-        """Just return train dataset.
-
-        Returns:
-            Whole train dataset.
-
-        """
         return self.train
 
     def convert_to_holdout_iterator(self) -> SparkHoldoutIterator:
@@ -195,8 +253,8 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
             new hold-out-iterator.
 
         """
-        # TODO: SLAMA - rewrite converting
-        return SparkHoldoutIterator(self.train)
+        _, train, valid = self._split_by_fold(self.train, 0)
+        return SparkHoldoutIterator(train, valid)
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
         assert len(val_preds) > 0
