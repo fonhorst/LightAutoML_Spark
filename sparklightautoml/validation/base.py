@@ -60,6 +60,14 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
     def unpersist(self):
         ...
 
+    @abstractmethod
+    def _set_child_persistence_context(self):
+        ...
+
+    @abstractmethod
+    def _destroy_child_persistence_context(self):
+        ...
+
     def apply_selector(self, selector: SparkSelectionPipelineWrapper) -> "SparkBaseTrainValidIterator":
         """Select features on train data.
 
@@ -75,16 +83,13 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
 
         """
         sel_train_valid = copy(self)
+        sel_train_valid._set_child_persistence_context()
 
         train = cast(SparkDataset, self.train)
 
         if not selector.is_fitted:
-            is_frozen = sel_train_valid.train.frozen
-            sel_train_valid.train.frozen = True
             selector.fit(sel_train_valid)
-            # TODO: SLAMA - unpersist selector
-            # persistence_manager.unpersist_all()
-            sel_train_valid.train.frozen = is_frozen
+            sel_train_valid._destroy_child_persistence_context()
 
         train_valid = copy(self)
 
