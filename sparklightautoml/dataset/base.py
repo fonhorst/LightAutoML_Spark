@@ -29,7 +29,8 @@ from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
 
 # TODO: SLAMA - refactor it to remove cyclic dependency on PersistedDataset
-Dependency = Union['SparkDataset', 'PersistedDataset', SparkDataFrame, Callable]
+Dependency = Union[str, 'SparkDataset', 'PersistedDataset', SparkDataFrame, Callable]
+DepIdentifable = Union[str, 'SparkDataset']
 
 
 class SparkDataset(LAMLDataset):
@@ -153,6 +154,10 @@ class SparkDataset(LAMLDataset):
     @data.setter
     def data(self, val: SparkDataFrame) -> None:
         self._data = val
+
+    @property
+    def dependencies(self) -> Optional[List[Dependency]]:
+        return self._dependencies
 
     @property
     def features(self) -> List[str]:

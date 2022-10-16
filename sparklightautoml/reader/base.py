@@ -22,7 +22,7 @@ from pyspark.sql import functions as sf, SparkSession
 from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager, PersistedDataset
+from sparklightautoml.dataset.persistence import PersistenceManager, PersistableDataset
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from sparklightautoml.utils import SparkDataFrame
@@ -234,6 +234,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = self._create_unique_ids(train_data)
 
+        persistence_manager.persist()
+
         if bucketize_data:
             # TODO: SLAMA join - need to take bucket_nums from settings
             train_data = self._bucketize_data(train_data, bucket_nums=100)
@@ -379,12 +381,12 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             )
 
         # checkpointing
-        persisted_dataset = PersistedDataset(
+        persisted_dataset = PersistableDataset(
             dataset,
             custom_persistence=True,
             callback=lambda: initial_train_data.unpersist()
         )
-        dataset = persistence_manager.persist(persisted_dataset, name="SparkToSparkReaderDataset")
+        dataset = persistence_manager.persist(persisted_dataset)
 
         logger.info("Reader finished fit_read")
 
