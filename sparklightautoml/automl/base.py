@@ -223,7 +223,8 @@ class SparkAutoML(TransformerInputOutputRoles):
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
 
         train_valid = self._create_validation_iterator(train_dataset, valid_dataset, None, cv_iter=cv_iter)
-        train_valid.train.frozen = True
+        train_valid.train_frozen = True
+        train_valid.val_frozen = True
 
         pipes: List[SparkMLPipeline] = []
         self.levels = []
@@ -268,8 +269,9 @@ class SparkAutoML(TransformerInputOutputRoles):
                 level_ds = SparkDataset.concatenate(all_pipes_predictions)
                 # TODO: SLAMA - add level
                 level_ds.persist()
-                train_valid.train.frozen = False
-                train_valid.train.unpersist()
+                train_valid.train_frozen = False
+                train_valid.val_frozen = False
+                train_valid.unpersist()
                 # level_ds = persistence_manager.persist(level_ds, name=main_milestone_name)
                 # persistence_manager.unpersist_children()
                 break
@@ -284,6 +286,8 @@ class SparkAutoML(TransformerInputOutputRoles):
             # TODO: SLAMA - add level
             level_ds.persist()
             train_valid.train.frozen = False
+            if not self.skip_conn:
+                train_valid.val_frozen = False
             train_valid.train.unpersist()
             # level_ds = persistence_manager.persist(level_ds, name=main_milestone_name)
             # persistence_manager.unpersist_children()
@@ -377,8 +381,12 @@ class SparkAutoML(TransformerInputOutputRoles):
     def _create_validation_iterator(
         self, train: SparkDataset, valid: Optional[SparkDataset], n_folds: Optional[int], cv_iter: Optional[Callable]
     ) -> SparkBaseTrainValidIterator:
+        # TODO: SLAMA - set level
+        train.persist()
         if valid:
-            dataset = self._merge_train_and_valid_datasets(train, valid)
+            # TODO: SLAMA - set level
+            valid.persist()
+            # dataset = self._merge_train_and_valid_datasets(train, valid)
             iterator = SparkHoldoutIterator(dataset)
         elif cv_iter:
             raise NotImplementedError("Not supported now")

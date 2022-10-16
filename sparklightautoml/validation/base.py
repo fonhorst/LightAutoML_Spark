@@ -1,13 +1,12 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from copy import copy
-from typing import Tuple, cast, Sequence, Optional
+from typing import Tuple, cast, Sequence
 
 from lightautoml.validation.base import TrainValidIterator
 from pyspark.sql import functions as sf
 
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.utils import SparkDataFrame
@@ -35,6 +34,30 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
             - validation part of the dataset.
 
         """
+        ...
+
+    @abstractmethod
+    @property
+    def train_frozen(self) -> bool:
+        ...
+
+    @abstractmethod
+    @train_frozen.setter
+    def train_frozen(self, val: bool):
+        ...
+
+    @abstractmethod
+    @property
+    def val_frozen(self) -> bool:
+        ...
+
+    @abstractmethod
+    @val_frozen.setter
+    def val_frozen(self, val: bool):
+        ...
+
+    @abstractmethod
+    def unpersist(self):
         ...
 
     def apply_selector(self, selector: SparkSelectionPipelineWrapper) -> "SparkBaseTrainValidIterator":

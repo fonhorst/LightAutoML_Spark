@@ -63,8 +63,9 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
 class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     """Simple one step iterator over one fold of SparkDataset"""
 
-    def __init__(self, train: SparkDataset):
+    def __init__(self, train: SparkDataset, valid: SparkDataset):
         super().__init__(train)
+        self._valid = valid
         self._curr_idx = 0
 
     def __iter__(self) -> Iterable:
@@ -84,14 +85,25 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         if self._curr_idx > 0:
             raise StopIteration
 
-        full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
+        # full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
         self._curr_idx += 1
 
-        return full_ds, train_part_ds, valid_part_ds
+        return None, self.train, self._valid
+
+    @property
+    def train_frozen(self) -> bool:
+        pass
+
+    @property
+    def val_frozen(self) -> bool:
+        pass
+
+    def unpersist(self):
+        pass
 
     def get_validation_data(self) -> SparkDataset:
-        full_ds, train_part_ds, valid_part_ds = self._split_by_fold(fold=0)
-        return valid_part_ds
+        # full_ds, train_part_ds, valid_part_ds = self._split_by_fold(fold=0)
+        return self._valid
 
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         return self
@@ -183,6 +195,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
             new hold-out-iterator.
 
         """
+        # TODO: SLAMA - rewrite converting
         return SparkHoldoutIterator(self.train)
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
