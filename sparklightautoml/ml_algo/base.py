@@ -179,7 +179,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         # TODO: SLAMA - set deps
         pred_ds.set_data(full_preds_df, list(self.output_roles.keys()), self.output_roles)
         # TODO: SLAMA - set level
-        pred_ds.persist()
+        pred_ds = pred_ds.persist()
 
         if iterator_len > 1:
             single_pred_ds = self._make_single_prediction_dataset(pred_ds)

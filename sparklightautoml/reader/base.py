@@ -383,9 +383,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 **kwargs
             )
 
-        # TODO: SLAMA - do we need checkpoint here?
-        dataset.persist()
-
         logger.info("Reader finished fit_read")
 
         return dataset

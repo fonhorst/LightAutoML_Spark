@@ -162,7 +162,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         # # checkpointing
         # val_preds_ds = persistence_manager.persist(val_preds_ds, name=self._milestone_name)
         # persistence_manager.unpersist_all(exceptions=val_preds_ds)
-        val_preds_ds.persist()
+        val_preds_ds = val_preds_ds.persist()
         train_valid.train.frozen = False
         train_valid.train.unpersist()
 

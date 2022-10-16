@@ -110,7 +110,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         train_valid.train = features_pipeline.fit_transform(train_valid.train)
 
         # TODO: SLAMA - do we need it here?
-        train_valid.train.persist()
+        # train_valid.train = train_valid.train.persist()
 
         return train_valid
 

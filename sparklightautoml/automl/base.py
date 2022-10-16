@@ -208,7 +208,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         # TODO: SLAMA - is it necessary here? We do it to save column with _id, may be to convert something
         # TODO: SLAMA - add level
-        train_dataset.persist()
+        train_dataset = train_dataset.persist()
 
         assert (
             len(self._levels) <= 1 or train_dataset.folds is not None
@@ -268,7 +268,7 @@ class SparkAutoML(TransformerInputOutputRoles):
                 # checkpointing
                 level_ds = SparkDataset.concatenate(all_pipes_predictions)
                 # TODO: SLAMA - add level
-                level_ds.persist()
+                level_ds = level_ds.persist()
                 train_valid.train_frozen = False
                 train_valid.val_frozen = False
                 train_valid.unpersist()
@@ -284,7 +284,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             # checkpointing
             level_ds = SparkDataset.concatenate(level_dss)
             # TODO: SLAMA - add level
-            level_ds.persist()
+            level_ds = level_ds.persist()
             train_valid.train.frozen = False
             if not self.skip_conn:
                 train_valid.val_frozen = False
@@ -306,7 +306,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         self._output_roles = copy(oof_pred.roles)
 
         # TODO: SLAMA - add level
-        oof_pred.persist()
+        oof_pred = oof_pred.persist()
         # oof_pred = persistence_manager.persist(oof_pred, name=main_milestone_name)
         # persistence_manager.unpersist_all(exceptions=oof_pred)
 
@@ -382,12 +382,12 @@ class SparkAutoML(TransformerInputOutputRoles):
         self, train: SparkDataset, valid: Optional[SparkDataset], n_folds: Optional[int], cv_iter: Optional[Callable]
     ) -> SparkBaseTrainValidIterator:
         # TODO: SLAMA - set level
-        train.persist()
+        train = train.persist()
         if valid:
             # TODO: SLAMA - set level
-            valid.persist()
+            valid = valid.persist()
             # dataset = self._merge_train_and_valid_datasets(train, valid)
-            iterator = SparkHoldoutIterator(dataset)
+            iterator = SparkHoldoutIterator(train, valid)
         elif cv_iter:
             raise NotImplementedError("Not supported now")
         elif train.folds:
