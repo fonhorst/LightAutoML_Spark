@@ -24,13 +24,13 @@ class PersistenceManager:
         self._parent = parent
         self._children: List['PersistenceManager'] = []
 
-    def persist(self, dataset: Union[SparkDataset, PersistedDataset], *, name: str) -> SparkDataset:
-        assert name is not None, "Name cannot be None"
-        assert dataset.uid not in self._persisted_datasets or self._persisted_datasets[dataset.uid] == name, \
-            f"Cannot persist the same dataset with diifferent names. Called with name: {name}. " \
-            f"Already exists in the registry: {self._persisted_datasets[dataset.uid]}"
+    def persist(self, dataset: Union[SparkDataset, PersistedDataset], *, name: Optional[str] = None) -> SparkDataset:
+        # assert dataset.uid not in self._persisted_datasets or self._persisted_datasets[dataset.uid] == name, \
+        #     f"Cannot persist the same dataset with different names. Called with name: {name}. " \
+        #     f"Already exists in the registry: {self._persisted_datasets[dataset.uid]}"
 
         if isinstance(dataset, SparkDataset):
+            name = dataset.uid if name is None else name
             ds = SparkSession.getActiveSession().createDataFrame(dataset.data.rdd, schema=dataset.data.schema).cache()
             ds.write.mode('overwrite').format('noop').save()
 
@@ -40,6 +40,7 @@ class PersistenceManager:
             persisted_dataset = PersistedDataset(ps_dataset)
         else:
             persisted_dataset = cast(PersistedDataset, dataset)
+            name = persisted_dataset.dataset.uid if name is None else name
 
         self.unpersist(name)
 

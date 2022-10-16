@@ -3,7 +3,7 @@ import uuid
 import warnings
 from collections import Counter
 from copy import copy
-from typing import Sequence, Any, Tuple, Union, Optional, List, cast, Dict, Set
+from typing import Sequence, Any, Tuple, Union, Optional, List, cast, Dict, Set, Callable
 
 import pandas as pd
 from lightautoml.dataset.base import (
@@ -24,8 +24,12 @@ from pyspark.sql import functions as sf, Column
 from pyspark.sql.session import SparkSession
 
 from sparklightautoml import VALIDATION_COLUMN
+from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
+
+# TODO: SLAMA - refactor it to remove cyclic dependency on PersistedDataset
+Dependency = Union['SparkDataset', 'PersistedDataset', SparkDataFrame, Callable]
 
 
 class SparkDataset(LAMLDataset):
@@ -49,12 +53,7 @@ class SparkDataset(LAMLDataset):
 
     ID_COLUMN = "_id"
 
-    def empty(self) -> "SparkDataset":
-
-        dataset = cast(SparkDataset, super().empty())
-
-        return dataset
-
+    # TODO: SLAMA - implement filling dependencies
     @classmethod
     def concatenate(cls, datasets: Sequence["SparkDataset"]) -> "SparkDataset":
         """
@@ -97,10 +96,15 @@ class SparkDataset(LAMLDataset):
     def __init__(self,
                  data: SparkDataFrame,
                  roles: Optional[RolesDict],
+                 persistence_manager: PersistenceManager,
                  task: Optional[Task] = None,
-                 bucketized: bool = False, **kwargs: Any):
+                 bucketized: bool = False,
+                 dependencies: Optional[List[Dependency]] = None,
+                 **kwargs: Any):
 
         self._uid = str(uuid.uuid4())
+        self._persistence_manager = persistence_manager
+        self._dependencies = dependencies
 
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
@@ -312,7 +316,21 @@ class SparkDataset(LAMLDataset):
 
         return df, target_series, folds_series, all_roles
 
-    def set_data(self, data: SparkDataFrame, features: List[str], roles: NpRoles = None):
+    def _initialize(self, task: Optional[Task], **kwargs: Any):
+        super()._initialize(task, **kwargs)
+        self._dependencies = None
+
+    def empty(self) -> "SparkDataset":
+        dataset = cast(SparkDataset, super().empty())
+        return dataset
+
+    def set_data(
+            self,
+            data: SparkDataFrame,
+            features: List[str],
+            roles: NpRoles = None,
+            dependencies: Optional[List[Dependency]] = None
+    ):
         """Inplace set data, features, roles for empty dataset.
 
         Args:
@@ -322,6 +340,35 @@ class SparkDataset(LAMLDataset):
         """
         self._validate_dataframe(data)
         super().set_data(data, None, roles)
+        self._dependencies = dependencies
+
+    def persist(self, level: str):
+        """
+        Materializes current Spark DataFrame and unpersists all its dependencies
+        Args:
+            level:
+
+        Returns:
+
+        """
+        # TODO: SLAMA - raise warning if the dataset is already persisted but with a different level in comparison with 'level' arg
+        raise NotImplementedError()
+
+    def unpersist(self):
+        """
+        Unpersist current dataframe if it is persisted and all its dependencies
+        Returns:
+
+        """
+        raise NotImplementedError()
+
+    @property
+    def frozen(self) -> bool:
+        raise NotImplementedError()
+
+    @frozen.setter
+    def frozen(self, val: bool):
+        raise NotImplementedError()
 
     def to_pandas(self) -> PandasDataset:
         data, target_data, folds_data, roles = self._materialize_to_pandas()

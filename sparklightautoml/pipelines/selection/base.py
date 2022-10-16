@@ -72,16 +72,9 @@ class SparkSelectionPipelineWrapper(SelectionPipeline, TransformerInputOutputRol
     def perform_selection(self, train_valid: Optional[TrainValidIterator]):
         self._sel_pipe.perform_selection(train_valid)
 
-    def fit(self, train_valid: SparkBaseTrainValidIterator, persistence_manager: Optional[PersistenceManager] = None):
+    def fit(self, train_valid: SparkBaseTrainValidIterator):
         self._service_columns = train_valid.train.service_columns
-
-        base_fit_transform = self._feature_pipeline.fit_transform
-        self._feature_pipeline.fit_transform = functools.partialmethod(
-            base_fit_transform,
-            persistence_manager=persistence_manager
-        )
         self._sel_pipe.fit(train_valid)
-        self._feature_pipeline.fit_transform = base_fit_transform
         self._is_fitted = True
 
         self._input_roles = copy(train_valid.train.roles)

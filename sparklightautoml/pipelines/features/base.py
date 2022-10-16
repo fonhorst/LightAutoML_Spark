@@ -242,8 +242,8 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         if len(self.pipes) > 1:
             return self.pipes.pop(i)
 
-    def _merge_pipes(self, data: SparkDataset, persistence_manager: PersistenceManager) -> FittedPipe:
-        fitted_pipes = [self._optimize_and_fit(data, pipe(data, persistence_manager.child())) for pipe in self.pipes]
+    def _merge_pipes(self, data: SparkDataset) -> FittedPipe:
+        fitted_pipes = [self._optimize_and_fit(data, pipe(data)) for pipe in self.pipes]
 
         processed_dataset = SparkDataset.concatenate([fp.dataset for fp in fitted_pipes])
         pipeline = PipelineModel(stages=[fp.transformer for fp in fitted_pipes])
@@ -253,8 +253,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
     def _optimize_and_fit(
             self,
             train: SparkDataset,
-            pipeline: SparkEstOrTrans,
-            persistence_manager: PersistenceManager) -> FittedPipe:
+            pipeline: SparkEstOrTrans) -> FittedPipe:
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
 
@@ -301,9 +300,6 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         output_roles = {feat: role for est in enodes for feat, role in est.get_output_roles().items()}
         featurized_train = train.empty()
         featurized_train.set_data(feature_sdf, list(output_roles.keys()), output_roles)
-
-        # TODO: SLAMA - it is already persisted, need to handle such a case
-        featurized_train = persistence_manager.persist(featurized_train, name="in_pipe")
 
         return FittedPipe(dataset=featurized_train, transformer=dag_transformer)
 

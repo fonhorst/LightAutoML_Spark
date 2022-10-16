@@ -97,9 +97,8 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
 
     def fit_predict(
             self,
-            train_valid: SparkBaseTrainValidIterator,
-            persistence_manager: Optional[PersistenceManager] = None
-    ) -> LAMLDataset:
+            train_valid: SparkBaseTrainValidIterator
+    ) -> SparkDataset:
         """Fit on train/valid iterator and transform on validation part.
 
         Args:
@@ -111,18 +110,21 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         """
 
         # train and apply pre selection
-        train_valid = train_valid.apply_selector(self.pre_selection, persistence_manager.child())
+        train_valid = train_valid.apply_selector(self.pre_selection)
 
         # apply features pipeline
-        train_valid = train_valid.apply_feature_pipeline(self.features_pipeline, persistence_manager.child())
+        train_valid = train_valid.apply_feature_pipeline(self.features_pipeline)
 
         # train and apply post selection
-        train_valid = train_valid.apply_selector(self.post_selection, persistence_manager.child())
+        train_valid = train_valid.apply_selector(self.post_selection)
 
+        # TODO: SLAMA - remove it later
         # this checkpoint may be important for some algorithms that submits many jobs during training like LinearLGBFS
-        if self._persist_before_ml_algo:
-            train_valid.data = persistence_manager.persist(train_valid.data, name=self._milestone_name)
-            persistence_manager.unpersist_children()
+        # if self._persist_before_ml_algo:
+        #     train_valid.data = persistence_manager.persist(train_valid.data, name=self._milestone_name)
+        #     persistence_manager.unpersist_children()
+
+        train_valid.train.frozen = True
 
         preds: List[SparkDataset] = []
         for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
@@ -156,9 +158,13 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         self._input_roles = copy(train_valid.train.roles)
         self._output_roles = copy(val_preds_ds.roles)
 
-        # checkpointing
-        val_preds_ds = persistence_manager.persist(val_preds_ds, name=self._milestone_name)
-        persistence_manager.unpersist_all(exceptions=val_preds_ds)
+        # TODO: SLAMA - remove it later
+        # # checkpointing
+        # val_preds_ds = persistence_manager.persist(val_preds_ds, name=self._milestone_name)
+        # persistence_manager.unpersist_all(exceptions=val_preds_ds)
+        val_preds_ds.persist()
+        train_valid.train.frozen = False
+        train_valid.train.unpersist()
 
         return val_preds_ds
 

@@ -23,6 +23,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
     def __init__(self, train: SparkDataset):
         assert train.folds_column in train.data.columns
         super().__init__(train)
+        self.train = cast(SparkDataset, train)
 
     def __next__(self) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         """Define how to get next object.
@@ -36,8 +37,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         """
         ...
 
-    def apply_selector(self, selector: SparkSelectionPipelineWrapper,
-                       persistence_manager: Optional[PersistenceManager] = None) -> "SparkBaseTrainValidIterator":
+    def apply_selector(self, selector: SparkSelectionPipelineWrapper) -> "SparkBaseTrainValidIterator":
         """Select features on train data.
 
         Check if selector is fitted.
@@ -56,8 +56,12 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         train = cast(SparkDataset, self.train)
 
         if not selector.is_fitted:
-            selector.fit(sel_train_valid, persistence_manager)
-            persistence_manager.unpersist_all()
+            is_frozen = sel_train_valid.train.frozen
+            sel_train_valid.train.frozen = True
+            selector.fit(sel_train_valid)
+            # TODO: SLAMA - unpersist selector
+            # persistence_manager.unpersist_all()
+            sel_train_valid.train.frozen = is_frozen
 
         train_valid = copy(self)
 
@@ -67,11 +71,13 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
 
     def apply_feature_pipeline(
             self,
-            features_pipeline: SparkFeaturesPipeline,
-            persistence_manager: Optional[PersistenceManager] = None
-    ) -> "SparkBaseTrainValidIterator":
+            features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
         train_valid = copy(self)
-        train_valid.train = features_pipeline.fit_transform(train_valid.train, persistence_manager)
+        train_valid.train = features_pipeline.fit_transform(train_valid.train)
+
+        # TODO: SLAMA - do we need it here?
+        train_valid.train.persist()
+
         return train_valid
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
