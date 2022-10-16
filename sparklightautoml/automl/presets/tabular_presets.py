@@ -27,7 +27,7 @@ from sparklightautoml.automl.presets.utils import (
     replace_year_in_date,
 )
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager
+from sparklightautoml.dataset.persistence import PersistenceManager, PlainCachePersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.ml_algo.linear_pyspark import SparkLinearLBFGS
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
@@ -98,14 +98,15 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         cb_params: Optional[dict] = None,
         linear_l2_params: Optional[dict] = None,
         gbm_pipeline_params: Optional[dict] = None,
-        linear_pipeline_params: Optional[dict] = None
+        linear_pipeline_params: Optional[dict] = None,
+        persistence_manager: Optional[PersistenceManager] = None
     ):
         if config_path is None:
             config_path = os.path.join(base_dir, self._default_config_path)
         super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path)
 
         self._cacher_key = "main_cache"
-        self._persistence_manager = persistence_manager or PersistenceManager()
+        self._persistence_manager = persistence_manager or PlainCachePersistenceManager()
 
         self._spark = spark
         # upd manual params

@@ -16,7 +16,7 @@ from pyspark.sql import functions as sf
 
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset
-from ..dataset.persistence import PersistenceManager
+from ..dataset.persistence import PersistenceManager, PlainCachePersistenceManager
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
@@ -202,7 +202,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         set_stdout_level(verbosity_to_loglevel(verbose))
         self.timer.start()
 
-        persistence_manager = persistence_manager or PersistenceManager()
+        persistence_manager = persistence_manager or PlainCachePersistenceManager()
 
         train_dataset = self.reader.fit_read(train_data, train_features, roles, persistence_manager=persistence_manager)
 
