@@ -19,6 +19,10 @@ class BasePersistenceManager(PersistenceManager):
         self._parent = parent
         self._children: List['PersistenceManager'] = []
 
+    @property
+    def uid(self) -> str:
+        return self._uid
+
     def persist(self,
                 dataset: Union[SparkDataset, PersistableDataFrame],
                 level: PersistenceLevel = PersistenceLevel.REGULAR) -> PersistableDataFrame:
@@ -73,9 +77,10 @@ class BasePersistenceManager(PersistenceManager):
         logger.debug(f"Manager {self._uid}: everything has been unpersisted.")
 
     def child(self) -> 'PersistenceManager':
-        logger.info(f"Manager {self._uid}: producing child.")
+        logger.info(f"Manager {self._uid}: producing a child.")
         a_child = PersistenceManager(self)
         self._children.append(a_child)
+        logger.info(f"Manager {self._uid}: the child (uid={a_child.uid}) has been produced.")
         return a_child
 
     def is_persisted(self, pdf: PersistableDataFrame) -> bool:

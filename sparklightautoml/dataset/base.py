@@ -483,6 +483,11 @@ class PersistenceManager(ABC):
         # we intentially create new uid to use to distinguish a persisted and unpersisted dataset
         return PersistableDataFrame(dataset.data, uid=str(uuid.uuid4()), dataset=dataset)
 
+    @property
+    @abstractmethod
+    def uid(self) -> str:
+        ...
+
     @abstractmethod
     def persist(self,
                 dataset: Union[SparkDataset, PersistableDataFrame],
