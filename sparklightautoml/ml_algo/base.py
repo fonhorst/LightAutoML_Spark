@@ -175,9 +175,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self._transformer = self._build_transformer()
 
         pred_ds = valid_ds.empty()
-        # TODO: SLAMA - set deps
         pred_ds.set_data(full_preds_df, list(self.output_roles.keys()), self.output_roles, name=f"{type(self)}")
-        # TODO: SLAMA - set level
         pred_ds = pred_ds.persist(level=PersistenceLevel.REGULAR)
 
         if iterator_len > 1:
@@ -260,7 +258,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         roles = {self.prediction_feature: dataset.roles[self.prediction_feature]}
 
         output: SparkDataset = dataset.empty()
-        output.set_data(preds, preds.columns, roles)
+        output.set_data(preds, preds.columns, roles, name="single_prediction_dataset")
 
         return output
 

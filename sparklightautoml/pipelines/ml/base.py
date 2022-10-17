@@ -117,12 +117,6 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         # train and apply post selection
         train_valid = train_valid.apply_selector(self.post_selection)
 
-        # TODO: SLAMA - remove it later
-        # this checkpoint may be important for some algorithms that submits many jobs during training like LinearLGBFS
-        # if self._persist_before_ml_algo:
-        #     train_valid.data = persistence_manager.persist(train_valid.data, name=self._milestone_name)
-        #     persistence_manager.unpersist_children()
-
         train_valid.train.frozen = True
 
         preds: List[SparkDataset] = []
@@ -157,10 +151,6 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         self._input_roles = copy(train_valid.train.roles)
         self._output_roles = copy(val_preds_ds.roles)
 
-        # TODO: SLAMA - remove it later
-        # # checkpointing
-        # val_preds_ds = persistence_manager.persist(val_preds_ds, name=self._milestone_name)
-        # persistence_manager.unpersist_all(exceptions=val_preds_ds)
         val_preds_ds = val_preds_ds.persist(level=PersistenceLevel.REGULAR)
         train_valid.train.frozen = False
         train_valid.train.unpersist()

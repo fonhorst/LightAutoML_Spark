@@ -298,7 +298,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
             feature_sdf,
             list(output_roles.keys()),
             output_roles,
-            dependencies=[lambda: Cacher.release_cache_by_key(cacher_key)]
+            dependencies=[lambda: Cacher.release_cache_by_key(cacher_key), train]
         )
 
         return FittedPipe(dataset=featurized_train, transformer=dag_transformer)
