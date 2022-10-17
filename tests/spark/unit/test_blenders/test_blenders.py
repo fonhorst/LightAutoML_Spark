@@ -6,6 +6,7 @@ from pyspark.sql import SparkSession
 
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.tasks.base import SparkTask as SparkTask
@@ -27,6 +28,7 @@ def test_weighted_blender(spark: SparkSession):
     folds_col = "folds"
     n_classes = 10
     models_count = 4
+    persistence_manager = PlainCachePersistenceManager()
 
     data = [
         {
@@ -41,8 +43,15 @@ def test_weighted_blender(spark: SparkSession):
     roles = {"a": NumericRole(), "b": NumericRole(), "c": NumericRole()}
 
     data_sdf = spark.createDataFrame(data)
-    data_sds = SparkDataset(data=data_sdf, task=SparkTask("multiclass"),
-                            roles=roles, target=target_col, folds=folds_col, name="WeightedBlenderData")
+    data_sds = SparkDataset(
+        data=data_sdf,
+        task=SparkTask("multiclass"),
+        persistence_manager=persistence_manager,
+        roles=roles,
+        target=target_col,
+        folds=folds_col,
+        name="WeightedBlenderData"
+    )
 
     pipes = [
         SparkMLPipeline(ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")])

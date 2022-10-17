@@ -127,7 +127,6 @@ if __name__ == "__main__":
 
     logger.info("\t Pipeline1...")
     pipeline_lvl1 = SparkMLPipeline(
-        cache_manager=PersistenceManager(),
         ml_algos=[(model1, params_tuner1), model2],
         pre_selection=SparkSelectionPipelineWrapper(selector),
         features_pipeline=pipe,
@@ -153,7 +152,6 @@ if __name__ == "__main__":
 
     logger.info("\t Pipeline2...")
     pipeline_lvl2 = SparkMLPipeline(
-        cache_manager=PersistenceManager(),
         ml_algos=[model],
         pre_selection=None,
         features_pipeline=pipe1,

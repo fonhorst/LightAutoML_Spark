@@ -98,7 +98,7 @@ class SparkDataset(LAMLDataset):
     def __init__(self,
                  data: SparkDataFrame,
                  roles: Optional[RolesDict],
-                 persistence_manager: 'PersistenceManager',
+                 persistence_manager: Optional['PersistenceManager'] = None,
                  task: Optional[Task] = None,
                  bucketized: bool = False,
                  dependencies: Optional[List[Dependency]] = None,
@@ -377,6 +377,7 @@ class SparkDataset(LAMLDataset):
         Returns:
             a new SparkDataset that is persisted and materialized
         """
+        assert self.persistence_manager, "Cannot persist when persistence_manager is None"
         # TODO: SLAMA - raise warning if the dataset is already persisted but with a different level in comparison with 'level' arg
         # TODO: SLAMA - send level
         return self.persistence_manager.persist(self, level).to_dataset()
@@ -386,6 +387,8 @@ class SparkDataset(LAMLDataset):
         Unpersists current dataframe if it is persisted and all its dependencies.
         It does nothing if the dataset is frozen
         """
+        assert self.persistence_manager, "Cannot unpersist when persistence_manager is None"
+
         if self.frozen:
             return
 

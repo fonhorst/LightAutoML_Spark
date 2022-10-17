@@ -10,6 +10,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import NumericType
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
@@ -51,9 +52,10 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int, agr:
     dtype = config['dtype'] if 'dtype' in config else None
 
     df = spark.read.csv(path, header=True, escape="\"")
+    persistence_manager = PlainCachePersistenceManager()
     sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv, advanced_roles=agr)
 
-    sdataset = sreader.fit_read(df, roles=roles)
+    sdataset = sreader.fit_read(df, roles=roles, persistence_manager=persistence_manager)
     checks(sdataset)
 
     sdataset = sreader.read(df, add_array_attrs=False)
@@ -104,9 +106,9 @@ def test_spark_reader_advanced_guess_roles(spark: SparkSession, config: Dict[str
     pdataset = preader.fit_read(train_pdf, roles=config["roles"])
 
     train_df = spark.read.csv(config['train_path'], header=True, escape="\"")
+    persistence_manager = PlainCachePersistenceManager()
     sreader = SparkToSparkReader(task=SparkTask(task_type), cv=cv, advanced_roles=True)
-    sdataset = sreader.fit_read(train_df, roles=config["roles"])
-    # spark_adv_roles = sreader.advanced_roles_guess(spark_train_ds)
+    sdataset = sreader.fit_read(train_df, roles=config["roles"], persistence_manager=persistence_manager)
 
     assert set(sdataset.features) == set(pdataset.features)
     sdiff = set(sdataset.features).symmetric_difference(pdataset.features)

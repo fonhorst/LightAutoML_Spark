@@ -12,6 +12,7 @@ from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -42,7 +43,11 @@ class DummyReader(SparkToSparkReader):
     def __init__(self, task: SparkTask):
         super().__init__(task)
 
-    def fit_read(self, train_data: SparkDataFrame, features_names: Any = None, roles: UserDefinedRolesDict = None,
+    def fit_read(self,
+                 train_data: SparkDataFrame,
+                 features_names: Any = None,
+                 roles: UserDefinedRolesDict = None,
+                 persistence_manager: Optional[PersistenceManager] = None,
                  **kwargs: Any) -> SparkDataset:
 
         self.target_col = roles["target"]
@@ -54,6 +59,7 @@ class DummyReader(SparkToSparkReader):
         sds = SparkDataset(
             train_data,
             self._roles,
+            persistence_manager,
             task=self.task,
             target=self.target_col,
             folds=folds_col,
@@ -63,7 +69,13 @@ class DummyReader(SparkToSparkReader):
 
     def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
         data = self._create_unique_ids(data)
-        sds = SparkDataset(data, self._roles, task=self.task, target=self.target_col)
+        sds = SparkDataset(
+            data,
+            self._roles,
+            persistence_manager=PlainCachePersistenceManager(),
+            task=self.task,
+            target=self.target_col
+        )
         return sds
 
 

@@ -55,7 +55,8 @@ class BasePersistenceManager(PersistenceManager):
 
         del self._persistence_registry[persisted_dataframe.uid]
 
-        logger.debug(f"Manager {self._uid}: the dataset (uid={uid}, name={persisted_dataframe.name}) has been unpersisted.")
+        logger.debug(f"Manager {self._uid}: "
+                     f"the dataset (uid={uid}, name={persisted_dataframe.name}) has been unpersisted.")
 
     def unpersist_children(self):
         logger.info(f"Manager {self._uid}: unpersisting children.")
@@ -81,7 +82,7 @@ class BasePersistenceManager(PersistenceManager):
     def child(self) -> 'PersistenceManager':
         # TODO: SLAMA - Bugfix
         logger.info(f"Manager {self._uid}: producing a child.")
-        a_child = PersistenceManager(self)
+        a_child = self._create_child()
         self._children.append(a_child)
         logger.info(f"Manager {self._uid}: the child (uid={a_child.uid}) has been produced.")
         return a_child
@@ -95,6 +96,10 @@ class BasePersistenceManager(PersistenceManager):
 
     @abstractmethod
     def _unpersist(self, pdf: PersistableDataFrame):
+        ...
+
+    @abstractmethod
+    def _create_child(self) -> PersistenceManager:
         ...
 
 
@@ -117,6 +122,9 @@ class PlainCachePersistenceManager(BasePersistenceManager):
     def _unpersist(self, pdf: PersistableDataFrame):
         pdf.sdf.unpersist()
 
+    def _create_child(self) -> PersistenceManager:
+        return PlainCachePersistenceManager(self)
+
 
 class LocalCheckpointPersistenceManager(BasePersistenceManager):
     def __init__(self, parent: Optional['PersistenceManager'] = None):
@@ -134,6 +142,9 @@ class LocalCheckpointPersistenceManager(BasePersistenceManager):
 
     def _unpersist(self, pdf: PersistableDataFrame):
         pdf.sdf.unpersist()
+
+    def _create_child(self) -> PersistenceManager:
+        return LocalCheckpointPersistenceManager(self)
 
 
 class BucketedPersistenceManager(BasePersistenceManager):
@@ -189,6 +200,9 @@ class BucketedPersistenceManager(BasePersistenceManager):
             f"for the dataset (uid={pdf.uid}, name={pdf.name}) with name {name} on path {path}."
         )
 
+    def _create_child(self) -> PersistenceManager:
+        return BucketedPersistenceManager(self._bucketed_datasets_folder, self._bucket_nums, self)
+
     def _build_path(self, name: str) -> str:
         return os.path.join(self._bucketed_datasets_folder, f"{name}.parquet")
 
@@ -226,3 +240,7 @@ class CompositePersistenceManager(BasePersistenceManager):
             if manager.is_persisted(pdf):
                 manager.unpersist(pdf.uid)
                 break
+
+    def _create_child(self) -> PersistenceManager:
+        level2managers = {lvl: manager.child() for lvl, manager in self._level2manager.items()}
+        return CompositePersistenceManager(level2managers, self)

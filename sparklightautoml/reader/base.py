@@ -23,6 +23,7 @@ from pyspark.sql import functions as sf, SparkSession
 from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel, PersistableDataFrame, PersistenceManager
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from sparklightautoml.utils import SparkDataFrame
@@ -204,12 +205,40 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         self.params = kwargs
 
+    def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
+        """Read dataset with fitted metadata.
+
+        Args:
+            data: Data.
+            features_names: Not used.
+            add_array_attrs: Additional attributes, like
+              target/group/weights/folds.
+
+        Returns:
+            Dataset with new columns.
+
+        """
+
+        kwargs = {}
+        if add_array_attrs:
+            for array_attr in self.used_array_attrs:
+                col_name = self.used_array_attrs[array_attr]
+                if col_name not in data.columns:
+                    continue
+                kwargs[array_attr] = col_name
+
+        transformer = self.make_transformer(add_array_attrs)
+        data = transformer.transform(data)
+
+        dataset = SparkDataset(data, roles=self.roles, task=self.task, **kwargs)
+
+        return dataset
+
     def fit_read(
             self,
             train_data: SparkDataFrame,
             features_names: Any = None,
             roles: UserDefinedRolesDict = None,
-            bucketize_data: bool = True,
             persistence_manager: Optional[PersistenceManager] = None,
             **kwargs: Any
     ) -> SparkDataset:
@@ -220,7 +249,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             features_names: Ignored. Just to keep signature.
             roles: Dict of features roles in format
               ``{RoleX: ['feat0', 'feat1', ...], RoleY: 'TARGET', ....}``.
-            bucketize_data: whatever or not to bucketize spark dataframe
             **kwargs: Can be used for target/group/weights.
 
         Returns:
@@ -230,7 +258,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         logger.info("Reader starting fit_read")
         logger.info(f"\x1b[1mTrain data columns: {train_data.columns}\x1b[0m\n")
 
-        persistence_manager = persistence_manager or PersistenceManager()
+        persistence_manager = persistence_manager or PlainCachePersistenceManager()
 
         train_data = self._create_unique_ids(train_data)
 
@@ -394,35 +422,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             )
 
         logger.info("Reader finished fit_read")
-
-        return dataset
-
-    def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
-        """Read dataset with fitted metadata.
-
-        Args:
-            data: Data.
-            features_names: Not used.
-            add_array_attrs: Additional attributes, like
-              target/group/weights/folds.
-
-        Returns:
-            Dataset with new columns.
-
-        """
-
-        kwargs = {}
-        if add_array_attrs:
-            for array_attr in self.used_array_attrs:
-                col_name = self.used_array_attrs[array_attr]
-                if col_name not in data.columns:
-                    continue
-                kwargs[array_attr] = col_name
-
-        transformer = self.make_transformer(add_array_attrs)
-        data = transformer.transform(data)
-
-        dataset = SparkDataset(data, roles=self.roles, task=self.task, **kwargs)
 
         return dataset
 

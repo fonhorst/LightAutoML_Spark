@@ -15,6 +15,9 @@ from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.features.lgb_pipeline import LGBAdvancedPipeline, LGBSimpleFeatures
 from lightautoml.pipelines.features.linear_pipeline import LinearFeatures
 from lightautoml.reader.base import PandasToPandasReader
+
+from sparklightautoml.dataset.base import PersistenceManager
+from sparklightautoml.dataset.persistence import LocalCheckpointPersistenceManager
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.ml_algo.linear_pyspark import SparkLinearLBFGS
@@ -57,6 +60,7 @@ logger = logging.getLogger(__name__)
 def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: Dict[str, Any],
                                          fp_lama_clazz, ml_algo_lama_clazz,
                                          ml_alg_kwargs: Dict[str, Any], pipeline_name: str):
+    persistence_manager = LocalCheckpointPersistenceManager()
     checkpoint_dir = '/opt/test_checkpoints/feature_pipelines'
     path = config['path']
     ds_name = os.path.basename(os.path.splitext(path)[0])
@@ -66,8 +70,8 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
     dump_test_path = os.path.join(checkpoint_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_test.dump") \
         if checkpoint_dir is not None else None
 
-    train_res = load_dump_if_exist(spark, dump_train_path)
-    test_res = load_dump_if_exist(spark, dump_test_path)
+    train_res = load_dump_if_exist(spark, persistence_manager, dump_train_path)
+    test_res = load_dump_if_exist(spark, persistence_manager, dump_test_path)
     if not train_res or not test_res:
         raise ValueError("Dataset should be processed with feature pipeline "
                          "and the corresponding dump should exist. Please, run corresponding non-quality test first.")
@@ -128,8 +132,15 @@ def compare_feature_pipelines_by_quality(spark: SparkSession, cv: int, config: D
 # noinspection PyShadowingNames
 def compare_feature_pipelines(spark: SparkSession, cv: int, ds_config: Dict[str, Any],
                               lama_clazz, slama_clazz, ml_alg_kwargs: Dict[str, Any], pipeline_name: str):
+    persistence_manager = LocalCheckpointPersistenceManager()
     checkpoint_fp_dir = '/opt/test_checkpoints/feature_pipelines'
-    spark_dss = prepared_datasets(spark, cv, [ds_config], checkpoint_dir='/opt/test_checkpoints/reader_datasets')
+    spark_dss = prepared_datasets(
+        spark,
+        cv,
+        [ds_config],
+        persistence_manager,
+        checkpoint_dir='/opt/test_checkpoints/reader_datasets'
+    )
     spark_train_ds, spark_test_ds = spark_dss[0]
 
     ds_name = os.path.basename(os.path.splitext(ds_config['path'])[0])
@@ -182,6 +193,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
                                pipeline_name: str, ml_alg_kwargs,
                                ml_kwargs_lama: Optional[Dict[str, Any]] = None,
                                ml_kwargs_spark: Optional[Dict[str, Any]] = None):
+    persistence_manager = LocalCheckpointPersistenceManager()
     checkpoint_dir = '/opt/test_checkpoints/feature_pipelines'
     path = config['path']
     task_name = config['task_type']
@@ -192,8 +204,8 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     dump_test_path = os.path.join(checkpoint_dir, f"dump_{pipeline_name}_{ds_name}_{cv}_test.dump") \
         if checkpoint_dir is not None else None
 
-    train_res = load_dump_if_exist(spark, dump_train_path)
-    test_res = load_dump_if_exist(spark, dump_test_path)
+    train_res = load_dump_if_exist(spark, persistence_manager, dump_train_path)
+    test_res = load_dump_if_exist(spark, persistence_manager, dump_test_path)
     if not train_res or not test_res:
         raise ValueError("Dataset should be processed with feature pipeline "
                          "and the corresponding dump should exist. Please, run corresponding non-quality test first.")

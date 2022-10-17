@@ -7,6 +7,7 @@ from pyspark.ml import PipelineModel
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     spark = get_spark_session()
+    persistence_manager = PlainCachePersistenceManager()
 
     seed = 42
     cv = 5
@@ -60,7 +62,7 @@ if __name__ == "__main__":
             )
         )
 
-        sdataset = sreader.fit_read(train_df, roles=roles)
+        sdataset = sreader.fit_read(train_df, roles=roles, persistence_manager=persistence_manager)
 
         iterator = SparkFoldsIterator(sdataset, n_folds=cv)
 

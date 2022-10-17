@@ -24,6 +24,7 @@ from lightautoml.pipelines.selection.importance_based import (
     ModelBasedImportanceEstimator,
 )
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -48,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     spark = get_spark_session()
+    persistence_manager = PlainCachePersistenceManager()
 
     # Read data from file
     logger.info("Read data from file")
@@ -112,7 +114,7 @@ if __name__ == "__main__":
     start_time = time.time()
     # pd_dataset = PandasDataset(data, roles_parser(check_roles), task=task)
     sreader = SparkToSparkReader(task=task, advanced_roles=False)
-    sdataset = sreader.fit_read(dataset_sdf, roles=check_roles)
+    sdataset = sreader.fit_read(dataset_sdf, roles=check_roles, persistence_manager=persistence_manager)
     logger.info("PandasDataset created. Time = {:.3f} sec".format(time.time() - start_time))
 
     # # Print pandas dataset feature roles
@@ -161,7 +163,6 @@ if __name__ == "__main__":
     logger.info("Tuner2 and model2 created")
 
     total = SparkMLPipeline(
-        cache_manager=PersistenceManager(),
         ml_algos=[(model1, params_tuner1), (model2, params_tuner2)],
         pre_selection=SparkSelectionPipelineWrapper(selector),
         features_pipeline=pipe,

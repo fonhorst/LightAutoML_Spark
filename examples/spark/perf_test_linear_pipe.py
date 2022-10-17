@@ -14,6 +14,7 @@ from pyspark.sql.pandas.functions import pandas_udf
 
 from examples_utils import get_spark_session
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.pipelines.features.linear_pipeline import SparkLinearFeatures
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
@@ -120,6 +121,8 @@ if __name__ == "__main__":
         'top_intersections': 4
     }
 
+    persistence_manager = PlainCachePersistenceManager()
+
     sdf, roles = generate_frame(cols=1000, rows_count=100, col_encs=['LE#2'])
 
     with log_exec_time('initial_caching'):
@@ -134,7 +137,15 @@ if __name__ == "__main__":
     #     new_sdf = new_sdf.select('_id', *pcols).cache()
     #     new_sdf.write.mode('overwrite').format('noop').save()
 
-    in_ds = SparkDataset(sdf, roles=roles, task=SparkTask("binary"), folds='folds', target='target', name="in_ds")
+    in_ds = SparkDataset(
+        sdf,
+        roles=roles,
+        persistence_manager=persistence_manager,
+        task=SparkTask("binary"),
+        folds='folds',
+        target='target',
+        name="in_ds"
+    )
 
     with log_exec_time():
         spark_features_pipeline = SparkLinearFeatures(cacher_key="main_cache", **ml_alg_kwargs)
