@@ -42,7 +42,7 @@ def test_weighted_blender(spark: SparkSession):
 
     data_sdf = spark.createDataFrame(data)
     data_sds = SparkDataset(data=data_sdf, task=SparkTask("multiclass"),
-                            roles=roles, target=target_col, folds=folds_col)
+                            roles=roles, target=target_col, folds=folds_col, name="WeightedBlenderData")
 
     pipes = [
         SparkMLPipeline(ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")])
@@ -57,7 +57,7 @@ def test_weighted_blender(spark: SparkSession):
     sdf = data_sds.data.drop(*list(roles.keys())).cache()
     sdf.write.mode('overwrite').format('noop').save()
     ml_ds = data_sds.empty()
-    ml_ds.set_data(sdf, list(preds_roles.keys()), preds_roles)
+    ml_ds.set_data(sdf, list(preds_roles.keys()), preds_roles, name=data_sds.name)
 
     swb = SparkWeightedBlender(max_iters=1, max_inner_iters=1)
     with log_exec_time('Blender fit_predict'):

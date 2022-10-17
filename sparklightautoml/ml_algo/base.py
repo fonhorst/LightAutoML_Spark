@@ -176,7 +176,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
         pred_ds = valid_ds.empty()
         # TODO: SLAMA - set deps
-        pred_ds.set_data(full_preds_df, list(self.output_roles.keys()), self.output_roles)
+        pred_ds.set_data(full_preds_df, list(self.output_roles.keys()), self.output_roles, name=f"{type(self)}")
         # TODO: SLAMA - set level
         pred_ds = pred_ds.persist(level=PersistenceLevel.REGULAR)
 

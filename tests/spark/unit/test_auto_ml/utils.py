@@ -51,7 +51,14 @@ class DummyReader(SparkToSparkReader):
         train_data = self._create_unique_ids(train_data)
         train_data, folds_col = self._create_folds(train_data, kwargs={})
 
-        sds = SparkDataset(train_data, self._roles, task=self.task, target=self.target_col, folds=folds_col)
+        sds = SparkDataset(
+            train_data,
+            self._roles,
+            task=self.task,
+            target=self.target_col,
+            folds=folds_col,
+            name="DummySparkToSparkReader"
+        )
         return sds
 
     def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
@@ -142,7 +149,7 @@ class DummySparkMLPipeline(SparkMLPipeline):
         out_roles.update(train_valid.input_roles)
 
         out_val_ds = cast(SparkDataset, val_ds.empty())
-        out_val_ds.set_data(sdf, list(out_roles.keys()), out_roles)
+        out_val_ds.set_data(sdf, list(out_roles.keys()), out_roles, name=val_ds.name)
 
         return out_val_ds
 

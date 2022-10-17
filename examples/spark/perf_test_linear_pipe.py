@@ -134,7 +134,7 @@ if __name__ == "__main__":
     #     new_sdf = new_sdf.select('_id', *pcols).cache()
     #     new_sdf.write.mode('overwrite').format('noop').save()
 
-    in_ds = SparkDataset(sdf, roles=roles, task=SparkTask("binary"), folds='folds', target='target')
+    in_ds = SparkDataset(sdf, roles=roles, task=SparkTask("binary"), folds='folds', target='target', name="in_ds")
 
     with log_exec_time():
         spark_features_pipeline = SparkLinearFeatures(cacher_key="main_cache", **ml_alg_kwargs)

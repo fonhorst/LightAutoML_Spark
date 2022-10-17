@@ -30,7 +30,6 @@ from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
 
-# TODO: SLAMA - refactor it to remove cyclic dependency on PersistedDataset
 Dependency = Union[str, 'SparkDataset', Callable]
 DepIdentifable = Union[str, 'SparkDataset']
 
@@ -58,7 +57,7 @@ class SparkDataset(LAMLDataset):
 
     # TODO: SLAMA - implement filling dependencies
     @classmethod
-    def concatenate(cls, datasets: Sequence["SparkDataset"]) -> "SparkDataset":
+    def concatenate(cls, datasets: Sequence["SparkDataset"], name: Optional[str] = None) -> "SparkDataset":
         """
         Concat multiple datasets by joining their internal ``pyspark.sql.DataFrame``
         using inner join on special hidden '_id' column
@@ -92,7 +91,7 @@ class SparkDataset(LAMLDataset):
         )
 
         output = datasets[0].empty()
-        output.set_data(concatenated_sdf, features, roles, dependencies=list(datasets))
+        output.set_data(concatenated_sdf, features, roles, dependencies=list(datasets), name=name)
 
         return output
 
@@ -103,12 +102,14 @@ class SparkDataset(LAMLDataset):
                  task: Optional[Task] = None,
                  bucketized: bool = False,
                  dependencies: Optional[List[Dependency]] = None,
+                 name: Optional[str] = None,
                  **kwargs: Any):
 
         self._uid = str(uuid.uuid4())
         self._persistence_manager = persistence_manager
         self._dependencies = dependencies
         self._frozen = False
+        self._name = name
 
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
@@ -145,6 +146,10 @@ class SparkDataset(LAMLDataset):
     @property
     def uid(self) -> str:
         return self._uid
+
+    @property
+    def name(self) -> Optional[str]:
+        return self._name
 
     @property
     def spark_session(self):
@@ -257,7 +262,7 @@ class SparkDataset(LAMLDataset):
         roles = {c: self.roles[c] for c in clice}
 
         output = self.empty()
-        output.set_data(sdf, clice, roles)
+        output.set_data(sdf, clice, roles, name=self.name)
 
         return output
         # raise NotImplementedError(f"The method is not supported by {self._dataset_type}")
@@ -345,7 +350,8 @@ class SparkDataset(LAMLDataset):
             features: List[str],
             roles: NpRoles = None,
             dependencies: Optional[List[Dependency]] = None,
-            uid: Optional[str] = None
+            uid: Optional[str] = None,
+            name: Optional[str] = None
     ):
         """Inplace set data, features, roles for empty dataset.
 
@@ -353,13 +359,12 @@ class SparkDataset(LAMLDataset):
             data: Table with features.
             features: `ignored, always None. just for same interface.
             roles: Dict with roles.
-            dependencies:
-            uid:
         """
         self._validate_dataframe(data)
         super().set_data(data, None, roles)
         self._dependencies = dependencies
         self._uid = uid
+        self._name = name
 
     def persist(self, level: 'PersistenceLevel') -> 'SparkDataset':
         """
@@ -463,6 +468,7 @@ class PersistableDataFrame:
     uid: str
     callback: Optional[Callable] = None
     base_dataset: Optional[SparkDataset] = None
+    custom_name: Optional[str] = None
 
     def to_dataset(self) -> SparkDataset:
         assert self.base_dataset
@@ -472,9 +478,15 @@ class PersistableDataFrame:
             self.base_dataset.features,
             self.base_dataset.roles,
             dependencies=list(self.base_dataset.dependencies),
-            uid=self.uid
+            uid=self.uid,
+            name=self.base_dataset.name
         )
         return ds
+
+    @property
+    def name(self) -> Optional[str]:
+        ds_name = self.base_dataset.name if self.base_dataset else None
+        return self.custom_name or ds_name
 
 
 class PersistenceManager(ABC):

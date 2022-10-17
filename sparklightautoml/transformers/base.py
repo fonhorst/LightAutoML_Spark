@@ -83,7 +83,7 @@ class SparkColumnsAndRoles(HasInputCols, HasOutputCols, HasInputRoles, HasOutput
         new_roles = deepcopy(base_dataset.roles)
         new_roles.update(transformer.get_output_roles())
         new_ds = base_dataset.empty()
-        new_ds.set_data(data, base_dataset.features + transformer.getOutputCols(), new_roles)
+        new_ds.set_data(data, base_dataset.features + transformer.getOutputCols(), new_roles, name=base_dataset.name)
         return new_ds
 
 

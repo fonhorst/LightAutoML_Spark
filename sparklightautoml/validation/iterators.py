@@ -47,7 +47,7 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
         sdf = sdf.withColumn(self.TRAIN_VAL_COLUMN, sf.lit(0))
 
         train_ds = cast(SparkDataset, self.train.empty())
-        train_ds.set_data(sdf, self.train.features, self.train.roles)
+        train_ds.set_data(sdf, self.train.features, self.train.roles, name=self.train.name)
 
         return train_ds, train_ds
 

@@ -29,15 +29,17 @@ class BasePersistenceManager(PersistenceManager):
         persisted_dataframe = self.to_persistable_dataframe(dataset) if isinstance(dataset, SparkDataset) \
             else cast(PersistableDataFrame, dataset)
 
-        logger.info(f"Manager {self._uid}: persisting dataset (uid={dataset.uid}) with level {level}.")
+        logger.info(f"Manager {self._uid}: "
+                    f"persisting dataset (uid={dataset.uid}, name={dataset.name}) with level {level}.")
 
         if persisted_dataframe.uid in self._persistence_registry:
-            logger.debug(f"Manager {self._uid}: the dataset (uid={dataset.uid}) is already persisted.")
+            logger.debug(f"Manager {self._uid}: "
+                         f"the dataset (uid={dataset.uid}, name={dataset.name}) is already persisted.")
             return self._persistence_registry[persisted_dataframe.uid]
 
         self._persistence_registry[persisted_dataframe.uid] = self._persist(persisted_dataframe, level)
 
-        logger.debug(f"Manager {self._uid}: the dataset (uid={dataset.uid}) has been persisted.")
+        logger.debug(f"Manager {self._uid}: the dataset (uid={dataset.uid}, name={dataset.name}) has been persisted.")
 
         return persisted_dataframe
 
@@ -53,7 +55,7 @@ class BasePersistenceManager(PersistenceManager):
 
         del self._persistence_registry[persisted_dataframe.uid]
 
-        logger.debug(f"Manager {self._uid}: the dataset (uid={uid}) has been unpersisted.")
+        logger.debug(f"Manager {self._uid}: the dataset (uid={uid}, name={persisted_dataframe.name}) has been unpersisted.")
 
     def unpersist_children(self):
         logger.info(f"Manager {self._uid}: unpersisting children.")
@@ -100,12 +102,14 @@ class PlainCachePersistenceManager(BasePersistenceManager):
         super().__init__(parent)
 
     def _persist(self, pdf: PersistableDataFrame, level: PersistenceLevel) -> PersistableDataFrame:
-        logger.debug(f"Manager {self._uid}: caching and materializing the dataset (uid={pdf.uid}).")
+        logger.debug(f"Manager {self._uid}: "
+                     f"caching and materializing the dataset (uid={pdf.uid}, name={pdf.name}).")
 
         ds = SparkSession.getActiveSession().createDataFrame(pdf.sdf.rdd, schema=pdf.sdf.schema).cache()
         ds.write.mode('overwrite').format('noop').save()
 
-        logger.debug(f"Manager {self._uid}: caching succeeded for the dataset (uid={pdf.uid}).")
+        logger.debug(f"Manager {self._uid}: "
+                     f"caching succeeded for the dataset (uid={pdf.uid}, name={pdf.name}).")
 
         return PersistableDataFrame(ds, pdf.uid, pdf.callback, pdf.base_dataset)
 
@@ -118,11 +122,13 @@ class LocalCheckpointPersistenceManager(BasePersistenceManager):
         super().__init__(parent)
 
     def _persist(self, pdf: PersistableDataFrame, level: PersistenceLevel) -> PersistableDataFrame:
-        logger.debug(f"Manager {self._uid}: making a local checkpoint for the dataset (uid={pdf.uid}).")
+        logger.debug(f"Manager {self._uid}: "
+                     f"making a local checkpoint for the dataset (uid={pdf.uid}, name={pdf.name}).")
 
         ds = pdf.sdf.localCheckpoint()
 
-        logger.debug(f"Manager {self._uid}: the local checkpoint has been made for the dataset (uid={pdf.uid}).")
+        logger.debug(f"Manager {self._uid}: "
+                     f"the local checkpoint has been made for the dataset (uid={pdf.uid}, name={pdf.name}).")
         return PersistableDataFrame(ds, pdf.uid, pdf.callback, pdf.base_dataset)
 
     def _unpersist(self, pdf: PersistableDataFrame):
@@ -140,13 +146,12 @@ class BucketedPersistenceManager(BasePersistenceManager):
 
     def _persist(self, pdf: PersistableDataFrame, level: PersistenceLevel) -> PersistableDataFrame:
         spark = SparkSession.getActiveSession()
-        #TODO: SLAMA - replace with a readable name
-        name = "SparkToSparkReaderTable"
+        name = self._build_name(pdf)
         # TODO: SLAMA join - need to identify correct setting  for bucket_nums if it is not provided
-        path = self._build_path(pdf.uid)
+        path = self._build_path(name)
         logger.debug(
             f"Manager {self._uid}: making a bucketed table "
-            f"for the dataset (uid={pdf.uid}) with name {name} on path {path}."
+            f"for the dataset (uid={pdf.uid}, name={pdf.name}) with name {name} on path {path}."
         )
 
         (
@@ -162,17 +167,16 @@ class BucketedPersistenceManager(BasePersistenceManager):
 
         logger.debug(
             f"Manager {self._uid}: the bucketed table has been made "
-            f"for the dataset (uid={pdf.uid}) with name {name} on path {path}."
+            f"for the dataset (uid={pdf.uid}, name={pdf.name}) with name {name} on path {path}."
         )
         return PersistableDataFrame(ds, pdf.uid, pdf.callback, pdf.base_dataset)
 
     def _unpersist(self, pdf: PersistableDataFrame):
-        path = self._build_path(pdf.uid)
-        # TODO: SLAMA - replace with a readable name
-        name = "SparkToSparkReaderTable"
+        name = self._build_name(pdf)
+        path = self._build_path(name)
         logger.debug(
             f"Manager {self._uid}: removing the bucketed table "
-            f"for the dataset (uid={pdf.uid}) with name {name} on path {path}."
+            f"for the dataset (uid={pdf.uid}, name={pdf.name}) with name {name} on path {path}."
         )
 
         # TODO: SLAMA - add file removing on hdfs
@@ -181,11 +185,15 @@ class BucketedPersistenceManager(BasePersistenceManager):
 
         logger.debug(
             f"Manager {self._uid}: the bucketed table has been removed"
-            f"for the dataset (uid={pdf.uid}) with name {name} on path {path}."
+            f"for the dataset (uid={pdf.uid}, name={pdf.name}) with name {name} on path {path}."
         )
 
-    def _build_path(self, uid: str) -> str:
-        return os.path.join(self._bucketed_datasets_folder, f"{uid}.parquet")
+    def _build_path(self, name: str) -> str:
+        return os.path.join(self._bucketed_datasets_folder, f"{name}.parquet")
+
+    @staticmethod
+    def _build_name(self, pdf: PersistableDataFrame):
+        return f"{pdf.name}_{pdf.uid}"
 
 
 class CompositePersistenceManager(BasePersistenceManager):

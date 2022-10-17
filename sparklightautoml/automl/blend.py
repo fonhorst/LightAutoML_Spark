@@ -233,7 +233,8 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         wpreds_sds.set_data(
             weighted_preds_sdf,
             list(self.output_roles.keys()),
-            self.output_roles
+            self.output_roles,
+            name=f"{type(self)}"
         )
 
         return wpreds_sds
@@ -326,7 +327,7 @@ class SparkMeanBlender(SparkBlender):
             self._single_prediction_col_name: output_role
         }
         pred_ds = predictions.empty()
-        pred_ds.set_data(df, df.columns, roles)
+        pred_ds.set_data(df, df.columns, roles, name=f"{type(self)}")
 
         self._output_roles = copy(roles)
 

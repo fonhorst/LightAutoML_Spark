@@ -135,12 +135,22 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         valid_part_sdf = sdf.where(sf.col(self.TRAIN_VAL_COLUMN) == 1).drop(self.TRAIN_VAL_COLUMN)
 
         train_ds = cast(SparkDataset, self.train.empty())
-        train_ds.set_data(sdf, self.train.features, self.train.roles)
+        train_ds.set_data(sdf, self.train.features, self.train.roles, name=self.train.name)
 
         train_part_ds = cast(SparkDataset, self.train.empty())
-        train_part_ds.set_data(train_part_sdf, self.train.features, self.train.roles)
+        train_part_ds.set_data(
+            train_part_sdf,
+            self.train.features,
+            self.train.roles,
+            name=f"{self.train.name}_train_{fold}"
+        )
 
         valid_part_ds = cast(SparkDataset, self.train.empty())
-        valid_part_ds.set_data(valid_part_sdf, self.train.features, self.train.roles)
+        valid_part_ds.set_data(
+            valid_part_sdf,
+            self.train.features,
+            self.train.roles,
+            name=f"{self.train.name}_val_{fold}"
+        )
 
         return train_ds, train_part_ds, valid_part_ds

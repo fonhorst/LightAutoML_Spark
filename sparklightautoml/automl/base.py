@@ -264,9 +264,11 @@ class SparkAutoML(TransformerInputOutputRoles):
 
             logger.info("\x1b[1mLayer {} training completed.\x1b[0m\n".format(leven_number))
 
+            level_ds_name = f"all_piped_predictions_level_{leven_number}"
+
             if flg_last_level:
                 # checkpointing
-                level_ds = SparkDataset.concatenate(all_pipes_predictions)
+                level_ds = SparkDataset.concatenate(all_pipes_predictions, name=level_ds_name)
                 # TODO: SLAMA - add level
                 level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
                 train_valid.train_frozen = False
@@ -282,7 +284,7 @@ class SparkAutoML(TransformerInputOutputRoles):
                          *all_pipes_predictions] if self.skip_conn else all_pipes_predictions
 
             # checkpointing
-            level_ds = SparkDataset.concatenate(level_dss)
+            level_ds = SparkDataset.concatenate(level_dss, name=level_ds_name)
             # TODO: SLAMA - add level
             level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
             train_valid.train.frozen = False

@@ -367,7 +367,14 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         train_data = train_data.select(SparkDataset.ID_COLUMN, self.target_col, folds_col, *ff)
 
         deps = [lambda: persistence_manager.unpersist(initial_train_data_pdf.uid)]
-        dataset = SparkDataset(train_data, self.roles, task=self.task, dependencies=deps, **kwargs)
+        dataset = SparkDataset(
+            train_data,
+            self.roles,
+            task=self.task,
+            dependencies=deps,
+            name="SparkToSparkReader",
+            **kwargs
+        )
 
         if self.advanced_roles:
             new_roles = self.advanced_roles_guess(dataset, manual_roles=parsed_roles)
@@ -382,6 +389,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                 persistence_manager=persistence_manager,
                 task=self.task,
                 dependencies=deps,
+                name="SparkToSparkReader",
                 **kwargs
             )
 
@@ -723,21 +731,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             new_roles_dict = {**new_roles_dict, **{x: DropRole() for x in rejected}}
 
         return new_roles_dict
-
-    # noinspection PyMethodMayBeStatic
-    def _bucketize_data(self, train_data: SparkDataFrame, bucket_nums: int) -> SparkDataFrame:
-        spark = SparkSession.getActiveSession()
-        name = "SparkToSparkReaderTable"
-        # TODO: SLAMA join - need to identify correct setting  for bucket_nums if it is not provided
-        (
-            train_data
-            .repartition(bucket_nums, SparkDataset.ID_COLUMN)
-            .write
-            .mode('overwrite')
-            .bucketBy(bucket_nums, SparkDataset.ID_COLUMN).sortBy(SparkDataset.ID_COLUMN)
-            .saveAsTable(name, format='parquet', path=f"/tmp/{name}")
-        )
-        return spark.table(name)
 
 
 class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickleMLWritable, CommonPickleMLReadable):

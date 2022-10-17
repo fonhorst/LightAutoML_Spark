@@ -238,7 +238,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
     def _merge_pipes(self, data: SparkDataset) -> FittedPipe:
         fitted_pipes = [self._optimize_and_fit(data, pipe(data)) for pipe in self.pipes]
 
-        processed_dataset = SparkDataset.concatenate([fp.dataset for fp in fitted_pipes])
+        processed_dataset = SparkDataset.concatenate([fp.dataset for fp in fitted_pipes], name=f"{type(self)}")
         pipeline = PipelineModel(stages=[fp.transformer for fp in fitted_pipes])
 
         return FittedPipe(dataset=processed_dataset, transformer=pipeline)
