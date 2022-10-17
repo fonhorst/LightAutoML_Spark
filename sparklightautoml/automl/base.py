@@ -206,8 +206,6 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         train_dataset = self.reader.fit_read(train_data, train_features, roles, persistence_manager=persistence_manager)
 
-        # TODO: SLAMA - is it necessary here? We do it to save column with _id, may be to convert something
-        # TODO: SLAMA - add level
         train_dataset = train_dataset.persist(level=PersistenceLevel.REGULAR)
 
         assert (
@@ -269,33 +267,35 @@ class SparkAutoML(TransformerInputOutputRoles):
             if flg_last_level:
                 # checkpointing
                 level_ds = SparkDataset.concatenate(all_pipes_predictions, name=level_ds_name)
-                # TODO: SLAMA - add level
                 level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
                 train_valid.train_frozen = False
                 train_valid.val_frozen = False
                 train_valid.unpersist()
-                # level_ds = persistence_manager.persist(level_ds, name=main_milestone_name)
-                # persistence_manager.unpersist_children()
                 break
 
             self.levels.append(pipes)
 
-            level_dss = [train_valid.get_validation_data(),
-                         *all_pipes_predictions] if self.skip_conn else all_pipes_predictions
-
             # checkpointing
-            level_ds = SparkDataset.concatenate(level_dss, name=level_ds_name)
-            # TODO: SLAMA - add level
-            level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
-            train_valid.train.frozen = False
-            if not self.skip_conn:
+            level_ds = (
+                SparkDataset
+                .concatenate(all_pipes_predictions, name=level_ds_name)
+                .persist(level=PersistenceLevel.CHECKPOINT)
+            )
+
+            if self.skip_conn:
+                level_ds = SparkDataset.concatenate(
+                    [train_valid.get_validation_data(), level_ds],
+                    name=f"{level_ds_name}_skip_conn"
+                )
+            else:
                 train_valid.val_frozen = False
+
+            train_valid.train_frozen = False
             train_valid.train.unpersist()
-            # level_ds = persistence_manager.persist(level_ds, name=main_milestone_name)
-            # persistence_manager.unpersist_children()
 
             train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
-            train_valid.train.frozen = True
+            train_valid.train_frozen = True
+            train_valid.val_frozen = True
 
         blended_prediction, last_pipes = self.blender.fit_predict(level_ds, pipes)
         self.levels.append(last_pipes)
@@ -306,11 +306,6 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         self._input_roles = copy(train_dataset.roles)
         self._output_roles = copy(oof_pred.roles)
-
-        # TODO: SLAMA - add level
-        oof_pred = oof_pred.persist(level=PersistenceLevel.REGULAR)
-        # oof_pred = persistence_manager.persist(oof_pred, name=main_milestone_name)
-        # persistence_manager.unpersist_all(exceptions=oof_pred)
 
         return oof_pred
 
