@@ -82,7 +82,7 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         sds = cast(SparkDataset, self.train)
         assert sds.folds_column is not None, "Cannot convert to Holdout iterator when folds_column is not defined"
-        return SparkHoldoutIterator(self.train)
+        return SparkHoldoutIterator(self.train, self.train)
 
 
 class SparkHoldoutIterator(SparkBaseTrainValidIterator):
@@ -253,7 +253,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
             new hold-out-iterator.
 
         """
-        _, train, valid = self._split_by_fold(self.train, 0)
+        _, train, valid = self._split_by_fold(0)
         return SparkHoldoutIterator(train, valid)
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:

@@ -210,9 +210,9 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             time_score = self.get_time_score(n_level, "lgb", False)
 
             sel_timer_0 = self.timer.get_task_timer("lgb", time_score)
-            selection_feats = SparkLGBSimpleFeatures(cacher_key=cacher_key)
+            selection_feats = SparkLGBSimpleFeatures()
 
-            selection_gbm = SparkBoostLGBM(cacher_key=cacher_key, timer=sel_timer_0, **lgb_params)
+            selection_gbm = SparkBoostLGBM(timer=sel_timer_0, **lgb_params)
             selection_gbm.set_prefix("Selector")
 
             if selection_params["importance_type"] == "permutation":
@@ -231,8 +231,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 time_score = self.get_time_score(n_level, "lgb", False)
 
                 sel_timer_1 = self.timer.get_task_timer("lgb", time_score)
-                selection_feats = SparkLGBSimpleFeatures(cacher_key=cacher_key)
-                selection_gbm = SparkBoostLGBM(cacher_key=cacher_key, timer=sel_timer_1, **lgb_params)
+                selection_feats = SparkLGBSimpleFeatures()
+                selection_gbm = SparkBoostLGBM(timer=sel_timer_1, **lgb_params)
                 selection_gbm.set_prefix("Selector")
 
                 importance = SparkNpPermutationImportanceEstimator()
@@ -256,7 +256,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         # linear model with l2
         time_score = self.get_time_score(n_level, "linear_l2")
         linear_l2_timer = self.timer.get_task_timer("reg_l2", time_score)
-        linear_l2_model = SparkLinearLBFGS(self._persistence_manager, timer=linear_l2_timer, **self.linear_l2_params)
+        linear_l2_model = SparkLinearLBFGS(timer=linear_l2_timer, **self.linear_l2_params)
         linear_l2_feats = SparkLinearFeatures(
             output_categories=True, cacher_key=self._cacher_key, **self.linear_pipeline_params
         )
@@ -325,7 +325,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         multilevel_avail = fit_args["valid_data"] is None and fit_args["cv_iter"] is None
 
         self.infer_auto_params(train_data, multilevel_avail)
-        reader = SparkToSparkReader(self._persistence_manager, task=self.task, **self.reader_params)
+        reader = SparkToSparkReader(task=self.task, **self.reader_params)
 
         pre_selector = self.get_selector(cacher_key="selector_cache")
 

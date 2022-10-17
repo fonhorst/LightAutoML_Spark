@@ -349,6 +349,7 @@ class SparkDataset(LAMLDataset):
             data: SparkDataFrame,
             features: List[str],
             roles: NpRoles = None,
+            persistence_manager: Optional['PersistenceManager'] = None,
             dependencies: Optional[List[Dependency]] = None,
             uid: Optional[str] = None,
             name: Optional[str] = None
@@ -362,6 +363,7 @@ class SparkDataset(LAMLDataset):
         """
         self._validate_dataframe(data)
         super().set_data(data, None, roles)
+        self._persistence_manager = persistence_manager
         self._dependencies = dependencies
         self._uid = uid
         self._name = name
@@ -493,7 +495,7 @@ class PersistenceManager(ABC):
     @staticmethod
     def to_persistable_dataframe(dataset: SparkDataset) -> PersistableDataFrame:
         # we intentially create new uid to use to distinguish a persisted and unpersisted dataset
-        return PersistableDataFrame(dataset.data, uid=str(uuid.uuid4()), dataset=dataset)
+        return PersistableDataFrame(dataset.data, uid=str(uuid.uuid4()), base_dataset=dataset)
 
     @property
     @abstractmethod

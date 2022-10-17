@@ -27,8 +27,8 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
 
     """
 
-    def __init__(self, cacher_key: str = "default_cacher"):
-        super().__init__(cacher_key)
+    def __init__(self):
+        super().__init__()
 
     def create_pipeline(self, train: SparkDataset) -> Union[SparkUnionTransformer, SparkSequentialTransformer]:
         """Create tree pipeline.

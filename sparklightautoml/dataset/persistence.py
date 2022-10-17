@@ -79,6 +79,7 @@ class BasePersistenceManager(PersistenceManager):
         logger.debug(f"Manager {self._uid}: everything has been unpersisted.")
 
     def child(self) -> 'PersistenceManager':
+        # TODO: SLAMA - Bugfix
         logger.info(f"Manager {self._uid}: producing a child.")
         a_child = PersistenceManager(self)
         self._children.append(a_child)
@@ -192,7 +193,7 @@ class BucketedPersistenceManager(BasePersistenceManager):
         return os.path.join(self._bucketed_datasets_folder, f"{name}.parquet")
 
     @staticmethod
-    def _build_name(self, pdf: PersistableDataFrame):
+    def _build_name(pdf: PersistableDataFrame):
         return f"{pdf.name}_{pdf.uid}"
 
 

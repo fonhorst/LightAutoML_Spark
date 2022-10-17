@@ -135,7 +135,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             self.timer.set_control_point()
 
             model_prediction_col = f"{self.prediction_feature}_{n}"
-            model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, full, train, valid)
+            model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
 
             self._models_prediction_columns.append(model_prediction_col)
             self.models.append(model)

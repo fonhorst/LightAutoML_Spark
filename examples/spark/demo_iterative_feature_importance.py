@@ -83,20 +83,18 @@ if __name__ == "__main__":
     # selector parts
     logger.info("Create feature selector")
     model01 = SparkBoostLGBM(
-        cacher_key='preselector',
         default_params={
             "learningRate": 0.05,
             "numLeaves": 64,
         }
     )
     model02 = SparkBoostLGBM(
-        cacher_key='preselector',
         default_params={
             "learningRate": 0.05,
             "numLeaves": 64,
         }
     )
-    pipe0 = SparkLGBSimpleFeatures(cacher_key='preselector')
+    pipe0 = SparkLGBSimpleFeatures()
     pie = SparkNpPermutationImportanceEstimator()
     pie1 = ModelBasedImportanceEstimator()
     sel1 = ImportanceCutoffSelector(pipe0, model01, pie1, cutoff=0)
@@ -106,12 +104,11 @@ if __name__ == "__main__":
 
     # pipeline 1 level parts
     logger.info("Start creation pipeline_1...")
-    pipe = SparkLGBSimpleFeatures(cacher_key=cacher_key)
+    pipe = SparkLGBSimpleFeatures()
 
     logger.info("\t ParamsTuner1 and Model1...")
     params_tuner1 = OptunaTuner(n_trials=1, timeout=100)
     model1 = SparkBoostLGBM(
-        cacher_key=cacher_key,
         default_params={
             "learningRate": 0.05,
             "numLeaves": 128
@@ -121,7 +118,6 @@ if __name__ == "__main__":
 
     logger.info("\t ParamsTuner2 and Model2...")
     model2 = SparkBoostLGBM(
-        cacher_key=cacher_key,
         default_params={
             "learningRate": 0.025,
             "numLeaves": 64,
@@ -141,11 +137,10 @@ if __name__ == "__main__":
 
     # pipeline 2 level parts
     logger.info("Start creation pipeline_2...")
-    pipe1 = SparkLGBSimpleFeatures(cacher_key=cacher_key)
+    pipe1 = SparkLGBSimpleFeatures()
 
     logger.info("\t ParamsTuner and Model...")
     model = SparkBoostLGBM(
-        cacher_key=cacher_key,
         default_params={
             "learningRate": 0.05,
             "numLeaves": 64,

@@ -126,11 +126,10 @@ if __name__ == "__main__":
     selector_iterator = SparkFoldsIterator(sdataset, 1)
     logger.info("Selection iterator created")
 
-    pipe = SparkLGBSimpleFeatures(cacher_key='preselector')
+    pipe = SparkLGBSimpleFeatures()
     logger.info("Pipe and model created")
 
     model0 = SparkBoostLGBM(
-        cacher_key='preselector',
         default_params={
             "learningRate": 0.05,
             "numLeaves": 64,
@@ -150,15 +149,15 @@ if __name__ == "__main__":
 
     # # Build AutoML pipeline
     logger.info("Start building AutoML pipeline")
-    pipe = SparkLGBSimpleFeatures(cacher_key=cacher_key)
+    pipe = SparkLGBSimpleFeatures()
     logger.info("Pipe created")
 
     params_tuner1 = OptunaTuner(n_trials=10, timeout=300)
-    model1 = SparkBoostLGBM(cacher_key=cacher_key, default_params={"learningRate": 0.05, "numLeaves": 128})
+    model1 = SparkBoostLGBM(default_params={"learningRate": 0.05, "numLeaves": 128})
     logger.info("Tuner1 and model1 created")
 
     params_tuner2 = OptunaTuner(n_trials=100, timeout=300)
-    model2 = SparkBoostLGBM(cacher_key=cacher_key, default_params={"learningRate": 0.025, "numLeaves": 64})
+    model2 = SparkBoostLGBM(default_params={"learningRate": 0.025, "numLeaves": 64})
     logger.info("Tuner2 and model2 created")
 
     total = SparkMLPipeline(

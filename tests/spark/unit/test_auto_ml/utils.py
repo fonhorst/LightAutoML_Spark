@@ -72,7 +72,7 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 
     def __init__(self, n_classes: int, name: str):
         self._name = name
-        super().__init__(PersistenceManager())
+        super().__init__()
         self.n_classes = n_classes
 
     def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset,
@@ -113,10 +113,9 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 class DummySparkMLPipeline(SparkMLPipeline):
     def __init__(
         self,
-        cache_manager: PersistenceManager,
         name: str = "dummy_pipe"
     ):
-        super().__init__(cache_manager, [], force_calc=[True], name=name)
+        super().__init__([], force_calc=[True], name=name)
 
     def fit_predict(self, train_valid: SparkBaseTrainValidIterator) -> SparkDataset:
         val_ds = train_valid.get_validation_data()
@@ -168,17 +167,15 @@ class DummyTabularAutoML(SparkAutoMLPreset):
         # initialize
         reader = DummyReader(self.task)
 
-        cache_manager = PersistenceManager()
-
         # first_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_0_Pipe_{i}") for i in range(3)]
         # second_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_1_Pipe_{i}") for i in range(2)]
 
         first_level = [
-            SparkMLPipeline(cache_manager, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
+            SparkMLPipeline(ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
             for i in range(3)
         ]
         second_level = [
-            SparkMLPipeline(cache_manager, ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
+            SparkMLPipeline(ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
             for i in range(1)
         ]
 
