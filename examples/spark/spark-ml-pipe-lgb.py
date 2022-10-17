@@ -41,7 +41,6 @@ if __name__ == "__main__":
         'output_categories': True,
         'top_intersections': 4
     }
-    cacher_key = "main_cache"
 
     with log_exec_time():
         train_df, test_df = prepare_test_and_train(spark, path, seed)
@@ -73,7 +72,7 @@ if __name__ == "__main__":
             post_selection=None
         )
 
-        oof_preds_ds = ml_pipe.fit_predict(iterator)
+        oof_preds_ds = ml_pipe.fit_predict(iterator).persist()
         oof_score = score(oof_preds_ds[:, spark_ml_algo.prediction_feature])
         logger.info(f"OOF score: {oof_score}")
 
@@ -106,6 +105,7 @@ if __name__ == "__main__":
         )
         test_score = score(test_pred_df)
         logger.info(f"Test score (#3 way): {test_score}")
+        persistence_manager.unpersist_all()
 
     logger.info("Finished")
 

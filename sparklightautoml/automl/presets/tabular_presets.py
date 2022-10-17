@@ -105,7 +105,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             config_path = os.path.join(base_dir, self._default_config_path)
         super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path)
 
-        self._cacher_key = "main_cache"
         self._persistence_manager = persistence_manager or PlainCachePersistenceManager()
 
         self._spark = spark
@@ -258,7 +257,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         linear_l2_timer = self.timer.get_task_timer("reg_l2", time_score)
         linear_l2_model = SparkLinearLBFGS(timer=linear_l2_timer, **self.linear_l2_params)
         linear_l2_feats = SparkLinearFeatures(
-            output_categories=True, cacher_key=self._cacher_key, **self.linear_pipeline_params
+            output_categories=True, **self.linear_pipeline_params
         )
 
         linear_l2_pipe = SparkNestedTabularMLPipeline(
@@ -497,9 +496,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         data, _ = self._read_data(data, features_names, read_csv_params)
         pred = super().predict(data, features_names, return_all_predictions, add_reader_attrs)
         return pred
-
-    def release_cache(self):
-        Cacher.release_cache_by_key(self._cacher_key)
 
     def _read_data(
         self,

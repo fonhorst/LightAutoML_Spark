@@ -179,9 +179,6 @@ class DummyTabularAutoML(SparkAutoMLPreset):
         # initialize
         reader = DummyReader(self.task)
 
-        # first_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_0_Pipe_{i}") for i in range(3)]
-        # second_level = [DummySparkMLPipeline(cacher_key, name=f"Lvl_1_Pipe_{i}") for i in range(2)]
-
         first_level = [
             SparkMLPipeline(ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
             for i in range(3)

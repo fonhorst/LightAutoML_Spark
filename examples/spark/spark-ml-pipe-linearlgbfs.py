@@ -43,7 +43,6 @@ if __name__ == "__main__":
         'output_categories': True,
         'top_intersections': 4
     }
-    cacher_key = "main_cache"
 
     with log_exec_time():
         train_df, test_df = prepare_test_and_train(spark, path, seed)
@@ -57,7 +56,7 @@ if __name__ == "__main__":
         iterator = SparkFoldsIterator(sdataset, n_folds=cv)
 
         spark_ml_algo = SparkLinearLBFGS(freeze_defaults=False)
-        spark_features_pipeline = SparkLinearFeatures(cacher_key=cacher_key, **ml_alg_kwargs)
+        spark_features_pipeline = SparkLinearFeatures(**ml_alg_kwargs)
         spark_selector = ImportanceCutoffSelector(
             cutoff=0.0,
             feature_pipeline=SparkLGBSimpleFeatures(),
@@ -72,7 +71,7 @@ if __name__ == "__main__":
             post_selection=None
         )
 
-        oof_preds_ds = ml_pipe.fit_predict(iterator)
+        oof_preds_ds = ml_pipe.fit_predict(iterator).persist()
         oof_score = score(oof_preds_ds[:, spark_ml_algo.prediction_feature])
         logger.info(f"OOF score: {oof_score}")
 
@@ -92,6 +91,7 @@ if __name__ == "__main__":
         )
         test_score = score(test_pred_df)
         logger.info(f"Test score (#2 way): {test_score}")
+        persistence_manager.unpersist_all()
 
     logger.info("Finished")
 

@@ -19,7 +19,6 @@ from sklearn.model_selection import train_test_split
 
 from examples_utils import get_spark_session
 from sparklightautoml.automl.base import SparkAutoML
-from sparklightautoml.dataset.base import PersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -73,8 +72,6 @@ if __name__ == "__main__":
     logger.info("Create task..")
     task = SparkTask("binary")
     logger.info("Task created")
-
-    cacher_key = "main_cache"
 
     logger.info("Create reader...")
     sreader = SparkToSparkReader(task=task, cv=5, random_state=1, advanced_roles=False)
@@ -173,7 +170,7 @@ if __name__ == "__main__":
 
     logger.info("Start AutoML pipeline fit_predict...")
     start_time = time.time()
-    oof_pred = automl.fit_predict(train_data_sdf, roles={"target": "TARGET"})
+    oof_pred = automl.fit_predict(train_data_sdf, roles={"target": "TARGET"}).persist()
     logger.info("AutoML pipeline fitted and predicted. Time = {:.3f} sec".format(time.time() - start_time))
 
     logger.info(f"Feature importances of selector:\n{selector.get_features_score()}")
@@ -201,5 +198,7 @@ if __name__ == "__main__":
     test_score = score(test_pred)
     logger.info(f"OOF score: {off_score}")
     logger.info(f"TEST score: {test_score}")
+
+    oof_pred.unpersist()
 
     spark.stop()

@@ -80,11 +80,6 @@ class SparkReaderHelper:
         if SparkDataset.ID_COLUMN not in train_data.columns:
             train_data = train_data.select("*", sf.monotonically_increasing_id().alias(SparkDataset.ID_COLUMN))
 
-        # if cacher_key is not None:
-        #     cacher = Cacher(key=cacher_key)
-        #     cacher.fit(train_data)
-        #     train_data = cacher.dataset
-
         logger.debug("SparkReaderHelper._create_unique_ids() is finished")
 
         return train_data

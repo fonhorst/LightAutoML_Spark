@@ -148,8 +148,8 @@ if __name__ == "__main__":
     )
 
     with log_exec_time():
-        spark_features_pipeline = SparkLinearFeatures(cacher_key="main_cache", **ml_alg_kwargs)
-        out_ds = spark_features_pipeline.fit_transform(in_ds)
+        spark_features_pipeline = SparkLinearFeatures(**ml_alg_kwargs)
+        out_ds = spark_features_pipeline.fit_transform(in_ds).persist()
 
     logger.info("Finished")
 

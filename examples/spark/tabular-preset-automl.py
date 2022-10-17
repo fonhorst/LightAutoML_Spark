@@ -61,7 +61,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
     transformer = automl.transformer()
 
-    automl.release_cache()
+    oof_predictions.unpersist()
 
     with log_exec_timer("spark-lama predicting on test (#1 way)") as predict_timer:
         te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)

@@ -50,7 +50,6 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         auto_unique_co: int = 50,
         output_categories: bool = True,
         multiclass_te_co: int = 3,
-        cacher_key: str = "default_cacher",
         **_
     ):
         """
@@ -71,7 +70,6 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
 
         """
         super().__init__(
-            cacher_key=cacher_key,
             multiclass_te_co=multiclass_te_co,
             top_intersections=top_intersections,
             max_intersection_depth=max_intersection_depth,

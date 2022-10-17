@@ -244,7 +244,7 @@ def compare_mlalgos_by_quality(spark: SparkSession, cv: int, config: Dict[str, A
     train_valid = SparkFoldsIterator(dumped_train_ds, n_folds=cv)
     if not USE_FOLDS_VALIDATION:
         train_valid = train_valid.convert_to_holdout_iterator()
-    ml_algo = ml_algo_spark_clazz(cacher_key='test', freeze_defaults=False, **ml_kwargs_spark)
+    ml_algo = ml_algo_spark_clazz(freeze_defaults=False, **ml_kwargs_spark)
     ml_algo, oof_pred = tune_and_fit_predict(ml_algo, DefaultTuner(), train_valid)
     ml_algo = cast(SparkTabularMLAlgo, ml_algo)
     assert ml_algo is not None

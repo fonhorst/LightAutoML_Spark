@@ -107,7 +107,6 @@ if __name__ == "__main__":
 
     # create Task
     task = SparkTask("binary")
-    cacher_key = "main_cache"
 
     # # Creating PandasDataSet
     logger.info("Creating PandasDataset")
@@ -179,13 +178,15 @@ if __name__ == "__main__":
     # # Fit predict using pipeline
     logger.info("Start AutoML pipeline fit_predict")
     start_time = time.time()
-    pred = total.fit_predict(train_valid)
+    pred = total.fit_predict(train_valid).persist()
     logger.info("Fit_predict finished. Time = {:.3f} sec".format(time.time() - start_time))
 
     # # Check preds
     logger.info("Preds:")
     logger.info("\n{}".format(pred))
     logger.info("Preds.shape = {}".format(pred.shape))
+
+    pred.unpersist()
 
     # # Predict full train dataset
     logger.info("Predict full train dataset")

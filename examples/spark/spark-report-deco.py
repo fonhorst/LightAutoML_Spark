@@ -45,5 +45,6 @@ if __name__ == "__main__":
             interpretation=True
         )(automl)
 
-        report_automl.fit_predict(train_data, roles=roles)
+        oof_preds = report_automl.fit_predict(train_data, roles=roles).persist()
         report_automl.predict(test_data, add_reader_attrs=True)
+        oof_preds.unpersist()

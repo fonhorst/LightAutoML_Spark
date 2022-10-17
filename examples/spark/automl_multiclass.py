@@ -43,7 +43,7 @@ if __name__ == "__main__":
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 10, 'max_tuning_time': 3600}
         )
 
-        preds = automl.fit_predict(train_data, roles)
+        preds = automl.fit_predict(train_data, roles).persist()
 
     logger.info("Predicting on out of fold")
 
@@ -54,8 +54,7 @@ if __name__ == "__main__":
 
     transformer = automl.transformer()
 
-    del preds
-    automl.release_cache()
+    preds.unpersist()
 
     with log_exec_timer("saving model") as saving_timer:
         transformer.write().overwrite().save("file:///tmp/automl_multiclass")
