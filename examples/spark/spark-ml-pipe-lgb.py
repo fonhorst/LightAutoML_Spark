@@ -105,8 +105,9 @@ if __name__ == "__main__":
         )
         test_score = score(test_pred_df)
         logger.info(f"Test score (#3 way): {test_score}")
-        persistence_manager.unpersist_all()
 
     logger.info("Finished")
+
+    oof_preds_ds.unpersist()
 
     spark.stop()

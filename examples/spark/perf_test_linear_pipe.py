@@ -153,4 +153,6 @@ if __name__ == "__main__":
 
     logger.info("Finished")
 
+    out_ds.unpersist()
+
     spark.stop()

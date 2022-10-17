@@ -95,4 +95,6 @@ if __name__ == "__main__":
 
     logger.info("Finished")
 
+    oof_preds_ds.unpersist()
+
     spark.stop()
