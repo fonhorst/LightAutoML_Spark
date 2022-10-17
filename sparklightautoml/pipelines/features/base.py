@@ -1,6 +1,7 @@
 """Basic classes for features generation."""
 import itertools
 import logging
+import uuid
 from copy import copy
 from dataclasses import dataclass
 from typing import Any, Callable, Set, Dict, cast
@@ -136,7 +137,6 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._cacher_key = "SparkFeaturePipeline"
         self.pipes: List[Callable[[SparkDataset], SparkEstOrTrans]] = [self.create_pipeline]
         self._transformer: Optional[Transformer] = None
         self._input_roles: Optional[RolesDict] = None
@@ -250,6 +250,8 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
         graph = build_graph(pipeline)
         tr_layers = list(toposort.toposort(graph))
 
+        cacher_key = f"{type(self)}_{uuid.uuid4()}"
+
         logger.info(f"Number of layers in the current feature pipeline {self}: {len(tr_layers)}")
 
         def exit_nodes(gr: Dict) -> Set:
@@ -284,15 +286,20 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
         dag_pipeline = Pipeline(stages=[
             stage
             for layer, cols in zip(tr_layers, cols_to_select_in_layers)
-            for stage in itertools.chain(layer, [SelectTransformer(cols), Cacher(self._cacher_key)])
+            for stage in itertools.chain(layer, [SelectTransformer(cols), Cacher(cacher_key)])
         ])
 
         dag_transformer = dag_pipeline.fit(train.data)
 
-        feature_sdf = Cacher.get_dataset_by_key(self._cacher_key)
+        feature_sdf = Cacher.get_dataset_by_key(cacher_key)
         output_roles = {feat: role for est in enodes for feat, role in est.get_output_roles().items()}
         featurized_train = train.empty()
-        featurized_train.set_data(feature_sdf, list(output_roles.keys()), output_roles)
+        featurized_train.set_data(
+            feature_sdf,
+            list(output_roles.keys()),
+            output_roles,
+            dependencies=[lambda: Cacher.release_cache_by_key(cacher_key)]
+        )
 
         return FittedPipe(dataset=featurized_train, transformer=dag_transformer)
 
