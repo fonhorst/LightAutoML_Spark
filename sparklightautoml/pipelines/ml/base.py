@@ -14,8 +14,7 @@ from pyspark.ml import Transformer, PipelineModel
 from ..base import TransformerInputOutputRoles
 from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
-from ...dataset.base import LAMLDataset, SparkDataset
-from ...dataset.persistence import PersistenceManager
+from ...dataset.base import LAMLDataset, SparkDataset, PersistenceLevel, PersistenceManager
 from ...ml_algo.base import SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
 
@@ -162,7 +161,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         # # checkpointing
         # val_preds_ds = persistence_manager.persist(val_preds_ds, name=self._milestone_name)
         # persistence_manager.unpersist_all(exceptions=val_preds_ds)
-        val_preds_ds = val_preds_ds.persist()
+        val_preds_ds = val_preds_ds.persist(level=PersistenceLevel.REGULAR)
         train_valid.train.frozen = False
         train_valid.train.unpersist()
 

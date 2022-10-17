@@ -19,7 +19,6 @@ from sklearn.model_selection import train_test_split
 
 from examples_utils import get_spark_session
 from sparklightautoml.automl.base import SparkAutoML
-from sparklightautoml.dataset.caching import PersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline

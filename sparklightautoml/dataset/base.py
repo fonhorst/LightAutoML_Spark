@@ -1,8 +1,11 @@
 import functools
 import uuid
 import warnings
+from abc import ABC, abstractmethod
 from collections import Counter
 from copy import copy
+from dataclasses import dataclass
+from enum import Enum
 from typing import Sequence, Any, Tuple, Union, Optional, List, cast, Dict, Set, Callable
 
 import pandas as pd
@@ -24,7 +27,6 @@ from pyspark.sql import functions as sf, Column
 from pyspark.sql.session import SparkSession
 
 from sparklightautoml import VALIDATION_COLUMN
-from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
 
@@ -97,7 +99,7 @@ class SparkDataset(LAMLDataset):
     def __init__(self,
                  data: SparkDataFrame,
                  roles: Optional[RolesDict],
-                 persistence_manager: PersistenceManager,
+                 persistence_manager: 'PersistenceManager',
                  task: Optional[Task] = None,
                  bucketized: bool = False,
                  dependencies: Optional[List[Dependency]] = None,
@@ -234,7 +236,7 @@ class SparkDataset(LAMLDataset):
         return [sc for sc in self._service_columns if sc in self.data.columns]
 
     @property
-    def persistence_manager(self) -> PersistenceManager:
+    def persistence_manager(self) -> 'PersistenceManager':
         return self._persistence_manager
 
     def __repr__(self):
@@ -359,7 +361,7 @@ class SparkDataset(LAMLDataset):
         self._dependencies = dependencies
         self._uid = uid
 
-    def persist(self, level: str) -> 'SparkDataset':
+    def persist(self, level: 'PersistenceLevel') -> 'SparkDataset':
         """
         Materializes current Spark DataFrame and unpersists all its dependencies
         Args:
@@ -370,7 +372,7 @@ class SparkDataset(LAMLDataset):
         """
         # TODO: SLAMA - raise warning if the dataset is already persisted but with a different level in comparison with 'level' arg
         # TODO: SLAMA - send level
-        return self.persistence_manager.persist(self).to_dataset()
+        return self.persistence_manager.persist(self, level).to_dataset()
 
     def unpersist(self):
         """
@@ -448,3 +450,89 @@ class SparkDataset(LAMLDataset):
     def from_dataset(dataset: "LAMLDataset") -> "LAMLDataset":
         assert isinstance(dataset, SparkDataset), "Can only convert from SparkDataset"
         return dataset
+
+
+class PersistenceLevel(Enum):
+    REGULAR = 1
+    CHECKPOINT = 2
+
+
+@dataclass(frozen=True)
+class PersistableDataFrame:
+    sdf: SparkDataFrame
+    uid: str
+    callback: Optional[Callable] = None
+    base_dataset: Optional[SparkDataset] = None
+
+    def to_dataset(self) -> SparkDataset:
+        assert self.base_dataset
+        ds = self.base_dataset.empty()
+        ds.set_data(
+            self.sdf,
+            self.base_dataset.features,
+            self.base_dataset.roles,
+            dependencies=list(self.base_dataset.dependencies),
+            uid=self.uid
+        )
+        return ds
+
+
+class PersistenceManager(ABC):
+    @staticmethod
+    def to_persistable_dataframe(dataset: SparkDataset) -> PersistableDataFrame:
+        # we intentially create new uid to use to distinguish a persisted and unpersisted dataset
+        return PersistableDataFrame(dataset.data, uid=str(uuid.uuid4()), dataset=dataset)
+
+    def __init__(self, parent: Optional['PersistenceManager'] = None):
+        self._persistence_registry: Dict[str, PersistableDataFrame] = dict()
+        self._parent = parent
+        self._children: List['PersistenceManager'] = []
+
+    def persist(self,
+                dataset: Union[SparkDataset, PersistableDataFrame],
+                level: PersistenceLevel = PersistenceLevel.REGULAR) -> PersistableDataFrame:
+        persisted_dataframe = self.to_persistable_dataframe(dataset) if isinstance(dataset, SparkDataset) \
+            else cast(PersistableDataFrame, dataset)
+
+        if persisted_dataframe.uid in self._persistence_registry:
+            return self._persistence_registry[persisted_dataframe.uid]
+
+        self._persistence_registry[persisted_dataframe.uid] = self._persist(persisted_dataframe, level)
+
+        return persisted_dataframe
+
+    def unpersist(self, uid: str):
+        persisted_dataframe = self._persistence_registry.get(uid, None)
+
+        if not persisted_dataframe:
+            return
+
+        self._unpersist(persisted_dataframe)
+
+        del self._persistence_registry[persisted_dataframe.uid]
+
+    def unpersist_all(self):
+        self.unpersist_children()
+
+        uids = list(self._persistence_registry.keys())
+
+        for uid in uids:
+            self.unpersist(uid)
+
+    def unpersist_children(self):
+        for child in self._children:
+            child.unpersist_all()
+        self._children = []
+
+    def child(self) -> 'PersistenceManager':
+        a_child = PersistenceManager(self)
+        self._children.append(a_child)
+        return a_child
+
+    @abstractmethod
+    def _persist(self, pdf: PersistableDataFrame, level: PersistenceLevel) -> PersistableDataFrame:
+        ...
+
+    @abstractmethod
+    def _unpersist(self, pdf: PersistableDataFrame):
+        ...

@@ -19,6 +19,7 @@ from pandas import Series
 from pyspark.ml import Transformer
 from pyspark.ml.feature import OneHotEncoder
 from pyspark.sql import functions as sf, DataFrame as SparkDataFrame, Window, Column
+from pyspark.sql.types import IntegerType
 from sklearn.utils.murmurhash import murmurhash3_32
 
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 # https://github.com/fonhorst/LightAutoML/pull/57/files/57c15690d66fbd96f3ee838500de96c4637d59fe#r749534669
 murmurhash3_32_udf = sf.udf(
     lambda value: murmurhash3_32(value.replace("NaN", "nan"), seed=42) if value is not None else None,
-    SparkTypes.IntegerType(),
+    IntegerType(),
 )
 
 
@@ -944,7 +945,6 @@ class SparkMulticlassTargetEncoderEstimator(SparkBaseEstimator):
         self.encodings = []
 
         df = dataset
-        sc = df.sql_ctx.sparkSession.sparkContext
 
         _fc = sf.col(self._folds_column)
         _tc = sf.col(self._target_column)

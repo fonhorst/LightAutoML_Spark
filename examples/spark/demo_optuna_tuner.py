@@ -24,7 +24,6 @@ from lightautoml.pipelines.selection.importance_based import (
     ModelBasedImportanceEstimator,
 )
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import PersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline

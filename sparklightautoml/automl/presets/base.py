@@ -7,12 +7,10 @@ import torch
 import yaml
 
 from sparklightautoml.automl.base import SparkAutoML
-from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.tasks.base import SparkTask
 from lightautoml.utils.logging import verbosity_to_loglevel, set_stdout_level, add_filehandler
 from lightautoml.utils.timer import PipelineTimer
-
-from sparklightautoml.dataset.persistence import PersistenceManager
 
 logger = logging.getLogger(__name__)
 

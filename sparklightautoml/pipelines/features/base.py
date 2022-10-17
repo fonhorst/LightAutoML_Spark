@@ -21,9 +21,6 @@ from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.caching import CacheAware
-
-from sparklightautoml.dataset.persistence import PersistenceManager
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.transformers.base import (
     SparkBaseEstimator,
@@ -121,7 +118,7 @@ class SelectTransformer(Transformer):
         return dataset.select(self.get_cols_to_select())
 
 
-class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, CacheAware):
+class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
     """Abstract class.
 
     Analyze train dataset and create composite transformer
@@ -187,11 +184,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         """
         raise NotImplementedError
 
-    def fit_transform(
-            self,
-            train: SparkDataset,
-            persistence_manager: Optional[PersistenceManager] = None
-    ) -> SparkDataset:
+    def fit_transform(self, train: SparkDataset) -> SparkDataset:
         """Create pipeline and then fit on train data and then transform.
 
         Args:
@@ -203,7 +196,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles, Cache
         """
         logger.info("SparkFeaturePipeline is started")
 
-        fitted_pipe = self._merge_pipes(train, persistence_manager)
+        fitted_pipe = self._merge_pipes(train)
         self._transformer = fitted_pipe.transformer
         self._input_roles = copy(train.roles)
         self._output_roles = copy(fitted_pipe.dataset.roles)

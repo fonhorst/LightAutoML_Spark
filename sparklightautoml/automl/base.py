@@ -15,8 +15,8 @@ from pyspark.ml import PipelineModel, Transformer
 from pyspark.sql import functions as sf
 
 from .blend import SparkBlender, SparkBestModelSelector
-from ..dataset.base import SparkDataset
-from ..dataset.persistence import PersistenceManager, PlainCachePersistenceManager
+from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
+from ..dataset.persistence import PlainCachePersistenceManager
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
@@ -208,7 +208,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         # TODO: SLAMA - is it necessary here? We do it to save column with _id, may be to convert something
         # TODO: SLAMA - add level
-        train_dataset = train_dataset.persist()
+        train_dataset = train_dataset.persist(level=PersistenceLevel.REGULAR)
 
         assert (
             len(self._levels) <= 1 or train_dataset.folds is not None
@@ -268,7 +268,7 @@ class SparkAutoML(TransformerInputOutputRoles):
                 # checkpointing
                 level_ds = SparkDataset.concatenate(all_pipes_predictions)
                 # TODO: SLAMA - add level
-                level_ds = level_ds.persist()
+                level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
                 train_valid.train_frozen = False
                 train_valid.val_frozen = False
                 train_valid.unpersist()
@@ -284,7 +284,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             # checkpointing
             level_ds = SparkDataset.concatenate(level_dss)
             # TODO: SLAMA - add level
-            level_ds = level_ds.persist()
+            level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
             train_valid.train.frozen = False
             if not self.skip_conn:
                 train_valid.val_frozen = False
@@ -306,7 +306,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         self._output_roles = copy(oof_pred.roles)
 
         # TODO: SLAMA - add level
-        oof_pred = oof_pred.persist()
+        oof_pred = oof_pred.persist(level=PersistenceLevel.REGULAR)
         # oof_pred = persistence_manager.persist(oof_pred, name=main_milestone_name)
         # persistence_manager.unpersist_all(exceptions=oof_pred)
 
@@ -382,10 +382,10 @@ class SparkAutoML(TransformerInputOutputRoles):
         self, train: SparkDataset, valid: Optional[SparkDataset], n_folds: Optional[int], cv_iter: Optional[Callable]
     ) -> SparkBaseTrainValidIterator:
         # TODO: SLAMA - set level
-        train = train.persist()
+        train = train.persist(level=PersistenceLevel.REGULAR)
         if valid:
             # TODO: SLAMA - set level
-            valid = valid.persist()
+            valid = valid.persist(level=PersistenceLevel.REGULAR)
             # dataset = self._merge_train_and_valid_datasets(train, valid)
             iterator = SparkHoldoutIterator(train, valid)
         elif cv_iter:

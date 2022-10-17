@@ -10,8 +10,7 @@ from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
 from pyspark.ml import Transformer
 
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager
+from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer

@@ -7,9 +7,7 @@ import numpy as np
 from lightautoml.automl.blend import WeightedBlender
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.reader.base import RolesDict
-from lightautoml.transformers.base import EmptyTransformer
 from pyspark.ml import Transformer
-from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
@@ -18,6 +16,7 @@ from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.tasks.base import DEFAULT_PREDICTION_COL_NAME, SparkTask
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
+from sparklightautoml.utils import NoOpTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +63,7 @@ class SparkBlender(ABC, TransformerInputOutputRoles):
         logger.info(f"Blender {type(self)} starting fit_predict")
 
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
-            self._transformer = EmptyTransformer()
+            self._transformer = NoOpTransformer()
             return predictions, pipes
 
         self._set_metadata(predictions, pipes)

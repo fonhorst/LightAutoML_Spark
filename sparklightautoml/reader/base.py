@@ -22,8 +22,7 @@ from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as sf, SparkSession
 from pyspark.sql.types import IntegerType, NumericType, FloatType, StringType
 
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager, PersistableDataFrame
+from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel, PersistableDataFrame, PersistenceManager
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
 from sparklightautoml.utils import SparkDataFrame
@@ -236,7 +235,10 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         train_data = self._create_unique_ids(train_data)
 
         # bucketing should happen here
-        initial_train_data_pdf = persistence_manager.persist(PersistableDataFrame(train_data, uid=str(uuid.uuid4())))
+        initial_train_data_pdf = persistence_manager.persist(
+            PersistableDataFrame(train_data, uid=str(uuid.uuid4())),
+            level=PersistenceLevel.CHECKPOINT
+        )
 
         train_data = initial_train_data_pdf.sdf
 

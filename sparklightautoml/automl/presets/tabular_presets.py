@@ -26,8 +26,8 @@ from sparklightautoml.automl.presets.utils import (
     replace_month_in_date,
     replace_year_in_date,
 )
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager, PlainCachePersistenceManager
+from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.ml_algo.linear_pyspark import SparkLinearLBFGS
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
@@ -262,7 +262,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         )
 
         linear_l2_pipe = SparkNestedTabularMLPipeline(
-            self._persistence_manager,
             [linear_l2_model],
             force_calc=True,
             pre_selection=pre_selector,
@@ -278,7 +277,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         pre_selector: Optional[SparkSelectionPipelineWrapper] = None,
     ):
 
-        gbm_feats = SparkLGBAdvancedPipeline(cacher_key=self._cacher_key, **self.gbm_pipeline_params)
+        gbm_feats = SparkLGBAdvancedPipeline(**self.gbm_pipeline_params)
 
         ml_algos = []
         force_calc = []
@@ -306,7 +305,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             force_calc.append(force)
 
         gbm_pipe = SparkNestedTabularMLPipeline(
-            self._persistence_manager,
             ml_algos,
             force_calc,
             pre_selection=pre_selector,

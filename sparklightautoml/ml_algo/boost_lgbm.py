@@ -24,8 +24,7 @@ from synapse.ml.lightgbm import (
 )
 from synapse.ml.onnx import ONNXModel
 
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager
+from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.mlwriters import (
     LightGBMModelWrapperMLReader,

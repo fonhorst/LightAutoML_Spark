@@ -14,8 +14,7 @@ from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as sf
 from pyspark.sql.types import IntegerType
 
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PersistenceManager
+from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import Cacher, SparkDataFrame
@@ -179,7 +178,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         # TODO: SLAMA - set deps
         pred_ds.set_data(full_preds_df, list(self.output_roles.keys()), self.output_roles)
         # TODO: SLAMA - set level
-        pred_ds = pred_ds.persist()
+        pred_ds = pred_ds.persist(level=PersistenceLevel.REGULAR)
 
         if iterator_len > 1:
             single_pred_ds = self._make_single_prediction_dataset(pred_ds)
