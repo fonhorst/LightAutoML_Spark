@@ -483,56 +483,28 @@ class PersistenceManager(ABC):
         # we intentially create new uid to use to distinguish a persisted and unpersisted dataset
         return PersistableDataFrame(dataset.data, uid=str(uuid.uuid4()), dataset=dataset)
 
-    def __init__(self, parent: Optional['PersistenceManager'] = None):
-        self._persistence_registry: Dict[str, PersistableDataFrame] = dict()
-        self._parent = parent
-        self._children: List['PersistenceManager'] = []
-
+    @abstractmethod
     def persist(self,
                 dataset: Union[SparkDataset, PersistableDataFrame],
                 level: PersistenceLevel = PersistenceLevel.REGULAR) -> PersistableDataFrame:
-        persisted_dataframe = self.to_persistable_dataframe(dataset) if isinstance(dataset, SparkDataset) \
-            else cast(PersistableDataFrame, dataset)
-
-        if persisted_dataframe.uid in self._persistence_registry:
-            return self._persistence_registry[persisted_dataframe.uid]
-
-        self._persistence_registry[persisted_dataframe.uid] = self._persist(persisted_dataframe, level)
-
-        return persisted_dataframe
-
-    def unpersist(self, uid: str):
-        persisted_dataframe = self._persistence_registry.get(uid, None)
-
-        if not persisted_dataframe:
-            return
-
-        self._unpersist(persisted_dataframe)
-
-        del self._persistence_registry[persisted_dataframe.uid]
-
-    def unpersist_all(self):
-        self.unpersist_children()
-
-        uids = list(self._persistence_registry.keys())
-
-        for uid in uids:
-            self.unpersist(uid)
-
-    def unpersist_children(self):
-        for child in self._children:
-            child.unpersist_all()
-        self._children = []
-
-    def child(self) -> 'PersistenceManager':
-        a_child = PersistenceManager(self)
-        self._children.append(a_child)
-        return a_child
-
-    @abstractmethod
-    def _persist(self, pdf: PersistableDataFrame, level: PersistenceLevel) -> PersistableDataFrame:
         ...
 
     @abstractmethod
-    def _unpersist(self, pdf: PersistableDataFrame):
+    def unpersist(self, uid: str):
+        ...
+
+    @abstractmethod
+    def unpersist_all(self):
+        ...
+
+    @abstractmethod
+    def unpersist_children(self):
+        ...
+
+    @abstractmethod
+    def child(self) -> 'PersistenceManager':
+        ...
+
+    @abstractmethod
+    def is_persisted(self, pdf: PersistableDataFrame) -> bool:
         ...
