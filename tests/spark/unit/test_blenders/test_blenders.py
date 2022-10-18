@@ -50,6 +50,8 @@ def test_weighted_blender(spark: SparkSession):
     ).persist()
 
     train_valid_iterator = SparkFoldsIterator(data_sds)
+    train_valid_iterator.train_frozen = True
+    train_valid_iterator.val_frozen = True
 
     pipes = [SparkMLPipeline(ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")]) for i in range(models_count)]
 
@@ -65,19 +67,22 @@ def test_weighted_blender(spark: SparkSession):
     with log_exec_time('Blender predict'):
         transformed_preds_sdf = swb.transformer.transform(data_sds.data)
         transformed_preds_sdf.write.mode('overwrite').format('noop').save()
-    #
-    # assert len(swb.output_roles) == 1
-    # prediction, role = list(swb.output_roles.items())[0]
-    # if data_sds.task.name in ["binary", "multiclass"]:
-    #     assert isinstance(role, NumericVectorOrArrayRole)
-    # else:
-    #     assert isinstance(role, NumericRole)
-    # assert prediction in blended_sds.data.columns
-    # assert prediction in blended_sds.roles
-    # assert blended_sds.roles[prediction] == role
-    # assert prediction in transformed_preds_sdf.columns
+
+    assert len(swb.output_roles) == 1
+    prediction, role = list(swb.output_roles.items())[0]
+    if data_sds.task.name in ["binary", "multiclass"]:
+        assert isinstance(role, NumericVectorOrArrayRole)
+    else:
+        assert isinstance(role, NumericRole)
+    assert prediction in blended_sds.data.columns
+    assert prediction in blended_sds.roles
+    assert blended_sds.roles[prediction] == role
+    assert prediction in transformed_preds_sdf.columns
+
+    train_valid_iterator.train_frozen = False
+    train_valid_iterator.val_frozen = False
+    train_valid_iterator.unpersist()
+
+    blended_sds.unpersist()
 
     print("Finished")
-
-    import time
-    time.sleep(600)

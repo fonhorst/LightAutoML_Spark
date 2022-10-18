@@ -179,7 +179,13 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self._transformer = self._build_transformer()
 
         pred_ds = valid_ds.empty()
-        pred_ds.set_data(full_preds_df, list(self.output_roles.keys()), self.output_roles, name=f"{type(self)}")
+        pred_ds.set_data(
+            full_preds_df,
+            list(self.output_roles.keys()),
+            self.output_roles,
+            dependencies=[train_valid_iterator.train, valid_ds],
+            name=f"{type(self)}"
+        )
         pred_ds = pred_ds.persist(level=PersistenceLevel.REGULAR)
 
         if iterator_len > 1:

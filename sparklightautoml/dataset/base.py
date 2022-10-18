@@ -507,7 +507,7 @@ class PersistenceManager(ABC):
     @staticmethod
     def to_persistable_dataframe(dataset: SparkDataset) -> PersistableDataFrame:
         # we intentially create new uid to use to distinguish a persisted and unpersisted dataset
-        return PersistableDataFrame(dataset.data, uid=str(uuid.uuid4()), base_dataset=dataset)
+        return PersistableDataFrame(dataset.data, uid=dataset.uid, base_dataset=dataset)
 
     @property
     @abstractmethod
