@@ -42,12 +42,13 @@ def spark() -> SparkSession:
         SparkSession
         .builder
         .appName("LAMA-test-app")
-        .master("local[4]")
+        .master("local-cluster[2,2,2048]")
         .config("spark.driver.memory", "8g")
         .config("spark.jars", JAR_PATH)
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.sql.shuffle.partitions", 200)
+        .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
         .getOrCreate()
     )
 

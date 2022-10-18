@@ -61,7 +61,7 @@ class BasePersistenceManager(PersistenceManager):
 
         logger.debug(f"Manager {self._uid}: the dataset (uid={dataset.uid}, name={dataset.name}) has been persisted.")
 
-        return persisted_dataframe
+        return self._persistence_registry[persisted_dataframe.uid].pdf
 
     def unpersist(self, uid: str):
         logger.info(f"Manager {self._uid}: unpersisting dataset (uid={uid}).")

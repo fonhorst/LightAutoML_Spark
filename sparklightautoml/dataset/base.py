@@ -74,7 +74,10 @@ class SparkDataset(LAMLDataset):
         """
         assert len(datasets) > 0, "Cannot join an empty list of datasets"
 
-        if any(d.bucketized for d in datasets):
+        if len(datasets) == 1:
+            return datasets[0]
+
+        if any(not d.bucketized for d in datasets):
             warnings.warn(
                 f"NOT bucketized datasets are requested to be joined. It may severaly affect perfrormance",
                 RuntimeWarning
@@ -230,9 +233,10 @@ class SparkDataset(LAMLDataset):
 
     @property
     def shape(self) -> Tuple[Optional[int], Optional[int]]:
-        with JobGroup("sparkdataset.shape", f"Finding count for dataset (uid={self.uid}, name={self.name})"):
-            warn_if_not_cached(self.data)
-            return self.data.count(), len(self.features)
+        return -1, len(self.features)
+        # with JobGroup("sparkdataset.shape", f"Finding count for dataset (uid={self.uid}, name={self.name})"):
+        #     warn_if_not_cached(self.data)
+        #     return self.data.count(), len(self.features)
 
     @property
     def target_column(self) -> Optional[str]:
