@@ -3,6 +3,7 @@ import os
 import shutil
 import uuid
 from abc import abstractmethod
+from dataclasses import dataclass
 from typing import Optional, Dict, List, Union, cast
 
 from pyspark.sql import SparkSession
@@ -12,10 +13,16 @@ from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel, Persis
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class _PersistablePair:
+    level: PersistenceLevel
+    pdf: PersistableDataFrame
+
+
 class BasePersistenceManager(PersistenceManager):
     def __init__(self, parent: Optional['PersistenceManager'] = None):
         self._uid = str(uuid.uuid4())
-        self._persistence_registry: Dict[str, PersistableDataFrame] = dict()
+        self._persistence_registry: Dict[str, _PersistablePair] = dict()
         self._parent = parent
         self._children: List['PersistenceManager'] = []
 
@@ -33,11 +40,23 @@ class BasePersistenceManager(PersistenceManager):
                     f"persisting dataset (uid={dataset.uid}, name={dataset.name}) with level {level}.")
 
         if persisted_dataframe.uid in self._persistence_registry:
+            persisted_pair = self._persistence_registry[persisted_dataframe.uid]
+
             logger.debug(f"Manager {self._uid}: "
                          f"the dataset (uid={dataset.uid}, name={dataset.name}) is already persisted.")
-            return self._persistence_registry[persisted_dataframe.uid]
 
-        self._persistence_registry[persisted_dataframe.uid] = self._persist(persisted_dataframe, level)
+            if persisted_pair.level != level:
+                raise RuntimeWarning(
+                    f"Asking to persist an already persisted dataset "
+                    f"(uid={persisted_pair.pdf.uid}, name={persisted_pair.pdf.name}) "
+                    f"but with different level. Will do nothing. "
+                    f"Current level {persisted_pair.level}, asked level {level}."
+                )
+
+            return persisted_pair.pdf
+
+        self._persistence_registry[persisted_dataframe.uid] = \
+            _PersistablePair(level, self._persist(persisted_dataframe, level))
 
         logger.debug(f"Manager {self._uid}: the dataset (uid={dataset.uid}, name={dataset.name}) has been persisted.")
 
@@ -45,18 +64,18 @@ class BasePersistenceManager(PersistenceManager):
 
     def unpersist(self, uid: str):
         logger.info(f"Manager {self._uid}: unpersisting dataset (uid={uid}).")
-        persisted_dataframe = self._persistence_registry.get(uid, None)
+        persisted_pair = self._persistence_registry.get(uid, None)
 
-        if not persisted_dataframe:
+        if not persisted_pair:
             logger.debug(f"Manager {self._uid}: the dataset (uid={uid}) is not persisted yet. Nothing to do.")
             return
 
-        self._unpersist(persisted_dataframe)
+        self._unpersist(persisted_pair.pdf)
 
-        del self._persistence_registry[persisted_dataframe.uid]
+        del self._persistence_registry[persisted_pair.pdf.uid]
 
         logger.debug(f"Manager {self._uid}: "
-                     f"the dataset (uid={uid}, name={persisted_dataframe.name}) has been unpersisted.")
+                     f"the dataset (uid={uid}, name={persisted_pair.pdf.name}) has been unpersisted.")
 
     def unpersist_children(self):
         logger.info(f"Manager {self._uid}: unpersisting children.")

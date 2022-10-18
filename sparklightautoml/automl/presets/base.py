@@ -5,12 +5,12 @@ from typing import Optional, Any, Sequence, Iterable
 
 import torch
 import yaml
+from lightautoml.utils.logging import verbosity_to_loglevel, set_stdout_level, add_filehandler
+from lightautoml.utils.timer import PipelineTimer
 
 from sparklightautoml.automl.base import SparkAutoML
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.tasks.base import SparkTask
-from lightautoml.utils.logging import verbosity_to_loglevel, set_stdout_level, add_filehandler
-from lightautoml.utils.timer import PipelineTimer
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +147,7 @@ class SparkAutoMLPreset(SparkAutoML):
         valid_data: Optional[Any] = None,
         valid_features: Optional[Sequence[str]] = None,
         verbose: int = 0,
+        persistence_manager: Optional[PersistenceManager] = None
     ) -> SparkDataset:
         """Fit on input data and make prediction on validation part.
 
@@ -192,6 +193,7 @@ class SparkAutoMLPreset(SparkAutoML):
             valid_data,
             valid_features,
             verbose,
+            persistence_manager
         )
 
         logger.info("\x1b[1mAutoml preset training completed in {:.2f} seconds\x1b[0m\n".format(self.timer.time_spent))

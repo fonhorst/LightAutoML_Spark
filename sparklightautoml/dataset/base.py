@@ -33,6 +33,10 @@ from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
 Dependency = Union[str, 'SparkDataset', Callable]
 DepIdentifable = Union[str, 'SparkDataset']
 
+class PersistenceLevel(Enum):
+    REGULAR = 1
+    CHECKPOINT = 2
+
 
 class SparkDataset(LAMLDataset):
     """
@@ -368,7 +372,7 @@ class SparkDataset(LAMLDataset):
         self._uid = uid
         self._name = name
 
-    def persist(self, level: 'PersistenceLevel') -> 'SparkDataset':
+    def persist(self, level: Optional[PersistenceLevel] = None) -> 'SparkDataset':
         """
         Materializes current Spark DataFrame and unpersists all its dependencies
         Args:
@@ -378,8 +382,7 @@ class SparkDataset(LAMLDataset):
             a new SparkDataset that is persisted and materialized
         """
         assert self.persistence_manager, "Cannot persist when persistence_manager is None"
-        # TODO: SLAMA - raise warning if the dataset is already persisted but with a different level in comparison with 'level' arg
-        # TODO: SLAMA - send level
+        level = level or PersistenceLevel.REGULAR
         return self.persistence_manager.persist(self, level).to_dataset()
 
     def unpersist(self):
@@ -460,11 +463,6 @@ class SparkDataset(LAMLDataset):
     def from_dataset(dataset: "LAMLDataset") -> "LAMLDataset":
         assert isinstance(dataset, SparkDataset), "Can only convert from SparkDataset"
         return dataset
-
-
-class PersistenceLevel(Enum):
-    REGULAR = 1
-    CHECKPOINT = 2
 
 
 @dataclass(frozen=True)

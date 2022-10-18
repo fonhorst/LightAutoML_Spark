@@ -1,5 +1,4 @@
 """Base class for selection pipelines."""
-import functools
 from abc import ABC
 from copy import copy
 from typing import Optional, List, cast
@@ -10,11 +9,11 @@ from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
 from pyspark.ml import Transformer
 
-from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
+from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.transformers.base import ColumnsSelectorTransformer
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, SparkSelectionPipeline
 
 
 class SparkImportanceEstimator(ImportanceEstimator, ABC):
@@ -22,7 +21,7 @@ class SparkImportanceEstimator(ImportanceEstimator, ABC):
         super(SparkImportanceEstimator, self).__init__()
 
 
-class SparkSelectionPipelineWrapper(SelectionPipeline, TransformerInputOutputRoles):
+class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutputRoles):
     def __init__(self, sel_pipe: SelectionPipeline):
         assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
         assert isinstance(sel_pipe.features_pipeline, SparkFeaturesPipeline) or isinstance(sel_pipe, EmptySelector), \

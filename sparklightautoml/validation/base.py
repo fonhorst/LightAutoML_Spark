@@ -1,18 +1,31 @@
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
-from typing import Tuple, cast, Sequence
+from typing import Tuple, cast, Sequence, Optional, Union, Any
 
+from lightautoml.ml_algo.base import MLAlgo
+from lightautoml.ml_algo.tuning.base import ParamsTuner
+from lightautoml.pipelines.features.base import FeaturesPipeline
+from lightautoml.pipelines.selection.base import SelectionPipeline, ImportanceEstimator
 from lightautoml.validation.base import TrainValidIterator
 from pyspark.sql import functions as sf
 
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
-from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.utils import SparkDataFrame
 
 TrainVal = Tuple[SparkDataset, SparkDataset]
+
+
+class SparkSelectionPipeline(SelectionPipeline, ABC):
+    def __init__(self,
+                 features_pipeline: Optional[FeaturesPipeline] = None,
+                 ml_algo: Optional[Union[MLAlgo, Tuple[MLAlgo, ParamsTuner]]] = None,
+                 imp_estimator: Optional[ImportanceEstimator] = None,
+                 fit_on_holdout: bool = False,
+                 **kwargs: Any):
+        super().__init__(features_pipeline, ml_algo, imp_estimator, fit_on_holdout, **kwargs)
 
 
 class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
@@ -80,7 +93,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
 
         child_manager.unpersist_all()
 
-    def apply_selector(self, selector: SparkSelectionPipelineWrapper) -> "SparkBaseTrainValidIterator":
+    def apply_selector(self, selector: SparkSelectionPipeline) -> "SparkBaseTrainValidIterator":
         """Select features on train data.
 
         Check if selector is fitted.
@@ -108,9 +121,6 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
             features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
         train_valid = copy(self)
         train_valid.train = features_pipeline.fit_transform(train_valid.train)
-
-        # TODO: SLAMA - do we need it here?
-        # train_valid.train = train_valid.train.persist()
 
         return train_valid
 

@@ -12,7 +12,6 @@ from lightautoml.reader.base import RolesDict
 from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
 from lightautoml.utils.timer import PipelineTimer
 from pyspark.ml import PipelineModel, Transformer
-from pyspark.sql import functions as sf
 
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
