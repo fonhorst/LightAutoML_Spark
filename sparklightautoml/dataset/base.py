@@ -109,12 +109,6 @@ class SparkDataset(LAMLDataset):
                  name: Optional[str] = None,
                  **kwargs: Any):
 
-        self._uid = str(uuid.uuid4())
-        self._persistence_manager = persistence_manager
-        self._dependencies = dependencies
-        self._frozen = False
-        self._name = name
-
         if "target" in kwargs:
             assert isinstance(kwargs["target"], str), "Target should be a str representing column name"
             self._target_column: str = kwargs["target"]
@@ -144,6 +138,12 @@ class SparkDataset(LAMLDataset):
 
         self._bucketized = bucketized
         self._roles = None
+
+        self._uid = str(uuid.uuid4())
+        self._persistence_manager = persistence_manager
+        self._dependencies = dependencies
+        self._frozen = False
+        self._name = name
 
         super().__init__(data, None, roles, task, **kwargs)
 
@@ -367,10 +367,10 @@ class SparkDataset(LAMLDataset):
         """
         self._validate_dataframe(data)
         super().set_data(data, None, roles)
-        self._persistence_manager = persistence_manager
-        self._dependencies = dependencies
-        self._uid = uid
-        self._name = name
+        self._persistence_manager = persistence_manager or self._persistence_manager
+        self._dependencies = dependencies or self._dependencies
+        self._uid = uid or self._uid
+        self._name = name or self._name
 
     def persist(self, level: Optional[PersistenceLevel] = None) -> 'SparkDataset':
         """

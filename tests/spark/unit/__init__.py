@@ -1,3 +1,5 @@
+import logging
+import logging.config
 from copy import copy
 from typing import Tuple, get_args, cast, List, Optional, Dict, Union
 
@@ -9,6 +11,7 @@ from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import ColumnRole
 from lightautoml.transformers.base import LAMLTransformer
 from lightautoml.transformers.numeric import NumpyTransformable
+from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
 from pyspark.ml import Estimator
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as sf
@@ -18,12 +21,18 @@ from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.transformers.base import ObsoleteSparkTransformer, SparkBaseEstimator, SparkBaseTransformer, \
     SparkColumnsAndRoles
-from sparklightautoml.utils import log_exec_time
+from sparklightautoml.utils import log_exec_time, logging_config, VERBOSE_LOGGING_FORMAT
 
 # NOTE!!!
 # All tests require PYSPARK_PYTHON env variable to be set
 # for example: PYSPARK_PYTHON=/home/nikolay/.conda/envs/LAMA/bin/python
 JAR_PATH = 'jars/spark-lightautoml_2.12-0.1.jar'
+
+
+logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/lama.log'))
+logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
+set_stdout_level(verbosity_to_loglevel(verbosity=5))
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")

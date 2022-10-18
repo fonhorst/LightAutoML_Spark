@@ -21,7 +21,7 @@ from sparklightautoml.utils import NoOpTransformer
 logger = logging.getLogger(__name__)
 
 
-class SparkBlender(ABC, TransformerInputOutputRoles):
+class SparkBlender(TransformerInputOutputRoles, ABC):
     """Basic class for blending.
 
     Blender learns how to make blend
@@ -37,6 +37,7 @@ class SparkBlender(ABC, TransformerInputOutputRoles):
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
         self._task: Optional[SparkTask] = None
+        super().__init__()
 
     @property
     def input_roles(self) -> Optional[RolesDict]:

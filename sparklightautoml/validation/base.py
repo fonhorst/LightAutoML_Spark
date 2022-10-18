@@ -51,23 +51,23 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         """
         ...
 
-    @abstractmethod
     @property
+    @abstractmethod
     def train_frozen(self) -> bool:
         ...
 
-    @abstractmethod
     @train_frozen.setter
+    @abstractmethod
     def train_frozen(self, val: bool):
         ...
 
-    @abstractmethod
     @property
+    @abstractmethod
     def val_frozen(self) -> bool:
         ...
 
-    @abstractmethod
     @val_frozen.setter
+    @abstractmethod
     def val_frozen(self, val: bool):
         ...
 
@@ -85,7 +85,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
             train_valid.train.features,
             train_valid.train.roles,
             persistence_manager=child_manager,
-            dependencies=None
+            dependencies=[]
         )
         train_valid.train = train
 

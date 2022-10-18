@@ -1,4 +1,3 @@
-import logging.config
 from typing import Dict, Any
 
 import pandas as pd
@@ -13,16 +12,10 @@ from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
-from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from .. import spark as spark_sess
 from ..dataset_utils import get_test_datasets
 
 spark = spark_sess
-
-
-logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/lama.log'))
-logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
-logger = logging.getLogger(__name__)
 
 
 # noinspection PyShadowingNames
