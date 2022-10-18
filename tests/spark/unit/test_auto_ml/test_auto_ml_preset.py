@@ -2,6 +2,7 @@ import logging.config
 
 from pyspark.sql import SparkSession
 
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from .utils import DummyTabularAutoML
 from .. import spark as spark_sess
@@ -25,6 +26,7 @@ def test_automl_preset(spark: SparkSession):
         {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % n_classes} for i in range(120, 140)
     ])
 
+    persistence_manager = PlainCachePersistenceManager()
     automl = DummyTabularAutoML(n_classes=n_classes)
 
     # 1. check for output result, features, roles (required columns in data, including return_all_predictions)
@@ -33,13 +35,15 @@ def test_automl_preset(spark: SparkSession):
     #   - all inputs data are presented in all pipes of the first level
     #   - all inputs data are presented in all pipes of the second level (if skip_conn)
     # 3. blending and return_all_predictions works correctly
-    oof_ds = automl.fit_predict(train_data, roles={"target": "TARGET"})
-    pred_ds = automl.predict(test_data)
+    oof_ds = automl.fit_predict(
+        train_data,
+        roles={"target": "TARGET"},
+        persistence_manager=persistence_manager
+    ).persist()
 
-    oof_df = oof_ds.data.cache()
-    oof_df.write.mode('overwrite').format('noop').save()
+    pred_ds = automl.predict(test_data).persist()
 
-    pred_df = pred_ds.data.cache()
-    pred_df.write.mode('overwrite').format('noop').save()
+    oof_ds.unpersist()
+    pred_ds.unpersist()
 
     logger.info("Finished")

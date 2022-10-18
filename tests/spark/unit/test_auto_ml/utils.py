@@ -1,3 +1,4 @@
+import os
 from copy import copy
 from typing import List, cast, Optional, Any, Tuple, Callable
 
@@ -163,7 +164,7 @@ class DummySparkMLPipeline(SparkMLPipeline):
 
 class DummyTabularAutoML(SparkAutoMLPreset):
     def __init__(self, n_classes: int):
-        config_path = '/home/nikolay/wspace/LightAutoML/lightautoml/spark/automl/presets/tabular_config.yml'
+        config_path = os.path.join(os.getcwd(), 'sparklightautoml/automl/presets/tabular_config.yml')
         super().__init__(SparkTask("multiclass"), config_path=config_path)
         self._n_classes = n_classes
 

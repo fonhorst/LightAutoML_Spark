@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import uuid
+import warnings
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Union, cast
@@ -47,11 +48,12 @@ class BasePersistenceManager(PersistenceManager):
                          f"the dataset (uid={dataset.uid}, name={dataset.name}) is already persisted.")
 
             if persisted_pair.level != level:
-                raise RuntimeWarning(
+                warnings.warn(
                     f"Asking to persist an already persisted dataset "
                     f"(uid={persisted_pair.pdf.uid}, name={persisted_pair.pdf.name}) "
                     f"but with different level. Will do nothing. "
-                    f"Current level {persisted_pair.level}, asked level {level}."
+                    f"Current level {persisted_pair.level}, asked level {level}.",
+                    RuntimeWarning
                 )
 
             return persisted_pair.pdf

@@ -28,7 +28,7 @@ from sparklightautoml.transformers.base import (
     SparkBaseTransformer,
     SparkUnionTransformer,
     SparkSequentialTransformer,
-    SparkEstOrTrans,
+    SparkEstOrTrans, ColumnsSelectorTransformer,
 )
 from sparklightautoml.transformers.base import (
     SparkChangeRolesTransformer,
@@ -95,28 +95,6 @@ def build_graph(begin: SparkEstOrTrans):
 class FittedPipe:
     dataset: SparkDataset
     transformer: Transformer
-
-
-class SelectTransformer(Transformer):
-    """
-    Transformer that returns ``pyspark.sql.DataFrame`` with selected columns.
-    """
-
-    colsToSelect = Param(Params._dummy(), "colsToSelect", "columns to select from the dataframe")
-
-    def __init__(self, cols_to_select: List[str]):
-        """
-        Args:
-            cols_to_select (List[str]): List of columns to select from input dataframe
-        """
-        super().__init__()
-        self.set(self.colsToSelect, cols_to_select)
-
-    def get_cols_to_select(self) -> List[str]:
-        return self.getOrDefault(self.colsToSelect)
-
-    def _transform(self, dataset):
-        return dataset.select(self.get_cols_to_select())
 
 
 class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
@@ -279,14 +257,20 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
         out_deps = cum_outputs_layers(set(train.features), tr_layers)
         in_deps = cum_inputs_layers([*tr_layers, enodes])
         cols_to_select_in_layers = [
-            [*train.service_columns, *out_feats.intersection(next_in_feats)]
+            list(out_feats.intersection(next_in_feats))
             for out_feats, next_in_feats in zip(out_deps[1:], in_deps[1:])
         ]
 
         dag_pipeline = Pipeline(stages=[
             stage
             for layer, cols in zip(tr_layers, cols_to_select_in_layers)
-            for stage in itertools.chain(layer, [SelectTransformer(cols), Cacher(cacher_key)])
+            for stage in itertools.chain(layer, [
+                ColumnsSelectorTransformer(
+                    input_cols=[SparkDataset.ID_COLUMN, *cols],
+                    optional_cols=[c for c in train.service_columns if c != SparkDataset.ID_COLUMN]
+                ),
+                Cacher(cacher_key)
+            ])
         ])
 
         dag_transformer = dag_pipeline.fit(train.data)
