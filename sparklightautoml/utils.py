@@ -278,3 +278,11 @@ def log_exception(logger: Logger):
             return result
         return wrapped_f
     return wrap
+
+
+@contextmanager
+def JobGroup(group_id: str, description: str):
+    sc = SparkSession.getActiveSession().sparkContext
+    sc.setJobGroup(group_id, description)
+    yield
+    sc._jsc.clearJobGroup()

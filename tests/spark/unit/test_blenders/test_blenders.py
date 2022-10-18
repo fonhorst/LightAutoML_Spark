@@ -53,19 +53,14 @@ def test_weighted_blender(spark: SparkSession):
 
     pipes = [SparkMLPipeline(ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")]) for i in range(models_count)]
 
-    data_sds = SparkDataset.concatenate([pipe.fit_predict(train_valid_iterator).persist() for pipe in pipes], name="concatanated")
+    pipes_preds = [pipe.fit_predict(train_valid_iterator).persist() for pipe in pipes]
 
-    # preds_roles = {c: role for c, role in data_sds.roles.items() if c not in roles}
-    #
-    # sdf = data_sds.data.drop(*list(roles.keys())).cache()
-    # sdf.write.mode('overwrite').format('noop').save()
-    # ml_ds = data_sds.empty()
-    # ml_ds.set_data(sdf, list(preds_roles.keys()), preds_roles, name=data_sds.name)
+    data_sds = SparkDataset.concatenate(pipes_preds, name="concatanated").persist()
 
     swb = SparkWeightedBlender(max_iters=1, max_inner_iters=1)
     with log_exec_time('Blender fit_predict'):
         blended_sds, filtered_pipes = swb.fit_predict(data_sds, pipes)
-        blended_sds.data.write.mode('overwrite').format('noop').save()
+        blended_sds.persist()
 
     with log_exec_time('Blender predict'):
         transformed_preds_sdf = swb.transformer.transform(data_sds.data)

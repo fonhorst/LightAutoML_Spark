@@ -9,6 +9,7 @@ from typing import Optional, Dict, List, Union, cast
 from pyspark.sql import SparkSession
 
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel, PersistableDataFrame, PersistenceManager
+from sparklightautoml.utils import JobGroup
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +131,9 @@ class PlainCachePersistenceManager(BasePersistenceManager):
         logger.debug(f"Manager {self._uid}: "
                      f"caching and materializing the dataset (uid={pdf.uid}, name={pdf.name}).")
 
-        ds = SparkSession.getActiveSession().createDataFrame(pdf.sdf.rdd, schema=pdf.sdf.schema).cache()
-        ds.write.mode('overwrite').format('noop').save()
+        with JobGroup("Persisting", f"{type(self)} caching df (uid={pdf.uid}, name={pdf.name})"):
+            ds = SparkSession.getActiveSession().createDataFrame(pdf.sdf.rdd, schema=pdf.sdf.schema).cache()
+            ds.write.mode('overwrite').format('noop').save()
 
         logger.debug(f"Manager {self._uid}: "
                      f"caching succeeded for the dataset (uid={pdf.uid}, name={pdf.name}).")

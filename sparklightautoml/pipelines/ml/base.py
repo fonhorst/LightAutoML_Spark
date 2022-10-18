@@ -151,9 +151,9 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         self._input_roles = copy(train_valid.train.roles)
         self._output_roles = copy(val_preds_ds.roles)
 
-        val_preds_ds = val_preds_ds.persist(level=PersistenceLevel.REGULAR)
+        # val_preds_ds = val_preds_ds.persist(level=PersistenceLevel.REGULAR)
         train_valid.train.frozen = False
-        train_valid.train.unpersist()
+        # train_valid.train.unpersist()
 
         return val_preds_ds
 

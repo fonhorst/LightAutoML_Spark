@@ -28,7 +28,7 @@ from pyspark.sql.session import SparkSession
 
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
-from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame
+from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame, JobGroup
 
 Dependency = Union[str, 'SparkDataset', Callable]
 DepIdentifable = Union[str, 'SparkDataset']
@@ -230,8 +230,9 @@ class SparkDataset(LAMLDataset):
 
     @property
     def shape(self) -> Tuple[Optional[int], Optional[int]]:
-        warn_if_not_cached(self.data)
-        return self.data.count(), len(self.features)
+        with JobGroup("sparkdataset.shape", f"Finding count for dataset (uid={self.uid}, name={self.name})"):
+            warn_if_not_cached(self.data)
+            return self.data.count(), len(self.features)
 
     @property
     def target_column(self) -> Optional[str]:
@@ -383,8 +384,10 @@ class SparkDataset(LAMLDataset):
             a new SparkDataset that is persisted and materialized
         """
         assert self.persistence_manager, "Cannot persist when persistence_manager is None"
-        level = level or PersistenceLevel.REGULAR
-        return self.persistence_manager.persist(self, level).to_dataset()
+        level = level if level is not None else PersistenceLevel.REGULAR
+        persisted_dataset = self.persistence_manager.persist(self, level).to_dataset()
+        self._unpersist_dependencies()
+        return persisted_dataset
 
     def unpersist(self):
         """
@@ -397,7 +400,9 @@ class SparkDataset(LAMLDataset):
             return
 
         self.persistence_manager.unpersist(self.uid)
+        self._unpersist_dependencies()
 
+    def _unpersist_dependencies(self):
         for dep in (self.dependencies or []):
             if isinstance(dep, str):
                 self.persistence_manager.unpersist(dep)
@@ -405,6 +410,7 @@ class SparkDataset(LAMLDataset):
                 dep.unpersist()
             else:
                 dep()
+
 
     @property
     def frozen(self) -> bool:
@@ -475,7 +481,7 @@ class PersistableDataFrame:
     custom_name: Optional[str] = None
 
     def to_dataset(self) -> SparkDataset:
-        assert self.base_dataset
+        assert self.base_dataset is not None
         ds = self.base_dataset.empty()
         ds.set_data(
             self.sdf,
@@ -489,7 +495,7 @@ class PersistableDataFrame:
 
     @property
     def name(self) -> Optional[str]:
-        ds_name = self.base_dataset.name if self.base_dataset else None
+        ds_name = self.base_dataset.name if self.base_dataset is not None else None
         return self.custom_name or ds_name
 
 
