@@ -12,7 +12,7 @@ from pyspark.ml import Transformer
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
-from sparklightautoml.transformers.base import ColumnsSelectorTransformer
+from sparklightautoml.utils import ColumnsSelectorTransformer
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator, SparkSelectionPipeline
 
 

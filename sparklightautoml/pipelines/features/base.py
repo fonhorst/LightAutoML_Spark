@@ -28,8 +28,7 @@ from sparklightautoml.transformers.base import (
     SparkBaseTransformer,
     SparkUnionTransformer,
     SparkSequentialTransformer,
-    SparkEstOrTrans, ColumnsSelectorTransformer,
-)
+    SparkEstOrTrans, )
 from sparklightautoml.transformers.base import (
     SparkChangeRolesTransformer,
 )
@@ -43,7 +42,8 @@ from sparklightautoml.transformers.categorical import (
 from sparklightautoml.transformers.categorical import SparkTargetEncoderEstimator
 from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
-from sparklightautoml.utils import Cacher, warn_if_not_cached, SparkDataFrame
+from sparklightautoml.utils import Cacher, warn_if_not_cached, SparkDataFrame, ColumnsSelectorTransformer, \
+    FirstTimeColumnsSelectorTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -265,9 +265,11 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
             stage
             for layer, cols in zip(tr_layers, cols_to_select_in_layers)
             for stage in itertools.chain(layer, [
-                ColumnsSelectorTransformer(
-                    input_cols=[SparkDataset.ID_COLUMN, *cols],
-                    optional_cols=[c for c in train.service_columns if c != SparkDataset.ID_COLUMN]
+                FirstTimeColumnsSelectorTransformer(
+                    ColumnsSelectorTransformer(
+                        input_cols=[SparkDataset.ID_COLUMN, *cols],
+                        optional_cols=[c for c in train.service_columns if c != SparkDataset.ID_COLUMN]
+                    )
                 ),
                 Cacher(cacher_key)
             ])

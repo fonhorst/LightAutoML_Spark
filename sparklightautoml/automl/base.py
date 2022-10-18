@@ -19,7 +19,7 @@ from ..dataset.persistence import PlainCachePersistenceManager
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
-from ..transformers.base import ColumnsSelectorTransformer
+from ..utils import ColumnsSelectorTransformer
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 

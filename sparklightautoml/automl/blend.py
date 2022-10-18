@@ -16,8 +16,7 @@ from sparklightautoml.ml_algo.base import AveragingTransformer
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.tasks.base import DEFAULT_PREDICTION_COL_NAME, SparkTask
-from sparklightautoml.transformers.base import ColumnsSelectorTransformer
-from sparklightautoml.utils import NoOpTransformer
+from sparklightautoml.utils import NoOpTransformer, ColumnsSelectorTransformer
 
 logger = logging.getLogger(__name__)
 

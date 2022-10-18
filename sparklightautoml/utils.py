@@ -5,11 +5,13 @@ import warnings
 from contextlib import contextmanager
 from datetime import datetime
 from logging import Logger
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, List
 
 import pyspark
 from pyspark import RDD
 from pyspark.ml import Transformer, Estimator
+from pyspark.ml.param import Param, Params, TypeConverters
+from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import SparkSession
 
@@ -183,6 +185,53 @@ def warn_if_not_cached(df: SparkDataFrame):
         warnings.warn(
             "Attempting to calculate shape on not cached dataframe. " "It may take too much time.", RuntimeWarning
         )
+
+
+class ColumnsSelectorTransformer(
+    Transformer, HasInputCols, HasOutputCols, DefaultParamsWritable, DefaultParamsReadable
+):
+    """
+    Makes selection input columns from input dataframe.
+    """
+
+    optionalCols = Param(
+        Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString
+    )
+
+    def __init__(self, input_cols: Optional[List[str]] = None, optional_cols: Optional[List[str]] = None):
+        super().__init__()
+        input_cols = input_cols if input_cols else []
+        optional_cols = optional_cols if optional_cols else []
+        assert (
+            len(set(input_cols).intersection(set(optional_cols))) == 0
+        ), "Input columns and optional columns cannot intersect"
+
+        self.set(self.inputCols, input_cols)
+        self.set(self.optionalCols, optional_cols)
+        self.set(self.outputCols, input_cols)
+
+    def get_optional_cols(self) -> List[str]:
+        return self.getOrDefault(self.optionalCols)
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+        ds_cols = set(dataset.columns)
+        present_opt_cols = [c for c in self.get_optional_cols() if c in ds_cols]
+        return dataset.select(*self.getInputCols(), *present_opt_cols)
+
+
+class FirstTimeColumnsSelectorTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
+    def __init__(self, cstr: ColumnsSelectorTransformer):
+        super().__init__()
+        self._has_applied = False
+        self._cstr = cstr
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        if not self._has_applied:
+            self._has_applied = True
+            return self._cstr.transform(dataset)
+
+        return dataset
 
 
 class NoOpTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):

@@ -22,7 +22,6 @@ from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
-
 SparkEstOrTrans = Union[
     "SparkBaseEstimator", "SparkBaseTransformer", "SparkUnionTransformer", "SparkSequentialTransformer"
 ]
@@ -294,39 +293,6 @@ class ObsoleteSparkTransformer(LAMLTransformer):
         new_roles = deepcopy(dataset.roles)
         new_roles.update({feat: new_role for feat in new_features})
         return new_roles
-
-
-class ColumnsSelectorTransformer(
-    Transformer, HasInputCols, HasOutputCols, DefaultParamsWritable, DefaultParamsReadable
-):
-    """
-    Makes selection input columns from input dataframe.
-    """
-
-    optionalCols = Param(
-        Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString
-    )
-
-    def __init__(self, input_cols: Optional[List[str]] = None, optional_cols: Optional[List[str]] = None):
-        super().__init__()
-        input_cols = input_cols if input_cols else []
-        optional_cols = optional_cols if optional_cols else []
-        assert (
-            len(set(input_cols).intersection(set(optional_cols))) == 0
-        ), "Input columns and optional columns cannot intersect"
-
-        self.set(self.inputCols, input_cols)
-        self.set(self.optionalCols, optional_cols)
-        self.set(self.outputCols, input_cols)
-
-    def get_optional_cols(self) -> List[str]:
-        return self.getOrDefault(self.optionalCols)
-
-    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
-        ds_cols = set(dataset.columns)
-        present_opt_cols = [c for c in self.get_optional_cols() if c in ds_cols]
-        return dataset.select(*self.getInputCols(), *present_opt_cols)
 
 
 class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
