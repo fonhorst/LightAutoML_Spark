@@ -1,4 +1,5 @@
 import logging
+from copy import copy
 from typing import Tuple, cast, List, Optional, Sequence
 
 import numpy as np
@@ -14,10 +15,10 @@ from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as sf
 from pyspark.sql.types import IntegerType
 
-from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
+from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
-from sparklightautoml.utils import Cacher, SparkDataFrame
+from sparklightautoml.utils import SparkDataFrame, log_exception
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)
@@ -49,9 +50,9 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self._input_roles: Optional[RolesDict] = None
 
     @property
-    def features(self) -> List[str]:
+    def features(self) -> Optional[List[str]]:
         """Get list of features."""
-        return list(self._input_roles.keys())
+        return list(self._input_roles.keys()) if self._input_roles else None
 
     @features.setter
     def features(self, val: Sequence[str]):
@@ -88,6 +89,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
         return self._transformer
 
+    @log_exception(logger=logger)
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
         """Fit and then predict accordig the strategy that uses train_valid_iterator.
 
@@ -103,11 +105,12 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             Dataset with predicted values.
 
         """
-
         logger.info(f"Input columns for MLALgo: {sorted(train_valid_iterator.train.features)}")
         logger.info(f"Train size for MLAlgo: {train_valid_iterator.train.data.count()}")
 
-        assert self.is_fitted is False, "Algo is already fitted"
+        assert not self.is_fitted, "Algo is already fitted"
+
+        self._input_roles = copy(train_valid_iterator.train.roles)
         # init params on input if no params was set before
         if self._params is None:
             self.params = self.init_params_on_input(train_valid_iterator)
@@ -127,7 +130,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         preds_dfs: List[SparkDataFrame] = []
         self._models_prediction_columns = []
         train_valid_iterator.train.frozen = True
-        for n, (full, train, valid) in enumerate(train_valid_iterator):
+        for n, (train, valid) in enumerate(train_valid_iterator):
             if iterator_len > 1:
                 logger.info2(
                     "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m =====".format(n, self._name)

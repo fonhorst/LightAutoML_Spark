@@ -1,4 +1,3 @@
-import logging
 import random
 
 from lightautoml.dataset.roles import NumericRole
@@ -10,16 +9,12 @@ from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.tasks.base import SparkTask as SparkTask
-from sparklightautoml.utils import log_exec_time, VERBOSE_LOGGING_FORMAT
+from sparklightautoml.utils import log_exec_time
 from sparklightautoml.validation.iterators import SparkDummyIterator
 from .. import spark as spark_sess
 from ..test_auto_ml.utils import DummyMLAlgo
 
 spark = spark_sess
-
-
-logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
-logger = logging.getLogger(__name__)
 
 
 # noinspection PyShadowingNames
@@ -87,4 +82,3 @@ def test_weighted_blender(spark: SparkSession):
     assert prediction in blended_sds.roles
     assert blended_sds.roles[prediction] == role
     assert prediction in transformed_preds_sdf.columns
-

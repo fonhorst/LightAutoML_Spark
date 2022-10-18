@@ -63,6 +63,8 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
         logger.info(f"Blender {type(self)} starting fit_predict")
 
+        self._input_roles = copy(predictions.roles)
+
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
             self._transformer = NoOpTransformer()
             return predictions, pipes

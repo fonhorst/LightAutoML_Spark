@@ -4,6 +4,7 @@ import time
 import warnings
 from contextlib import contextmanager
 from datetime import datetime
+from logging import Logger
 from typing import Optional, Tuple, Dict
 
 import pyspark
@@ -264,3 +265,16 @@ class EmptyCacher(Cacher):
     def _fit(self, dataset):
         self._dataset = dataset
         return NoOpTransformer(name=f"empty_cacher_{self._key}")
+
+
+def log_exception(logger: Logger):
+    def wrap(func):
+        def wrapped_f(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+            except Exception as ex:
+                logger.error("Error wrapper caught error", exc_info=True)
+                raise ex
+            return result
+        return wrapped_f
+    return wrap

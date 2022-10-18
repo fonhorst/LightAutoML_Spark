@@ -1,15 +1,16 @@
-from typing import Optional, Union, List
+from typing import Optional, Union, List, cast
 
 import numpy as np
 import pandas as pd
+from lightautoml.dataset.roles import CategoryRole
+from lightautoml.reader.guess_roles import calc_ginis, RolesDict
+from lightautoml.transformers.categorical import MultiClassTargetEncoder
 from pyspark.ml import Pipeline
 from pyspark.sql import functions as sf
 from pyspark.sql.types import IntegerType, StructField, StructType
 
-from lightautoml.dataset.roles import CategoryRole
-from lightautoml.reader.guess_roles import calc_ginis, RolesDict
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.transformers.base import SparkChangeRolesTransformer
+from sparklightautoml.transformers.base import SparkChangeRolesTransformer, SparkBaseTransformer
 from sparklightautoml.transformers.categorical import (
     SparkLabelEncoderEstimator,
     SparkFreqEncoderEstimator,
@@ -18,7 +19,6 @@ from sparklightautoml.transformers.categorical import (
     SparkMulticlassTargetEncoderEstimator,
 )
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
-from lightautoml.transformers.categorical import MultiClassTargetEncoder
 
 
 def get_gini_func(target_col: str):
@@ -55,14 +55,12 @@ def get_score_from_pipe(train: SparkDataset, pipe: Optional[Pipeline] = None) ->
     if pipe is not None:
         pipeline_model = pipe.fit(train.data)
         df = pipeline_model.transform(train.data)
-        last_stage = pipeline_model.stages[-1]
+        last_stage = cast(SparkBaseTransformer, pipeline_model.stages[-1])
 
         sdf = df.select(SparkDataset.ID_COLUMN, train.target_column, *last_stage.getOutputCols())
 
         train = train.empty()
-        train.set_data(sdf, features=last_stage.getOutputCols(), roles=last_stage.getOutputRoles())
-    else:
-        sdf = train.data
+        train.set_data(sdf, features=last_stage.getOutputCols(), roles=last_stage.get_output_roles())
 
     gini_func = get_gini_func(train.target_column)
 
@@ -146,7 +144,6 @@ def get_numeric_roles_stat(
             fraction = 1.0
         else:
             fraction = subsample / total_number
-            total_number = subsample
         sdf = sdf.sample(fraction=fraction, seed=random_state)
 
     train = train.empty()
