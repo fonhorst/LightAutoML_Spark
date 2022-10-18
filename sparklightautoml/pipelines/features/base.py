@@ -687,7 +687,7 @@ class SparkEmptyFeaturePipeline(SparkFeaturesPipeline):
         """
         Returns ``SparkNoOpTransformer`` instance
         """
-        return SparkNoOpTransformer()
+        return SparkNoOpTransformer(train.roles)
 
 
 class SparkNoOpTransformer(SparkBaseTransformer):
@@ -695,8 +695,14 @@ class SparkNoOpTransformer(SparkBaseTransformer):
     This transformer does nothing, it just returns the input dataframe unchanged.
     """
 
-    def __init__(self):
-        super().__init__(input_cols=[], output_cols=[], input_roles=dict(), output_roles=dict())
+    def __init__(self, roles: RolesDict):
+        cols = list(roles.keys())
+        super().__init__(
+            input_cols=cols,
+            output_cols=cols,
+            input_roles=roles,
+            output_roles=roles
+        )
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset
