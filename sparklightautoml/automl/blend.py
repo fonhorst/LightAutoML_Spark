@@ -8,6 +8,7 @@ from lightautoml.automl.blend import WeightedBlender
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.reader.base import RolesDict
 from pyspark.ml import Transformer
+from pyspark.ml.feature import SQLTransformer
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
@@ -63,11 +64,24 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
         logger.info(f"Blender {type(self)} starting fit_predict")
 
-        if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
-            self._transformer = NoOpTransformer()
-            return predictions, pipes
-
         self._set_metadata(predictions, pipes)
+
+        if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
+            sel_stmnt = ', '.join([
+                *predictions.service_columns,
+                f'{pipes[0].ml_algos[0].prediction_feature} AS {self._single_prediction_col_name}'
+            ])
+            self._transformer = SQLTransformer(statement=f"SELECT {sel_stmnt} FROM __THIS__")
+
+            preds = predictions.empty()
+            preds.set_data(
+                self._transformer.transform(predictions.data),
+                list(self.output_roles.keys()),
+                self.output_roles,
+                name=f"{type(self)}"
+            )
+
+            return preds, pipes
 
         result = self._fit_predict(predictions, pipes)
 
@@ -165,6 +179,7 @@ class SparkBestModelSelector(SparkBlender, WeightedBlender):
         splitted_models_and_pipes = self.split_models(predictions, pipes)
 
         best_pred = None
+        best_pred_col = None
         best_pipe_idx = 0
         best_model_idx = 0
         best_score = -np.inf
@@ -179,17 +194,27 @@ class SparkBestModelSelector(SparkBlender, WeightedBlender):
                 best_model_idx = mod
                 best_score = score
                 best_pred = pred_ds
+                best_pred_col = pred_col
 
         best_pipe = pipes[best_pipe_idx]
         best_pipe.ml_algos = [best_pipe.ml_algos[best_model_idx]]
 
-        self._transformer = ColumnsSelectorTransformer(
-            input_cols=[SparkDataset.ID_COLUMN, self._single_prediction_col_name]
+        sel_stmnt = ', '.join([
+            *predictions.service_columns,
+            f'{best_pred_col} AS {self._single_prediction_col_name}'
+        ])
+        self._transformer = SQLTransformer(statement=f"SELECT {sel_stmnt} FROM __THIS__")
+
+        self._output_roles = {self._single_prediction_col_name: best_pred.roles[best_pred_col]}
+
+        out_ds = best_pred.empty()
+        out_ds.set_data(
+            self._transformer.transform(best_pred.data),
+            list(self._output_roles.keys()),
+            self._output_roles
         )
 
-        self._output_roles = copy(best_pred.roles)
-
-        return best_pred, [best_pipe]
+        return out_ds, [best_pipe]
 
 
 class SparkWeightedBlender(SparkBlender, WeightedBlender):
