@@ -38,6 +38,7 @@ def test_weighted_blender(spark: SparkSession):
     roles = {"a": NumericRole(), "b": NumericRole(), "c": NumericRole()}
 
     data_sdf = spark.createDataFrame(data)
+
     data_sds = SparkDataset(
         data=data_sdf,
         task=SparkTask("multiclass"),
@@ -46,28 +47,28 @@ def test_weighted_blender(spark: SparkSession):
         target=target_col,
         folds=folds_col,
         name="WeightedBlenderData"
-    )
+    ).persist()
 
     train_valid_iterator = SparkFoldsIterator(data_sds)
 
     pipes = [SparkMLPipeline(ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")]) for i in range(models_count)]
 
-    data_sds = SparkDataset.concatenate([pipe.fit_predict(train_valid_iterator) for pipe in pipes], name="concatanated")
+    data_sds = SparkDataset.concatenate([pipe.fit_predict(train_valid_iterator).persist() for pipe in pipes], name="concatanated")
 
-    preds_roles = {c: role for c, role in data_sds.roles.items() if c not in roles}
-
-    sdf = data_sds.data.drop(*list(roles.keys())).cache()
-    sdf.write.mode('overwrite').format('noop').save()
-    ml_ds = data_sds.empty()
-    ml_ds.set_data(sdf, list(preds_roles.keys()), preds_roles, name=data_sds.name)
+    # preds_roles = {c: role for c, role in data_sds.roles.items() if c not in roles}
+    #
+    # sdf = data_sds.data.drop(*list(roles.keys())).cache()
+    # sdf.write.mode('overwrite').format('noop').save()
+    # ml_ds = data_sds.empty()
+    # ml_ds.set_data(sdf, list(preds_roles.keys()), preds_roles, name=data_sds.name)
 
     swb = SparkWeightedBlender(max_iters=1, max_inner_iters=1)
     with log_exec_time('Blender fit_predict'):
-        blended_sds, filtered_pipes = swb.fit_predict(ml_ds, pipes)
+        blended_sds, filtered_pipes = swb.fit_predict(data_sds, pipes)
         blended_sds.data.write.mode('overwrite').format('noop').save()
 
     with log_exec_time('Blender predict'):
-        transformed_preds_sdf = swb.transformer.transform(ml_ds.data)
+        transformed_preds_sdf = swb.transformer.transform(data_sds.data)
         transformed_preds_sdf.write.mode('overwrite').format('noop').save()
 
     assert len(swb.output_roles) == 1

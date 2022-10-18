@@ -481,7 +481,7 @@ class PersistableDataFrame:
             self.sdf,
             self.base_dataset.features,
             self.base_dataset.roles,
-            dependencies=list(self.base_dataset.dependencies),
+            dependencies=list(self.base_dataset.dependencies or []),
             uid=self.uid,
             name=self.base_dataset.name
         )
