@@ -63,8 +63,6 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
     ) -> Tuple[SparkDataset, Sequence[SparkMLPipeline]]:
         logger.info(f"Blender {type(self)} starting fit_predict")
 
-        self._input_roles = copy(predictions.roles)
-
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
             self._transformer = NoOpTransformer()
             return predictions, pipes
@@ -115,7 +113,9 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
 
     def _set_metadata(self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]):
         assert len(predictions.roles) > 0, "The predictions dataset should have at least one column"
+        self._input_roles = copy(predictions.roles)
         self._pred_role = list(predictions.roles.values())[0]
+        self._output_roles = {self._single_prediction_col_name: self._pred_role}
 
         if isinstance(self._pred_role, NumericVectorOrArrayRole):
             self._outp_dim = self._pred_role.size
@@ -124,16 +124,6 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
         self._outp_prob = predictions.task.name in ["binary", "multiclass"]
         self._score = predictions.task.get_dataset_metric()
         self._task = predictions.task
-
-    # def _make_single_pred_ds(self, predictions: SparkDataset, pred_col: str) -> SparkDataset:
-    #     pred_sdf = predictions.data.select(
-    #         SparkDataset.ID_COLUMN, predictions.target_column, sf.col(pred_col).alias(self._single_prediction_col_name)
-    #     )
-    #     pred_roles = {c: predictions.roles[c] for c in pred_sdf.columns}
-    #     pred_ds = predictions.empty()
-    #     pred_ds.set_data(pred_sdf, pred_sdf.columns, pred_roles)
-    #
-    #     return pred_ds
 
     def score(self, dataset: SparkDataset) -> float:
         """Score metric for blender.

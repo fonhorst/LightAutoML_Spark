@@ -139,6 +139,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
             model_prediction_col = f"{self.prediction_feature}_{n}"
             model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
+            val_pred = val_pred.select(SparkDataset.ID_COLUMN, model_prediction_col)
 
             self._models_prediction_columns.append(model_prediction_col)
             self.models.append(model)
@@ -165,13 +166,13 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
         neutral_element = None
 
-        preds_dfs = [
-            df.select(
-                SparkDataset.ID_COLUMN,
-                *[sf.lit(neutral_element).alias(c) for c in self._models_prediction_columns if c not in df.columns]
-            )
-            for df in preds_dfs
-        ]
+        # preds_dfs = [
+        #     df.select(
+        #         SparkDataset.ID_COLUMN,
+        #         *self._models_prediction_columns,
+        #     )
+        #     for df in preds_dfs
+        # ]
         full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
         # create Spark MLlib Transformer and save to property var

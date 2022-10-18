@@ -89,8 +89,9 @@ class SparkDataset(LAMLDataset):
 
         roles = {col: role for ds in datasets for col, role in ds.roles.items()}
 
+        except_cols = [c for c in datasets[0].service_columns if c != SparkDataset.ID_COLUMN]
         concatenated_sdf = functools.reduce(
-            lambda acc, sdf: acc.join(sdf, on=cls.ID_COLUMN, how='left'),
+            lambda acc, sdf: acc.join(sdf.drop(*except_cols), on=cls.ID_COLUMN, how='left'),
             (d.data for d in datasets)
         )
 

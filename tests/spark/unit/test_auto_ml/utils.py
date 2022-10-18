@@ -89,14 +89,10 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 
     def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset,
                                 valid: SparkDataset) -> Tuple[SparkMLModel, SparkDataFrame, str]:
-        prediction = array_to_vector(sf.array(*[sf.lit(10 * 10 + j) for j in range(self.n_classes)]))\
-            .alias(fold_prediction_column)
-        pred_df = valid.data.select('*', prediction)
-
         fake_op = FakeOpTransformer(cols_to_generate=[fold_prediction_column], n_classes=self.n_classes)
         ml_model = PipelineModel(stages=[fake_op])
 
-        return ml_model, pred_df, fold_prediction_column
+        return ml_model, ml_model.transform(valid.data), fold_prediction_column
 
     def predict_single_fold(self, model: SparkMLModel, dataset: SparkDataset) -> SparkDataFrame:
         raise NotImplementedError("")

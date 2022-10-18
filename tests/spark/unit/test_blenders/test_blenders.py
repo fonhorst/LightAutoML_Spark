@@ -10,7 +10,7 @@ from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import log_exec_time
-from sparklightautoml.validation.iterators import SparkDummyIterator
+from sparklightautoml.validation.iterators import SparkDummyIterator, SparkFoldsIterator
 from .. import spark as spark_sess
 from ..test_auto_ml.utils import DummyMLAlgo
 
@@ -48,13 +48,11 @@ def test_weighted_blender(spark: SparkSession):
         name="WeightedBlenderData"
     )
 
-    pipes = [
-        SparkMLPipeline(ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")])
-        for i in range(models_count)
-    ]
+    train_valid_iterator = SparkFoldsIterator(data_sds)
 
-    for pipe in pipes:
-        data_sds = pipe.fit_predict(SparkDummyIterator(data_sds))
+    pipes = [SparkMLPipeline(ml_algos=[DummyMLAlgo(n_classes, name=f"dummy_0_{i}")]) for i in range(models_count)]
+
+    data_sds = SparkDataset.concatenate([pipe.fit_predict(train_valid_iterator) for pipe in pipes], name="concatanated")
 
     preds_roles = {c: role for c, role in data_sds.roles.items() if c not in roles}
 

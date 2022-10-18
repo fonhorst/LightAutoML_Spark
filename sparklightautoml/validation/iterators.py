@@ -268,7 +268,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         full_val_preds = functools.reduce(
             lambda acc, x: acc.join(x, on=SparkDataset.ID_COLUMN, how='left'),
             val_preds,
-            initial=initial_df
+            initial_df
         )
 
         return full_val_preds

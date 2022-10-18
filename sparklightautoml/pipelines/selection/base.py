@@ -40,7 +40,7 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
             return None
 
         return ColumnsSelectorTransformer(
-            input_cols=[self._service_columns, *self._sel_pipe.selected_features]
+            input_cols=[*self._service_columns, *self._sel_pipe.selected_features]
         )
 
     @property
