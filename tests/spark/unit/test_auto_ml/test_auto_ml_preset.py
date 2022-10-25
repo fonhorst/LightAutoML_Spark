@@ -1,8 +1,11 @@
 import logging.config
 
+import pytest
 from pyspark.sql import SparkSession
 
-from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
+from sparklightautoml.dataset.base import PersistenceManager
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager, LocalCheckpointPersistenceManager, \
+    BucketedPersistenceManager
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from .utils import DummyTabularAutoML
 from .. import spark as spark_sess
@@ -15,7 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 # noinspection PyShadowingNames
-def test_automl_preset(spark: SparkSession):
+@pytest.mark.parametrize("persistence_manager", [
+    PlainCachePersistenceManager(),
+    LocalCheckpointPersistenceManager(),
+    BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10)
+])
+def test_automl_preset(spark: SparkSession, persistence_manager: PersistenceManager):
     n_classes = 10
 
     train_data = spark.createDataFrame([
@@ -26,7 +34,6 @@ def test_automl_preset(spark: SparkSession):
         {"a": i, "b": 100 + i, "c": 100 * i, "TARGET": i % n_classes} for i in range(120, 140)
     ])
 
-    persistence_manager = PlainCachePersistenceManager()
     automl = DummyTabularAutoML(n_classes=n_classes)
 
     # 1. check for output result, features, roles (required columns in data, including return_all_predictions)
