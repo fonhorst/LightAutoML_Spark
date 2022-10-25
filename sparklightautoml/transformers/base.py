@@ -138,7 +138,7 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, ABC):
         output_roles: RolesDict,
         do_replace_columns: Union[bool, List[str]] = False,
     ):
-        super().__init__()
+        super(SparkBaseTransformer, self).__init__()
 
         # assert len(input_cols) == len(output_cols)
         # assert len(input_roles) == len(output_roles)

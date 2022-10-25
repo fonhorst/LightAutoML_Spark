@@ -27,7 +27,7 @@ class BasePersistenceManager(PersistenceManager):
         self._uid = str(uuid.uuid4())
         self._persistence_registry: Dict[str, _PersistablePair] = dict()
         self._parent = parent
-        self._children: List['PersistenceManager'] = []
+        self._children: Dict[str, 'PersistenceManager'] = dict()
 
     @property
     def uid(self) -> str:
@@ -35,7 +35,7 @@ class BasePersistenceManager(PersistenceManager):
 
     @property
     def children(self) -> List['PersistenceManager']:
-        return copy(self._children)
+        return list(self._children.values())
 
     @property
     def datasets(self) -> List[SparkDataset]:
@@ -98,7 +98,7 @@ class BasePersistenceManager(PersistenceManager):
 
         for child in self._children:
             child.unpersist_all()
-        self._children = []
+        self._children = dict()
 
         logger.debug(f"Manager {self._uid}: children have been unpersisted.")
 
@@ -118,9 +118,18 @@ class BasePersistenceManager(PersistenceManager):
         # TODO: SLAMA - Bugfix
         logger.info(f"Manager {self._uid}: producing a child.")
         a_child = self._create_child()
-        self._children.append(a_child)
+        self._children[a_child.uid] = a_child
         logger.info(f"Manager {self._uid}: the child (uid={a_child.uid}) has been produced.")
         return a_child
+
+    def remove_child(self, child: Union['PersistenceManager', str]):
+        uid = child.uid if isinstance(child, PersistenceManager) else child
+
+        if uid not in self._children:
+            logger.warning(f"Not found child with uid {uid} to delete from parent {self._uid}")
+            return
+
+        del self._children[uid]
 
     def is_persisted(self, pdf: PersistableDataFrame) -> bool:
         return pdf.uid in self._persistence_registry

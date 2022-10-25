@@ -131,7 +131,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         )
 
         stages = [
-            self.reader.make_transformer(add_array_attrs=add_array_attrs, **reader_args),
+            self.reader.transformer(add_array_attrs=add_array_attrs, **reader_args),
             *(ml_pipe.transformer for level in self.levels for ml_pipe in level),
             *blender,
             sel_tr
@@ -234,8 +234,6 @@ class SparkAutoML(TransformerInputOutputRoles):
             len(self._levels) <= 1 or valid_data is None
         ), "Not possible to fit more than 1 level with holdout validation"
 
-        main_milestone_name = "CurrentMainMilestone"
-
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
 
         train_valid = self._create_validation_iterator(train_dataset, valid_dataset, None, cv_iter=cv_iter)
@@ -308,8 +306,10 @@ class SparkAutoML(TransformerInputOutputRoles):
             else:
                 train_valid.val_frozen = False
 
+            # TODO: SLAMA - need to fugure out how to unfrozen previous val dataset if self.skip_conn is True
+            train_valid.val_frozen = False
             train_valid.train_frozen = False
-            train_valid.train.unpersist()
+            train_valid.unpersist()
 
             train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
             train_valid.train_frozen = True
@@ -336,6 +336,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         features_names: Optional[Sequence[str]] = None,
         return_all_predictions: Optional[bool] = None,
         add_reader_attrs: bool = False,
+        persistence_manager: Optional[PersistenceManager] = None
     ) -> SparkDataset:
         """Predict with automl on new dataset.
 
@@ -358,13 +359,16 @@ class SparkAutoML(TransformerInputOutputRoles):
         # )
         # predictions = automl_transformer.transform(dataset.data)
 
+        persistence_manager = persistence_manager or PlainCachePersistenceManager()
+
         transformer = self.transformer(return_all_predictions=return_all_predictions)
         predictions = transformer.transform(data)
 
         sds = SparkDataset(
             data=predictions,
             roles=copy(transformer.get_output_roles()),
-            task=self.reader.task
+            task=self.reader.task,
+            persistence_manager=persistence_manager
         )
         # sds = dataset.empty()
         # sds.set_data(predictions, predictions.columns, roles)
@@ -430,7 +434,7 @@ class SparkAutoML(TransformerInputOutputRoles):
     ) -> Tuple[Transformer, RolesDict]:
         stages = []
         if not no_reader:
-            stages.append(self.reader.make_transformer(add_array_attrs=True))
+            stages.append(self.reader.transformer(add_array_attrs=True))
 
         ml_pipes = [ml_pipe.transformer for level in self.levels for ml_pipe in level]
         stages.extend(ml_pipes)

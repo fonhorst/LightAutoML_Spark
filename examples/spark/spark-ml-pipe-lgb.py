@@ -83,7 +83,7 @@ if __name__ == "__main__":
         logger.info(f"Test score (#1 way): {test_score}")
 
         # 2. second way (Spark ML API)
-        transformer = PipelineModel(stages=[sreader.make_transformer(add_array_attrs=True), ml_pipe.transformer])
+        transformer = PipelineModel(stages=[sreader.transformer(add_array_attrs=True), ml_pipe.transformer])
         test_pred_df = transformer.transform(test_df)
         test_pred_df = test_pred_df.select(
             SparkDataset.ID_COLUMN,

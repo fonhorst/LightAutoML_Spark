@@ -1,4 +1,5 @@
 import functools
+import logging
 import uuid
 import warnings
 from abc import ABC, abstractmethod
@@ -28,7 +29,9 @@ from pyspark.sql.session import SparkSession
 
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
-from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame, JobGroup
+from sparklightautoml.utils import SparkDataFrame
+
+logger = logging.getLogger(__name__)
 
 Dependency = Union[str, 'SparkDataset', Callable]
 DepIdentifable = Union[str, 'SparkDataset']
@@ -393,6 +396,8 @@ class SparkDataset(LAMLDataset):
         #     return self
 
         assert self.persistence_manager, "Cannot persist when persistence_manager is None"
+
+        logger.debug(f"Persisting SparkDataset (uid={self.uid}, name={self.name})")
         level = level if level is not None else PersistenceLevel.REGULAR
         persisted_dataset = self.persistence_manager.persist(self, level).to_dataset()
         self._unpersist_dependencies()
@@ -408,7 +413,10 @@ class SparkDataset(LAMLDataset):
         assert self.persistence_manager, "Cannot unpersist when persistence_manager is None"
 
         if self.frozen:
+            logger.debug(f"Cannot unpersist frozen SparkDataset (uid={self.uid}, name={self.name})")
             return
+
+        logger.debug(f"Unpersisting SparkDataset (uid={self.uid}, name={self.name})")
 
         self.persistence_manager.unpersist(self.uid)
         self._unpersist_dependencies()
@@ -565,6 +573,10 @@ class PersistenceManager(ABC):
 
     @abstractmethod
     def child(self) -> 'PersistenceManager':
+        ...
+
+    @abstractmethod
+    def remove_child(self, child: Union['PersistenceManager', str]):
         ...
 
     @abstractmethod

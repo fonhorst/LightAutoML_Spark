@@ -79,7 +79,9 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
     def _child_persistence_context(self) -> 'SparkBaseTrainValidIterator':
         train_valid = copy(self)
         train = train_valid.train.empty()
-        child_manager = train_valid.train.persistence_manager.child()
+        pm = train_valid.train.persistence_manager
+        child_manager = pm.child()
+
         train.set_data(
             train_valid.train.data,
             train_valid.train.features,
@@ -92,6 +94,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         yield train_valid
 
         child_manager.unpersist_all()
+        pm.remove_child(child_manager)
 
     def apply_selector(self, selector: SparkSelectionPipeline) -> "SparkBaseTrainValidIterator":
         """Select features on train data.

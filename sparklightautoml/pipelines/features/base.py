@@ -28,7 +28,7 @@ from sparklightautoml.transformers.base import (
     SparkBaseTransformer,
     SparkUnionTransformer,
     SparkSequentialTransformer,
-    SparkEstOrTrans, )
+    SparkEstOrTrans, SparkColumnsAndRoles, )
 from sparklightautoml.transformers.base import (
     SparkChangeRolesTransformer,
 )
@@ -695,17 +695,13 @@ class SparkNoOpTransformer(SparkBaseTransformer):
         return dataset
 
 
-class SparkPipelineModel(SparkBaseTransformer, PipelineModel):
+class SparkPipelineModel(PipelineModel, SparkColumnsAndRoles):
     def __init__(self,
                  stages: List[SparkBaseTransformer],
                  input_roles: RolesDict,
                  output_roles: RolesDict):
-        SparkBaseTransformer.__init__(
-            self,
-            list(input_roles.keys()),
-            list(output_roles.keys()),
-            input_roles,
-            output_roles,
-            False
-        )
-        PipelineModel.__init__(self, stages)
+        super(SparkPipelineModel, self).__init__(stages)
+        self.set(self.inputCols, list(input_roles.keys()))
+        self.set(self.outputCols, list(output_roles.keys()))
+        self.set(self.inputRoles, input_roles)
+        self.set(self.outputRoles, output_roles)

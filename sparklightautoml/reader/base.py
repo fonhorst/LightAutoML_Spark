@@ -198,6 +198,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             "drop_score_co": drop_score_co,
         }
 
+        self.class_mapping = None
         self.params = kwargs
 
     def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:
@@ -222,7 +223,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
                     continue
                 kwargs[array_attr] = col_name
 
-        transformer = self.make_transformer(add_array_attrs)
+        transformer = self.transformer(add_array_attrs)
         data = transformer.transform(data)
 
         dataset = SparkDataset(data, roles=self.roles, task=self.task, **kwargs)
@@ -389,7 +390,11 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = train_data.select(SparkDataset.ID_COLUMN, self.target_col, folds_col, *ff)
 
-        deps = [lambda: persistence_manager.unpersist(initial_train_data_pdf.uid)]
+        def _unpersist():
+            logger.debug("UNPERSIST_reader")
+            persistence_manager.unpersist(initial_train_data_pdf.uid)
+
+        deps = [_unpersist]
         dataset = SparkDataset(
             train_data,
             self.roles,
@@ -420,7 +425,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         return dataset
 
-    def make_transformer(self, add_array_attrs: bool = False, **kwargs):
+    def transformer(self, add_array_attrs: bool = False, **kwargs):
         roles = {f: self.roles[f] for f in self.used_features}
         transformer = SparkToSparkReaderTransformer(
             self.task.name, self.class_mapping, copy(self.used_array_attrs), roles, add_array_attrs
@@ -474,8 +479,6 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         """
         logger.debug("SparkToSparkReader._create_target() is started")
-
-        self.class_mapping = None
 
         nan_count = sdf.where(sf.isnan(target_col)).count()
         assert nan_count == 0, "Nan in target detected"
