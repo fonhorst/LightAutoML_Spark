@@ -303,13 +303,13 @@ class SparkAutoML(TransformerInputOutputRoles):
                     [train_valid.get_validation_data(), level_ds],
                     name=f"{level_ds_name}_skip_conn"
                 )
+                train_valid.train_frozen = False
+                train_valid.unpersist()
+                train_valid.val_frozen = False
             else:
                 train_valid.val_frozen = False
-
-            # TODO: SLAMA - need to fugure out how to unfrozen previous val dataset if self.skip_conn is True
-            train_valid.val_frozen = False
-            train_valid.train_frozen = False
-            train_valid.unpersist()
+                train_valid.train_frozen = False
+                train_valid.unpersist()
 
             train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
             train_valid.train_frozen = True

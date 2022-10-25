@@ -42,12 +42,6 @@ def test_automl_preset(spark: SparkSession):
     ).persist()
     pred_ds = automl.predict(test_data, persistence_manager=persistence_manager).persist()
 
-    # ds_names = {ds.uid: ds.name for ds in persistence_manager.all_datasets}
-    # print(f"{ds_names}")
-    # logger.info("I'm here")
-    #
-    # oof_ds.unpersist()
-
     assert len(persistence_manager.children) == 0
     assert len(persistence_manager.all_datasets) == 2
 
