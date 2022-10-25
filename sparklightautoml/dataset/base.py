@@ -149,6 +149,7 @@ class SparkDataset(LAMLDataset):
         self._dependencies = dependencies
         self._frozen = False
         self._name = name
+        self._is_persisted = False
 
         super().__init__(data, None, roles, task, **kwargs)
 
@@ -388,10 +389,15 @@ class SparkDataset(LAMLDataset):
         Returns:
             a new SparkDataset that is persisted and materialized
         """
+        if self._is_persisted:
+            return self
+
         assert self.persistence_manager, "Cannot persist when persistence_manager is None"
         level = level if level is not None else PersistenceLevel.REGULAR
         persisted_dataset = self.persistence_manager.persist(self, level).to_dataset()
         self._unpersist_dependencies()
+        self._is_persisted = True
+
         return persisted_dataset
 
     def unpersist(self):
@@ -404,8 +410,10 @@ class SparkDataset(LAMLDataset):
         if self.frozen:
             return
 
-        self.persistence_manager.unpersist(self.uid)
-        self._unpersist_dependencies()
+        if self._is_persisted:
+            self.persistence_manager.unpersist(self.uid)
+        else:
+            self._unpersist_dependencies()
 
     def _unpersist_dependencies(self):
         for dep in (self.dependencies or []):

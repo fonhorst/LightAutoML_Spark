@@ -38,7 +38,7 @@ class BasePersistenceManager(PersistenceManager):
         persisted_dataframe = self.to_persistable_dataframe(dataset) if isinstance(dataset, SparkDataset) \
             else cast(PersistableDataFrame, dataset)
 
-        logger.info(f"Manager {self._uid}: "
+        logger.debug(f"Manager {self._uid}: "
                     f"persisting dataset (uid={dataset.uid}, name={dataset.name}) with level {level}.")
 
         if persisted_dataframe.uid in self._persistence_registry:
@@ -66,7 +66,7 @@ class BasePersistenceManager(PersistenceManager):
         return self._persistence_registry[persisted_dataframe.uid].pdf
 
     def unpersist(self, uid: str):
-        logger.info(f"Manager {self._uid}: unpersisting dataset (uid={uid}).")
+        logger.debug(f"Manager {self._uid}: unpersisting dataset (uid={uid}).")
         persisted_pair = self._persistence_registry.get(uid, None)
 
         if not persisted_pair:

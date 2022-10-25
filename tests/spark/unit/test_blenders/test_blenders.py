@@ -4,13 +4,13 @@ from lightautoml.dataset.roles import NumericRole
 from pyspark.sql import SparkSession
 
 from sparklightautoml.automl.blend import SparkWeightedBlender
-from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
+from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import log_exec_time
-from sparklightautoml.validation.iterators import SparkDummyIterator, SparkFoldsIterator
+from sparklightautoml.validation.iterators import SparkFoldsIterator
 from .. import spark as spark_sess
 from ..test_auto_ml.utils import DummyMLAlgo
 
