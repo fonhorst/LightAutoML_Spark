@@ -3,9 +3,9 @@ import logging.config
 import pytest
 from pyspark.sql import SparkSession
 
-from sparklightautoml.dataset.base import PersistenceManager
+from sparklightautoml.dataset.base import PersistenceManager, PersistenceLevel
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager, LocalCheckpointPersistenceManager, \
-    BucketedPersistenceManager
+    BucketedPersistenceManager, CompositePersistenceManager
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from .utils import DummyTabularAutoML
 from .. import spark as spark_sess
@@ -21,7 +21,11 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("persistence_manager", [
     PlainCachePersistenceManager(),
     LocalCheckpointPersistenceManager(),
-    BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10)
+    BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10),
+    CompositePersistenceManager({
+        PersistenceLevel.REGULAR: PlainCachePersistenceManager(),
+        PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10)
+    })
 ])
 def test_automl_preset(spark: SparkSession, persistence_manager: PersistenceManager):
     n_classes = 10
