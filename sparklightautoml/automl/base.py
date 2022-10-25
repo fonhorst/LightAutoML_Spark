@@ -114,10 +114,8 @@ class SparkAutoML(TransformerInputOutputRoles):
     def output_roles(self) -> Optional[RolesDict]:
         return self._output_roles
 
-    def transformer(self, no_reader: bool = False, return_all_predictions: bool = False) -> Transformer:
-
-        automl_transformer, _ = self._build_transformer(no_reader, return_all_predictions)
-
+    def transformer(self, return_all_predictions: bool = False) -> Transformer:
+        automl_transformer, _ = self._build_transformer(return_all_predictions=return_all_predictions)
         return automl_transformer
 
     def _initialize(
@@ -308,6 +306,9 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         return oof_pred
 
+    # TODO: SLAMA - add persistence_manager arg
+    # if no manager, replace with PlainCachePersistenceManager
+    # TODO: SLAMA - add reader args sending into transformer building
     def predict(
         self,
         data: Any,
@@ -329,15 +330,22 @@ class SparkAutoML(TransformerInputOutputRoles):
             Dataset with predictions.
 
         """
-        dataset = self.reader.read(data, features_names, add_array_attrs=add_reader_attrs)
-        logger.info(f"After Reader in {type(self)}. Columns: {sorted(dataset.data.columns)}")
-        automl_transformer, roles = self._build_transformer(
-            no_reader=True, return_all_predictions=return_all_predictions
-        )
-        predictions = automl_transformer.transform(dataset.data)
+        # dataset = self.reader.read(data, features_names, add_array_attrs=add_reader_attrs)
+        # logger.info(f"After Reader in {type(self)}. Columns: {sorted(dataset.data.columns)}")
+        # automl_transformer, roles = self._build_transformer(
+        #     no_reader=True, return_all_predictions=return_all_predictions
+        # )
+        # predictions = automl_transformer.transform(dataset.data)
 
-        sds = dataset.empty()
-        sds.set_data(predictions, predictions.columns, roles)
+        predictions = self.transformer(return_all_predictions=return_all_predictions).transform(data)
+
+        sds = SparkDataset(
+            data=predictions,
+            roles=copy(self.output_roles),
+            task=self.reader.task
+        )
+        # sds = dataset.empty()
+        # sds.set_data(predictions, predictions.columns, roles)
 
         return sds
 
