@@ -355,7 +355,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     def fit_predict_single_fold(
         self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset
     ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
-        assert self.validation_column in train.data.columns, "Train should contain validation column"
+        # assert self.validation_column in train.data.columns, "Train should contain validation column"
 
         if self.task is None:
             self.task = train.task
@@ -391,7 +391,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             params["numThreads"] = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
 
         train_data = train.data
-        valid_size = train_data.where(sf.col(self.validation_column) == 1).count()
+        valid_data = valid.data
+        valid_size = valid.data.count()
         max_val_size = self._max_validation_size
         if valid_size > max_val_size:
             warnings.warn(
@@ -399,15 +400,24 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                 f"Reducing validation size down to maximum.",
                 category=RuntimeWarning,
             )
-            rest_cols = list(train_data.columns)
-            rest_cols.remove(self.validation_column)
 
-            replace_col = sf.when(sf.rand(self._seed) < max_val_size / valid_size, sf.lit(True)).otherwise(sf.lit(False))
-            val_filter_cond = sf.when(sf.col(self.validation_column) == 1, replace_col).otherwise(sf.lit(True))
+            valid_data = valid_data.sample(fraction=max_val_size / valid_size, seed=self._seed)
 
-            train_data = train_data.where(val_filter_cond)
+            # rest_cols = list(train_data.columns)
+            # rest_cols.remove(self.validation_column)
+            #
+            # replace_col = sf.when(sf.rand(self._seed) < max_val_size / valid_size, sf.lit(True)).otherwise(sf.lit(False))
+            # val_filter_cond = sf.when(sf.col(self.validation_column) == 1, replace_col).otherwise(sf.lit(True))
+            #
+            # train_data = train_data.where(val_filter_cond)
 
-        valid_data = valid.data
+        k = 0
+
+        full_data = (
+            train_data
+            .select('*', sf.lit(False).alias(self.validation_column))
+            .unionByName(valid_data.select('*', sf.lit(True).alias(self.validation_column)))
+        )
 
         lgbm = lgbm_booster(
             **params,
@@ -425,7 +435,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         if train.task.name == "reg":
             lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
 
-        ml_model = lgbm.fit(self._assembler.transform(train_data))
+        ml_model = lgbm.fit(self._assembler.transform(full_data))
 
         val_pred = ml_model.transform(self._assembler.transform(valid_data))
         val_pred = DropColumnsTransformer(

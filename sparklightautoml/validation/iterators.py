@@ -5,6 +5,7 @@ from typing import Optional, cast, Iterable, Sequence
 from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal
 
@@ -153,6 +154,11 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         assert len(val_preds) == 1
 
         return val_preds[0]
+
+    def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
+        train_valid = super().apply_feature_pipeline(features_pipeline)
+        train_valid._valid = features_pipeline.transform(train_valid._valid)
+        return train_valid
 
 
 class SparkFoldsIterator(SparkBaseTrainValidIterator):

@@ -398,6 +398,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         dataset = SparkDataset(
             train_data,
             self.roles,
+            persistence_manager=persistence_manager,
             task=self.task,
             dependencies=deps,
             name="SparkToSparkReader",

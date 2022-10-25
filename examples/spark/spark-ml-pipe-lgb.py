@@ -47,9 +47,7 @@ if __name__ == "__main__":
 
         task = SparkTask(task_type)
         score = task.get_dataset_metric()
-
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
-
         spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
         spark_features_pipeline = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
         spark_selector = SparkSelectionPipelineWrapper(
