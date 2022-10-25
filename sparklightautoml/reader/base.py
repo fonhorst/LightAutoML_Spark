@@ -420,7 +420,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         return dataset
 
-    def make_transformer(self, add_array_attrs: bool = False):
+    def make_transformer(self, add_array_attrs: bool = False, **kwargs):
         roles = {f: self.roles[f] for f in self.used_features}
         transformer = SparkToSparkReaderTransformer(
             self.task.name, self.class_mapping, copy(self.used_array_attrs), roles, add_array_attrs

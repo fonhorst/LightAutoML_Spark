@@ -17,6 +17,7 @@ from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
 from ..pipelines.base import TransformerInputOutputRoles
+from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..utils import ColumnsSelectorTransformer
@@ -114,9 +115,29 @@ class SparkAutoML(TransformerInputOutputRoles):
     def output_roles(self) -> Optional[RolesDict]:
         return self._output_roles
 
-    def transformer(self, return_all_predictions: bool = False) -> Transformer:
-        automl_transformer, _ = self._build_transformer(return_all_predictions=return_all_predictions)
-        return automl_transformer
+    def transformer(self, return_all_predictions: bool = False, add_array_attrs: bool = True, **reader_args) \
+            -> SparkPipelineModel:
+        if not return_all_predictions:
+            blender = [self.blender.transformer]
+            output_roles = self.blender.output_roles
+        else:
+            blender = []
+            output_roles = {**(ml_pipe.output_roles for ml_pipe in self.levels[-1])}
+
+        sel_tr = ColumnsSelectorTransformer(
+            name="SparkAutoML",
+            input_cols=[SparkDataset.ID_COLUMN] + list(output_roles.keys()),
+            optional_cols=[self.reader.target_col] if self.reader.target_col else [],
+        )
+
+        stages = [
+            self.reader.make_transformer(add_array_attrs=add_array_attrs, **reader_args),
+            *(ml_pipe.transformer for level in self.levels for ml_pipe in level),
+            *blender,
+            sel_tr
+        ]
+
+        return SparkPipelineModel(stages, input_roles=self.input_roles, output_roles=output_roles)
 
     def _initialize(
         self,
@@ -337,11 +358,12 @@ class SparkAutoML(TransformerInputOutputRoles):
         # )
         # predictions = automl_transformer.transform(dataset.data)
 
-        predictions = self.transformer(return_all_predictions=return_all_predictions).transform(data)
+        transformer = self.transformer(return_all_predictions=return_all_predictions)
+        predictions = transformer.transform(data)
 
         sds = SparkDataset(
             data=predictions,
-            roles=copy(self.output_roles),
+            roles=copy(transformer.get_output_roles()),
             task=self.reader.task
         )
         # sds = dataset.empty()

@@ -4,7 +4,7 @@ import logging
 import uuid
 from copy import copy
 from dataclasses import dataclass
-from typing import Any, Callable, Set, Dict, cast
+from typing import Any, Callable, Set, Dict, cast, Union
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -693,3 +693,19 @@ class SparkNoOpTransformer(SparkBaseTransformer):
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return dataset
+
+
+class SparkPipelineModel(SparkBaseTransformer, PipelineModel):
+    def __init__(self,
+                 stages: List[SparkBaseTransformer],
+                 input_roles: RolesDict,
+                 output_roles: RolesDict):
+        SparkBaseTransformer.__init__(
+            self,
+            list(input_roles.keys()),
+            list(output_roles.keys()),
+            input_roles,
+            output_roles,
+            False
+        )
+        PipelineModel.__init__(self, stages)
