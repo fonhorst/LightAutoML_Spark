@@ -771,7 +771,9 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickle
     def set_add_array_attrs(self, value: bool):
         return self.set(self.addArrayAttrs, value)
 
-    def _transform(self, data: SparkDataFrame) -> SparkDataFrame:
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
+
         service_columns = []
 
         used_array_attrs = self.get_used_array_attrs()
@@ -781,20 +783,21 @@ class SparkToSparkReaderTransformer(Transformer, SparkReaderHelper, CommonPickle
             for array_attr in used_array_attrs:
                 col_name = used_array_attrs[array_attr]
 
-                if col_name not in data.columns:
+                if col_name not in dataset.columns:
                     continue
 
                 if array_attr == "target":
-                    data = self._process_target_column(self.get_task_name(), self.get_class_mapping(), data, col_name)
+                    dataset = self._process_target_column(self.get_task_name(), self.get_class_mapping(), dataset, col_name)
 
                 service_columns.append(col_name)
 
-        data = self._create_unique_ids(data)
+        dataset = self._create_unique_ids(dataset)
 
-        data = data.select(
+        dataset = dataset.select(
             SparkDataset.ID_COLUMN,
             *service_columns,
             *[self._convert_column(feat, role) for feat, role in roles.items()],
         )
 
-        return data
+        logger.debug(f"Out {type(self)}. Columns: {sorted(dataset.columns)}")
+        return dataset

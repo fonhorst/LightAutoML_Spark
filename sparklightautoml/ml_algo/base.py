@@ -338,7 +338,7 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
         return self.getOrDefault(self.dimNum)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
 
         pred_cols = self.getInputCols()
         weights = {c: w for w, c in zip(self.get_weights(), pred_cols)}
@@ -380,6 +380,6 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
         cols_to_select = [c for c in dataset.columns if c not in cols_to_remove]
         out_df = dataset.select(*cols_to_select, out_col.alias(self.getOutputCol()))
 
-        logger.info(f"In the end of transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+        logger.debug(f"Out {type(self)}. Columns: {sorted(out_df.columns)}")
 
         return out_df

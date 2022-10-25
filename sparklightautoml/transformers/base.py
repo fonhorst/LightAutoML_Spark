@@ -175,8 +175,10 @@ class SparkBaseTransformer(Transformer, SparkColumnsAndRoles, ABC):
         # return input_df.select(*cols_to_leave, *cols_to_add)
 
     def transform(self, dataset, params=None):
-        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
-        return super().transform(dataset, params)
+        logger.debug(f"Transforming {type(self)}. Columns: {sorted(dataset.columns)}")
+        transformed_dataset = super().transform(dataset, params)
+        logger.debug(f"Out {type(self)}. Columns: {sorted(dataset.columns)}")
+        return transformed_dataset
 
 
 class SparkUnionTransformer:
@@ -314,6 +316,7 @@ class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultPara
         self.set(self.numClasses, num_classes)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
         num_classes = self.getOrDefault(self.numClasses)
         probability_cols = self.getOrDefault(self.probabilityCols)
         other_cols = [c for c in dataset.columns if c not in probability_cols]
@@ -322,6 +325,7 @@ class ProbabilityColsTransformer(Transformer, DefaultParamsWritable, DefaultPara
             for c in probability_cols
         ]
         dataset = dataset.select(*other_cols, *probability_cols)
+        logger.debug(f"Out {type(self)}. Columns: {sorted(dataset.columns)}")
         return dataset
 
 
@@ -341,10 +345,12 @@ class PredictionColsTransformer(Transformer, DefaultParamsWritable, DefaultParam
         self.set(self.predictionCols, prediction_cols)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
         prediction_cols = self.getOrDefault(self.predictionCols)
         other_cols = [c for c in dataset.columns if c not in prediction_cols]
         prediction_cols = [sf.col(c).getItem(0).alias(c) for c in prediction_cols]
         dataset = dataset.select(*other_cols, *prediction_cols)
+        logger.debug(f"Out {type(self)}. Columns: {sorted(dataset.columns)}")
         return dataset
 
 
@@ -375,10 +381,13 @@ class DropColumnsTransformer(Transformer, DefaultParamsWritable, DefaultParamsRe
         return self.getOrDefault(self.optionalColsToRemove)
 
     def _transform(self, dataset):
+        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
+
         ds_cols = set(dataset.columns)
         optional_to_remove = [c for c in self.get_optional_cols_to_remove() if c in ds_cols]
         dataset = dataset.drop(*self.get_cols_to_remove(), *optional_to_remove)
 
+        logger.debug(f"Out {type(self)}. Columns: {sorted(dataset.columns)}")
         return dataset
 
 

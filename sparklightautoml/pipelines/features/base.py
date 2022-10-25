@@ -267,6 +267,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
             for stage in itertools.chain(layer, [
                 FirstTimeColumnsSelectorTransformer(
                     ColumnsSelectorTransformer(
+                        name="SparkFeaturePipeline",
                         input_cols=[SparkDataset.ID_COLUMN, *cols],
                         optional_cols=[c for c in train.service_columns if c != SparkDataset.ID_COLUMN]
                     )

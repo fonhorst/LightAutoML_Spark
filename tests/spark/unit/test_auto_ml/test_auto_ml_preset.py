@@ -40,7 +40,6 @@ def test_automl_preset(spark: SparkSession):
         roles={"target": "TARGET"},
         persistence_manager=persistence_manager
     ).persist()
-
     pred_ds = automl.predict(test_data).persist()
 
     oof_ds.unpersist()

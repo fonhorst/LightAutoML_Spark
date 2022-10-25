@@ -198,7 +198,7 @@ class ColumnsSelectorTransformer(
         Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString
     )
 
-    def __init__(self, input_cols: Optional[List[str]] = None, optional_cols: Optional[List[str]] = None):
+    def __init__(self, name: Optional[str] = None, input_cols: Optional[List[str]] = None, optional_cols: Optional[List[str]] = None):
         super().__init__()
         input_cols = input_cols if input_cols else []
         optional_cols = optional_cols if optional_cols else []
@@ -206,6 +206,7 @@ class ColumnsSelectorTransformer(
             len(set(input_cols).intersection(set(optional_cols))) == 0
         ), "Input columns and optional columns cannot intersect"
 
+        self._name = name
         self.set(self.inputCols, input_cols)
         self.set(self.optionalCols, optional_cols)
         self.set(self.outputCols, input_cols)
@@ -214,10 +215,14 @@ class ColumnsSelectorTransformer(
         return self.getOrDefault(self.optionalCols)
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        logger.info(f"In transformer {type(self)}. Columns: {sorted(dataset.columns)}")
+        logger.debug(f"In {type(self)}. Name: {self._name}. Columns: {sorted(dataset.columns)}")
+
         ds_cols = set(dataset.columns)
         present_opt_cols = [c for c in self.get_optional_cols() if c in ds_cols]
-        return dataset.select(*self.getInputCols(), *present_opt_cols)
+        dataset = dataset.select(*self.getInputCols(), *present_opt_cols)
+
+        logger.debug(f"Out {type(self)}. Name: {self._name}. Columns: {sorted(dataset.columns)}")
+        return dataset
 
 
 class FirstTimeColumnsSelectorTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
@@ -227,10 +232,13 @@ class FirstTimeColumnsSelectorTransformer(Transformer, DefaultParamsWritable, De
         self._cstr = cstr
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
+
         if not self._has_applied:
             self._has_applied = True
-            return self._cstr.transform(dataset)
+            dataset = self._cstr.transform(dataset)
 
+        logger.debug(f"Out {type(self)}. Columns: {sorted(dataset.columns)}")
         return dataset
 
 
@@ -240,17 +248,7 @@ class NoOpTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable)
         self._name = name
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        return dataset
-
-
-class DebugTransformer(Transformer):
-    def __init__(self, name: Optional[str] = None):
-        super().__init__()
-        self._name = name
-
-    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        dataset = dataset.cache()
-        dataset.write.mode("overwrite").format("noop").save()
+        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
         return dataset
 
 

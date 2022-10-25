@@ -1,3 +1,4 @@
+import logging
 import os
 from copy import copy
 from typing import List, cast, Optional, Any, Tuple, Callable
@@ -14,6 +15,7 @@ from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
+from sparklightautoml.transformers.base import DropColumnsTransformer
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -23,6 +25,8 @@ from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 from sparklightautoml.validation.iterators import SparkFoldsIterator
 
+logger = logging.getLogger(__name__)
+
 
 class FakeOpTransformer(Transformer):
     def __init__(self, cols_to_generate: List[str], n_classes: int):
@@ -31,13 +35,16 @@ class FakeOpTransformer(Transformer):
         self._n_classes = n_classes
 
     def _transform(self, dataset):
-        return dataset.select(
+        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
+        out_dataset = dataset.select(
             '*',
             *[
                 array_to_vector(sf.array(*[sf.rand() for _ in range(self._n_classes)])).alias(f)
                 for f in self._cos_to_generate
             ]
         )
+        logger.debug(f"Out {type(self)}. Columns: {sorted(out_dataset.columns)}")
+        return out_dataset
 
 
 class DummyReader(SparkToSparkReader):
@@ -100,11 +107,7 @@ class DummyMLAlgo(SparkTabularMLAlgo):
 
     def _build_transformer(self) -> Transformer:
         avr = self._build_averaging_transformer()
-        fake_ops: List[Transformer] = [
-            FakeOpTransformer(cols_to_generate=[mcol], n_classes=self.n_classes)
-            for mcol in self._models_prediction_columns
-        ]
-        averaging_model = PipelineModel(stages=fake_ops + [avr])
+        averaging_model = PipelineModel(stages=self.models + [avr])
         return averaging_model
 
     def _build_averaging_transformer(self) -> Transformer:

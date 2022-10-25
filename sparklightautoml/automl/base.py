@@ -414,6 +414,7 @@ class SparkAutoML(TransformerInputOutputRoles):
                 output_roles.update(ml_pipe.output_roles)
 
         sel_tr = ColumnsSelectorTransformer(
+            name="SparkAutoML",
             input_cols=[SparkDataset.ID_COLUMN] + list(output_roles.keys()),
             optional_cols=[self.reader.target_col] if self.reader.target_col else [],
         )
