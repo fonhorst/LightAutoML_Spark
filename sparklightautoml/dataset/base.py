@@ -389,8 +389,8 @@ class SparkDataset(LAMLDataset):
         Returns:
             a new SparkDataset that is persisted and materialized
         """
-        if self._is_persisted:
-            return self
+        # if self._is_persisted:
+        #     return self
 
         assert self.persistence_manager, "Cannot persist when persistence_manager is None"
         level = level if level is not None else PersistenceLevel.REGULAR
@@ -410,10 +410,13 @@ class SparkDataset(LAMLDataset):
         if self.frozen:
             return
 
-        if self._is_persisted:
-            self.persistence_manager.unpersist(self.uid)
-        else:
-            self._unpersist_dependencies()
+        self.persistence_manager.unpersist(self.uid)
+        self._unpersist_dependencies()
+
+        # if self._is_persisted:
+        #     self.persistence_manager.unpersist(self.uid)
+        # else:
+        #     self._unpersist_dependencies()
 
     def _unpersist_dependencies(self):
         for dep in (self.dependencies or []):
@@ -521,6 +524,25 @@ class PersistenceManager(ABC):
     @property
     @abstractmethod
     def uid(self) -> str:
+        ...
+
+    @property
+    @abstractmethod
+    def children(self) -> List['PersistenceManager']:
+        ...
+
+    @property
+    @abstractmethod
+    def datasets(self) -> List[SparkDataset]:
+        ...
+
+    @property
+    @abstractmethod
+    def all_datasets(self) -> List[SparkDataset]:
+        """
+        Returns:
+            all persisted datasets including persisted with children contexts
+        """
         ...
 
     @abstractmethod

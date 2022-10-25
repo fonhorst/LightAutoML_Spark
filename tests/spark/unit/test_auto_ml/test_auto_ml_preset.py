@@ -42,7 +42,12 @@ def test_automl_preset(spark: SparkSession):
     ).persist()
     pred_ds = automl.predict(test_data).persist()
 
+    assert len(persistence_manager.children) == 0
+    assert len(persistence_manager.all_datasets) == 2
+
     oof_ds.unpersist()
     pred_ds.unpersist()
+
+    assert len(persistence_manager.all_datasets) == 0
 
     logger.info("Finished")

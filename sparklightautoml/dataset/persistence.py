@@ -4,6 +4,7 @@ import shutil
 import uuid
 import warnings
 from abc import abstractmethod
+from copy import copy
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Union, cast
 
@@ -32,6 +33,18 @@ class BasePersistenceManager(PersistenceManager):
     def uid(self) -> str:
         return self._uid
 
+    @property
+    def children(self) -> List['PersistenceManager']:
+        return copy(self._children)
+
+    @property
+    def datasets(self) -> List[SparkDataset]:
+        return [pair.pdf.to_dataset() for pair in self._persistence_registry.values()]
+
+    @property
+    def all_datasets(self) -> List[SparkDataset]:
+        return [*self.datasets, *(ds for child in self.children for ds in child.all_datasets)]
+
     def persist(self,
                 dataset: Union[SparkDataset, PersistableDataFrame],
                 level: PersistenceLevel = PersistenceLevel.REGULAR) -> PersistableDataFrame:
@@ -39,7 +52,7 @@ class BasePersistenceManager(PersistenceManager):
             else cast(PersistableDataFrame, dataset)
 
         logger.debug(f"Manager {self._uid}: "
-                    f"persisting dataset (uid={dataset.uid}, name={dataset.name}) with level {level}.")
+                     f"persisting dataset (uid={dataset.uid}, name={dataset.name}) with level {level}.")
 
         if persisted_dataframe.uid in self._persistence_registry:
             persisted_pair = self._persistence_registry[persisted_dataframe.uid]
