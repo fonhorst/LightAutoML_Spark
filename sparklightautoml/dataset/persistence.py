@@ -253,7 +253,7 @@ class BucketedPersistenceManager(BasePersistenceManager):
 
     @staticmethod
     def _build_name(pdf: PersistableDataFrame):
-        return f"{pdf.name}_{pdf.uid}"
+        return f"{pdf.name}_{pdf.uid}".replace('-', '__')
 
 
 class CompositePersistenceManager(BasePersistenceManager):

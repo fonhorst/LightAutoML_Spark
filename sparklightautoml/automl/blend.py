@@ -84,7 +84,7 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
                 self._transformer.transform(predictions.data),
                 list(self.output_roles.keys()),
                 self.output_roles,
-                name=f"{type(self)}"
+                name=type(self).__name__
             )
 
             return preds, pipes
@@ -221,7 +221,8 @@ class SparkBestModelSelector(SparkBlender, WeightedBlender):
         out_ds.set_data(
             self._transformer.transform(best_pred.data),
             list(self._output_roles.keys()),
-            self._output_roles
+            self._output_roles,
+            name=type(self).__name__
         )
 
         return out_ds, [best_pipe]
@@ -262,7 +263,7 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
             weighted_preds_sdf,
             list(self.output_roles.keys()),
             self.output_roles,
-            name=f"{type(self)}"
+            name=type(self).__name__
         )
 
         return wpreds_sds
@@ -355,7 +356,7 @@ class SparkMeanBlender(SparkBlender):
             self._single_prediction_col_name: output_role
         }
         pred_ds = predictions.empty()
-        pred_ds.set_data(df, df.columns, roles, name=f"{type(self)}")
+        pred_ds.set_data(df, df.columns, roles, name=type(self).__name__)
 
         self._output_roles = copy(roles)
 

@@ -5,23 +5,22 @@ from typing import List, cast, Optional, Any, Tuple, Callable
 
 import numpy as np
 import pyspark.sql.functions as sf
-from pyspark.ml import Transformer, PipelineModel
-from pyspark.ml.functions import array_to_vector
-
 from lightautoml.dataset.roles import NumericRole
 from lightautoml.reader.base import UserDefinedRolesDict
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
+from pyspark.ml import Transformer, PipelineModel
+from pyspark.ml.functions import array_to_vector
+
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
-from sparklightautoml.transformers.base import DropColumnsTransformer
-from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
+from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 from sparklightautoml.validation.iterators import SparkFoldsIterator
 
@@ -88,7 +87,6 @@ class DummyReader(SparkToSparkReader):
 
 
 class DummyMLAlgo(SparkTabularMLAlgo):
-    _name = "dummy"
 
     def __init__(self, n_classes: int, name: str):
         self._name = name
