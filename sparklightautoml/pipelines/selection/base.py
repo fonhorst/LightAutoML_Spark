@@ -12,7 +12,7 @@ from pyspark.ml import Transformer
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
-from sparklightautoml.utils import ColumnsSelectorTransformer
+from sparklightautoml.utils import ColumnsSelectorTransformer, NoOpTransformer
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator, SparkSelectionPipeline
 
 
@@ -39,11 +39,11 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
         if not self._sel_pipe.is_fitted:
             return None
 
-        return ColumnsSelectorTransformer(
-            name="SparkSelectionPipelineWrapper",
-            input_cols=[SparkDataset.ID_COLUMN, *self._sel_pipe.selected_features],
-            optional_cols=[c for c in self._service_columns if c != SparkDataset.ID_COLUMN]
-        )
+        # we cannot select columns on infer time
+        # because ml pipes are executed sequentially during predict
+        # applying selector on predict may lead to loss of columns
+        # required for the subsequent ml pipes
+        return NoOpTransformer(name=f"{type(self)}")
 
     @property
     def input_roles(self) -> Optional[RolesDict]:

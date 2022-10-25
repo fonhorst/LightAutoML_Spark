@@ -7,7 +7,7 @@ import numpy as np
 from lightautoml.automl.blend import WeightedBlender
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.reader.base import RolesDict
-from pyspark.ml import Transformer
+from pyspark.ml import Transformer, Pipeline
 from pyspark.ml.feature import SQLTransformer
 
 from sparklightautoml.dataset.base import SparkDataset
@@ -66,11 +66,18 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
         self._set_metadata(predictions, pipes)
 
         if len(pipes) == 1 and len(pipes[0].ml_algos) == 1:
-            sel_stmnt = ', '.join([
-                *predictions.service_columns,
-                f'{pipes[0].ml_algos[0].prediction_feature} AS {self._single_prediction_col_name}'
-            ])
-            self._transformer = SQLTransformer(statement=f"SELECT {sel_stmnt} FROM __THIS__")
+            # sel_stmnt = ', '.join([
+            #     *[c for c in predictions.service_columns if c in predictions.data.columns],
+            #     f'{pipes[0].ml_algos[0].prediction_feature} AS {self._single_prediction_col_name}'
+            # ])
+            self._transformer = Pipeline(stages=[
+                SQLTransformer(statement=f"SELECT *, {pipes[0].ml_algos[0].prediction_feature} AS {self._single_prediction_col_name} FROM __THIS__"),
+                ColumnsSelectorTransformer(
+                    name=f"{type(self)}",
+                    input_cols=[self._single_prediction_col_name],
+                    optional_cols=predictions.service_columns
+                )
+            ]).fit(predictions.data)
 
             preds = predictions.empty()
             preds.set_data(
@@ -198,11 +205,15 @@ class SparkBestModelSelector(SparkBlender, WeightedBlender):
         best_pipe = pipes[best_pipe_idx]
         best_pipe.ml_algos = [best_pipe.ml_algos[best_model_idx]]
 
-        sel_stmnt = ', '.join([
-            *predictions.service_columns,
-            f'{best_pred_col} AS {self._single_prediction_col_name}'
-        ])
-        self._transformer = SQLTransformer(statement=f"SELECT {sel_stmnt} FROM __THIS__")
+        self._transformer = Pipeline(stages=[
+            SQLTransformer(
+                statement=f"SELECT *, {best_pred_col} AS {self._single_prediction_col_name} FROM __THIS__"),
+            ColumnsSelectorTransformer(
+                name=f"{type(self)}",
+                input_cols=[self._single_prediction_col_name],
+                optional_cols=predictions.service_columns
+            )
+        ]).fit(best_pred.data)
 
         self._output_roles = {self._single_prediction_col_name: best_pred.roles[best_pred_col]}
 

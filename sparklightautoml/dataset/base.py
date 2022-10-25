@@ -33,6 +33,7 @@ from sparklightautoml.utils import warn_if_not_cached, SparkDataFrame, JobGroup
 Dependency = Union[str, 'SparkDataset', Callable]
 DepIdentifable = Union[str, 'SparkDataset']
 
+
 class PersistenceLevel(Enum):
     REGULAR = 1
     CHECKPOINT = 2

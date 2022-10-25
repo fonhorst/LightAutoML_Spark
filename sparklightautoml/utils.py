@@ -198,7 +198,10 @@ class ColumnsSelectorTransformer(
         Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString
     )
 
-    def __init__(self, name: Optional[str] = None, input_cols: Optional[List[str]] = None, optional_cols: Optional[List[str]] = None):
+    def __init__(self,
+                 name: Optional[str] = None,
+                 input_cols: Optional[List[str]] = None,
+                 optional_cols: Optional[List[str]] = None):
         super().__init__()
         input_cols = input_cols if input_cols else []
         optional_cols = optional_cols if optional_cols else []
@@ -248,7 +251,7 @@ class NoOpTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable)
         self._name = name
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
+        logger.debug(f"In {type(self)}. Name: {self._name}. Columns: {sorted(dataset.columns)}")
         return dataset
 
 
