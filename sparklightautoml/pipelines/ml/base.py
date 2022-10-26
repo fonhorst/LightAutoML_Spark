@@ -89,8 +89,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
     def name(self) -> str:
         return self._name
 
-    @property
-    def transformer(self):
+    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         assert self._transformer is not None, f"{type(self)} seems to be not fitted"
         return self._transformer
 
@@ -142,10 +141,10 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         val_preds_ds = SparkDataset.concatenate(preds, name=f"{type(self)}_folds_predictions")
 
         self._transformer = PipelineModel(stages=[
-            self.pre_selection.transformer,
-            self.features_pipeline.transformer,
-            self.post_selection.transformer,
-            *[ml_algo.transformer for ml_algo in self.ml_algos]
+            self.pre_selection.transformer(),
+            self.features_pipeline.transformer(),
+            self.post_selection.transformer(),
+            *[ml_algo.transformer() for ml_algo in self.ml_algos]
         ])
 
         self._input_roles = copy(train_valid.train.roles)

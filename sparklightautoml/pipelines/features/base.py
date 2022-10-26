@@ -146,7 +146,6 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
     def output_roles(self) -> Optional[RolesDict]:
         return self._output_roles
 
-    @property
     def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         return self._transformer
 

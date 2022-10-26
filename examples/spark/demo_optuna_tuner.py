@@ -198,7 +198,7 @@ if __name__ == "__main__":
     logger.info("Preds.shape = {}".format(train_pred.shape))
 
     logger.info("Save MLPipeline")
-    total.transformer.write().overwrite().save("file:///tmp/SparkMLPipeline")
+    total.transformer().write().overwrite().save("file:///tmp/SparkMLPipeline")
 
     logger.info("Load saved MLPipeline")
     pipeline_model = PipelineModel.load("file:///tmp/SparkMLPipeline")

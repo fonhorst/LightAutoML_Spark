@@ -80,8 +80,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     def validation_column(self) -> str:
         return self._default_validation_col_name
 
-    @property
-    def transformer(self, *args, **kwargs) -> Transformer:
+    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         """Returns Spark MLlib Transformer.
         Represents a Transformer with fitted models."""
 

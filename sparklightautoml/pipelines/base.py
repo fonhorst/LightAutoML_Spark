@@ -28,7 +28,7 @@ class TransformerInputOutputRoles(ABC):
         ...
 
     @abstractmethod
-    def transformer(self, *args, **kwargs) -> Transformer:
+    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         ...
 
     def _make_transformed_dataset(self, dataset: SparkDataset, *args, **kwargs) -> SparkDataset:

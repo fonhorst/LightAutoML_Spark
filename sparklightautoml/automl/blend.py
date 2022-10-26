@@ -49,8 +49,7 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
         """Returns dict of output roles"""
         return self._output_roles
 
-    @property
-    def transformer(self) -> Transformer:
+    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         """Returns Spark MLlib Transformer.
         Represents a Transformer with fitted models."""
 

@@ -122,7 +122,7 @@ class SparkAutoML(TransformerInputOutputRoles):
     def transformer(self, return_all_predictions: bool = False, add_array_attrs: bool = True, **reader_args) \
             -> SparkPipelineModel:
         if not return_all_predictions:
-            blender = [self.blender.transformer]
+            blender = [self.blender.transformer()]
             output_roles = self.blender.output_roles
         else:
             blender = []
@@ -136,7 +136,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         stages = [
             self.reader.transformer(add_array_attrs=add_array_attrs, **reader_args),
-            *(ml_pipe.transformer for level in self.levels for ml_pipe in level),
+            *(ml_pipe.transformer() for level in self.levels for ml_pipe in level),
             *blender,
             sel_tr
         ]
@@ -475,11 +475,11 @@ class SparkAutoML(TransformerInputOutputRoles):
         if not no_reader:
             stages.append(self.reader.transformer(add_array_attrs=True))
 
-        ml_pipes = [ml_pipe.transformer for level in self.levels for ml_pipe in level]
+        ml_pipes = [ml_pipe.transformer() for level in self.levels for ml_pipe in level]
         stages.extend(ml_pipes)
 
         if not return_all_predictions:
-            stages.append(self.blender.transformer)
+            stages.append(self.blender.transformer())
             output_roles = self.blender.output_roles
         else:
             output_roles = dict()

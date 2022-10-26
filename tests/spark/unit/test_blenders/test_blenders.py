@@ -65,7 +65,7 @@ def test_weighted_blender(spark: SparkSession):
         blended_sds.persist()
 
     with log_exec_time('Blender predict'):
-        transformed_preds_sdf = swb.transformer.transform(data_sds.data)
+        transformed_preds_sdf = swb.transformer().transform(data_sds.data)
         transformed_preds_sdf.write.mode('overwrite').format('noop').save()
 
     assert len(swb.output_roles) == 1

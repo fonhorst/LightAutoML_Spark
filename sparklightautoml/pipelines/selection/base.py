@@ -34,7 +34,6 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
         self._feature_pipeline = cast(SparkFeaturesPipeline, self._sel_pipe.features_pipeline)
         super().__init__()
 
-    @property
     def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         if not self._sel_pipe.is_fitted:
             return None
