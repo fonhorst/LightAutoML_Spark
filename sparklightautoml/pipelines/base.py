@@ -3,8 +3,10 @@ from typing import Optional
 
 from lightautoml.dataset.base import RolesDict
 from pyspark.ml import Transformer
+from pyspark.ml.pipeline import PipelineModel
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.utils import ColumnsSelectorTransformer
 
 
 class TransformerInputOutputRoles(ABC):
@@ -32,9 +34,12 @@ class TransformerInputOutputRoles(ABC):
         ...
 
     def _make_transformed_dataset(self, dataset: SparkDataset, *args, **kwargs) -> SparkDataset:
-        sdf = self.transformer(*args, **kwargs).transform(dataset.data)
+        sdf = PipelineModel(stages=[
+            self.transformer(*args, **kwargs),
+            ColumnsSelectorTransformer(input_cols=list(self.output_roles.keys()), optional_cols=dataset.service_columns)
+        ]).transform(dataset.data)
 
-        roles = {**dataset.roles, **self.output_roles}
+        roles = {**self.output_roles}
 
         out_ds = dataset.empty()
         out_ds.set_data(sdf, list(roles.keys()), roles)

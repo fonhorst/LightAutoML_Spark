@@ -411,8 +411,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             #
             # train_data = train_data.where(val_filter_cond)
 
-        k = 0
-
         full_data = (
             train_data
             .select('*', sf.lit(False).alias(self.validation_column))

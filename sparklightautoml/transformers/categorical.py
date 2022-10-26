@@ -143,9 +143,9 @@ class SparkLabelEncoderEstimator(SparkBaseEstimator, TypesHelper):
         roles = self._input_intermediate_roles
         columns = self._input_intermediate_columns
 
-        if self._fname_prefix == "inter":
-            roles = self.get_input_roles()
-            columns = self.getInputCols()
+        # if self._fname_prefix == "inter":
+        #     roles = self.get_input_roles()
+        #     columns = self.getInputCols()
 
         indexer = LAMLStringIndexer(
             inputCols=columns,
@@ -424,10 +424,15 @@ class SparkCatIntersectionsHelper:
 
         return murmurhash3_32_udf(sf.concat(*columns_for_concat)).alias(col_name)
 
-    def _build_df(self, df: SparkDataFrame, intersections: Optional[Sequence[Sequence[str]]]) -> SparkDataFrame:
-        columns_to_select = [self._make_category(comb).alias(f"{self._make_col_name(comb)}") for comb in intersections]
+    def _build_df(self, df: SparkDataFrame, intersections: Optional[Sequence[Sequence[str]]]) \
+            -> Tuple[SparkDataFrame, List[str]]:
+        col_names = [self._make_col_name(comb) for comb in intersections]
+        columns_to_select = [
+            self._make_category(comb).alias(col_name)
+            for comb, col_name in zip(intersections, col_names)
+        ]
         df = df.select("*", *columns_to_select)
-        return df
+        return df, col_names
 
 
 class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEncoderEstimator):
@@ -483,7 +488,13 @@ class SparkCatIntersectionsEstimator(SparkCatIntersectionsHelper, SparkLabelEnco
         logger.info(f"[{type(self)} (CI)] fit is started")
         logger.debug(f"Calculating (CI) for input columns: {self.getInputCols()}")
 
-        inter_df = self._build_df(df, self.intersections)
+        inter_df, inter_cols = self._build_df(df, self.intersections)
+
+        self._input_intermediate_roles = {
+            col: self.get_input_roles()[elts[0]]
+            for col, elts in zip(inter_cols, self.intersections)
+        }
+        self._input_intermediate_columns = inter_cols
 
         super()._fit(inter_df)
 
@@ -525,7 +536,7 @@ class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEn
         self.intersections = intersections
 
     def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
-        inter_df = self._build_df(df, self.intersections)
+        inter_df, _ = self._build_df(df, self.intersections)
         temp_cols = sorted(list(set(inter_df.columns).difference(df.columns)))
         self._input_columns = temp_cols
 
