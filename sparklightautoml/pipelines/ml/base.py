@@ -167,12 +167,4 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
             Dataset with predictions of all trained models.
 
         """
-        out_sdf = self.transformer.transform(dataset.data)
-
-        out_roles = copy(dataset.roles)
-        out_roles.update(self.output_roles)
-
-        out_ds = dataset.empty()
-        out_ds.set_data(out_sdf, list(out_roles.keys()), out_roles)
-
-        return out_ds
+        return self._make_transformed_dataset(dataset)

@@ -20,7 +20,7 @@ from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
-from ..utils import ColumnsSelectorTransformer
+from ..utils import ColumnsSelectorTransformer, SparkDataFrame
 from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 
@@ -332,7 +332,7 @@ class SparkAutoML(TransformerInputOutputRoles):
     # TODO: SLAMA - add reader args sending into transformer building
     def predict(
         self,
-        data: Any,
+        data: SparkDataFrame,
         features_names: Optional[Sequence[str]] = None,
         return_all_predictions: Optional[bool] = None,
         add_reader_attrs: bool = False,
@@ -352,13 +352,6 @@ class SparkAutoML(TransformerInputOutputRoles):
             Dataset with predictions.
 
         """
-        # dataset = self.reader.read(data, features_names, add_array_attrs=add_reader_attrs)
-        # logger.info(f"After Reader in {type(self)}. Columns: {sorted(dataset.data.columns)}")
-        # automl_transformer, roles = self._build_transformer(
-        #     no_reader=True, return_all_predictions=return_all_predictions
-        # )
-        # predictions = automl_transformer.transform(dataset.data)
-
         persistence_manager = persistence_manager or PlainCachePersistenceManager()
 
         transformer = self.transformer(return_all_predictions=return_all_predictions)
@@ -370,8 +363,6 @@ class SparkAutoML(TransformerInputOutputRoles):
             task=self.reader.task,
             persistence_manager=persistence_manager
         )
-        # sds = dataset.empty()
-        # sds.set_data(predictions, predictions.columns, roles)
 
         return sds
 

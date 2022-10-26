@@ -183,13 +183,8 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
 
         return fitted_pipe.dataset
 
-    def transform(self, test: LAMLDataset) -> LAMLDataset:
-        sdf = self._transformer.transform(test.data)
-
-        transformed_ds = test.empty()
-        transformed_ds.set_data(sdf, list(self.output_roles.keys()), self.output_roles)
-
-        return transformed_ds
+    def transform(self, test: SparkDataset) -> SparkDataset:
+        return self._make_transformed_dataset(test)
 
     def append(self, pipeline):
         if isinstance(pipeline, SparkFeaturesPipeline):

@@ -98,12 +98,7 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
         return result
 
     def predict(self, predictions: SparkDataset) -> SparkDataset:
-        sdf = self._transformer.transform(predictions.data)
-
-        sds = predictions.empty()
-        sds.set_data(sdf, list(self._output_roles.keys()), self._output_roles)
-
-        return sds
+        return self._make_transformed_dataset(predictions)
 
     def _fit_predict(
         self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]

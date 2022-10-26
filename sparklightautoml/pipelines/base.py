@@ -4,6 +4,8 @@ from typing import Optional
 from lightautoml.dataset.base import RolesDict
 from pyspark.ml import Transformer
 
+from sparklightautoml.dataset.base import SparkDataset
+
 
 class TransformerInputOutputRoles(ABC):
     """
@@ -28,3 +30,13 @@ class TransformerInputOutputRoles(ABC):
     @abstractmethod
     def transformer(self, *args, **kwargs) -> Transformer:
         ...
+
+    def _make_transformed_dataset(self, dataset: SparkDataset, *args, **kwargs) -> SparkDataset:
+        sdf = self.transformer(*args, **kwargs).transform(dataset.data)
+
+        roles = {**dataset.roles, **self.output_roles}
+
+        out_ds = dataset.empty()
+        out_ds.set_data(sdf, list(roles.keys()), roles)
+
+        return out_ds

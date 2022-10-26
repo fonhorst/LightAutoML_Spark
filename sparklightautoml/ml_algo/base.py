@@ -219,12 +219,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         raise NotImplementedError("Not supported for Spark. Use transformer property instead ")
 
     def predict(self, dataset: SparkDataset) -> SparkDataset:
-        sdf = self.transformer.transform(dataset.data)
-
-        ds = dataset.empty()
-        ds.set_data(sdf, list(self.output_roles.keys()), self.output_roles)
-
-        return ds
+        return self._make_transformed_dataset(dataset)
 
     def _infer_and_set_prediction_role(self, valid_ds: SparkDataset):
         outp_dim = 1
