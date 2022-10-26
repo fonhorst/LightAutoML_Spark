@@ -1,19 +1,23 @@
 """Base AutoML class."""
 import logging
+import os
 from copy import copy
-from typing import Any, Callable, Tuple, cast
+from typing import Any, Callable, Tuple, cast, Optional, Sequence
 from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Sequence
 
+from lightautoml.dataset.base import RolesDict
 from lightautoml.reader.base import RolesDict
 from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
 from lightautoml.utils.timer import PipelineTimer
 from pyspark.ml import PipelineModel, Transformer
+from pyspark.sql.session import SparkSession
 
 from .blend import SparkBlender, SparkBestModelSelector
+from .presets.tabular_presets import ReadableIntoSparkDf
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
 from ..pipelines.base import TransformerInputOutputRoles
@@ -327,6 +331,60 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         return oof_pred
 
+    def predict(
+        self,
+        data: ReadableIntoSparkDf,
+        return_all_predictions: Optional[bool] = None,
+        add_reader_attrs: bool = False,
+        persistence_manager: Optional[PersistenceManager] = None
+    ) -> SparkDataset:
+        """Get dataset with predictions.
+
+        Almost same as :meth:`lightautoml.automl.base.AutoML.predict`
+        on new dataset, with additional features.
+
+        Additional features - working with different data formats.
+        Supported now:
+
+            - Path to ``.csv``, ``.parquet``, ``.feather`` files.
+            - :class:`~numpy.ndarray`, or dict of :class:`~numpy.ndarray`. For example,
+              ``{'data': X...}``. In this case roles are optional,
+              but `train_features` and `valid_features` required.
+            - :class:`pandas.DataFrame`.
+
+        Parallel inference - you can pass ``n_jobs`` to speedup
+        prediction (requires more RAM).
+        Batch_inference - you can pass ``batch_size``
+        to decrease RAM usage (may be longer).
+
+        Args:
+            data: Dataset to perform inference.
+            features_names: Optional features names,
+              if cannot be inferred from `train_data`.
+            return_all_predictions: if True,
+              returns all model predictions from last level
+            add_reader_attrs: if True,
+              the reader's attributes will be added to the SparkDataset
+
+        Returns:
+            Dataset with predictions.
+
+        """
+        persistence_manager = persistence_manager or PlainCachePersistenceManager()
+        transformer = self.transformer(return_all_predictions=return_all_predictions, add_array_attrs=add_reader_attrs)
+
+        data = self._read_data(data)
+        predictions = transformer.transform(data)
+
+        sds = SparkDataset(
+            data=predictions,
+            roles=copy(transformer.get_output_roles()),
+            task=self.reader.task,
+            persistence_manager=persistence_manager
+        )
+
+        return sds
+
     # TODO: SLAMA - add persistence_manager arg
     # if no manager, replace with PlainCachePersistenceManager
     # TODO: SLAMA - add reader args sending into transformer building
@@ -352,17 +410,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             Dataset with predictions.
 
         """
-        persistence_manager = persistence_manager or PlainCachePersistenceManager()
 
-        transformer = self.transformer(return_all_predictions=return_all_predictions)
-        predictions = transformer.transform(data)
-
-        sds = SparkDataset(
-            data=predictions,
-            roles=copy(transformer.get_output_roles()),
-            task=self.reader.task,
-            persistence_manager=persistence_manager
-        )
 
         return sds
 
@@ -448,3 +496,48 @@ class SparkAutoML(TransformerInputOutputRoles):
         automl_transformer = PipelineModel(stages=stages)
 
         return automl_transformer, output_roles
+
+    def _read_data(self, data: ReadableIntoSparkDf) -> SparkDataFrame:
+        """Get :class:`~pyspark.sql.DataFrame` from different data formats.
+
+        Note:
+            Supported now data formats:
+
+                - Path to ``.csv``, ``.parquet``, ``.feather`` files.
+                - :class:`~numpy.ndarray`, or dict of :class:`~numpy.ndarray`.
+                  For example, ``{'data': X...}``. In this case,
+                  roles are optional, but `train_features`
+                  and `valid_features` required.
+                - :class:`pandas.DataFrame`.
+
+        Args:
+            data: Readable to DataFrame data.
+            features_names: Optional features names if ``numpy.ndarray``.
+            n_jobs: Number of processes to read file.
+            read_csv_params: Params to read csv file.
+
+        Returns:
+            Tuple with read data and new roles mapping.
+
+        """
+        spark = SparkSession.getActiveSession()
+
+
+        if isinstance(data, SparkDataFrame):
+            return data
+
+        if isinstance(data, str):
+            path: str = data
+            if path.endswith(".parquet"):
+                return spark.read.parquet(path)
+                # return pd.read_parquet(data, columns=read_csv_params["usecols"]), None
+            if path.endswith(".csv"):
+                csv_params = self._get_read_csv_params()
+                return spark.read.csv(path, **csv_params)
+            else:
+                raise ValueError(f"Unsupported data format: {os.path.splitext(path)[1]}")
+
+        raise ValueError("Input data format is not supported")
+
+    def _get_read_csv_params(self) -> Dict:
+        return {}

@@ -6,7 +6,6 @@ from typing import Optional, Sequence, Iterable, Union, Tuple, List
 import numpy as np
 from lightautoml.automl.presets.base import upd_params
 from lightautoml.automl.presets.utils import plot_pdp_with_distribution
-from lightautoml.dataset.base import RolesDict
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.pipelines.selection.base import ComposedSelector
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
@@ -37,7 +36,7 @@ from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrap
 from sparklightautoml.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
-from sparklightautoml.utils import Cacher, SparkDataFrame
+from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -450,98 +449,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         oof_pred = super().fit_predict(train, roles=roles, cv_iter=cv_iter, valid_data=valid_data, verbose=verbose)
 
         return oof_pred
-
-    def predict(
-        self,
-        data: ReadableIntoSparkDf,
-        features_names: Optional[Sequence[str]] = None,
-        return_all_predictions: Optional[bool] = None,
-        add_reader_attrs: bool = False,
-    ) -> SparkDataset:
-        """Get dataset with predictions.
-
-        Almost same as :meth:`lightautoml.automl.base.AutoML.predict`
-        on new dataset, with additional features.
-
-        Additional features - working with different data formats.
-        Supported now:
-
-            - Path to ``.csv``, ``.parquet``, ``.feather`` files.
-            - :class:`~numpy.ndarray`, or dict of :class:`~numpy.ndarray`. For example,
-              ``{'data': X...}``. In this case roles are optional,
-              but `train_features` and `valid_features` required.
-            - :class:`pandas.DataFrame`.
-
-        Parallel inference - you can pass ``n_jobs`` to speedup
-        prediction (requires more RAM).
-        Batch_inference - you can pass ``batch_size``
-        to decrease RAM usage (may be longer).
-
-        Args:
-            data: Dataset to perform inference.
-            features_names: Optional features names,
-              if cannot be inferred from `train_data`.
-            return_all_predictions: if True,
-              returns all model predictions from last level
-            add_reader_attrs: if True,
-              the reader's attributes will be added to the SparkDataset
-
-        Returns:
-            Dataset with predictions.
-
-        """
-
-        read_csv_params = self._get_read_csv_params()
-
-        data, _ = self._read_data(data, features_names, read_csv_params)
-        pred = super().predict(data, features_names, return_all_predictions, add_reader_attrs)
-        return pred
-
-    def _read_data(
-        self,
-        data: ReadableIntoSparkDf,
-        features_names: Optional[Sequence[str]] = None,
-        read_csv_params: Optional[dict] = None,
-    ) -> Tuple[SparkDataFrame, Optional[RolesDict]]:
-        """Get :class:`~pyspark.sql.DataFrame` from different data formats.
-
-        Note:
-            Supported now data formats:
-
-                - Path to ``.csv``, ``.parquet``, ``.feather`` files.
-                - :class:`~numpy.ndarray`, or dict of :class:`~numpy.ndarray`.
-                  For example, ``{'data': X...}``. In this case,
-                  roles are optional, but `train_features`
-                  and `valid_features` required.
-                - :class:`pandas.DataFrame`.
-
-        Args:
-            data: Readable to DataFrame data.
-            features_names: Optional features names if ``numpy.ndarray``.
-            n_jobs: Number of processes to read file.
-            read_csv_params: Params to read csv file.
-
-        Returns:
-            Tuple with read data and new roles mapping.
-
-        """
-        if read_csv_params is None:
-            read_csv_params = {}
-
-        if isinstance(data, SparkDataFrame):
-            return data, None
-
-        if isinstance(data, str):
-            path: str = data
-            if path.endswith(".parquet"):
-                return self._spark.read.parquet(path), None
-                # return pd.read_parquet(data, columns=read_csv_params["usecols"]), None
-            if path.endswith(".csv"):
-                return self._spark.read.csv(path, **read_csv_params), None
-            else:
-                raise ValueError(f"Unsupported data format: {os.path.splitext(path)[1]}")
-
-        raise ValueError("Input data format is not supported")
 
     def get_feature_scores(
         self,
