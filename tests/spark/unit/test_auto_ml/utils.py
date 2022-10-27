@@ -59,6 +59,7 @@ class DummyReader(SparkToSparkReader):
 
         self.target_col = roles["target"]
         self._roles = {c: NumericRole() for c in train_data.columns if c != self.target_col}
+        self._used_features = list(self._roles.keys())
 
         train_data = self._create_unique_ids(train_data)
         train_data, folds_col = self._create_folds(train_data, kwargs={})

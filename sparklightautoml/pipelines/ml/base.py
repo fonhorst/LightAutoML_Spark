@@ -143,9 +143,9 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         val_preds_ds = SparkDataset.concatenate(preds, name=f"{type(self)}_folds_predictions")
 
         self._transformer = PipelineModel(stages=[
-            self.pre_selection.transformer(),
+            # self.pre_selection.transformer(),
             self.features_pipeline.transformer(),
-            self.post_selection.transformer(),
+            # self.post_selection.transformer(),
             *[ml_algo.transformer() for ml_algo in self.ml_algos],
         ])
 

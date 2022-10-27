@@ -674,6 +674,8 @@ class SparkEmptyFeaturePipeline(SparkFeaturesPipeline):
         return SparkNoOpTransformer(train.roles)
 
 
+
+
 class SparkNoOpTransformer(SparkBaseTransformer):
     """
     This transformer does nothing, it just returns the input dataframe unchanged.

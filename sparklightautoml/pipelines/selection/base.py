@@ -35,7 +35,7 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
         self._service_columns: Optional[List[str]] = None
         super().__init__()
 
-    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
+    def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
         if not self._sel_pipe.is_fitted:
             return None
 
