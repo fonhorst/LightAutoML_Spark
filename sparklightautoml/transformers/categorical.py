@@ -194,15 +194,15 @@ class SparkLabelEncoderTransformer(
     ):
         super().__init__(input_cols, output_cols, input_roles, output_roles, do_replace_columns)
         self.indexer_model = indexer_model
+        self._input_intermediate_columns = self.getInputCols()
+        self._input_intermediate_roles = self.get_input_roles()
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
 
         logger.info(f"[{type(self)} (LE)] transform is started")
-        columns = self.getInputCols()
-        out_columns = self.getOutputCols()
-        if self._fname_prefix == "inter":
-            columns = self.getInputCols()
-            out_columns = sorted(out_columns)
+
+        columns = self._input_intermediate_columns
+        out_columns = sorted(self.getOutputCols())
 
         model: LAMLStringIndexerModel = (
             self.indexer_model.setDefaultValue(self._fillna_val)
@@ -213,7 +213,6 @@ class SparkLabelEncoderTransformer(
 
         logger.info(f"[{type(self)} (LE)] Transform is finished")
 
-        # output = self._make_output_df(model.transform(dataset), self.getOutputCols())
         output = model.transform(dataset)
 
         return output
@@ -536,13 +535,11 @@ class SparkCatIntersectionsTransformer(SparkCatIntersectionsHelper, SparkLabelEn
         self.intersections = intersections
 
     def _transform(self, df: SparkDataFrame) -> SparkDataFrame:
-        inter_df, _ = self._build_df(df, self.intersections)
-        temp_cols = sorted(list(set(inter_df.columns).difference(df.columns)))
-        self._input_columns = temp_cols
+        inter_df, self._input_intermediate_columns = self._build_df(df, self.intersections)
 
         out_df = super()._transform(inter_df)
 
-        out_df = out_df.drop(*temp_cols)
+        out_df = out_df.drop(*self._input_intermediate_columns)
         return out_df
 
 

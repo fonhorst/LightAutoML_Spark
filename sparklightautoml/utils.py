@@ -198,10 +198,21 @@ class ColumnsSelectorTransformer(
         Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString
     )
 
+    transformOnlyFirstTime = Param(
+        Params._dummy(), "transformOnlyFirstTime", "whatever to transform only once or each time",
+        typeConverter=TypeConverters.toBoolean
+    )
+
+    _alreadyTransformed = Param(
+        Params._dummy(), "_alreadyTransformed", "is it first time to transform or not",
+        typeConverter=TypeConverters.toBoolean
+    )
+
     def __init__(self,
                  name: Optional[str] = None,
                  input_cols: Optional[List[str]] = None,
-                 optional_cols: Optional[List[str]] = None):
+                 optional_cols: Optional[List[str]] = None,
+                 transform_only_first_time: bool = False):
         super().__init__()
         input_cols = input_cols if input_cols else []
         optional_cols = optional_cols if optional_cols else []
@@ -213,6 +224,8 @@ class ColumnsSelectorTransformer(
         self.set(self.inputCols, input_cols)
         self.set(self.optionalCols, optional_cols)
         self.set(self.outputCols, input_cols)
+        self.set(self.transformOnlyFirstTime, transform_only_first_time)
+        self.set(self._alreadyTransformed, False)
 
     def get_optional_cols(self) -> List[str]:
         return self.getOrDefault(self.optionalCols)
@@ -220,28 +233,14 @@ class ColumnsSelectorTransformer(
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         logger.debug(f"In {type(self)}. Name: {self._name}. Columns: {sorted(dataset.columns)}")
 
-        ds_cols = set(dataset.columns)
-        present_opt_cols = [c for c in self.get_optional_cols() if c in ds_cols]
-        dataset = dataset.select(*self.getInputCols(), *present_opt_cols)
+        if not self.getOrDefault(self.transformOnlyFirstTime) \
+                or not self.getOrDefault(self._alreadyTransformed):
+            ds_cols = set(dataset.columns)
+            present_opt_cols = [c for c in self.get_optional_cols() if c in ds_cols]
+            dataset = dataset.select(*self.getInputCols(), *present_opt_cols)
+            self.set(self._alreadyTransformed, True)
 
         logger.debug(f"Out {type(self)}. Name: {self._name}. Columns: {sorted(dataset.columns)}")
-        return dataset
-
-
-class FirstTimeColumnsSelectorTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable):
-    def __init__(self, cstr: ColumnsSelectorTransformer):
-        super().__init__()
-        self._has_applied = False
-        self._cstr = cstr
-
-    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
-        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
-
-        if not self._has_applied:
-            self._has_applied = True
-            dataset = self._cstr.transform(dataset)
-
-        logger.debug(f"Out {type(self)}. Columns: {sorted(dataset.columns)}")
         return dataset
 
 

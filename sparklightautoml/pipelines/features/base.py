@@ -4,21 +4,20 @@ import logging
 import uuid
 from copy import copy
 from dataclasses import dataclass
-from typing import Any, Callable, Set, Dict, cast, Union
+from typing import Any, Callable, Set, Dict, cast
 from typing import List
 from typing import Optional
 from typing import Tuple
 
 import numpy as np
 import toposort
-from lightautoml.dataset.base import RolesDict, LAMLDataset
+from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole, NumericRole, DatetimeRole
 from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.utils import get_columns_by_role
 from pandas import DataFrame
 from pandas import Series
 from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
-from pyspark.ml.param import Param, Params
 from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
@@ -42,8 +41,7 @@ from sparklightautoml.transformers.categorical import (
 from sparklightautoml.transformers.categorical import SparkTargetEncoderEstimator
 from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
-from sparklightautoml.utils import Cacher, warn_if_not_cached, SparkDataFrame, ColumnsSelectorTransformer, \
-    FirstTimeColumnsSelectorTransformer
+from sparklightautoml.utils import Cacher, warn_if_not_cached, SparkDataFrame, ColumnsSelectorTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -259,12 +257,11 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
             stage
             for layer, cols in zip(tr_layers, cols_to_select_in_layers)
             for stage in itertools.chain(layer, [
-                FirstTimeColumnsSelectorTransformer(
-                    ColumnsSelectorTransformer(
-                        name="SparkFeaturePipeline",
-                        input_cols=[SparkDataset.ID_COLUMN, *cols],
-                        optional_cols=[c for c in train.service_columns if c != SparkDataset.ID_COLUMN]
-                    )
+                ColumnsSelectorTransformer(
+                    name=type(self).__name__,
+                    input_cols=[SparkDataset.ID_COLUMN, *cols],
+                    optional_cols=[c for c in train.service_columns if c != SparkDataset.ID_COLUMN],
+                    transform_only_first_time=True
                 ),
                 Cacher(cacher_key)
             ])
