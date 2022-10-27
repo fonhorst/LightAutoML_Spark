@@ -17,7 +17,7 @@ from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, Aver
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 from ..dataset.base import SparkDataset, PersistenceManager
 from ..transformers.base import DropColumnsTransformer
-from ..utils import SparkDataFrame
+from ..utils import SparkDataFrame, log_exception
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +247,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         )
         return avr
 
+    @log_exception(logger=logger)
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
         """Fit and then predict accordig the strategy that uses train_valid_iterator.
 
@@ -265,8 +266,8 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         logger.info("Starting LinearLGBFS")
         self.timer.start()
 
-        cat_feats = [feat for feat, role in train_valid_iterator.train.roles if role.name == "Category"]
-        non_cat_feats = [feat for feat, role in train_valid_iterator.train.roles if role.name != "Category"]
+        cat_feats = [feat for feat, role in train_valid_iterator.train.roles.items() if role.name == "Category"]
+        non_cat_feats = [feat for feat, role in train_valid_iterator.train.roles.items() if role.name != "Category"]
 
         self._assembler = VectorAssembler(
             inputCols=non_cat_feats + cat_feats,

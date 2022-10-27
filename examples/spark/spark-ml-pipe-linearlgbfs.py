@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
         iterator = SparkFoldsIterator(sdataset, n_folds=cv)
 
-        spark_ml_algo = SparkLinearLBFGS(freeze_defaults=False)
+        spark_ml_algo = SparkLinearLBFGS(default_params={'regParam': [10e-5]})
         spark_features_pipeline = SparkLinearFeatures(**ml_alg_kwargs)
         spark_selector = ImportanceCutoffSelector(
             cutoff=0.0,
