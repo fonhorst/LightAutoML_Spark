@@ -13,7 +13,7 @@ from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
-logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
+logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 3. use_algos = [["linear_l2"]]
     # 4. use_algos = [["lgb", "linear_l2"], ["lgb"]]
     # use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    # use_algos = [["lgb", "linear_l2"]]
-    use_algos = [["lgb"]]
+    use_algos = [["lgb", "linear_l2"], ["lgb"]]
     cv = 3
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 

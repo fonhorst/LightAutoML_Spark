@@ -13,8 +13,10 @@ from pyspark.ml import Transformer, Estimator
 from pyspark.ml.param import Param, Params, TypeConverters
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.pipeline import PipelineModel
-from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
+from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable, MLReadable, MLWritable
 from pyspark.sql import SparkSession
+
+from sparklightautoml.mlwriters import CommonPickleMLWritable, CommonPickleMLReadable
 
 VERBOSE_LOGGING_FORMAT = "%(asctime)s %(levelname)s %(module)s %(filename)s:%(lineno)d %(message)s"
 
