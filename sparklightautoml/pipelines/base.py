@@ -45,7 +45,8 @@ class TransformerInputOutputRoles(ABC):
         # we don't service_columns cause they should be available in the input by default
         return WrappingSelectingPipelineModel(
             stages=[transformer],
-            input_columns=list(self.output_roles.keys())
+            input_columns=list(self.output_roles.keys()),
+            name=type(self).__name__
         )
 
     def _make_transformed_dataset(self, dataset: SparkDataset, *args, **kwargs) -> SparkDataset:

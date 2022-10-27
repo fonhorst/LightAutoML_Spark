@@ -256,19 +256,27 @@ class NoOpTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable)
 
 
 class WrappingSelectingPipelineModel(PipelineModel, HasInputCols):
+    name = Param(
+        Params._dummy(), "name", "name.", typeConverter=TypeConverters.toString
+    )
+
     optionalCols = Param(
         Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString
     )
 
-    def __init__(self, stages: List[Transformer],
+    def __init__(self,
+                 stages: List[Transformer],
                  input_columns: List[str],
-                 optional_columns: Optional[List[str]] = None):
+                 optional_columns: Optional[List[str]] = None,
+                 name: Optional[str] = None):
         super().__init__(stages)
         self.set(self.inputCols, input_columns)
         self.set(self.optionalCols, optional_columns or [])
+        self.set(self.name, name or "")
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         cstr = ColumnsSelectorTransformer(
+            name=f"{type(self).__name__}({self.getOrDefault(self.name)})",
             input_cols=[*dataset.columns, *self.getInputCols()],
             optional_cols=self.getOrDefault(self.optionalCols)
         )

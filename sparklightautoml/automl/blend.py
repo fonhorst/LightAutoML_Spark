@@ -53,13 +53,16 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
     def _get_service_columns(self) -> List[str]:
         return self._service_columns
 
-    def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
+    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
         """Returns Spark MLlib Transformer.
         Represents a Transformer with fitted models."""
 
         assert self._transformer is not None, "Pipeline is not fitted!"
 
         return self._transformer
+
+    def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
+        raise NotImplementedError("This method should not be used for this class")
 
     def fit_predict(
         self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]
