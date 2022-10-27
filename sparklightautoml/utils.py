@@ -12,6 +12,7 @@ from pyspark import RDD
 from pyspark.ml import Transformer, Estimator
 from pyspark.ml.param import Param, Params, TypeConverters
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
+from pyspark.ml.pipeline import PipelineModel
 from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import SparkSession
 
@@ -252,6 +253,27 @@ class NoOpTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable)
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         logger.debug(f"In {type(self)}. Name: {self._name}. Columns: {sorted(dataset.columns)}")
         return dataset
+
+
+class WrappingSelectingPipelineModel(PipelineModel, HasInputCols):
+    optionalCols = Param(
+        Params._dummy(), "optionalCols", "optional column names.", typeConverter=TypeConverters.toListString
+    )
+
+    def __init__(self, stages: List[Transformer],
+                 input_columns: List[str],
+                 optional_columns: Optional[List[str]] = None):
+        super().__init__(stages)
+        self.set(self.inputCols, input_columns)
+        self.set(self.optionalCols, optional_columns or [])
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        cstr = ColumnsSelectorTransformer(
+            input_cols=[*dataset.columns, *self.getInputCols()],
+            optional_cols=self.getOrDefault(self.optionalCols)
+        )
+        ds = super()._transform(dataset)
+        return cstr.transform(ds)
 
 
 class Cacher(Estimator):

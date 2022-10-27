@@ -6,7 +6,7 @@ from pyspark.ml import Transformer
 from pyspark.ml.pipeline import PipelineModel
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import ColumnsSelectorTransformer
+from sparklightautoml.utils import ColumnsSelectorTransformer, WrappingSelectingPipelineModel
 
 
 class TransformerInputOutputRoles(ABC):
@@ -42,11 +42,11 @@ class TransformerInputOutputRoles(ABC):
         ...
 
     def _clean_transformer_columns(self, transformer: Transformer, service_columns: Optional[List[str]] = None):
-        cleaning_selector = ColumnsSelectorTransformer(
-            input_cols=[*self.input_roles.keys(), *self.output_roles.keys()],
-            optional_cols=service_columns
+        # we don't service_columns cause they should be available in the input by default
+        return WrappingSelectingPipelineModel(
+            stages=[transformer],
+            input_columns=list(self.output_roles.keys())
         )
-        return PipelineModel(stages=[transformer, cleaning_selector])
 
     def _make_transformed_dataset(self, dataset: SparkDataset, *args, **kwargs) -> SparkDataset:
         roles = {**self.output_roles}
