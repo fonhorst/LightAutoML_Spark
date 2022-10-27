@@ -85,8 +85,6 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
                 )
             ]).fit(predictions.data)
 
-            self._transformer = self._clean_transformer_columns(self._transformer, predictions.service_columns)
-
             preds = predictions.empty()
             preds.set_data(
                 self._transformer.transform(predictions.data),
