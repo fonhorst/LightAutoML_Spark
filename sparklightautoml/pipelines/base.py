@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, List
 
 from lightautoml.dataset.base import RolesDict
 from pyspark.ml import Transformer
@@ -29,9 +29,24 @@ class TransformerInputOutputRoles(ABC):
         """Returns dict of output roles"""
         ...
 
-    @abstractmethod
     def transformer(self, *args, **kwargs) -> Optional[Transformer]:
+        transformer = self._build_transformer(*args, **kwargs)
+        return self._clean_transformer_columns(transformer, self._get_service_columns()) if transformer else None
+
+    @abstractmethod
+    def _get_service_columns(self) -> List[str]:
         ...
+
+    @abstractmethod
+    def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
+        ...
+
+    def _clean_transformer_columns(self, transformer: Transformer, service_columns: Optional[List[str]] = None):
+        cleaning_selector = ColumnsSelectorTransformer(
+            input_cols=[*self.input_roles.keys(), *self.output_roles.keys()],
+            optional_cols=service_columns
+        )
+        return PipelineModel(stages=[transformer, cleaning_selector])
 
     def _make_transformed_dataset(self, dataset: SparkDataset, *args, **kwargs) -> SparkDataset:
         roles = {**self.output_roles}

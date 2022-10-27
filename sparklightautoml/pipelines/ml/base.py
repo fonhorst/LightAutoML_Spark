@@ -77,6 +77,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
         self._persist_before_ml_algo = persist_before_ml_algo
+        self._service_columns: Optional[List[str]] = None
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
@@ -90,7 +91,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
     def name(self) -> str:
         return self._name
 
-    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
+    def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
         assert self._transformer is not None, f"{type(self)} seems to be not fitted"
         return self._transformer
 
@@ -150,6 +151,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
 
         self._input_roles = copy(train_valid.train.roles)
         self._output_roles = copy(val_preds_ds.roles)
+        self._service_columns = train_valid.train.service_columns
 
         # val_preds_ds = val_preds_ds.persist(level=PersistenceLevel.REGULAR)
         train_valid.train.frozen = False
@@ -168,3 +170,8 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
 
         """
         return self._make_transformed_dataset(dataset)
+
+    def _get_service_columns(self) -> List[str]:
+        return self._service_columns
+
+

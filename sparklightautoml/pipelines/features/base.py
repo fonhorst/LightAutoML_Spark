@@ -117,6 +117,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
         self._transformer: Optional[Transformer] = None
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
+        self._service_columns: Optional[List[str]] = None
 
     @property
     def input_features(self) -> List[str]:
@@ -144,7 +145,10 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
     def output_roles(self) -> Optional[RolesDict]:
         return self._output_roles
 
-    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
+    def _get_service_columns(self) -> List[str]:
+        return self._service_columns
+
+    def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
         return self._transformer
 
     def create_pipeline(self, train: SparkDataset) -> SparkEstOrTrans:
@@ -175,6 +179,7 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
         self._transformer = fitted_pipe.transformer
         self._input_roles = copy(train.roles)
         self._output_roles = copy(fitted_pipe.dataset.roles)
+        self._service_columns = train.service_columns
 
         logger.info("SparkFeaturePipeline is finished")
 

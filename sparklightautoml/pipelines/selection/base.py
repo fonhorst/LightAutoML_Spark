@@ -32,6 +32,7 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
         self._feature_pipeline = cast(SparkFeaturesPipeline, self._sel_pipe.features_pipeline)
+        self._service_columns: Optional[List[str]] = None
         super().__init__()
 
     def transformer(self, *args, **kwargs) -> Optional[Transformer]:
@@ -82,6 +83,7 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
             for feat, role in self._input_roles.items()
             if feat in self._sel_pipe.selected_features
         }
+        self._service_columns = train_valid.train.service_columns
 
     def select(self, dataset: SparkDataset) -> SparkDataset:
         return cast(SparkDataset, self._sel_pipe.select(dataset))
@@ -91,3 +93,6 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
 
     def get_features_score(self):
         return self._sel_pipe.get_features_score()
+
+    def _get_service_columns(self) -> List[str]:
+        return self._service_columns

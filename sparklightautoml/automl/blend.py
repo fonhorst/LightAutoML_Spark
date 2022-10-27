@@ -37,6 +37,7 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
         self._task: Optional[SparkTask] = None
+        self._service_columns: Optional[List[str]] = None
         super().__init__()
 
     @property
@@ -49,7 +50,10 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
         """Returns dict of output roles"""
         return self._output_roles
 
-    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
+    def _get_service_columns(self) -> List[str]:
+        return self._service_columns
+
+    def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
         """Returns Spark MLlib Transformer.
         Represents a Transformer with fitted models."""
 
@@ -78,6 +82,8 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
                 )
             ]).fit(predictions.data)
 
+            self._transformer = self._clean_transformer_columns(self._transformer, predictions.service_columns)
+
             preds = predictions.empty()
             preds.set_data(
                 self._transformer.transform(predictions.data),
@@ -91,6 +97,7 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
         result = self._fit_predict(predictions, pipes)
 
         self._output_roles = result[0].roles
+        self._service_columns = predictions.service_columns
 
         logger.info(f"Blender {type(self)} finished fit_predict")
 

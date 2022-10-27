@@ -44,10 +44,10 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self.n_classes: Optional[int] = None
         # names of columns that should contain predictions of individual models
         self._models_prediction_columns: Optional[List[str]] = None
-        self._transformer: Optional[Transformer] = None
 
         self._prediction_role: Optional[ColumnRole] = None
         self._input_roles: Optional[RolesDict] = None
+        self._service_columns: Optional[List[str]] = None
 
     @property
     def features(self) -> Optional[List[str]]:
@@ -79,14 +79,6 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     @property
     def validation_column(self) -> str:
         return self._default_validation_col_name
-
-    def transformer(self, *args, **kwargs) -> Optional[Transformer]:
-        """Returns Spark MLlib Transformer.
-        Represents a Transformer with fitted models."""
-
-        assert self._transformer is not None, "Pipeline is not fitted!"
-
-        return self._transformer
 
     @log_exception(logger=logger)
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
@@ -175,7 +167,10 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
         # create Spark MLlib Transformer and save to property var
-        self._transformer = self._build_transformer()
+        # self._transformer = self._clean_transformer_columns(
+        #     self._build_transformer(),
+        #     train_valid_iterator.train.service_columns
+        # )
 
         pred_ds = valid_ds.empty()
         pred_ds.set_data(
@@ -186,6 +181,8 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             name=f"{self._name}"
         )
         pred_ds = pred_ds.persist(level=PersistenceLevel.REGULAR)
+
+        self._service_columns = train_valid_iterator.train.service_columns
 
         if iterator_len > 1:
             single_pred_ds = self._make_single_prediction_dataset(pred_ds)
@@ -220,6 +217,9 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     def predict(self, dataset: SparkDataset) -> SparkDataset:
         return self._make_transformed_dataset(dataset)
 
+    def _get_service_columns(self) -> List[str]:
+        return self._service_columns
+
     def _infer_and_set_prediction_role(self, valid_ds: SparkDataset):
         outp_dim = 1
         if self.task.name == "multiclass":
@@ -250,9 +250,6 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
     def _predict_feature_name(self):
         return f"{self._name}_prediction"
-
-    def _build_transformer(self) -> Transformer:
-        raise NotImplementedError()
 
     def _build_averaging_transformer(self) -> Transformer:
         raise NotImplementedError()

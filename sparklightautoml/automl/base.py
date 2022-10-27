@@ -110,6 +110,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         self._transformer = None
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
+        self._service_columns: Optional[List[str]] = None
         if reader and levels:
             self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
@@ -330,6 +331,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         self._input_roles = copy(train_dataset.roles)
         self._output_roles = copy(oof_pred.roles)
+        self._service_columns = train_dataset.service_columns
 
         return oof_pred
 
@@ -368,46 +370,6 @@ class SparkAutoML(TransformerInputOutputRoles):
             add_reader_attrs: if True,
               the reader's attributes will be added to the SparkDataset
 
-        Returns:
-            Dataset with predictions.
-
-        """
-        persistence_manager = persistence_manager or PlainCachePersistenceManager()
-        transformer = self.transformer(return_all_predictions=return_all_predictions, add_array_attrs=add_reader_attrs)
-
-        data = self._read_data(data)
-        predictions = transformer.transform(data)
-
-        sds = SparkDataset(
-            data=predictions,
-            roles=copy(transformer.get_output_roles()),
-            task=self.reader.task,
-            persistence_manager=persistence_manager
-        )
-
-        return sds
-
-    # TODO: SLAMA - add persistence_manager arg
-    # if no manager, replace with PlainCachePersistenceManager
-    # TODO: SLAMA - add reader args sending into transformer building
-    def predict(
-        self,
-        data: SparkDataFrame,
-        features_names: Optional[Sequence[str]] = None,
-        return_all_predictions: Optional[bool] = None,
-        add_reader_attrs: bool = False,
-        persistence_manager: Optional[PersistenceManager] = None
-    ) -> SparkDataset:
-        """Predict with automl on new dataset.
-
-        Args:
-            data: Dataset to perform inference.
-            features_names: Optional features names,
-              if cannot be inferred from `train_data`.
-            return_all_predictions: if True,
-              returns all model predictions from last level
-            add_reader_attrs: if True,
-              adds reader attributes to the dataset
         Returns:
             Dataset with predictions.
 
@@ -481,6 +443,9 @@ class SparkAutoML(TransformerInputOutputRoles):
         logger.info(f"Using train valid iterator of type: {type(iterator)}")
 
         return iterator
+
+    def _get_service_columns(self) -> List[str]:
+        return self._service_columns
 
     def _build_transformer(
         self, no_reader: bool = False, return_all_predictions: bool = False
