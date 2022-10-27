@@ -34,12 +34,12 @@ class TransformerInputOutputRoles(ABC):
         ...
 
     def _make_transformed_dataset(self, dataset: SparkDataset, *args, **kwargs) -> SparkDataset:
+        roles = {**self.output_roles}
+
         sdf = PipelineModel(stages=[
             self.transformer(*args, **kwargs),
-            ColumnsSelectorTransformer(input_cols=list(self.output_roles.keys()), optional_cols=dataset.service_columns)
+            ColumnsSelectorTransformer(input_cols=list(roles.keys()), optional_cols=dataset.service_columns)
         ]).transform(dataset.data)
-
-        roles = {**self.output_roles}
 
         out_ds = dataset.empty()
         out_ds.set_data(sdf, list(roles.keys()), roles)

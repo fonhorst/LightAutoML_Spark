@@ -16,6 +16,7 @@ from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset, PersistenceLevel, PersistenceManager
 from ...ml_algo.base import SparkTabularMLAlgo
+from ...utils import ColumnsSelectorTransformer
 from ...validation.base import SparkBaseTrainValidIterator
 
 
@@ -144,7 +145,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
             self.pre_selection.transformer(),
             self.features_pipeline.transformer(),
             self.post_selection.transformer(),
-            *[ml_algo.transformer() for ml_algo in self.ml_algos]
+            *[ml_algo.transformer() for ml_algo in self.ml_algos],
         ])
 
         self._input_roles = copy(train_valid.train.roles)

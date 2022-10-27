@@ -415,7 +415,6 @@ class SparkAutoML(TransformerInputOutputRoles):
         persistence_manager = persistence_manager or PlainCachePersistenceManager()
         transformer = self.transformer(return_all_predictions=return_all_predictions, add_array_attrs=add_reader_attrs)
 
-        transformer = self.transformer(return_all_predictions=return_all_predictions)
         data = self._read_data(data)
         predictions = transformer.transform(data)
 
@@ -423,7 +422,8 @@ class SparkAutoML(TransformerInputOutputRoles):
             data=predictions,
             roles=copy(transformer.get_output_roles()),
             task=self.reader.task,
-            persistence_manager=persistence_manager
+            persistence_manager=persistence_manager,
+            target=self.reader.target_col
         )
 
         return sds
