@@ -1,6 +1,7 @@
 import logging.config
 
 import pytest
+from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
 from sparklightautoml.dataset.base import PersistenceManager, PersistenceLevel
@@ -60,5 +61,12 @@ def test_automl_preset(spark: SparkSession, persistence_manager: PersistenceMana
     pred_ds.unpersist()
 
     assert len(persistence_manager.all_datasets) == 0
+
+    # automl_model_path = "/tmp/slama_test.model"
+    # automl.transformer().write().overwrite().save(automl_model_path)
+    # pipeline_model = PipelineModel.load(automl_model_path)
+    #
+    # te_pred = pipeline_model.transform(test_data)
+    # te_pred.write.mode('overwrite').format('noop').save()
 
     logger.info("Finished")

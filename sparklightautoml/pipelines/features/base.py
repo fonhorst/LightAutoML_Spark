@@ -21,6 +21,7 @@ from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
 from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.mlwriters import CommonPickleMLWritable, CommonPickleMLReadable
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.transformers.base import (
     SparkBaseEstimator,
@@ -674,7 +675,7 @@ class SparkEmptyFeaturePipeline(SparkFeaturesPipeline):
         return SparkNoOpTransformer(train.roles)
 
 
-class SparkNoOpTransformer(SparkBaseTransformer):
+class SparkNoOpTransformer(SparkBaseTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
     """
     This transformer does nothing, it just returns the input dataframe unchanged.
     """

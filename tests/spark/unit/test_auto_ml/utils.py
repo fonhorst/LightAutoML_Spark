@@ -17,6 +17,7 @@ from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
+from sparklightautoml.mlwriters import CommonPickleMLWritable, CommonPickleMLReadable
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
@@ -27,7 +28,7 @@ from sparklightautoml.validation.iterators import SparkFoldsIterator
 logger = logging.getLogger(__name__)
 
 
-class FakeOpTransformer(Transformer):
+class FakeOpTransformer(Transformer, CommonPickleMLWritable, CommonPickleMLReadable):
     def __init__(self, cols_to_generate: List[str], n_classes: int):
         super().__init__()
         self._cos_to_generate = cols_to_generate
