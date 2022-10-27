@@ -1,7 +1,7 @@
 import logging
 import os
 from copy import deepcopy, copy
-from typing import Optional, Sequence, Iterable, Union, Tuple, List
+from typing import Optional, Sequence, Iterable, Tuple, List
 
 import numpy as np
 from lightautoml.automl.presets.base import upd_params
@@ -17,6 +17,7 @@ from pyspark.sql import functions as sf, Window
 from pyspark.sql.types import DateType, StringType
 from tqdm import tqdm
 
+from sparklightautoml.automl.base import ReadableIntoSparkDf
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.automl.presets.utils import (
@@ -39,9 +40,6 @@ from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
-
-# Either path/full url, or pyspark.sql.DataFrame
-ReadableIntoSparkDf = Union[str, SparkDataFrame]
 
 base_dir = os.path.dirname(__file__)
 
@@ -285,7 +283,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             time_score = self.get_time_score(n_level, key)
             gbm_timer = self.timer.get_task_timer(algo_key, time_score)
             if algo_key == "lgb":
-                gbm_model = SparkBoostLGBM(self._persistence_manager, timer=gbm_timer, **self.lgb_params)
+                gbm_model = SparkBoostLGBM(timer=gbm_timer, **self.lgb_params)
             elif algo_key == "cb":
                 raise NotImplementedError("Not supported yet")
             else:
@@ -439,12 +437,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
         if roles is None:
             roles = {}
-        read_csv_params = self._get_read_csv_params()
-        train, upd_roles = self._read_data(train_data, train_features, read_csv_params)
-        if upd_roles:
-            roles = {**roles, **upd_roles}
+        train = self._read_data(train_data, train_features)
+        # if upd_roles:
+        #     roles = {**roles, **upd_roles}
         if valid_data is not None:
-            valid_data, _ = self._read_data(valid_data, valid_features, self.read_csv_params)
+            valid_data = self._read_data(valid_data, valid_features)
 
         oof_pred = super().fit_predict(train, roles=roles, cv_iter=cv_iter, valid_data=valid_data, verbose=verbose)
 
@@ -486,7 +483,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             return None
 
         read_csv_params = self._get_read_csv_params()
-        data, _ = self._read_data(data, features_names, read_csv_params)
+        data = self._read_data(data, features_names, read_csv_params)
         used_feats = self.collect_used_feats()
         fi = calc_feats_permutation_imps(
             self,

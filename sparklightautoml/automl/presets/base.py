@@ -1,7 +1,7 @@
 import logging
 import os
 import shutil
-from typing import Optional, Any, Sequence, Iterable
+from typing import Optional, Any, Sequence, Iterable, Union
 
 import torch
 import yaml
@@ -11,6 +11,7 @@ from lightautoml.utils.timer import PipelineTimer
 from sparklightautoml.automl.base import SparkAutoML
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.tasks.base import SparkTask
+from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 

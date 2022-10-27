@@ -2,7 +2,7 @@
 import logging
 import os
 from copy import copy
-from typing import Any, Callable, Tuple, cast, Optional, Sequence
+from typing import Any, Callable, Tuple, cast, Union
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -17,7 +17,6 @@ from pyspark.ml import PipelineModel, Transformer
 from pyspark.sql.session import SparkSession
 
 from .blend import SparkBlender, SparkBestModelSelector
-from .presets.tabular_presets import ReadableIntoSparkDf
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
 from ..pipelines.base import TransformerInputOutputRoles
@@ -29,6 +28,9 @@ from ..validation.base import SparkBaseTrainValidIterator
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 
 logger = logging.getLogger(__name__)
+
+# Either path/full url, or pyspark.sql.DataFrame
+ReadableIntoSparkDf = Union[str, SparkDataFrame]
 
 
 class SparkAutoML(TransformerInputOutputRoles):
@@ -410,7 +412,19 @@ class SparkAutoML(TransformerInputOutputRoles):
             Dataset with predictions.
 
         """
+        persistence_manager = persistence_manager or PlainCachePersistenceManager()
+        transformer = self.transformer(return_all_predictions=return_all_predictions, add_array_attrs=add_reader_attrs)
 
+        transformer = self.transformer(return_all_predictions=return_all_predictions)
+        data = self._read_data(data)
+        predictions = transformer.transform(data)
+
+        sds = SparkDataset(
+            data=predictions,
+            roles=copy(transformer.get_output_roles()),
+            task=self.reader.task,
+            persistence_manager=persistence_manager
+        )
 
         return sds
 
@@ -497,7 +511,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         return automl_transformer, output_roles
 
-    def _read_data(self, data: ReadableIntoSparkDf) -> SparkDataFrame:
+    def _read_data(self, data: ReadableIntoSparkDf, features: Optional[List[str]] = None) -> SparkDataFrame:
         """Get :class:`~pyspark.sql.DataFrame` from different data formats.
 
         Note:
@@ -522,22 +536,24 @@ class SparkAutoML(TransformerInputOutputRoles):
         """
         spark = SparkSession.getActiveSession()
 
-
         if isinstance(data, SparkDataFrame):
-            return data
-
-        if isinstance(data, str):
-            path: str = data
+            out_sdf = data
+        elif isinstance(data, str):
+            path = cast(str, data)
             if path.endswith(".parquet"):
-                return spark.read.parquet(path)
+                out_sdf = spark.read.parquet(path)
                 # return pd.read_parquet(data, columns=read_csv_params["usecols"]), None
-            if path.endswith(".csv"):
+            elif path.endswith(".csv"):
                 csv_params = self._get_read_csv_params()
-                return spark.read.csv(path, **csv_params)
+                out_sdf = spark.read.csv(path, **csv_params)
             else:
                 raise ValueError(f"Unsupported data format: {os.path.splitext(path)[1]}")
+        else:
+            raise ValueError("Input data format is not supported")
 
-        raise ValueError("Input data format is not supported")
+        out_sdf = out_sdf.select(*features) if features is not None else out_sdf
+
+        return out_sdf
 
     def _get_read_csv_params(self) -> Dict:
         return {}
