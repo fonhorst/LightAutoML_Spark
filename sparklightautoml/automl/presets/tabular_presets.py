@@ -394,6 +394,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         valid_features: Optional[Sequence[str]] = None,
         log_file: str = None,
         verbose: int = 0,
+        persistence_manager: Optional[PersistenceManager] = None
     ) -> SparkDataset:
         """Fit and get prediction on validation dataset.
 
@@ -443,7 +444,14 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         if valid_data is not None:
             valid_data = self._read_data(valid_data, valid_features)
 
-        oof_pred = super().fit_predict(train, roles=roles, cv_iter=cv_iter, valid_data=valid_data, verbose=verbose)
+        oof_pred = super().fit_predict(
+            train,
+            roles=roles,
+            cv_iter=cv_iter,
+            valid_data=valid_data,
+            verbose=verbose,
+            persistence_manager=persistence_manager
+        )
 
         return oof_pred
 

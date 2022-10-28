@@ -10,6 +10,7 @@ from pyspark.sql import SparkSession
 from examples_utils import get_dataset_attrs, prepare_test_and_train, get_spark_session
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import LocalCheckpointPersistenceManager
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
@@ -51,7 +52,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
         oof_predictions = automl.fit_predict(
             train_data,
-            roles=roles
+            roles=roles,
+            persistence_manager=LocalCheckpointPersistenceManager()
         )
 
     logger.info("Predicting on out of fold")
