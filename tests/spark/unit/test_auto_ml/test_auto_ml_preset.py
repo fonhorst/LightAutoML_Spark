@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
             bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
         ),
         PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
-        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False)
+        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=True)
     })
 ])
 def test_automl_preset(spark: SparkSession, persistence_manager: PersistenceManager):

@@ -317,7 +317,8 @@ class Cacher(Estimator):
         # ds = dataset.localCheckpoint(eager=True)
 
         # using plain caching
-        ds = SparkSession.getActiveSession().createDataFrame(dataset.rdd, schema=dataset.schema).cache()
+        # ds = SparkSession.getActiveSession().createDataFrame(dataset.rdd, schema=dataset.schema).cache()
+        ds = dataset.cache()
         ds.write.mode('overwrite').format('noop').save()
 
         logger.info(f"Cacher {self._key} (RDD Id: {ds.rdd.id()}, Column nums: {len(ds.columns)}). "
