@@ -38,6 +38,7 @@ DepIdentifable = Union[str, 'SparkDataset']
 
 
 class PersistenceLevel(Enum):
+    READER = 0
     REGULAR = 1
     CHECKPOINT = 2
 

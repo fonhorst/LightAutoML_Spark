@@ -27,6 +27,8 @@ from sparklightautoml.utils import log_exec_time, logging_config, VERBOSE_LOGGIN
 # All tests require PYSPARK_PYTHON env variable to be set
 # for example: PYSPARK_PYTHON=/home/nikolay/.conda/envs/LAMA/bin/python
 JAR_PATH = 'jars/spark-lightautoml_2.12-0.1.jar'
+PARTITIONS_NUM = 8
+BUCKET_NUMS = PARTITIONS_NUM
 
 
 logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/lama.log'))
@@ -47,8 +49,9 @@ def spark() -> SparkSession:
         .config("spark.jars", JAR_PATH)
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-        .config("spark.sql.shuffle.partitions", 200)
+        .config("spark.sql.shuffle.partitions", PARTITIONS_NUM)
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        .config("spark.sql.autoBroadcastJoinThreshold", "-1")
         .getOrCreate()
     )
 

@@ -261,7 +261,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
         # bucketing should happen here
         initial_train_data_pdf = persistence_manager.persist(
             PersistableDataFrame(train_data, uid=str(uuid.uuid4())),
-            level=PersistenceLevel.CHECKPOINT
+            level=PersistenceLevel.READER
         )
 
         train_data = initial_train_data_pdf.sdf

@@ -9,7 +9,7 @@ from sparklightautoml.dataset.persistence import PlainCachePersistenceManager, L
     BucketedPersistenceManager, CompositePersistenceManager
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
 from .utils import DummyTabularAutoML
-from .. import spark as spark_sess
+from .. import spark as spark_sess, BUCKET_NUMS
 
 spark = spark_sess
 
@@ -20,12 +20,20 @@ logger = logging.getLogger(__name__)
 
 # noinspection PyShadowingNames
 @pytest.mark.parametrize("persistence_manager", [
-    PlainCachePersistenceManager(),
-    LocalCheckpointPersistenceManager(),
-    BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10),
+    # PlainCachePersistenceManager(),
+    # LocalCheckpointPersistenceManager(),
+    # BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10),
+    # CompositePersistenceManager({
+    #     PersistenceLevel.READER: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10),
+    #     PersistenceLevel.REGULAR: PlainCachePersistenceManager(),
+    #     PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10)
+    # }),
     CompositePersistenceManager({
-        PersistenceLevel.REGULAR: PlainCachePersistenceManager(),
-        PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10)
+        PersistenceLevel.READER: BucketedPersistenceManager(
+            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
+        ),
+        PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
+        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False)
     })
 ])
 def test_automl_preset(spark: SparkSession, persistence_manager: PersistenceManager):

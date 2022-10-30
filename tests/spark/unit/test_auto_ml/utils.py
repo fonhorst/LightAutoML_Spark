@@ -13,7 +13,7 @@ from pyspark.ml.functions import array_to_vector
 
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
-from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
+from sparklightautoml.dataset.base import SparkDataset, PersistenceManager, PersistenceLevel
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -74,6 +74,9 @@ class DummyReader(SparkToSparkReader):
             folds=folds_col,
             name="DummySparkToSparkReader"
         )
+
+        sds = persistence_manager.persist(sds, level=PersistenceLevel.READER).to_dataset()
+
         return sds
 
     def read(self, data: SparkDataFrame, features_names: Any = None, add_array_attrs: bool = False) -> SparkDataset:

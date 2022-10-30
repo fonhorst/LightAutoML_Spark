@@ -148,15 +148,18 @@ class BasePersistenceManager(PersistenceManager):
 
 
 class PlainCachePersistenceManager(BasePersistenceManager):
-    def __init__(self, parent: Optional['PersistenceManager'] = None):
+    def __init__(self, parent: Optional['PersistenceManager'] = None, prune_history: bool = True):
         super().__init__(parent)
+        self._prune_history = prune_history
 
     def _persist(self, pdf: PersistableDataFrame, level: PersistenceLevel) -> PersistableDataFrame:
         logger.debug(f"Manager {self._uid}: "
                      f"caching and materializing the dataset (uid={pdf.uid}, name={pdf.name}).")
 
         with JobGroup("Persisting", f"{type(self)} caching df (uid={pdf.uid}, name={pdf.name})"):
-            ds = SparkSession.getActiveSession().createDataFrame(pdf.sdf.rdd, schema=pdf.sdf.schema).cache()
+            df = SparkSession.getActiveSession().createDataFrame(pdf.sdf.rdd, schema=pdf.sdf.schema) \
+                if self._prune_history else pdf.sdf
+            ds = df.cache()
             ds.write.mode('overwrite').format('noop').save()
 
         logger.debug(f"Manager {self._uid}: "
@@ -179,7 +182,8 @@ class LocalCheckpointPersistenceManager(BasePersistenceManager):
         logger.debug(f"Manager {self._uid}: "
                      f"making a local checkpoint for the dataset (uid={pdf.uid}, name={pdf.name}).")
 
-        ds = pdf.sdf.localCheckpoint()
+        with JobGroup("Persisting", f"{type(self)} local checkpointing of df (uid={pdf.uid}, name={pdf.name})"):
+            ds = pdf.sdf.localCheckpoint()
 
         logger.debug(f"Manager {self._uid}: "
                      f"the local checkpoint has been made for the dataset (uid={pdf.uid}, name={pdf.name}).")
@@ -196,10 +200,12 @@ class BucketedPersistenceManager(BasePersistenceManager):
     def __init__(self,
                  bucketed_datasets_folder: str,
                  bucket_nums: int = 100,
-                 parent: Optional['PersistenceManager'] = None):
+                 parent: Optional['PersistenceManager'] = None,
+                 no_unpersisting: bool = False):
         super().__init__(parent)
         self._bucket_nums = bucket_nums
         self._bucketed_datasets_folder = bucketed_datasets_folder
+        self._no_unpersisting = no_unpersisting
 
     def _persist(self, pdf: PersistableDataFrame, level: PersistenceLevel) -> PersistableDataFrame:
         spark = SparkSession.getActiveSession()
@@ -211,15 +217,17 @@ class BucketedPersistenceManager(BasePersistenceManager):
             f"for the dataset (uid={pdf.uid}, name={pdf.name}) with name {name} on path {path}."
         )
 
-        (
-            pdf.sdf
-            .repartition(self._bucket_nums, SparkDataset.ID_COLUMN)
-            .write
-            .mode('overwrite')
-            .bucketBy(self._bucket_nums, SparkDataset.ID_COLUMN)
-            .sortBy(SparkDataset.ID_COLUMN)
-            .saveAsTable(name, format='parquet', path=path)
-        )
+        with JobGroup("Persisting",
+                      f"{type(self)} saving bucketed table of df (uid={pdf.uid}, name={pdf.name}). Table path: {path}"):
+            (
+                pdf.sdf
+                .repartition(self._bucket_nums, SparkDataset.ID_COLUMN)
+                .write
+                .mode('overwrite')
+                .bucketBy(self._bucket_nums, SparkDataset.ID_COLUMN)
+                .sortBy(SparkDataset.ID_COLUMN)
+                .saveAsTable(name, format='parquet', path=path)
+            )
         ds = spark.table(name)
 
         logger.debug(
@@ -229,6 +237,9 @@ class BucketedPersistenceManager(BasePersistenceManager):
         return PersistableDataFrame(ds, pdf.uid, pdf.callback, pdf.base_dataset)
 
     def _unpersist(self, pdf: PersistableDataFrame):
+        if self._no_unpersisting:
+            return
+
         name = self._build_name(pdf)
         path = self._build_path(name)
         logger.debug(
