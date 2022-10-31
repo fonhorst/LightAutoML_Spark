@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     persistence_manager = PlainCachePersistenceManager()
 
-    sdf, roles = generate_frame(cols=1000, rows_count=100, col_encs=['LE#2'])
+    sdf, roles = generate_frame(cols=10, rows_count=100)#, col_encs=['LE#2'])
 
     with log_exec_time('initial_caching'):
         sdf = sdf.cache()

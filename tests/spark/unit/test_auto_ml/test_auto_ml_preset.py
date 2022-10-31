@@ -28,12 +28,21 @@ logger = logging.getLogger(__name__)
     #     PersistenceLevel.REGULAR: PlainCachePersistenceManager(),
     #     PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10)
     # }),
+    # CompositePersistenceManager({
+    #     PersistenceLevel.READER: BucketedPersistenceManager(
+    #         bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
+    #     ),
+    #     PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
+    #     PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False)
+    # }),
     CompositePersistenceManager({
         PersistenceLevel.READER: BucketedPersistenceManager(
             bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
         ),
         PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
-        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=True)
+        PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(
+            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS
+        ),
     })
 ])
 def test_automl_preset(spark: SparkSession, persistence_manager: PersistenceManager):

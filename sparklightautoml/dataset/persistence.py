@@ -148,7 +148,7 @@ class BasePersistenceManager(PersistenceManager):
 
 
 class PlainCachePersistenceManager(BasePersistenceManager):
-    def __init__(self, parent: Optional['PersistenceManager'] = None, prune_history: bool = True):
+    def __init__(self, parent: Optional['PersistenceManager'] = None, prune_history: bool = False):
         super().__init__(parent)
         self._prune_history = prune_history
 
