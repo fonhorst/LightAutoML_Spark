@@ -8,10 +8,12 @@ import org.apache.spark.ml.attribute.NumericAttribute
 import org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel.LAMLStringIndexModelWriter
 import org.apache.spark.ml.param.shared.{HasInputCols, HasOutputCols}
 import org.apache.spark.ml.param.{Param, ParamMap}
-import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, DefaultParamsWriter, MLReadable, MLReader, MLWriter}
+import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsReader, DefaultParamsWritable, DefaultParamsWriter, MLReadable, MLReader, MLWriter}
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.functions.{col, lit, udf}
 import org.apache.spark.sql.types.{IntegerType, ShortType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
+import org.apache.spark.util.VersionUtils.majorMinorVersion
 
 object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
   type Encodings = Map[String, Array[Double]]
@@ -20,11 +22,16 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
   private[TargetEncoderTransformer] class TargetEncoderTransformerWriter(instance: TargetEncoderTransformer)
           extends MLWriter {
 
-    private case class Data(labelsArray: Array[Array[(String, Long)]])
+    private case class Data(encodings: Encodings, oofEncodings: OofEncodings, applyOof: Boolean, foldColumn: String)
 
     override protected def saveImpl(path: String): Unit = {
       DefaultParamsWriter.saveMetadata(instance, path, sc)
-      val data = Data(instance.labelsArray)
+      val data = Data(
+        instance.getEncodings.get,
+        instance.getOofEncodings.get,
+        instance.getApplyOof.get,
+        instance.getFoldColumn.get
+      )
       val dataPath = new Path(path, "data").toString
       sparkSession.createDataFrame(Seq(data)).repartition(1).write.parquet(dataPath)
     }
@@ -41,23 +48,18 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
       // We support loading old `StringIndexerModel` saved by previous Spark versions.
       // Previous model has `labels`, but new model has `labelsArray`.
       val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
-      val labelsArray = if (majorVersion < 3) {
-        // Spark 2.4 and before.
-        val data = sparkSession.read.parquet(dataPath)
-                .select("labels")
-                .head()
-        val labels = data.getAs[Seq[(String, Long)]](0).toArray
-        Array(labels)
-      } else {
-        // After Spark 3.0.
-        val data = sparkSession.read.parquet(dataPath)
-                .select("labelsArray")
-                .head()
-
-        val res = data.getSeq[scala.collection.Seq[GenericRowWithSchema]](0)
-        res.map(_.map(x => (x.getAs[String](0), x.getAs[Long](1))).toArray).toArray
+      if (majorVersion < 3) {
+        throw new RuntimeException("Spark version < 3 is not supported")
       }
-      val model = new LAMLStringIndexerModel(metadata.uid, labelsArray)
+
+      val data = sparkSession.read.parquet(dataPath)
+              .select("encodings", "oofEncodings", "applyOof", "foldColumn")
+              .head()
+
+      val res = data.getSeq[scala.collection.Seq[GenericRowWithSchema]](0)
+      res.map(_.map(x => (x.getAs[String](0), x.getAs[Long](1))).toArray).toArray
+
+      val model = new TargetEncoderTransformer(metadata.uid, labelsArray)
       metadata.getAndSetParams(model)
       model
     }
