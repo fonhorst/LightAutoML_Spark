@@ -107,16 +107,31 @@ class TestLAMLStringIndexer extends BaseFunSuite {
     val te = new TargetEncoderTransformer("te_tr", enc, oof_enc, fold_column)
             .setInputCols(in_cols)
             .setOutputCols(out_cols)
+
     val tdf = te.transform(df)
 
     tdf.columns should contain allElementsOf df.columns
     tdf.columns should contain allElementsOf out_cols
     out_cols.foreach(col => tdf.schema(col) shouldBe a [DoubleType])
 
+    // TODO: content checking
+
     val tdf_2 = te.transform(df)
 
     tdf_2.columns should contain allElementsOf df.columns
     tdf_2.columns should contain allElementsOf out_cols
     out_cols.foreach(col => tdf_2.schema(col) shouldBe a [DoubleType])
+
+    // TODO: content checking
+
+    val tdf_3 = te.transform(df)
+
+    tdf_3.columns should contain allElementsOf df.columns
+    tdf_3.columns should contain allElementsOf out_cols
+    out_cols.foreach(col => tdf_3.schema(col) shouldBe a [DoubleType])
+
+    // TODO: content checking
+
+    // TODO: saving loading
   }
 }
