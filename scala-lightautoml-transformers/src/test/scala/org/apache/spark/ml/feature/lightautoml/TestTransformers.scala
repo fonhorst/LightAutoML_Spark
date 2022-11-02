@@ -1,15 +1,13 @@
 package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.internal.config.Tests.IS_TESTING
-import org.apache.spark.sql.{Dataset, Row, SparkSession}
-import org.apache.spark.ml.feature.{StringIndexer, StringIndexerModel}
-import org.apache.spark.ml.feature.lightautoml.{LAMLStringIndexer, LAMLStringIndexerModel}
-import org.apache.spark.util.AccumulatorContext
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
+import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
+import org.apache.spark.sql.{Row, SparkSession}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers._
 
-import java.util.{Locale, TimeZone}
+import scala.collection.JavaConverters._
 
 
 abstract class BaseFunSuite extends AnyFunSuite with BeforeAndAfterAll with Logging {
@@ -72,7 +70,7 @@ class TestLAMLStringIndexer extends BaseFunSuite {
     val endTime = System.currentTimeMillis()
 
     println(s"Duration = ${(endTime - startTime) / 1000D} seconds")
-    println(s"Size: ${cnt}")
+    println(s"Size: $cnt")
 
     lamaModel.write.overwrite().save("/tmp/LAMLStringIndexerModel")
     val pipelineModel = LAMLStringIndexerModel.load("/tmp/LAMLStringIndexerModel")
@@ -80,6 +78,45 @@ class TestLAMLStringIndexer extends BaseFunSuite {
   }
 
   test("Smoke test of Target Encoder transformer") {
+    val in_cols = Seq("a", "b", "c").toArray
+    val out_cols = in_cols.map(x => s"te_$x")
 
+    val enc = in_cols
+            .zipWithIndex.map{case (col, idx) => (col,(idx until idx + 4).map(_.toDouble).toArray)}
+            .toMap
+
+    val oof_enc = in_cols
+            .zipWithIndex.map {
+              case (col, idx) => (col, (1 until 2).map(
+                i => (idx * i * 10 until idx * i * 10 + 4).map(_.toDouble).toArray).toArray
+              )
+            }
+            .toMap
+
+    val fold_column = "fold"
+
+    // fold_column, some_other_col, a, b, c
+    val data = (1 until 10).map(_ => Row(Seq(0, 42, 1, 1, 1))).toList.asJava
+    val schema = StructType(
+      Array(StructField(fold_column, IntegerType), StructField("some_other_col", IntegerType))
+      ++ in_cols.map(col => StructField(col, IntegerType))
+    )
+
+    val df = spark.createDataFrame(data, schema)
+
+    val te = new TargetEncoderTransformer("te_tr", enc, oof_enc, fold_column)
+            .setInputCols(in_cols)
+            .setOutputCols(out_cols)
+    val tdf = te.transform(df)
+
+    tdf.columns should contain allElementsOf df.columns
+    tdf.columns should contain allElementsOf out_cols
+    out_cols.foreach(col => tdf.schema(col) shouldBe a [DoubleType])
+
+    val tdf_2 = te.transform(df)
+
+    tdf_2.columns should contain allElementsOf df.columns
+    tdf_2.columns should contain allElementsOf out_cols
+    out_cols.foreach(col => tdf_2.schema(col) shouldBe a [DoubleType])
   }
 }

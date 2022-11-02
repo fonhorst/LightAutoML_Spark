@@ -1,6 +1,7 @@
 package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.shaded.org.xbill.DNS.NSAP_PTRRecord
 import org.apache.spark.SparkException
 import org.apache.spark.annotation.Since
 import org.apache.spark.ml.Transformer
@@ -42,26 +43,27 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
     private val className = classOf[TargetEncoderTransformer].getName
 
     override def load(path: String): TargetEncoderTransformer = {
-      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
-      val dataPath = new Path(path, "data").toString
-
-      // We support loading old `StringIndexerModel` saved by previous Spark versions.
-      // Previous model has `labels`, but new model has `labelsArray`.
-      val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
-      if (majorVersion < 3) {
-        throw new RuntimeException("Spark version < 3 is not supported")
-      }
-
-      val data = sparkSession.read.parquet(dataPath)
-              .select("encodings", "oofEncodings", "applyOof", "foldColumn")
-              .head()
-
-      val res = data.getSeq[scala.collection.Seq[GenericRowWithSchema]](0)
-      res.map(_.map(x => (x.getAs[String](0), x.getAs[Long](1))).toArray).toArray
-
-      val model = new TargetEncoderTransformer(metadata.uid, labelsArray)
-      metadata.getAndSetParams(model)
-      model
+      throw new NotImplementedError()
+//      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
+//      val dataPath = new Path(path, "data").toString
+//
+//      // We support loading old `StringIndexerModel` saved by previous Spark versions.
+//      // Previous model has `labels`, but new model has `labelsArray`.
+//      val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
+//      if (majorVersion < 3) {
+//        throw new RuntimeException("Spark version < 3 is not supported")
+//      }
+//
+//      val data = sparkSession.read.parquet(dataPath)
+//              .select("encodings", "oofEncodings", "applyOof", "foldColumn")
+//              .head()
+//
+//      val res = data.getSeq[scala.collection.Seq[GenericRowWithSchema]](0)
+//      res.map(_.map(x => (x.getAs[String](0), x.getAs[Long](1))).toArray).toArray
+//
+//      val model = new TargetEncoderTransformer(metadata.uid, labelsArray)
+//      metadata.getAndSetParams(model)
+//      model
     }
   }
 
