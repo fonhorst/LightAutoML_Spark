@@ -43,27 +43,28 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
     private val className = classOf[TargetEncoderTransformer].getName
 
     override def load(path: String): TargetEncoderTransformer = {
-      throw new NotImplementedError()
-//      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
-//      val dataPath = new Path(path, "data").toString
-//
-//      // We support loading old `StringIndexerModel` saved by previous Spark versions.
-//      // Previous model has `labels`, but new model has `labelsArray`.
-//      val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
-//      if (majorVersion < 3) {
-//        throw new RuntimeException("Spark version < 3 is not supported")
-//      }
-//
-//      val data = sparkSession.read.parquet(dataPath)
-//              .select("encodings", "oofEncodings", "applyOof", "foldColumn")
-//              .head()
-//
-//      val res = data.getSeq[scala.collection.Seq[GenericRowWithSchema]](0)
-//      res.map(_.map(x => (x.getAs[String](0), x.getAs[Long](1))).toArray).toArray
-//
-//      val model = new TargetEncoderTransformer(metadata.uid, labelsArray)
-//      metadata.getAndSetParams(model)
-//      model
+      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
+      val dataPath = new Path(path, "data").toString
+
+      // We support loading old `StringIndexerModel` saved by previous Spark versions.
+      // Previous model has `labels`, but new model has `labelsArray`.
+      val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
+      if (majorVersion < 3) {
+        throw new RuntimeException("Spark version < 3 is not supported")
+      }
+
+      val data = sparkSession.read.parquet(dataPath)
+              .select("encodings", "oofEncodings", "applyOof", "foldColumn")
+              .first()
+
+      val enc = data.getMap[String, Array[Double]](0)
+      val oofEnc = data.getMap[String, Array[Array[Double]]](1)
+      val applyOof = data.getBoolean(2)
+      val foldColumns = data.getString(3)
+
+      val model = new TargetEncoderTransformer(metadata.uid, enc, oofEnc, foldColumns, applyOof)
+      metadata.getAndSetParams(model)
+      model
     }
   }
 
@@ -77,7 +78,9 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
 class TargetEncoderTransformer(override val uid: String,
                                enc: TargetEncoderTransformer.Encodings,
                                oof_enc: TargetEncoderTransformer.OofEncodings,
-                               fold_column: String)
+                               fold_column: String,
+                               apply_oof: Boolean = true
+                              )
         extends Transformer
                 with HasInputCols
                 with HasOutputCols
@@ -112,7 +115,7 @@ class TargetEncoderTransformer(override val uid: String,
 
   this.set(encodings, enc)
   this.set(oofEncodings, oof_enc)
-  this.set(applyOof, true)
+  this.set(applyOof, apply_oof)
   this.set(foldColumn, fold_column)
 
   def setEncodings(enc: Encodings): this.type = set(encodings, enc)
