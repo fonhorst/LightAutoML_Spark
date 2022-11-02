@@ -1,18 +1,71 @@
 package org.apache.spark.ml.feature.lightautoml
 
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkException
+import org.apache.spark.annotation.Since
 import org.apache.spark.ml.Transformer
 import org.apache.spark.ml.attribute.NumericAttribute
+import org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel.LAMLStringIndexModelWriter
 import org.apache.spark.ml.param.shared.{HasInputCols, HasOutputCols}
 import org.apache.spark.ml.param.{Param, ParamMap}
-import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, Identifiable}
+import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, DefaultParamsWriter, MLReadable, MLReader, MLWriter}
 import org.apache.spark.sql.functions.{col, lit, udf}
 import org.apache.spark.sql.types.{IntegerType, ShortType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 
-object TargetEncoderTransformer {
+object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
   type Encodings = Map[String, Array[Double]]
   type OofEncodings = Map[String, Array[Array[Double]]]
+
+  private[TargetEncoderTransformer] class TargetEncoderTransformerWriter(instance: TargetEncoderTransformer)
+          extends MLWriter {
+
+    private case class Data(labelsArray: Array[Array[(String, Long)]])
+
+    override protected def saveImpl(path: String): Unit = {
+      DefaultParamsWriter.saveMetadata(instance, path, sc)
+      val data = Data(instance.labelsArray)
+      val dataPath = new Path(path, "data").toString
+      sparkSession.createDataFrame(Seq(data)).repartition(1).write.parquet(dataPath)
+    }
+  }
+
+  private class TargetEncoderTransformerReader extends MLReader[TargetEncoderTransformer] {
+
+    private val className = classOf[TargetEncoderTransformer].getName
+
+    override def load(path: String): TargetEncoderTransformer = {
+      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
+      val dataPath = new Path(path, "data").toString
+
+      // We support loading old `StringIndexerModel` saved by previous Spark versions.
+      // Previous model has `labels`, but new model has `labelsArray`.
+      val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
+      val labelsArray = if (majorVersion < 3) {
+        // Spark 2.4 and before.
+        val data = sparkSession.read.parquet(dataPath)
+                .select("labels")
+                .head()
+        val labels = data.getAs[Seq[(String, Long)]](0).toArray
+        Array(labels)
+      } else {
+        // After Spark 3.0.
+        val data = sparkSession.read.parquet(dataPath)
+                .select("labelsArray")
+                .head()
+
+        val res = data.getSeq[scala.collection.Seq[GenericRowWithSchema]](0)
+        res.map(_.map(x => (x.getAs[String](0), x.getAs[Long](1))).toArray).toArray
+      }
+      val model = new LAMLStringIndexerModel(metadata.uid, labelsArray)
+      metadata.getAndSetParams(model)
+      model
+    }
+  }
+
+  override def read: MLReader[TargetEncoderTransformer] = new TargetEncoderTransformerReader
+
+  override def load(path: String): TargetEncoderTransformer = super.load(path)
 }
 
 // encodings - (column, cat_seq_id -> value)
@@ -121,6 +174,15 @@ class TargetEncoderTransformer(override val uid: String,
     validateAndTransformSchema(schema)
   }
 
+  override def write: LAMLStringIndexModelWriter = new LAMLStringIndexModelWriter(this)
+
+  override def toString: String = {
+    s"StringIndexerModel: uid=$uid, handleInvalid=${$(handleInvalid)}" +
+            get(stringOrderType).map(t => s", stringOrderType=$t").getOrElse("") +
+            get(inputCols).map(c => s", numInputCols=${c.length}").getOrElse("") +
+            get(outputCols).map(c => s", numOutputCols=${c.length}").getOrElse("")
+  }
+
   private def validateAndTransformField(schema: StructType,
                                         inputColName: String,
                                         outputColName: String): StructField = {
@@ -152,3 +214,5 @@ class TargetEncoderTransformer(override val uid: String,
     StructType(schema.fields ++ outputFields)
   }
 }
+
+
