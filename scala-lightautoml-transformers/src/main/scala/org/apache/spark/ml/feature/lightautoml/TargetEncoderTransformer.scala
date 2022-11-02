@@ -1,20 +1,18 @@
 package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.hadoop.fs.Path
-import org.apache.hadoop.shaded.org.xbill.DNS.NSAP_PTRRecord
 import org.apache.spark.SparkException
-import org.apache.spark.annotation.Since
 import org.apache.spark.ml.Transformer
 import org.apache.spark.ml.attribute.NumericAttribute
-import org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel.LAMLStringIndexModelWriter
 import org.apache.spark.ml.param.shared.{HasInputCols, HasOutputCols}
 import org.apache.spark.ml.param.{Param, ParamMap}
-import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsReader, DefaultParamsWritable, DefaultParamsWriter, MLReadable, MLReader, MLWriter}
-import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
+import org.apache.spark.ml.util._
 import org.apache.spark.sql.functions.{col, lit, udf}
 import org.apache.spark.sql.types.{IntegerType, ShortType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.util.VersionUtils.majorMinorVersion
+
+import scala.collection.Map
 
 object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
   type Encodings = Map[String, Array[Double]]
@@ -48,7 +46,7 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
 
       // We support loading old `StringIndexerModel` saved by previous Spark versions.
       // Previous model has `labels`, but new model has `labelsArray`.
-      val (majorVersion, minorVersion) = majorMinorVersion(metadata.sparkVersion)
+      val (majorVersion, _) = majorMinorVersion(metadata.sparkVersion)
       if (majorVersion < 3) {
         throw new RuntimeException("Spark version < 3 is not supported")
       }
