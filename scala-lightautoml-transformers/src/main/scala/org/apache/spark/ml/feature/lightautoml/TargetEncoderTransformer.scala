@@ -177,11 +177,11 @@ class TargetEncoderTransformer(override val uid: String,
     validateAndTransformSchema(schema)
   }
 
-  override def write: LAMLStringIndexModelWriter = new LAMLStringIndexModelWriter(this)
+  override def write: TargetEncoderTransformerWriter = new TargetEncoderTransformerWriter(this)
 
   override def toString: String = {
-    s"StringIndexerModel: uid=$uid, handleInvalid=${$(handleInvalid)}" +
-            get(stringOrderType).map(t => s", stringOrderType=$t").getOrElse("") +
+    s"TargetEncoderTransformer: uid=$uid, " +
+            get(applyOof).map(t => s", applyOf=$t").getOrElse("") +
             get(inputCols).map(c => s", numInputCols=${c.length}").getOrElse("") +
             get(outputCols).map(c => s", numOutputCols=${c.length}").getOrElse("")
   }
