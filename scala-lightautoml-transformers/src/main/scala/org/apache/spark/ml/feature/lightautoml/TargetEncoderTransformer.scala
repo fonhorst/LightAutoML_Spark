@@ -147,6 +147,7 @@ class TargetEncoderTransformer(override val uid: String,
         val func = udf((col_name: String, fold: Integer, cat: Integer) => {
           oofEncodingsBcst.value(col_name)(fold)(cat)
         })
+        setApplyOof(false)
         getInputCols.zip(getOutputCols).map{
           case (in_col, out_col) => func(lit(in_col), col(getFoldColumn.get), col(in_col)).alias(out_col)
         }
