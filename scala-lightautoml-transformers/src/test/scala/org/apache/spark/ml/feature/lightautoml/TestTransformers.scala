@@ -1,6 +1,7 @@
 package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.scalatest.BeforeAndAfterAll
@@ -121,30 +122,30 @@ class TestLAMLStringIndexer extends BaseFunSuite {
 
     // id, fold_column, some_other_col, a, b, c
     val data = Seq(
-      Row(Seq(0, 0, 42, 1, 1, 1)),
-      Row(Seq(1, 0, 43, 2, 1, 3)),
-      Row(Seq(2, 1, 44, 1, 2, 3)),
-      Row(Seq(3, 1, 45, 1, 2, 2)),
-      Row(Seq(4, 2, 46, 3, 1, 1)),
-      Row(Seq(5, 2, 47, 4, 1, 2)),
+      Row(0, 0, 42, 1, 1, 1),
+      Row(1, 0, 43, 2, 1, 3),
+      Row(2, 1, 44, 1, 2, 3),
+      Row(3, 1, 45, 1, 2, 2),
+      Row(4, 2, 46, 3, 1, 1),
+      Row(5, 2, 47, 4, 1, 2),
     ).toList.asJava
 
     val result_enc = Seq(
-      Row(Seq(0, 0, 42, -1, -1, -1)),
-      Row(Seq(1, 0, 43, -2, -1, -3)),
-      Row(Seq(2, 1, 44, -1, -2, -3)),
-      Row(Seq(3, 1, 45, -1, -2, -2)),
-      Row(Seq(4, 2, 46, -3, -1, -1)),
-      Row(Seq(5, 2, 47, -4, -1, -2)),
+      Row(0, 0, 42, 1, 1, 1, -1.0, -1.0, -1.0),
+      Row(1, 0, 43, 2, 1, 3, -2.0, -1.0, -3.0),
+      Row(2, 1, 44, 1, 2, 3, -1.0, -2.0, -3.0),
+      Row(3, 1, 45, 1, 2, 2, -1.0, -2.0, -2.0),
+      Row(4, 2, 46, 3, 1, 1, -3.0, -1.0, -1.0),
+      Row(5, 2, 47, 4, 1, 2, -4.0, -1.0, -2.0),
     )
 
     val result_oof_enc = Seq(
-      Row(Seq(0, 0, 42, 10, 10, 10)),
-      Row(Seq(1, 0, 43, 20, 10, 20)),
-      Row(Seq(2, 1, 44, 11, 12, 13)),
-      Row(Seq(3, 1, 45, 11, 12, 12)),
-      Row(Seq(4, 2, 46, 23, 21, 21)),
-      Row(Seq(5, 2, 47, 24, 21, 22)),
+      Row(0, 0, 42, 1, 1, 1, 10.0, 10.0, 10.0),
+      Row(1, 0, 43, 2, 1, 3, 20.0, 10.0, 30.0),
+      Row(2, 1, 44, 1, 2, 3, 11.0, 12.0, 13.0),
+      Row(3, 1, 45, 1, 2, 2, 11.0, 12.0, 12.0),
+      Row(4, 2, 46, 3, 1, 1, 23.0, 21.0, 21.0),
+      Row(5, 2, 47, 4, 1, 2, 24.0, 21.0, 22.0),
     )
 
     val schema = StructType(
@@ -159,9 +160,9 @@ class TestLAMLStringIndexer extends BaseFunSuite {
     def checkResult(tdf: DataFrame, df: DataFrame, target_data: Seq[Row]): Unit = {
       tdf.columns should contain allElementsOf df.columns
       tdf.columns should contain allElementsOf out_cols
-      out_cols.foreach(col => tdf.schema(col) shouldBe a [DoubleType])
+      out_cols.foreach(col => tdf.schema(col).dataType shouldBe a [DoubleType])
 
-      val resul_rows = tdf.orderBy(id_column).collect()
+      val resul_rows = tdf.orderBy(col(id_column)).collect()
       resul_rows.zip(target_data).foreach {
         case (row, target) => row.toSeq should equal (target.toSeq)
       }

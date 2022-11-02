@@ -8,7 +8,7 @@ import org.apache.spark.ml.param.shared.{HasInputCols, HasOutputCols}
 import org.apache.spark.ml.param.{Param, ParamMap}
 import org.apache.spark.ml.util._
 import org.apache.spark.sql.functions.{col, lit, udf}
-import org.apache.spark.sql.types.{IntegerType, ShortType, StructField, StructType}
+import org.apache.spark.sql.types.{IntegerType, ShortType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.util.VersionUtils.majorMinorVersion
 
@@ -151,9 +151,10 @@ class TargetEncoderTransformer(override val uid: String,
           oofEncodingsBcst.value(col_name)(fold)(cat)
         })
         setApplyOof(false)
-        getInputCols.zip(getOutputCols).map{
-          case (in_col, out_col) => func(lit(in_col), col(getFoldColumn.get), col(in_col)).alias(out_col)
+        val outs = getInputCols.zip(getOutputCols).map{
+          case (in_col, out_col) => func(lit(in_col).cast(StringType), col(getFoldColumn.get), col(in_col)).alias(out_col)
         }
+        outs
       case Some(false) if getEncodings.isEmpty =>
         throw new IllegalArgumentException("Encodings cannot be unset if applyOof is false")
       case Some(false) =>
