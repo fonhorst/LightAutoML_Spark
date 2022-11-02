@@ -36,6 +36,7 @@ abstract class BaseFunSuite extends AnyFunSuite with BeforeAndAfterAll with Logg
 
 
     val dir = new Directory(new File(workdir))
+    dir.deleteRecursively()
     dir.createDirectory()
   }
 
@@ -47,7 +48,7 @@ abstract class BaseFunSuite extends AnyFunSuite with BeforeAndAfterAll with Logg
   }
 }
 
-class TestLAMLStringIndexer extends BaseFunSuite {
+class TestTransformers extends BaseFunSuite {
 
   test("Smoke LAMLStringIndexer test") {
     val file = "resources/data.json"
@@ -178,7 +179,7 @@ class TestLAMLStringIndexer extends BaseFunSuite {
     checkResult(te.transform(df), df, result_enc)
     checkResult(te.transform(df), df, result_enc)
 
-    val path = workdir + "target_encoder.transformer"
+    val path = s"$workdir/target_encoder.transformer"
     te.save(path)
 
     val loaded_te = TargetEncoderTransformer.load(path)

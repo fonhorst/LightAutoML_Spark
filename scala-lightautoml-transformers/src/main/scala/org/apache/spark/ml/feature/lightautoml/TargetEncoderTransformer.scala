@@ -4,15 +4,15 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkException
 import org.apache.spark.ml.Transformer
 import org.apache.spark.ml.attribute.NumericAttribute
+import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.ml.param.shared.{HasInputCols, HasOutputCols}
-import org.apache.spark.ml.param.{Param, ParamMap}
 import org.apache.spark.ml.util._
 import org.apache.spark.sql.functions.{col, lit, udf}
-import org.apache.spark.sql.types.{IntegerType, ShortType, StringType, StructField, StructType}
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.util.VersionUtils.majorMinorVersion
 
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 
 object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
   type Encodings = Map[String, Array[Double]]
@@ -55,8 +55,12 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
               .select("encodings", "oofEncodings", "applyOof", "foldColumn")
               .first()
 
-      val enc = data.getMap[String, Array[Double]](0)
-      val oofEnc = data.getMap[String, Array[Array[Double]]](1)
+      val enc = data.getMap[String, mutable.WrappedArray[Double]](0).map{
+        case(col_name, warr) => (col_name, warr.toArray)
+      }.toMap
+      val oofEnc = data.getMap[String, mutable.WrappedArray[mutable.WrappedArray[Double]]](1).map{
+        case(col_name, warr) => (col_name, warr.map(_.toArray).toArray)
+      }.toMap
       val applyOof = data.getBoolean(2)
       val foldColumns = data.getString(3)
 
@@ -74,10 +78,10 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
 // encodings - (column, cat_seq_id -> value)
 // oof_encodings - (columns, fold_id -> cat_seq_id -> value)
 class TargetEncoderTransformer(override val uid: String,
-                               enc: TargetEncoderTransformer.Encodings,
-                               oof_enc: TargetEncoderTransformer.OofEncodings,
-                               fold_column: String,
-                               apply_oof: Boolean = true
+                               private var enc: TargetEncoderTransformer.Encodings,
+                               private var oof_enc: TargetEncoderTransformer.OofEncodings,
+                               private var fold_column: String,
+                               private var apply_oof: Boolean = true
                               )
         extends Transformer
                 with HasInputCols
@@ -87,50 +91,21 @@ class TargetEncoderTransformer(override val uid: String,
 
   import TargetEncoderTransformer._
 
-  val encodings: Param[Encodings] = new Param[Encodings](
-    this, "encodings",
-    "Encodings to be applied during normal transform",
-    (_:Encodings) => true
-  )
+  def setEncodings(enc: Encodings): this.type = {this.enc = enc; this}
 
-  val oofEncodings: Param[OofEncodings] = new Param[OofEncodings](
-    this, "oofEncodings",
-    "Encodings taking care of folds to be applied during fit_transform only",
-    (_:OofEncodings) => true
-  )
+  def getEncodings: Option[Encodings] = Some(enc)
 
-  val applyOof: Param[Boolean] = new Param[Boolean](
-    this, "applyOof",
-    "Apply oof encodings instead of just encodings",
-    (_: Boolean) => true
-  )
+  def setOofEncodings(oof_enc: OofEncodings): this.type = {this.oof_enc = oof_enc; this}
 
-  val foldColumn: Param[String] = new Param[String](
-    this, "foldColumn",
-    "Fold column name to be used when applying oof encodings",
-    (_: String) => true
-  )
+  def getOofEncodings: Option[OofEncodings] = Some(oof_enc)
 
-  this.set(encodings, enc)
-  this.set(oofEncodings, oof_enc)
-  this.set(applyOof, apply_oof)
-  this.set(foldColumn, fold_column)
+  def setApplyOof(oof: Boolean): this.type = {this.apply_oof = oof; this}
 
-  def setEncodings(enc: Encodings): this.type = set(encodings, enc)
+  def getApplyOof: Option[Boolean] = Some(apply_oof)
 
-  def getEncodings: Option[Encodings] = get(encodings)
+  def setFoldColumn(col: String): this.type = {this.fold_column = col; this}
 
-  def setOofEncodings(oof_enc: OofEncodings): this.type = set(oofEncodings, oof_enc)
-
-  def getOofEncodings: Option[OofEncodings] = get(oofEncodings)
-
-  def setApplyOof(oof: Boolean): this.type = set(applyOof, oof)
-
-  def getApplyOof: Option[Boolean] = get(applyOof)
-
-  def setFoldColumn(col: String): this.type = set(foldColumn, col)
-
-  def getFoldColumn: Option[String] = get(foldColumn)
+  def getFoldColumn: Option[String] = Some(this.fold_column)
 
   def setInputCols(cols: Array[String]): this.type = set(inputCols, cols)
 
@@ -185,7 +160,7 @@ class TargetEncoderTransformer(override val uid: String,
 
   override def toString: String = {
     s"TargetEncoderTransformer: uid=$uid, " +
-            get(applyOof).map(t => s", applyOf=$t").getOrElse("") +
+            getApplyOof.map(t => s", applyOf=$t").getOrElse("") +
             get(inputCols).map(c => s", numInputCols=${c.length}").getOrElse("") +
             get(outputCols).map(c => s", numOutputCols=${c.length}").getOrElse("")
   }
