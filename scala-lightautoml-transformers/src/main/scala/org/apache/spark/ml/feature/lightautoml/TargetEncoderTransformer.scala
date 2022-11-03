@@ -131,8 +131,10 @@ class TargetEncoderTransformer(override val uid: String,
     val outColumns = getApplyOof match {
       case Some(true) if getOofEncodings.isEmpty =>
         throw new IllegalArgumentException("OofEncodings cannot be unset if applyOof is true")
+
       case Some(true) if getFoldColumn.isEmpty =>
         throw new IllegalArgumentException("foldCol cannot be unset if applyOof is true")
+
       case Some(true) =>
         val oofEncodingsBcst = spark.sparkContext.broadcast(getOofEncodings.get)
         val func = udf((col_name: String, fold: Integer, cat: Integer) => {
@@ -140,19 +142,29 @@ class TargetEncoderTransformer(override val uid: String,
         })
         setApplyOof(false)
         val outs = getInputCols.zip(getOutputCols).map{
-          case (in_col, out_col) => func(lit(in_col).cast(StringType), col(getFoldColumn.get), col(in_col)).alias(out_col)
+          case (in_col, out_col) => func(
+            lit(in_col).cast(StringType),
+            col(getFoldColumn.get).cast(IntegerType),
+            col(in_col).cast(IntegerType)
+          ).alias(out_col)
         }
         outs
+
       case Some(false) if getEncodings.isEmpty =>
         throw new IllegalArgumentException("Encodings cannot be unset if applyOof is false")
+
       case Some(false) =>
         val encodingsBcst = spark.sparkContext.broadcast(getEncodings.get)
         val func = udf((col_name: String, cat: Integer) => {
           encodingsBcst.value(col_name)(cat)
         })
         getInputCols.zip(getOutputCols).map {
-          case (in_col, out_col) => func(lit(in_col), col(in_col)).alias(out_col)
+          case (in_col, out_col) => func(
+            lit(in_col),
+            col(in_col).cast(IntegerType)
+          ).alias(out_col)
         }
+
       case None =>
         throw new IllegalArgumentException("applyOof cannot be None")
     }
@@ -182,7 +194,7 @@ class TargetEncoderTransformer(override val uid: String,
                                         inputColName: String,
                                         outputColName: String): StructField = {
     val inputDataType = schema(inputColName).dataType
-    require(inputDataType == IntegerType || inputDataType == ShortType,
+    require(inputDataType == IntegerType || inputDataType == ShortType || inputDataType == LongType,
       s"The input column $inputColName must be integer type or short type, " +
               s"but got $inputDataType.")
     require(schema.fields.forall(_.name != outputColName),

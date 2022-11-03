@@ -1131,7 +1131,9 @@ class SparkScalaTargetEncoderTransformerWrapper(SparkBaseTransformer):
             enc={k: v.tolist() for k, v in enc.items()},
             oof_enc={k: v.mapping.tolist() for k, v in oof_enc.items()},
             fold_column=fold_column,
-            apply_oof=apply_oof
+            apply_oof=apply_oof,
+            input_cols=self.getInputCols(),
+            output_cols=self.getOutputCols()
         )
 
     def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:

@@ -144,12 +144,12 @@ def test_scala_target_encoder_transformer(spark: SparkSession):
     out_cols = [*in_cols, *output_cols]
 
     def make_df(data: List[List[float]]) -> SparkDataFrame:
-        schema = StructType(fields=[StructField(col, IntegerType()) for col in in_cols])
+        # schema = StructType(fields=[StructField(col, IntegerType()) for col in in_cols])
         df_data = [
             {col: val for col, val in zip(in_cols, row)}
             for row in data
         ]
-        return spark.createDataFrame(df_data, schema=schema)
+        return spark.createDataFrame(df_data)#, schema=schema)
 
     data = [
         [0, 0, 42, 1, 1, 1],
