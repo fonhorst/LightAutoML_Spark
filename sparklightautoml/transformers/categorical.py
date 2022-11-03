@@ -218,6 +218,11 @@ class SparkLabelEncoderTransformer(
 
         output = model.transform(dataset)
 
+        rest_cols = [col for col in output.columns if col not in self.getOutputCols()]
+        out_cols = [sf.col(col).astype(IntegerType()).alias(col) for col in self.getOutputCols()]
+
+        output = output.select([*rest_cols, *out_cols])
+
         return output
 
 
@@ -424,7 +429,8 @@ class SparkCatIntersectionsHelper:
             columns_for_concat.append(lit)
         columns_for_concat = columns_for_concat[:-1]
 
-        return murmurhash3_32_udf(sf.concat(*columns_for_concat)).alias(col_name)
+        # return murmurhash3_32_udf(sf.concat(*columns_for_concat)).alias(col_name)
+        return sf.hash(sf.concat(*columns_for_concat)).alias(col_name)
 
     def _build_df(self, df: SparkDataFrame, intersections: Optional[Sequence[Sequence[str]]]) \
             -> Tuple[SparkDataFrame, List[str]]:

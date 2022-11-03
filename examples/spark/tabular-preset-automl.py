@@ -9,8 +9,9 @@ from pyspark.sql import SparkSession
 
 from examples_utils import get_dataset_attrs, prepare_test_and_train, get_spark_session
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import LocalCheckpointPersistenceManager
+from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
+from sparklightautoml.dataset.persistence import LocalCheckpointPersistenceManager, CompositePersistenceManager, \
+    BucketedPersistenceManager, PlainCachePersistenceManager
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
@@ -20,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 # NOTE! This demo requires datasets to be downloaded into a local folder.
 # Run ./bin/download-datasets.sh to get required datasets into the folder.
+
+BUCKET_NUMS = 16
 
 
 def main(spark: SparkSession, dataset_name: str, seed: int):
@@ -33,6 +36,17 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     use_algos = [["lgb", "linear_l2"], ["lgb"]]
     cv = 3
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
+
+    persistence_manager = CompositePersistenceManager({
+        PersistenceLevel.READER: BucketedPersistenceManager(
+            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
+        ),
+        PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
+        # PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False),
+        PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(
+            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS
+        ),
+    })
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
@@ -53,7 +67,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
         oof_predictions = automl.fit_predict(
             train_data,
             roles=roles,
-            persistence_manager=LocalCheckpointPersistenceManager()
+            persistence_manager=persistence_manager
         )
 
     logger.info("Predicting on out of fold")
@@ -146,7 +160,7 @@ def multirun(spark: SparkSession, dataset_name: str):
 
 
 if __name__ == "__main__":
-    spark_sess = get_spark_session()
+    spark_sess = get_spark_session(BUCKET_NUMS)
     # One can run:
     # 1. main(dataset_name="lama_test_dataste", seed=42)
     # 2. multirun(spark_sess, dataset_name="lama_test_dataset")

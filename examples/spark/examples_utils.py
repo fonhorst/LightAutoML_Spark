@@ -1,5 +1,5 @@
 import os
-from typing import Tuple
+from typing import Tuple, Optional
 
 from pyspark.sql import SparkSession
 
@@ -104,7 +104,9 @@ def prepare_test_and_train(spark: SparkSession, path: str, seed: int) -> Tuple[S
     return train_data, test_data
 
 
-def get_spark_session():
+def get_spark_session(partitions_num: Optional[int] = None):
+    partitions_num = partitions_num if partitions_num else 16
+
     if os.environ.get("SCRIPT_ENV", None) == "cluster":
         spark_sess = SparkSession.builder.getOrCreate()
     else:
@@ -120,10 +122,11 @@ def get_spark_session():
             .config("spark.cleaner.referenceTracking.cleanCheckpoints", "true")
             .config("spark.cleaner.referenceTracking", "true")
             .config("spark.cleaner.periodicGC.interval", "1min")
-            .config("spark.sql.shuffle.partitions", "16")
+            .config("spark.sql.shuffle.partitions", f"{partitions_num}")
             .config("spark.driver.memory", "4g")
             .config("spark.executor.memory", "4g")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+            .config("spark.sql.autoBroadcastJoinThreshold", "-1")
             .getOrCreate()
         )
 

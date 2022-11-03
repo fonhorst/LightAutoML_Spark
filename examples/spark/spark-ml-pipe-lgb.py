@@ -6,8 +6,9 @@ from pyspark.ml import PipelineModel
 
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
-from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
+from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
+from sparklightautoml.dataset.persistence import PlainCachePersistenceManager, CompositePersistenceManager, \
+    BucketedPersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -26,8 +27,20 @@ logger = logging.getLogger(__name__)
 
 
 if __name__ == "__main__":
-    spark = get_spark_session()
-    persistence_manager = PlainCachePersistenceManager()
+    bucket_nums = 16
+    spark = get_spark_session(bucket_nums)
+    # persistence_manager = PlainCachePersistenceManager()
+
+    persistence_manager = CompositePersistenceManager({
+        PersistenceLevel.READER: BucketedPersistenceManager(
+            bucketed_datasets_folder="/tmp", bucket_nums=bucket_nums, no_unpersisting=True
+        ),
+        PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
+        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False),
+        # PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(
+        #     bucketed_datasets_folder="/tmp", bucket_nums=bucket_nums
+        # ),
+    })
 
     seed = 42
     cv = 5
