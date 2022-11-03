@@ -13,6 +13,7 @@ import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.util.VersionUtils.majorMinorVersion
 
 import scala.collection.{Map, mutable}
+import scala.collection.JavaConverters._
 
 object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
   type Encodings = Map[String, Array[Double]]
@@ -90,6 +91,18 @@ class TargetEncoderTransformer(override val uid: String,
                 with DefaultParamsReadable[TargetEncoderTransformer] {
 
   import TargetEncoderTransformer._
+
+  def this(uid: String,
+           enc: java.util.Map[String, java.util.List[Double]],
+           oof_enc: java.util.Map[String, java.util.List[java.util.List[Double]]],
+           fold_column: String, apply_oof: Boolean) =
+    this(
+      uid,
+      enc.asScala.map {case(col_name, mapping) => (col_name, mapping.asScala.toArray)}.toMap,
+      oof_enc.asScala.map {case(col_name, mapping) => (col_name, mapping.asScala.map(_.asScala.toArray).toArray)}.toMap,
+      fold_column,
+      apply_oof
+    )
 
   def setEncodings(enc: Encodings): this.type = {this.enc = enc; this}
 
