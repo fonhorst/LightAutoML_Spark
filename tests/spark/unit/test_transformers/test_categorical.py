@@ -9,6 +9,8 @@ from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import CategoryRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.reader.base import PandasToPandasReader
+from pyspark.sql.types import StructType, StructField, IntegerType
+
 from sparklightautoml.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
     SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator, \
     SparkMulticlassTargetEncoderEstimator
@@ -142,11 +144,12 @@ def test_scala_target_encoder_transformer(spark: SparkSession):
     out_cols = [*in_cols, *output_cols]
 
     def make_df(data: List[List[float]]) -> SparkDataFrame:
+        schema = StructType(fields=[StructField(col, IntegerType()) for col in in_cols])
         df_data = [
             {col: val for col, val in zip(in_cols, row)}
             for row in data
         ]
-        return spark.createDataFrame(df_data)
+        return spark.createDataFrame(df_data, schema=schema)
 
     data = [
         [0, 0, 42, 1, 1, 1],
@@ -157,7 +160,7 @@ def test_scala_target_encoder_transformer(spark: SparkSession):
         [5, 2, 47, 4, 1, 2],
     ]
 
-    result_enc = [
+    target_enc = [
         [0, 0, 42, 1, 1, 1, -1.0, -1.0, -1.0],
         [1, 0, 43, 2, 1, 3, -2.0, -1.0, -3.0],
         [2, 1, 44, 1, 2, 3, -1.0, -2.0, -3.0],
@@ -166,7 +169,7 @@ def test_scala_target_encoder_transformer(spark: SparkSession):
         [5, 2, 47, 4, 1, 2, -4.0, -1.0, -2.0],
     ]
 
-    result_oof_enc = [
+    target_oof_enc = [
         [0, 0, 42, 1, 1, 1, 10.0, 10.0, 10.0],
         [1, 0, 43, 2, 1, 3, 20.0, 10.0, 30.0],
         [2, 1, 44, 1, 2, 3, 11.0, 12.0, 13.0],
@@ -176,15 +179,17 @@ def test_scala_target_encoder_transformer(spark: SparkSession):
     ]
 
     data_df = make_df(data)
-    target_enc_df = make_df(result_enc)
-    target_oof_enc_df = make_df(result_oof_enc)
 
     tet = TargetEncoderTransformer(enc=enc, oof_enc=oof_enc, fold_column=fold_column, apply_oof=True)\
         .setInputCols(input_cols).setOutputCols(output_cols)
 
-    result_oof_enc_df = tet.transform(data_df)
-    result_enc_df = tet.transform(data_df)
-    result_enc_df = tet.transform(data_df)
+    result_oof_enc = tet.transform(data_df).collect()
+    result_enc = tet.transform(data_df).collect()
+    result_enc_2 = tet.transform(data_df).collect()
+
+    assert len(result_oof_enc) == len(target_oof_enc)
+    assert len(result_enc) == len(target_enc)
+    assert len(result_enc_2) == len(target_enc)
 
 
 # noinspection PyShadowingNames
