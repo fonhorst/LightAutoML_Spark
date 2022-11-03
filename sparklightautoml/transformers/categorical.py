@@ -7,18 +7,19 @@ from typing import Optional, Sequence, List, Tuple, Dict, Any
 
 import numpy as np
 import pandas as pd
-from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
+from lightautoml.reader.base import RolesDict
 from lightautoml.transformers.categorical import (
     categorical_check,
     encoding_check,
     oof_task_check,
     multiclass_task_check,
 )
+from numpy import ndarray
 from pandas import Series
 from pyspark.ml import Transformer
 from pyspark.ml.feature import OneHotEncoder
-from pyspark.sql import functions as sf, DataFrame as SparkDataFrame, Window, Column
+from pyspark.sql import functions as sf, Window, Column
 from pyspark.sql.types import IntegerType
 from sklearn.utils.murmurhash import murmurhash3_32
 
@@ -31,6 +32,8 @@ from sparklightautoml.mlwriters import (
 )
 from sparklightautoml.transformers.base import SparkBaseEstimator, SparkBaseTransformer
 from sparklightautoml.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexer, LAMLStringIndexerModel
+from sparklightautoml.transformers.scala_wrappers.target_encoder_transformer import TargetEncoderTransformer
+from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -703,7 +706,7 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
     def score_func_reg(target, candidate) -> float:
         return (target - candidate) ** 2
 
-    def _fit(self, dataset: SparkDataFrame) -> "SparkTargetEncoderTransformer":
+    def _fit(self, dataset: SparkDataFrame) -> "SparkBaseTransformer":
         logger.info(f"[{type(self)} (TE)] fit_transform is started")
 
         assert self._target_column in dataset.columns, "Target should be presented in the dataframe"
@@ -821,15 +824,24 @@ class SparkTargetEncoderEstimator(SparkBaseEstimator):
 
         logger.info(f"[{type(self)} (TE)] fit_transform is finished")
 
-        return SparkTargetEncoderTransformer(
-            encodings=self.encodings,
-            input_cols=self.getInputCols(),
+        return SparkScalaTargetEncoderTransformerWrapper(
+            enc=self.encodings,
+            oof_enc=oof_feats_encoding,
+            fold_column=self._folds_column,
+            apply_oof=True,
             input_roles=self.get_input_roles(),
-            output_cols=self.getOutputCols(),
-            output_roles=self.get_output_roles(),
-            do_replace_columns=self.get_do_replace_columns(),
-            oof_feats_encoding=oof_feats_encoding,
+            output_roles=self.get_output_roles()
         )
+        #
+        # return SparkTargetEncoderTransformer(
+        #     encodings=self.encodings,
+        #     input_cols=self.getInputCols(),
+        #     input_roles=self.get_input_roles(),
+        #     output_cols=self.getOutputCols(),
+        #     output_roles=self.get_output_roles(),
+        #     do_replace_columns=self.get_do_replace_columns(),
+        #     oof_feats_encoding=oof_feats_encoding,
+        # )
 
 
 class SparkTargetEncoderTransformer(SparkBaseTransformer, CommonPickleMLWritable, CommonPickleMLReadable):
@@ -1098,3 +1110,29 @@ class SparkMultiTargetEncoderTransformer(SparkBaseTransformer, CommonPickleMLWri
         logger.info(f"[{type(self)} (MCTE)] transform is finished")
 
         return output
+
+
+class SparkScalaTargetEncoderTransformerWrapper(SparkBaseTransformer):
+    def __init__(self, *,
+                 enc: Dict[str, ndarray],
+                 oof_enc: Dict[str, OOfFeatsMapping],
+                 fold_column: str,
+                 apply_oof: bool,
+                 input_roles: RolesDict,
+                 output_roles: RolesDict):
+        super(SparkScalaTargetEncoderTransformerWrapper, self).__init__(
+            list(input_roles.keys()),
+            list(output_roles.keys()),
+            input_roles,
+            output_roles
+        )
+
+        self._transformer = TargetEncoderTransformer(
+            enc={k: v.tolist() for k, v in enc.items()},
+            oof_enc={k: v.mapping.tolist() for k, v in oof_enc.items()},
+            fold_column=fold_column,
+            apply_oof=apply_oof
+        )
+
+    def _transform(self, sdf: SparkDataFrame) -> SparkDataFrame:
+        return self._transformer.transform(sdf)

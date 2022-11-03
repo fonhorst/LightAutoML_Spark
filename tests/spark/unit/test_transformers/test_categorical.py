@@ -6,7 +6,7 @@ import pytest
 from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
-from lightautoml.dataset.roles import CategoryRole
+from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.reader.base import PandasToPandasReader
 from pyspark.sql.types import StructType, StructField, IntegerType
@@ -180,8 +180,14 @@ def test_scala_target_encoder_transformer(spark: SparkSession):
 
     data_df = make_df(data)
 
-    tet = TargetEncoderTransformer(enc=enc, oof_enc=oof_enc, fold_column=fold_column, apply_oof=True)\
-        .setInputCols(input_cols).setOutputCols(output_cols)
+    tet = TargetEncoderTransformer(
+        enc=enc,
+        oof_enc=oof_enc,
+        fold_column=fold_column,
+        apply_oof=True,
+        input_cols=input_cols,
+        output_cols=output_cols
+    )
 
     result_oof_enc = tet.transform(data_df).collect()
     result_enc = tet.transform(data_df).collect()
