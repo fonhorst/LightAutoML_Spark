@@ -33,7 +33,7 @@ from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
-Dependency = Union[str, 'SparkDataset', Callable]
+Dependency = Union[str, 'SparkDataset', 'Unpersistable', Callable]
 DepIdentifable = Union[str, 'SparkDataset']
 
 
@@ -114,7 +114,7 @@ class SparkDataset(LAMLDataset, Unpersistable):
         )
 
         output = datasets[0].empty()
-        output.set_data(concatenated_sdf, features, roles, dependencies=[*datasets, *extra_dependencies], name=name)
+        output.set_data(concatenated_sdf, features, roles, dependencies=[*datasets, *(extra_dependencies or [])], name=name)
 
         return output
 
@@ -443,7 +443,7 @@ class SparkDataset(LAMLDataset, Unpersistable):
         for dep in (self.dependencies or []):
             if isinstance(dep, str):
                 self.persistence_manager.unpersist(dep)
-            elif isinstance(dep, SparkDataset):
+            elif isinstance(dep, Unpersistable):
                 dep.unpersist()
             else:
                 dep()

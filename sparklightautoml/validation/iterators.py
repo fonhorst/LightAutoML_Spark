@@ -51,8 +51,9 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
     def freeze(self) -> 'SparkDummyIterator':
         return SparkDummyIterator(self.train.freeze())
 
-    def unpersist(self):
-        self.train.unpersist()
+    def unpersist(self, skip_val: bool = False):
+        if not skip_val:
+            self.train.unpersist()
 
     def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
         assert len(val_preds) == 1
@@ -100,9 +101,10 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def freeze(self) -> 'SparkHoldoutIterator':
         return SparkHoldoutIterator(self.train.freeze(), self._valid.freeze())
 
-    def unpersist(self):
+    def unpersist(self, skip_val: bool = False):
         self.train.unpersist()
-        self._valid.unpersist()
+        if not skip_val:
+            self._valid.unpersist()
 
     def get_validation_data(self) -> SparkDataset:
         # full_ds, train_part_ds, valid_part_ds = self._split_by_fold(fold=0)
@@ -208,10 +210,9 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
     #     self._val_frozen = val
     #     self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
 
-
-
-    def unpersist(self):
-        self.train.unpersist()
+    def unpersist(self, skip_val: bool = False):
+        if not skip_val:
+            self.train.unpersist()
 
     def get_validation_data(self) -> SparkDataset:
         return self.train

@@ -60,7 +60,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, Unpersistable, ABC):
         ...
 
     @abstractmethod
-    def unpersist(self):
+    def unpersist(self, skip_val: bool = False):
         ...
 
     @contextmanager
