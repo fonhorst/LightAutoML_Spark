@@ -383,7 +383,12 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             params["predictionCol"] = fold_prediction_column
 
         master_addr = train.spark_session.conf.get("spark.master")
-        if master_addr.startswith("local"):
+        if master_addr.startswith("local-cluster"):
+            # exec_str, cores_str, mem_mb_str
+            _, cores_str, _ = master_addr[len("local-cluster["): -1].split(",")
+            cores = int(cores_str)
+            params["numThreads"] = max(cores - 1, 1)
+        elif master_addr.startswith("local"):
             cores_str = master_addr[len("local["): -1]
             cores = int(cores_str) if cores_str != "*" else multiprocessing.cpu_count()
             params["numThreads"] = max(cores - 1, 1)
