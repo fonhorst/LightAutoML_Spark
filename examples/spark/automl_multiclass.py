@@ -6,7 +6,9 @@ from pyspark.sql import functions as sf
 
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
-from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
+from sparklightautoml.dataset.persistence import CompositePersistenceManager, BucketedPersistenceManager, \
+    PlainCachePersistenceManager
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import VERBOSE_LOGGING_FORMAT
 from sparklightautoml.utils import log_exec_timer
@@ -19,9 +21,20 @@ logger = logging.getLogger(__name__)
 # NOTE! This demo requires datasets to be downloaded into a local folder.
 # Run ./bin/download-datasets.sh to get required datasets into the folder.
 
+BUCKET_NUMS = 16
 
 if __name__ == "__main__":
-    spark = get_spark_session()
+    spark = get_spark_session(BUCKET_NUMS)
+    persistence_manager = CompositePersistenceManager({
+        PersistenceLevel.READER: BucketedPersistenceManager(
+            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
+        ),
+        PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
+        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False),
+        # PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(
+        #     bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS
+        # ),
+    })
 
     seed = 42
     cv = 2
@@ -44,7 +57,7 @@ if __name__ == "__main__":
             tuning_params={'fit_on_holdout': True, 'max_tuning_iter': 10, 'max_tuning_time': 3600}
         )
 
-        preds = automl.fit_predict(train_data, roles).persist()
+        preds = automl.fit_predict(train_data, roles, persistence_manager=persistence_manager).persist()
 
     logger.info("Predicting on out of fold")
 
