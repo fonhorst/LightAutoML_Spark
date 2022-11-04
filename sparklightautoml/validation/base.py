@@ -3,19 +3,40 @@ from contextlib import contextmanager
 from copy import copy
 from typing import Tuple, cast, Sequence, Optional, Union, Any
 
+from attr import dataclass
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.ml_algo.tuning.base import ParamsTuner
 from lightautoml.pipelines.features.base import FeaturesPipeline
 from lightautoml.pipelines.selection.base import SelectionPipeline, ImportanceEstimator
 from lightautoml.validation.base import TrainValidIterator
-from pyspark.sql import functions as sf
+from pyspark.sql import functions as sf, Column
 
 from sparklightautoml import VALIDATION_COLUMN
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.utils import SparkDataFrame
 
-TrainVal = Tuple[SparkDataset, SparkDataset]
+
+@dataclass(frozen=True)
+class TrainValSplit:
+    full: SparkDataset
+    is_valid_column_name: str
+
+    @property
+    def train(self) -> SparkDataset:
+        return self._make_ds(sf.col(self.is_valid_column_name))
+
+    @property
+    def valid(self) -> SparkDataset:
+        return self._make_ds(sf.col(self.is_valid_column_name))
+
+    def _make_ds(self, cond: Column):
+        sdf = self.full.data.where(cond).drop(self.is_valid_column_name)
+
+        ds = self.full.empty()
+        ds.set_data(sdf, self.full.features, self.full.roles)
+
+        return ds
 
 
 class SparkSelectionPipeline(SelectionPipeline, ABC):
@@ -40,7 +61,7 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         super().__init__(train)
         self.train = cast(SparkDataset, train)
 
-    def __next__(self) -> TrainVal:
+    def __next__(self) -> TrainValSplit:
         """Define how to get next object.
 
         Returns:
@@ -136,16 +157,22 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         # 4. for dummy - do nothing
         raise NotImplementedError()
 
-    def _split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
+    def _split_by_fold(self, fold_or_is_val_column: Union[int, str]) -> TrainValSplit:
         train = cast(SparkDataset, self.train)
-        is_val_col = (
-            sf.when(sf.col(self.train.folds_column) != fold, sf.lit(0)).otherwise(sf.lit(1))
-            .alias(self.TRAIN_VAL_COLUMN)
-        )
+
+        if isinstance(fold_or_is_val_column, int):
+            fold = cast(int, fold_or_is_val_column)
+            is_val_col = (
+                sf.when(sf.col(self.train.folds_column) != fold, sf.lit(False))
+                .otherwise(sf.lit(True))
+                .alias(self.TRAIN_VAL_COLUMN)
+            )
+        else:
+            is_val_col = sf.col(fold_or_is_val_column)
 
         sdf = train.data.select("*", is_val_col)
-        train_part_sdf = sdf.where(sf.col(self.TRAIN_VAL_COLUMN) == 0).drop(self.TRAIN_VAL_COLUMN)
-        valid_part_sdf = sdf.where(sf.col(self.TRAIN_VAL_COLUMN) == 1).drop(self.TRAIN_VAL_COLUMN)
+        train_part_sdf = sdf.where(is_val_col).drop(self.TRAIN_VAL_COLUMN)
+        valid_part_sdf = sdf.where(is_val_col).drop(self.TRAIN_VAL_COLUMN)
 
         train_ds = cast(SparkDataset, self.train.empty())
         train_ds.set_data(sdf, self.train.features, self.train.roles, name=self.train.name)
@@ -166,4 +193,4 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
             name=f"{self.train.name}_val_{fold}"
         )
 
-        return train_ds, train_part_ds, valid_part_ds
+        return TrainValSplit(train_ds, train_part_ds, valid_part_ds, self.TRAIN_VAL_COLUMN)

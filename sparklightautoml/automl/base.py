@@ -426,19 +426,16 @@ class SparkAutoML(TransformerInputOutputRoles):
     def _create_validation_iterator(
         self, train: SparkDataset, valid: Optional[SparkDataset], n_folds: Optional[int], cv_iter: Optional[Callable]
     ) -> SparkBaseTrainValidIterator:
-        # TODO: SLAMA - set level
-        train = train.persist(level=PersistenceLevel.REGULAR)
+
         if valid:
-            # TODO: SLAMA - set level
-            valid = valid.persist(level=PersistenceLevel.REGULAR)
-            # dataset = self._merge_train_and_valid_datasets(train, valid)
-            iterator = SparkHoldoutIterator(train, valid)
+            train_val = self._merge_train_and_valid_datasets(train, valid)
+            iterator = SparkHoldoutIterator(train_val.persist(level=PersistenceLevel.REGULAR))
         elif cv_iter:
             raise NotImplementedError("Not supported now")
         elif train.folds:
-            iterator = SparkFoldsIterator(train, n_folds)
+            iterator = SparkFoldsIterator(train.persist(level=PersistenceLevel.REGULAR), n_folds)
         else:
-            iterator = SparkDummyIterator(train)
+            iterator = SparkDummyIterator(train.persist(level=PersistenceLevel.REGULAR))
 
         logger.info(f"Using train valid iterator of type: {type(iterator)}")
 
@@ -522,3 +519,9 @@ class SparkAutoML(TransformerInputOutputRoles):
 
     def _get_read_csv_params(self) -> Dict:
         return {}
+
+    def _merge_train_and_valid_datasets(self, train: SparkDataset, valid: SparkDataset):
+        sdf = train.data.unionByName(valid.data)
+        train_val = train.empty()
+        train_val.set_data(sdf, train.features, train.roles)
+        return train_val

@@ -14,7 +14,7 @@ from pyspark.ml.regression import LinearRegression, LinearRegressionModel
 from pyspark.sql import functions as sf
 
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainValSplit
 from ..dataset.base import SparkDataset, PersistenceManager
 from ..transformers.base import DropColumnsTransformer
 from ..utils import SparkDataFrame, log_exception
@@ -147,9 +147,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
 
         return estimators, es
 
-    def fit_predict_single_fold(
-        self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset
-    ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+    def fit_predict_single_fold(self, fold_prediction_column: str, tv_split: TrainValSplit) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
         Args:
@@ -163,13 +161,10 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         """
         logger.info(f"fit_predict single fold in LinearLBGFS. Num of features: {len(self.input_roles.keys())} ")
 
-        if self.task is None:
-            self.task = train.task
+        train_sdf = tv_split.train.data
+        val_sdf = tv_split.valid.data
 
-        train_sdf = train.data
-        val_sdf = valid.data
-
-        estimators, early_stopping = self._infer_params(train, fold_prediction_column)
+        estimators, early_stopping = self._infer_params(tv_split.train, fold_prediction_column)
 
         assert len(estimators) > 0
 
@@ -184,7 +179,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
             ml_model = pipeline.fit(train_sdf)
             val_pred = ml_model.transform(val_sdf)
             preds_to_score = val_pred.select(
-                sf.col(fold_prediction_column).alias("prediction"), sf.col(valid.target_column).alias("target")
+                sf.col(fold_prediction_column).alias("prediction"), sf.col(tv_split.train.target_column).alias("target")
             )
             current_score = self.score(preds_to_score)
             if current_score > best_score:

@@ -7,7 +7,7 @@ from pyspark.sql import functions as sf
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainValSplit
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
     def __len__(self) -> Optional[int]:
         return 1
 
-    def __next__(self) -> TrainVal:
+    def __next__(self) -> TrainValSplit:
         """Define how to get next object.
 
         Returns:
@@ -50,7 +50,7 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
         train_ds = cast(SparkDataset, self.train.empty())
         train_ds.set_data(sdf, self.train.features, self.train.roles, name=self.train.name)
 
-        return train_ds, train_ds
+        return TrainValSplit(train_ds, train_ds, train_ds, self.TRAIN_VAL_COLUMN)
 
     @property
     def train_frozen(self) -> bool:
@@ -83,21 +83,23 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         sds = cast(SparkDataset, self.train)
         assert sds.folds_column is not None, "Cannot convert to Holdout iterator when folds_column is not defined"
-        return SparkHoldoutIterator(self.train, self.train)
+        return SparkHoldoutIterator(self.train)
 
 
 class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     """Simple one step iterator over one fold of SparkDataset"""
 
-    def __init__(self, train: SparkDataset, valid: SparkDataset):
-        super().__init__(train)
-        self._valid = valid
+    def __init__(self, train_val: SparkDataset, is_val_column_name: Optional[str] = None):
+        super().__init__(train_val)
+        self._is_val_column_name = is_val_column_name
+
+        self._valid = None
         self._curr_idx = 0
 
-        self._base_train_frozen = train.frozen
-        self._base_valid_frozen = valid.frozen
-        self._train_frozen = train.frozen
-        self._val_frozen = valid.frozen
+        self._base_train_frozen = train_val.frozen
+        self._base_valid_frozen = train_val.frozen
+        self._train_frozen = train_val.frozen
+        self._val_frozen = train_val.frozen
 
     def __iter__(self) -> Iterable:
         self._curr_idx = 0
@@ -106,7 +108,7 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def __len__(self) -> Optional[int]:
         return 1
 
-    def __next__(self) -> TrainVal:
+    def __next__(self) -> TrainValSplit:
         """Define how to get next object.
 
         Returns:
@@ -116,10 +118,10 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         if self._curr_idx > 0:
             raise StopIteration
 
-        # full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
+        train_valid_split = self._split_by_fold(self._curr_idx)
         self._curr_idx += 1
 
-        return self.train, self._valid
+        return train_valid_split
 
     @property
     def train_frozen(self) -> bool:
@@ -132,12 +134,20 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     @train_frozen.setter
     def train_frozen(self, val: bool):
         self._train_frozen = val
-        self.train.frozen = self._base_train_frozen or self._train_frozen
+
+        if self._valid:
+            self.train.frozen = self._base_train_frozen or self._train_frozen
+        else:
+            self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
 
     @val_frozen.setter
     def val_frozen(self, val: bool):
         self._val_frozen = val
-        self._valid.frozen = self._base_valid_frozen or self._val_frozen
+
+        if self._valid:
+            self._valid.frozen = self._base_valid_frozen or self._val_frozen
+        else:
+            self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
 
     def unpersist(self):
         self.train.unpersist()
@@ -157,7 +167,8 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
 
     def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
         train_valid = super().apply_feature_pipeline(features_pipeline)
-        train_valid._valid = features_pipeline.transform(train_valid._valid)
+        if train_valid._valid:
+            train_valid._valid = features_pipeline.transform(train_valid._valid)
         return train_valid
 
 
@@ -208,7 +219,7 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
 
         return self
 
-    def __next__(self) -> TrainVal:
+    def __next__(self) -> TrainValSplit:
         """Define how to get next object.
 
         Returns:
@@ -221,10 +232,10 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
             logger.debug("No more folds to continue, stopping iterations")
             raise StopIteration
 
-        full_ds, train_part_ds, valid_part_ds = self._split_by_fold(self._curr_idx)
+        train_val_split = self._split_by_fold(self._curr_idx)
         self._curr_idx += 1
 
-        return train_part_ds, valid_part_ds
+        return train_val_split
 
     @property
     def train_frozen(self) -> bool:
@@ -236,8 +247,8 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
 
     @train_frozen.setter
     def train_frozen(self, val: bool):
-        self._base_train_frozen = val
-        self.train.frozen = self._base_train_frozen or self._base_train_frozen or self._val_frozen
+        self._train_frozen = val
+        self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
 
     @val_frozen.setter
     def val_frozen(self, val: bool):

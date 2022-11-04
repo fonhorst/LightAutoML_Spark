@@ -19,7 +19,7 @@ from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import SparkDataFrame, log_exception
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainValSplit
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,6 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "SparkTabularMLAlgo"
-    _default_validation_col_name: str = SparkBaseTrainValidIterator.TRAIN_VAL_COLUMN
 
     def __init__(
         self,
@@ -76,10 +75,6 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     def prediction_role(self) -> ColumnRole:
         return self._prediction_role
 
-    @property
-    def validation_column(self) -> str:
-        return self._default_validation_col_name
-
     @log_exception(logger=logger)
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
         """Fit and then predict accordig the strategy that uses train_valid_iterator.
@@ -100,6 +95,8 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         logger.info(f"Train size for MLAlgo: {train_valid_iterator.train.data.count()}")
 
         assert not self.is_fitted, "Algo is already fitted"
+
+        self.task = train_valid_iterator.train.task
 
         self._input_roles = copy(train_valid_iterator.train.roles)
         # init params on input if no params was set before
@@ -195,9 +192,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
         return pred_ds
 
-    def fit_predict_single_fold(
-        self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset
-    ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+    def fit_predict_single_fold(self, fold_prediction_column: str, tv_split: TrainValSplit) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
         Args:
