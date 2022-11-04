@@ -295,6 +295,8 @@ class SparkAutoML(TransformerInputOutputRoles):
                 train_valid.unpersist()
                 break
 
+            self.levels.append(pipes)
+
             level = [train_valid.get_validation_data(), *all_pipes_predictions] \
                 if self.skip_conn else all_pipes_predictions
             name = f"{level_ds_name}_skip_conn" if self.skip_conn else level_ds_name

@@ -69,6 +69,9 @@ def test_automl_preset(spark: SparkSession, persistence_manager: PersistenceMana
         roles={"target": "TARGET"},
         persistence_manager=persistence_manager
     ).persist()
+
+    logger.info("Starting to predict")
+
     pred_ds = automl.predict(test_data, persistence_manager=persistence_manager).persist()
 
     assert len(persistence_manager.children) == 0

@@ -35,7 +35,7 @@ class FakeOpTransformer(Transformer, CommonPickleMLWritable, CommonPickleMLReada
         self._n_classes = n_classes
 
     def _transform(self, dataset):
-        logger.debug(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
+        logger.warning(f"In {type(self)}. Columns: {sorted(dataset.columns)}")
         out_dataset = dataset.select(
             '*',
             *[
@@ -43,7 +43,7 @@ class FakeOpTransformer(Transformer, CommonPickleMLWritable, CommonPickleMLReada
                 for f in self._cos_to_generate
             ]
         )
-        logger.debug(f"Out {type(self)}. Columns: {sorted(out_dataset.columns)}")
+        logger.warning(f"Out {type(self)}. Columns: {sorted(out_dataset.columns)}")
         return out_dataset
 
 
@@ -184,11 +184,11 @@ class DummyTabularAutoML(SparkAutoMLPreset):
 
         first_level = [
             SparkMLPipeline(ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
-            for i in range(3)
+            for i in range(1)
         ]
         second_level = [
             SparkMLPipeline(ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
-            for i in range(2)
+            for i in range(1)
         ]
 
         levels = [first_level, second_level]
