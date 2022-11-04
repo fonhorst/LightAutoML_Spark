@@ -118,29 +118,32 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         # train and apply post selection
         train_valid = train_valid.apply_selector(self.post_selection)
 
-        train_valid.train.frozen = True
-
         preds: List[SparkDataset] = []
-        for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
-            ml_algo, curr_preds = tune_and_fit_predict(ml_algo, param_tuner, train_valid, force_calc)
-            ml_algo = cast(SparkTabularMLAlgo, ml_algo)
-            if ml_algo is not None:
-                curr_preds = cast(SparkDataset, curr_preds)
-                self.ml_algos.append(ml_algo)
-                preds.append(curr_preds)
-            else:
-                warnings.warn(
-                    "Current ml_algo has not been trained by some reason. " "Check logs for more details.",
-                    RuntimeWarning,
-                )
+        with train_valid.frozen() as frozen_train_valid:
+            for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
+                ml_algo, curr_preds = tune_and_fit_predict(ml_algo, param_tuner, frozen_train_valid, force_calc)
+                ml_algo = cast(SparkTabularMLAlgo, ml_algo)
+                if ml_algo is not None:
+                    curr_preds = cast(SparkDataset, curr_preds)
+                    self.ml_algos.append(ml_algo)
+                    preds.append(curr_preds)
+                else:
+                    warnings.warn(
+                        "Current ml_algo has not been trained by some reason. " "Check logs for more details.",
+                        RuntimeWarning,
+                    )
 
-        assert (
-            len(self.ml_algos) > 0
-        ), "Pipeline finished with 0 models for some reason.\nProbably one or more models failed"
+            assert (
+                len(self.ml_algos) > 0
+            ), "Pipeline finished with 0 models for some reason.\nProbably one or more models failed"
 
         del self._ml_algos
 
-        val_preds_ds = SparkDataset.concatenate(preds, name=f"{type(self)}_folds_predictions")
+        val_preds_ds = SparkDataset.concatenate(
+            preds,
+            name=f"{type(self)}_folds_predictions",
+            extra_dependencies=[train_valid]
+        )
 
         self._transformer = PipelineModel(stages=[
             # self.pre_selection.transformer(),
@@ -152,10 +155,6 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         self._input_roles = copy(train_valid.train.roles)
         self._output_roles = copy(val_preds_ds.roles)
         self._service_columns = train_valid.train.service_columns
-
-        # val_preds_ds = val_preds_ds.persist(level=PersistenceLevel.REGULAR)
-        train_valid.train.frozen = False
-        # train_valid.train.unpersist()
 
         return val_preds_ds
 

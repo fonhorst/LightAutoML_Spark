@@ -11,7 +11,7 @@ from lightautoml.validation.base import TrainValidIterator
 from pyspark.sql import functions as sf
 
 from sparklightautoml import VALIDATION_COLUMN
-from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.base import SparkDataset, Unpersistable
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.utils import SparkDataFrame
 
@@ -28,7 +28,7 @@ class SparkSelectionPipeline(SelectionPipeline, ABC):
         super().__init__(features_pipeline, ml_algo, imp_estimator, fit_on_holdout, **kwargs)
 
 
-class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
+class SparkBaseTrainValidIterator(TrainValidIterator, Unpersistable, ABC):
     """
     Implements applying selection pipeline and feature pipeline to SparkDataset.
     """
@@ -51,24 +51,12 @@ class SparkBaseTrainValidIterator(TrainValidIterator, ABC):
         """
         ...
 
-    @property
-    @abstractmethod
-    def train_frozen(self) -> bool:
-        ...
+    @contextmanager
+    def frozen(self) -> 'SparkBaseTrainValidIterator':
+        yield self.freeze()
 
-    @train_frozen.setter
     @abstractmethod
-    def train_frozen(self, val: bool):
-        ...
-
-    @property
-    @abstractmethod
-    def val_frozen(self) -> bool:
-        ...
-
-    @val_frozen.setter
-    @abstractmethod
-    def val_frozen(self, val: bool):
+    def freeze(self) -> 'SparkBaseTrainValidIterator':
         ...
 
     @abstractmethod

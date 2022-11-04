@@ -120,29 +120,31 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
         preds_dfs: List[SparkDataFrame] = []
         self._models_prediction_columns = []
-        train_valid_iterator.train.frozen = True
-        for n, (train, valid) in enumerate(train_valid_iterator):
-            if iterator_len > 1:
-                logger.info2(
-                    "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m =====".format(n, self._name)
-                )
-            self.timer.set_control_point()
 
-            model_prediction_col = f"{self.prediction_feature}_{n}"
-            model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
-            val_pred = val_pred.select(SparkDataset.ID_COLUMN, model_prediction_col)
+        with train_valid_iterator.frozen() as frozen_train_valid_iterator:
+            for n, (train, valid) in enumerate(frozen_train_valid_iterator):
+                if iterator_len > 1:
+                    logger.info2(
+                        "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
+                        "=====".format(n, self._name)
+                    )
+                self.timer.set_control_point()
 
-            self._models_prediction_columns.append(model_prediction_col)
-            self.models.append(model)
-            preds_dfs.append(val_pred)
+                model_prediction_col = f"{self.prediction_feature}_{n}"
+                model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
+                val_pred = val_pred.select(SparkDataset.ID_COLUMN, model_prediction_col)
 
-            self.timer.write_run_info()
+                self._models_prediction_columns.append(model_prediction_col)
+                self.models.append(model)
+                preds_dfs.append(val_pred)
 
-            if (n + 1) != len(train_valid_iterator):
-                # split into separate cases because timeout checking affects parent pipeline timer
-                if self.timer.time_limit_exceeded():
-                    logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
-                    break
+                self.timer.write_run_info()
+
+                if (n + 1) != len(frozen_train_valid_iterator):
+                    # split into separate cases because timeout checking affects parent pipeline timer
+                    if self.timer.time_limit_exceeded():
+                        logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
+                        break
 
         # combining results for different folds
         # 1. folds - union
@@ -177,7 +179,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             full_preds_df,
             list(self.output_roles.keys()),
             self.output_roles,
-            dependencies=[train_valid_iterator.train, valid_ds],
+            dependencies=[train_valid_iterator],
             name=f"{self._name}"
         )
         pred_ds = pred_ds.persist(level=PersistenceLevel.REGULAR)

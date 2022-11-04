@@ -43,7 +43,12 @@ class PersistenceLevel(Enum):
     CHECKPOINT = 2
 
 
-class SparkDataset(LAMLDataset):
+class Unpersistable(ABC):
+    def unpersist(self):
+        ...
+
+
+class SparkDataset(LAMLDataset, Unpersistable):
     """
     Implements a dataset that uses a ``pyspark.sql.DataFrame`` internally,
     stores some internal state (features, roles, ...) and provide methods to work with dataset.
@@ -66,7 +71,12 @@ class SparkDataset(LAMLDataset):
 
     # TODO: SLAMA - implement filling dependencies
     @classmethod
-    def concatenate(cls, datasets: Sequence["SparkDataset"], name: Optional[str] = None) -> "SparkDataset":
+    def concatenate(
+            cls,
+            datasets: Sequence["SparkDataset"],
+            name: Optional[str] = None,
+            extra_dependencies: Optional[List[Dependency]] = None
+    ) -> "SparkDataset":
         """
         Concat multiple datasets by joining their internal ``pyspark.sql.DataFrame``
         using inner join on special hidden '_id' column
@@ -104,7 +114,7 @@ class SparkDataset(LAMLDataset):
         )
 
         output = datasets[0].empty()
-        output.set_data(concatenated_sdf, features, roles, dependencies=list(datasets), name=name)
+        output.set_data(concatenated_sdf, features, roles, dependencies=[*datasets, *extra_dependencies], name=name)
 
         return output
 
@@ -368,7 +378,8 @@ class SparkDataset(LAMLDataset):
             persistence_manager: Optional['PersistenceManager'] = None,
             dependencies: Optional[List[Dependency]] = None,
             uid: Optional[str] = None,
-            name: Optional[str] = None
+            name: Optional[str] = None,
+            frozen: bool = False
     ):
         """Inplace set data, features, roles for empty dataset.
 
@@ -383,6 +394,7 @@ class SparkDataset(LAMLDataset):
         self._dependencies = dependencies or self._dependencies
         self._uid = uid or self._uid
         self._name = name or self._name
+        self._frozen = frozen
 
     def persist(self, level: Optional[PersistenceLevel] = None) -> 'SparkDataset':
         """
@@ -436,7 +448,6 @@ class SparkDataset(LAMLDataset):
             else:
                 dep()
 
-
     @property
     def frozen(self) -> bool:
         return self._frozen
@@ -444,6 +455,11 @@ class SparkDataset(LAMLDataset):
     @frozen.setter
     def frozen(self, val: bool):
         self._frozen = val
+
+    def freeze(self) -> 'SparkDataset':
+        ds = self.empty()
+        ds.set_data(self.data, self.features, self.roles, frozen=True)
+        return ds
 
     def to_pandas(self) -> PandasDataset:
         data, target_data, folds_data, roles = self._materialize_to_pandas()

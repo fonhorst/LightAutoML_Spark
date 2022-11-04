@@ -21,10 +21,6 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
         super().__init__(train)
         self._curr_idx = 0
 
-        self._base_train_frozen = train.frozen
-        self._train_frozen = train.frozen
-        self._val_frozen = train.frozen
-
     def __iter__(self) -> Iterable:
         self._curr_idx = 0
         return self
@@ -52,23 +48,8 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
 
         return train_ds, train_ds
 
-    @property
-    def train_frozen(self) -> bool:
-        return self._train_frozen
-
-    @property
-    def val_frozen(self) -> bool:
-        return self._val_frozen
-
-    @train_frozen.setter
-    def train_frozen(self, val: bool):
-        self._train_frozen = val
-        self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
-
-    @val_frozen.setter
-    def val_frozen(self, val: bool):
-        self._val_frozen = val
-        self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
+    def freeze(self) -> 'SparkDummyIterator':
+        return SparkDummyIterator(self.train.freeze())
 
     def unpersist(self):
         self.train.unpersist()
@@ -94,11 +75,6 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
         self._valid = valid
         self._curr_idx = 0
 
-        self._base_train_frozen = train.frozen
-        self._base_valid_frozen = valid.frozen
-        self._train_frozen = train.frozen
-        self._val_frozen = valid.frozen
-
     def __iter__(self) -> Iterable:
         self._curr_idx = 0
         return self
@@ -121,23 +97,8 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
 
         return self.train, self._valid
 
-    @property
-    def train_frozen(self) -> bool:
-        return self._train_frozen
-
-    @property
-    def val_frozen(self) -> bool:
-        return self._val_frozen
-
-    @train_frozen.setter
-    def train_frozen(self, val: bool):
-        self._train_frozen = val
-        self.train.frozen = self._base_train_frozen or self._train_frozen
-
-    @val_frozen.setter
-    def val_frozen(self, val: bool):
-        self._val_frozen = val
-        self._valid.frozen = self._base_valid_frozen or self._val_frozen
+    def freeze(self) -> 'SparkHoldoutIterator':
+        return SparkHoldoutIterator(self.train.freeze(), self._valid.freeze())
 
     def unpersist(self):
         self.train.unpersist()
@@ -226,23 +187,28 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
 
         return train_part_ds, valid_part_ds
 
-    @property
-    def train_frozen(self) -> bool:
-        return self._train_frozen
+    def freeze(self) -> 'SparkFoldsIterator':
+        return SparkFoldsIterator(self.train.freeze(), n_folds=self.n_folds)
 
-    @property
-    def val_frozen(self) -> bool:
-        return self._val_frozen
+    # @property
+    # def train_frozen(self) -> bool:
+    #     return self._train_frozen
+    #
+    # @property
+    # def val_frozen(self) -> bool:
+    #     return self._val_frozen
+    #
+    # @train_frozen.setter
+    # def train_frozen(self, val: bool):
+    #     self._base_train_frozen = val
+    #     self.train.frozen = self._base_train_frozen or self._base_train_frozen or self._val_frozen
+    #
+    # @val_frozen.setter
+    # def val_frozen(self, val: bool):
+    #     self._val_frozen = val
+    #     self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
 
-    @train_frozen.setter
-    def train_frozen(self, val: bool):
-        self._base_train_frozen = val
-        self.train.frozen = self._base_train_frozen or self._base_train_frozen or self._val_frozen
 
-    @val_frozen.setter
-    def val_frozen(self, val: bool):
-        self._val_frozen = val
-        self.train.frozen = self._base_train_frozen or self._train_frozen or self._val_frozen
 
     def unpersist(self):
         self.train.unpersist()

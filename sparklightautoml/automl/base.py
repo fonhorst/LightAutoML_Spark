@@ -244,8 +244,8 @@ class SparkAutoML(TransformerInputOutputRoles):
         valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
 
         train_valid = self._create_validation_iterator(train_dataset, valid_dataset, None, cv_iter=cv_iter)
-        train_valid.train_frozen = True
-        train_valid.val_frozen = True
+        # train_valid.train_frozen = True
+        # train_valid.val_frozen = True
 
         pipes: List[SparkMLPipeline] = []
         self.levels = []
@@ -259,68 +259,86 @@ class SparkAutoML(TransformerInputOutputRoles):
             )
 
             all_pipes_predictions: List[SparkDataset] = []
-            for k, ml_pipe in enumerate(level):
-                pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(train_valid))
-                all_pipes_predictions.append(pipe_predictions)
+            with train_valid.frozen() as frozen_train_valid:
+                for k, ml_pipe in enumerate(level):
+                    pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(frozen_train_valid))\
+                        .persist(level=PersistenceLevel.CHECKPOINT)
 
-                pipes.append(ml_pipe)
+                    all_pipes_predictions.append(pipe_predictions)
+                    pipes.append(ml_pipe)
 
-                logger.info("Time left {:.2f} secs\n".format(self.timer.time_left))
+                    logger.info("Time left {:.2f} secs\n".format(self.timer.time_left))
 
-                if self.timer.time_limit_exceeded():
-                    logger.info(
-                        "Time limit exceeded. Last level models will be blended and unused pipelines will be pruned.\n"
-                    )
-
-                    flg_last_level = True
-                    break
-                else:
-                    if self.timer.child_out_of_time:
+                    if self.timer.time_limit_exceeded():
                         logger.info(
-                            "Time limit exceeded in one of the tasks. AutoML will blend level {0} models.\n".format(
-                                leven_number
-                            )
+                            "Time limit exceeded. Last level models will be blended "
+                            "and unused pipelines will be pruned.\n"
                         )
+
                         flg_last_level = True
+                        break
+                    else:
+                        if self.timer.child_out_of_time:
+                            logger.info(
+                                "Time limit exceeded in one of the tasks. AutoML will blend level {0} models.\n".format(
+                                    leven_number
+                                )
+                            )
+                            flg_last_level = True
 
             logger.info("\x1b[1mLayer {} training completed.\x1b[0m\n".format(leven_number))
 
             level_ds_name = f"all_piped_predictions_level_{leven_number}"
 
             if flg_last_level:
-                # checkpointing
                 level_ds = SparkDataset.concatenate(all_pipes_predictions, name=level_ds_name)
-                level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
-                train_valid.train_frozen = False
-                train_valid.val_frozen = False
                 train_valid.unpersist()
                 break
 
-            self.levels.append(pipes)
+            level = [train_valid.get_validation_data(), *all_pipes_predictions] \
+                if self.skip_conn else all_pipes_predictions
+            name = f"{level_ds_name}_skip_conn" if self.skip_conn else level_ds_name
+            level_ds = SparkDataset.concatenate(level, name=name)
 
-            # checkpointing
-            level_ds = (
-                SparkDataset
-                .concatenate(all_pipes_predictions, name=level_ds_name)
-                .persist(level=PersistenceLevel.CHECKPOINT)
-            )
-
-            if self.skip_conn:
-                level_ds = SparkDataset.concatenate(
-                    [train_valid.get_validation_data(), level_ds],
-                    name=f"{level_ds_name}_skip_conn"
-                )
-                train_valid.train_frozen = False
-                train_valid.unpersist()
-                train_valid.val_frozen = False
-            else:
-                train_valid.val_frozen = False
-                train_valid.train_frozen = False
-                train_valid.unpersist()
-
+            train_valid.unpersist(skip_val=self.skip_conn)
             train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
-            train_valid.train_frozen = True
-            train_valid.val_frozen = True
+
+
+
+            # if flg_last_level:
+            #     # checkpointing
+            #     level_ds = SparkDataset.concatenate(all_pipes_predictions, name=level_ds_name)
+            #     level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
+            #     train_valid.train_frozen = False
+            #     train_valid.val_frozen = False
+            #     train_valid.unpersist()
+            #     break
+            #
+            # self.levels.append(pipes)
+            #
+            # # checkpointing
+            # level_ds = (
+            #     SparkDataset
+            #     .concatenate(all_pipes_predictions, name=level_ds_name)
+            #     .persist(level=PersistenceLevel.CHECKPOINT)
+            # )
+            #
+            # if self.skip_conn:
+            #     level_ds = SparkDataset.concatenate(
+            #         [train_valid.get_validation_data(), level_ds],
+            #         name=f"{level_ds_name}_skip_conn"
+            #     )
+            #     train_valid.train_frozen = False
+            #     train_valid.unpersist()
+            #     train_valid.val_frozen = False
+            # else:
+            #     train_valid.val_frozen = False
+            #     train_valid.train_frozen = False
+            #     train_valid.unpersist()
+
+            # train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
+            # train_valid.train_frozen = True
+            # train_valid.val_frozen = True
 
         blended_prediction, last_pipes = self.blender.fit_predict(level_ds, pipes)
         self.levels.append(last_pipes)
