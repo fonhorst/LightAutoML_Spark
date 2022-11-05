@@ -123,6 +123,7 @@ def get_spark_session(partitions_num: Optional[int] = None):
             .config("spark.cleaner.referenceTracking", "true")
             .config("spark.cleaner.periodicGC.interval", "1min")
             .config("spark.sql.shuffle.partitions", f"{partitions_num}")
+            .config("spark.default.parallelism", f"{partitions_num}")
             .config("spark.driver.memory", "4g")
             .config("spark.executor.memory", "4g")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
