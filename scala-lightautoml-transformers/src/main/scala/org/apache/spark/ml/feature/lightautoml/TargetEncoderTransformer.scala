@@ -2,6 +2,7 @@ package org.apache.spark.ml.feature.lightautoml
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkException
+import org.apache.spark.annotation.Since
 import org.apache.spark.ml.Transformer
 import org.apache.spark.ml.attribute.NumericAttribute
 import org.apache.spark.ml.param.ParamMap
@@ -14,67 +15,6 @@ import org.apache.spark.util.VersionUtils.majorMinorVersion
 
 import scala.collection.{Map, mutable}
 import scala.collection.JavaConverters._
-
-object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
-  type Encodings = Map[String, Array[Double]]
-  type OofEncodings = Map[String, Array[Array[Double]]]
-
-  private[TargetEncoderTransformer] class TargetEncoderTransformerWriter(instance: TargetEncoderTransformer)
-          extends MLWriter {
-
-    private case class Data(encodings: Encodings, oofEncodings: OofEncodings, applyOof: Boolean, foldColumn: String)
-
-    override protected def saveImpl(path: String): Unit = {
-      DefaultParamsWriter.saveMetadata(instance, path, sc)
-      val data = Data(
-        instance.getEncodings.get,
-        instance.getOofEncodings.get,
-        instance.getApplyOof.get,
-        instance.getFoldColumn.get
-      )
-      val dataPath = new Path(path, "data").toString
-      sparkSession.createDataFrame(Seq(data)).repartition(1).write.parquet(dataPath)
-    }
-  }
-
-  private class TargetEncoderTransformerReader extends MLReader[TargetEncoderTransformer] {
-
-    private val className = classOf[TargetEncoderTransformer].getName
-
-    override def load(path: String): TargetEncoderTransformer = {
-      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
-      val dataPath = new Path(path, "data").toString
-
-      // We support loading old `StringIndexerModel` saved by previous Spark versions.
-      // Previous model has `labels`, but new model has `labelsArray`.
-      val (majorVersion, _) = majorMinorVersion(metadata.sparkVersion)
-      if (majorVersion < 3) {
-        throw new RuntimeException("Spark version < 3 is not supported")
-      }
-
-      val data = sparkSession.read.parquet(dataPath)
-              .select("encodings", "oofEncodings", "applyOof", "foldColumn")
-              .first()
-
-      val enc = data.getMap[String, mutable.WrappedArray[Double]](0).map{
-        case(col_name, warr) => (col_name, warr.toArray)
-      }.toMap
-      val oofEnc = data.getMap[String, mutable.WrappedArray[mutable.WrappedArray[Double]]](1).map{
-        case(col_name, warr) => (col_name, warr.map(_.toArray).toArray)
-      }.toMap
-      val applyOof = data.getBoolean(2)
-      val foldColumns = data.getString(3)
-
-      val model = new TargetEncoderTransformer(metadata.uid, enc, oofEnc, foldColumns, applyOof)
-      metadata.getAndSetParams(model)
-      model
-    }
-  }
-
-  override def read: MLReader[TargetEncoderTransformer] = new TargetEncoderTransformerReader
-
-  override def load(path: String): TargetEncoderTransformer = super.load(path)
-}
 
 // encodings - (column, cat_seq_id -> value)
 // oof_encodings - (columns, fold_id -> cat_seq_id -> value)
@@ -222,4 +162,65 @@ class TargetEncoderTransformer(override val uid: String,
   }
 }
 
+object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
+  type Encodings = Map[String, Array[Double]]
+  type OofEncodings = Map[String, Array[Array[Double]]]
 
+  override def read: MLReader[TargetEncoderTransformer] = new TargetEncoderTransformerReader
+
+  override def load(path: String): TargetEncoderTransformer = super.load(path)
+
+  def just_a_brand_new_method: Integer = 42
+
+  private[TargetEncoderTransformer] class TargetEncoderTransformerWriter(instance: TargetEncoderTransformer)
+          extends MLWriter {
+
+    private case class Data(encodings: Encodings, oofEncodings: OofEncodings, applyOof: Boolean, foldColumn: String)
+
+    override protected def saveImpl(path: String): Unit = {
+      DefaultParamsWriter.saveMetadata(instance, path, sc)
+      val data = Data(
+        instance.getEncodings.get,
+        instance.getOofEncodings.get,
+        instance.getApplyOof.get,
+        instance.getFoldColumn.get
+      )
+      val dataPath = new Path(path, "data").toString
+      sparkSession.createDataFrame(Seq(data)).repartition(1).write.parquet(dataPath)
+    }
+  }
+
+  private[TargetEncoderTransformer] class TargetEncoderTransformerReader extends MLReader[TargetEncoderTransformer] {
+
+    private val className = classOf[TargetEncoderTransformer].getName
+
+    override def load(path: String): TargetEncoderTransformer = {
+      val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
+      val dataPath = new Path(path, "data").toString
+
+      // We support loading old `StringIndexerModel` saved by previous Spark versions.
+      // Previous model has `labels`, but new model has `labelsArray`.
+      val (majorVersion, _) = majorMinorVersion(metadata.sparkVersion)
+      if (majorVersion < 3) {
+        throw new RuntimeException("Spark version < 3 is not supported")
+      }
+
+      val data = sparkSession.read.parquet(dataPath)
+              .select("encodings", "oofEncodings", "applyOof", "foldColumn")
+              .first()
+
+      val enc = data.getMap[String, mutable.WrappedArray[Double]](0).map{
+        case(col_name, warr) => (col_name, warr.toArray)
+      }.toMap
+      val oofEnc = data.getMap[String, mutable.WrappedArray[mutable.WrappedArray[Double]]](1).map{
+        case(col_name, warr) => (col_name, warr.map(_.toArray).toArray)
+      }.toMap
+      val applyOof = data.getBoolean(2)
+      val foldColumns = data.getString(3)
+
+      val model = new TargetEncoderTransformer(metadata.uid, enc, oofEnc, foldColumns, applyOof)
+      metadata.getAndSetParams(model)
+      model
+    }
+  }
+}

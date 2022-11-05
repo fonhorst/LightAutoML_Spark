@@ -1,26 +1,25 @@
-from typing import Dict, Any, List
+import os
+from typing import Dict, Any, List, cast
 
 import numpy as np
 import pandas as pd
 import pytest
-from pyspark.sql import SparkSession
-
 from lightautoml.dataset.np_pd_dataset import PandasDataset
-from lightautoml.dataset.roles import CategoryRole, NumericRole
+from lightautoml.dataset.roles import CategoryRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.reader.base import PandasToPandasReader
-from pyspark.sql.types import StructType, StructField, IntegerType
-
-from sparklightautoml.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
-    SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator, \
-    SparkMulticlassTargetEncoderEstimator
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     TargetEncoder, MultiClassTargetEncoder
+from pyspark.sql import SparkSession
 
+from sparklightautoml.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
+    SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator, \
+    SparkMulticlassTargetEncoderEstimator, SparkFreqEncoderTransformer
+from sparklightautoml.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
 from sparklightautoml.transformers.scala_wrappers.target_encoder_transformer import TargetEncoderTransformer
 from sparklightautoml.utils import SparkDataFrame
-from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata
+from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata, workdir
 from ..dataset_utils import get_test_datasets
 
 spark = spark_sess
@@ -66,14 +65,18 @@ def test_sparkml_label_encoder(spark: SparkSession, dataset: DatasetForTest):
 
 # noinspection PyShadowingNames
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_freq_encoder(spark: SparkSession, dataset: DatasetForTest):
+def test_freq_encoder(spark: SparkSession, workdir: str, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
     transformer = SparkFreqEncoderEstimator(
         input_cols=ds.features,
         input_roles=ds.roles
     )
-    compare_sparkml_by_content(spark, ds, FreqEncoder(), transformer)
+    tet = cast(SparkFreqEncoderTransformer, compare_sparkml_by_content(spark, ds, FreqEncoder(), transformer))
+
+    te_path = os.path.join(workdir, "scala_te.transformer")
+    tet.save(te_path)
+    tet_loaded = SparkFreqEncoderTransformer.load(te_path)
 
 
 # noinspection PyShadowingNames
@@ -112,7 +115,10 @@ def test_cat_intersections(spark: SparkSession, dataset: DatasetForTest):
     # compare_sparkml_by_content(spark, ds, CatIntersectstions(), transformer)
 
 
-def test_scala_target_encoder_transformer(spark: SparkSession):
+def test_scala_target_encoder_transformer(spark: SparkSession, workdir: str):
+    # LAMLStringIndexerModel.load("...")
+    TargetEncoderTransformer.load("...")
+
     enc = {
         "a": [0.0, -1.0, -2.0, -3.0, -4.0],
         "b": [0.0, -1.0, -2.0],
@@ -194,6 +200,18 @@ def test_scala_target_encoder_transformer(spark: SparkSession):
     result_enc_2 = tet.transform(data_df).collect()
 
     assert len(result_oof_enc) == len(target_oof_enc)
+    assert len(result_enc) == len(target_enc)
+    assert len(result_enc_2) == len(target_enc)
+
+    # TODO: SLAMA - add full test
+
+    te_path = os.path.join(workdir, "scala_te.transformer")
+    tet.save(te_path)
+
+    tet_loaded = TargetEncoderTransformer.load(te_path)
+    result_enc = tet_loaded.transform(data_df).collect()
+    result_enc_2 = tet_loaded.transform(data_df).collect()
+
     assert len(result_enc) == len(target_enc)
     assert len(result_enc_2) == len(target_enc)
 

@@ -1,5 +1,7 @@
 import logging
 import logging.config
+import os
+import shutil
 from copy import copy
 from typing import Tuple, get_args, cast, List, Optional, Dict, Union
 
@@ -12,7 +14,7 @@ from lightautoml.dataset.roles import ColumnRole
 from lightautoml.transformers.base import LAMLTransformer
 from lightautoml.transformers.numeric import NumpyTransformable
 from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
-from pyspark.ml import Estimator
+from pyspark.ml import Estimator, Transformer
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as sf
 
@@ -47,8 +49,8 @@ def spark() -> SparkSession:
         .master("local-cluster[2,2,2048]")
         .config("spark.driver.memory", "8g")
         .config("spark.jars", JAR_PATH)
-        .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
-        .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+        # .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
+        # .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
         .config("spark.sql.shuffle.partitions", PARTITIONS_NUM)
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
         .config("spark.sql.autoBroadcastJoinThreshold", "-1")
@@ -77,6 +79,22 @@ def spark_with_deps() -> SparkSession:
     yield spark
 
     spark.stop()
+
+
+@pytest.fixture(scope="session")
+def workdir() -> str:
+    """
+    Creates temporary workdir for tests in the begging and cleans in the end.
+    Returns:
+        an absolute path to the workdir
+    """
+
+    workdir_path = os.path.join("/tmp/slama_tests_workdir")
+    os.makedirs(workdir_path)
+
+    yield workdir_path
+
+    shutil.rmtree(workdir_path)
 
 
 def compare_feature_distrs_in_datasets(lama_df, spark_df, diff_proc=0.05):
@@ -188,7 +206,7 @@ def compare_sparkml_transformers_results(spark: SparkSession,
                                          t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
                                          compare_feature_distributions: bool = True,
                                          compare_content: bool = True,
-                                         rtol: float = 1.e-5):
+                                         rtol: float = 1.e-5) -> Transformer:
     """
     Args:
         spark: session to be used for calculating the example
@@ -227,6 +245,8 @@ def compare_sparkml_transformers_results(spark: SparkSession,
 
     compare_datasets(ds, transformed_ds, transformed_sds, compare_feature_distributions, compare_content, rtol)
 
+    return t_spark
+
 
 def compare_sparkml_by_content(
         spark: SparkSession,
@@ -234,7 +254,7 @@ def compare_sparkml_by_content(
         t_lama: LAMLTransformer,
         t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
         rtol: float = 1.e-5
-):
+) -> Transformer:
     """
         Args:
             spark: session to be used for calculating the example
@@ -246,7 +266,7 @@ def compare_sparkml_by_content(
         Returns:
             A tuple of (LAMA transformed dataset, Spark transformed dataset)
         """
-    compare_sparkml_transformers_results(spark, ds, t_lama, t_spark, rtol=rtol)
+    return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark, rtol=rtol)
 
 
 def compare_sparkml_by_metadata(
@@ -254,7 +274,7 @@ def compare_sparkml_by_metadata(
         ds: PandasDataset,
         t_lama: LAMLTransformer,
         t_spark: Union[SparkBaseEstimator, SparkBaseTransformer],
-        compare_feature_distributions: bool = False):
+        compare_feature_distributions: bool = False) -> Transformer:
     """
         Args:
             spark: session to be used for calculating the example
@@ -267,9 +287,9 @@ def compare_sparkml_by_metadata(
         Returns:
             A tuple of (LAMA transformed dataset, Spark transformed dataset)
         """
-    compare_sparkml_transformers_results(spark, ds, t_lama, t_spark,
-                                         compare_feature_distributions=compare_feature_distributions,
-                                         compare_content=False)
+    return compare_sparkml_transformers_results(spark, ds, t_lama, t_spark,
+                                                compare_feature_distributions=compare_feature_distributions,
+                                                compare_content=False)
 
 
 def compare_transformers_results(spark: SparkSession,

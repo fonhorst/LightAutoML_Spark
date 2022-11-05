@@ -5,9 +5,12 @@ from pyspark.ml.param.shared import HasInputCols, HasOutputCols
 from pyspark.ml.util import JavaMLReadable, JavaMLWritable
 from pyspark.ml.wrapper import JavaTransformer
 
+from sparklightautoml.mlwriters import CommonJavaToPythonMLReadable
+
 
 @inherit_doc
-class TargetEncoderTransformer(JavaTransformer, JavaMLReadable, JavaMLWritable, HasInputCols, HasOutputCols):
+class TargetEncoderTransformer(JavaTransformer, HasInputCols, HasOutputCols,
+                               CommonJavaToPythonMLReadable, JavaMLWritable):
     """
     Scala-based implementation of Target Encoder transformer
     """

@@ -283,18 +283,6 @@ class LightGBMModelWrapperMLReader(MLReader):
         return model_wrapper
 
 
-@inherit_doc
-class LAMLStringIndexerModelJavaMLReadable(MLReadable):
-    """
-    (Private) Mixin for instances that provide JavaMLReader.
-    """
-
-    @classmethod
-    def read(cls):
-        """Returns an MLReader instance for this class."""
-        return LAMLStringIndexerModelJavaMLReader(cls)
-
-
 def _jvm():
     """
     Returns the JVM view associated with SparkContext. Must be called
@@ -308,13 +296,13 @@ def _jvm():
 
 
 @inherit_doc
-class LAMLStringIndexerModelJavaMLReader(MLReader):
+class CommonJavaToPythonMLReader(MLReader):
     """
     (Private) Specialization of :py:class:`MLReader` for :py:class:`JavaParams` types
     """
 
     def __init__(self, clazz):
-        super(LAMLStringIndexerModelJavaMLReader, self).__init__()
+        super().__init__()
         self._clazz = clazz
         self._jread = self._load_java_obj(clazz).read()
 
@@ -335,8 +323,21 @@ class LAMLStringIndexerModelJavaMLReader(MLReader):
     @classmethod
     def _load_java_obj(cls, clazz):
         """Load the peer Java object of the ML instance."""
-        java_class = "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel"
+        # java_class = "org.apache.spark.ml.feature.lightautoml.LAMLStringIndexerModel"
+        java_class = f"org.apache.spark.ml.feature.lightautoml.{clazz.__name__}"
         java_obj = _jvm()
         for name in java_class.split("."):
             java_obj = getattr(java_obj, name)
         return java_obj
+
+
+@inherit_doc
+class CommonJavaToPythonMLReadable(MLReadable):
+    """
+    (Private) Mixin for instances that provide JavaMLReader.
+    """
+
+    @classmethod
+    def read(cls):
+        """Returns an MLReader instance for this class."""
+        return CommonJavaToPythonMLReader(cls)
