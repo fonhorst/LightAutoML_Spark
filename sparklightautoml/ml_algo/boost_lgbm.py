@@ -37,6 +37,8 @@ from sparklightautoml.transformers.base import (
     PredictionColsTransformer,
     ProbabilityColsTransformer,
 )
+from sparklightautoml.transformers.scala_wrappers.balanced_union_partitions_coalescer import \
+    BalancedUnionPartitionsCoalescerTransformer
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 
@@ -416,11 +418,18 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             #
             # train_data = train_data.where(val_filter_cond)
 
+        assert train_data.rdd.getNumPartitions() == valid_data.rdd.getNumPartitions(), \
+            f"Train and val sets should have the same number of partitions. " \
+            f"But the train set has {train_data.rdd.getNumPartitions()} and " \
+            f"the val set has {valid_data.rdd.getNumPartitions()}."
+
         full_data = (
             train_data
             .select('*', sf.lit(False).alias(self.validation_column))
             .unionByName(valid_data.select('*', sf.lit(True).alias(self.validation_column)))
         )
+
+        full_data = BalancedUnionPartitionsCoalescerTransformer().transform(full_data)
 
         lgbm = lgbm_booster(
             **params,

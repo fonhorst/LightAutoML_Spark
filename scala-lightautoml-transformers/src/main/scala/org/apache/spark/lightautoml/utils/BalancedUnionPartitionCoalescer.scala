@@ -17,7 +17,7 @@ class BalancedUnionPartitionCoalescer extends PartitionCoalescer with Serializab
 
     val unique_sizes = parent2parts.map(_._2.length).toSet
 
-    assert(unique_sizes.size == 1)
+    assert(unique_sizes.size == 1, s"Found ")
 
     val partsNum = unique_sizes.head
 
