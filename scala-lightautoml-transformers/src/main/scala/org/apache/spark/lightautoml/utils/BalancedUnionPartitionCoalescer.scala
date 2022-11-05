@@ -11,13 +11,16 @@ class BalancedUnionPartitionCoalescer extends PartitionCoalescer with Serializab
   override def coalesce(maxPartitions: Int, parent: RDD[_]): Array[PartitionGroup] = {
     val up_arr = parent.partitions.map(_.asInstanceOf[UnionPartition[_]])
     val parent2parts = up_arr
-            .map(x => (x.parentRddIndex, x))
-            .groupBy(_._1)
-            .map(x => (x._1, x._2.map(_._2).sortBy(_.parentPartition.index)))
+            .groupBy(_.parentRddIndex)
+            .map{case(parentRddIndex, ups) => (parentRddIndex, ups.sortBy(_.parentPartition.index))}
 
-    val unique_sizes = parent2parts.map(_._2.length).toSet
+    val parent2size = parent2parts.map{case(parentRddIndex, ups) => (parentRddIndex, ups.length)}
+    val unique_sizes = parent2size.values.toSet
 
-    assert(unique_sizes.size == 1, s"Found ")
+    assert(
+      unique_sizes.size == 1,
+      s"Found differences in num of parts: $unique_sizes. Parent to parts num mapping: $parent2size"
+    )
 
     val partsNum = unique_sizes.head
 
