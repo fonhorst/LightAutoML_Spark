@@ -418,18 +418,21 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             #
             # train_data = train_data.where(val_filter_cond)
 
-        assert train_data.rdd.getNumPartitions() == valid_data.rdd.getNumPartitions(), \
-            f"Train and val sets should have the same number of partitions. " \
-            f"But the train set has {train_data.rdd.getNumPartitions()} and " \
-            f"the val set has {valid_data.rdd.getNumPartitions()}."
+        td = train_data.select('*', sf.lit(False).alias(self.validation_column))
+        vd = valid_data.select('*', sf.lit(True).alias(self.validation_column))
+        full_data = td.unionByName(vd)
 
-        full_data = (
-            train_data
-            .select('*', sf.lit(False).alias(self.validation_column))
-            .unionByName(valid_data.select('*', sf.lit(True).alias(self.validation_column)))
-        )
-
-        full_data = BalancedUnionPartitionsCoalescerTransformer().transform(full_data)
+        if train_data.rdd.getNumPartitions() == valid_data.rdd.getNumPartitions():
+            full_data = BalancedUnionPartitionsCoalescerTransformer().transform(full_data)
+        else:
+            message = f"Cannot apply BalancedUnionPartitionsCoalescer " \
+                      f"due to train and val datasets doesn't have the same number of partitions. " \
+                      f"The train dataset has {train_data.rdd.getNumPartitions()} partitions " \
+                      f"while the val dataset has {valid_data.rdd.getNumPartitions()} partitions." \
+                      f"Continue with plain union." \
+                      f"In some situations it may negatively affect behavior of SynapseML LightGBM " \
+                      f"due to empty partitions"
+            warnings.warn(message, RuntimeWarning)
 
         lgbm = lgbm_booster(
             **params,

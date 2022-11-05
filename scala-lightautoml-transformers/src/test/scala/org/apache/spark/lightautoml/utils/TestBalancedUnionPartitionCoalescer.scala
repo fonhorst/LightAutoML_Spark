@@ -1,6 +1,5 @@
 package org.apache.spark.lightautoml.utils
 
-import org.apache.spark.BaseFunSuite
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Row, SparkSession}
@@ -12,10 +11,19 @@ import scala.util.Random
 /*
 *  To run this example:
 *   - set env variable: SPARK_SCALA_VERSION=2.12
+*   - do one of the alternatives
+*   1. First way:
 *   - create 'assembly/target/scala-2.12/jars' directory in the root of the project (scala-lightautoml-transformers)
 *   - copy spark jars to 'assembly/target/scala-2.12/jars'. These jars can be taken from spark/pyspark distributions
 *     for example: cp -r $HOME/.cache/pypoetry/virtualenvs/lightautoml-749ciRtl-py3.9/lib/python3.9/site-packages/pyspark/jars/ assembly/target/scala-2.12/jars
 *   - ensure that spark-lightautoml_2.12-0.1.jar has been built and accessible for spark (run: sbt package)
+*
+*   2. Second way:
+*   - set env variable SPARK_HOME point to a spark distribution of the corresponding version
+*     for instance:
+*        SPARK_HOME=/home/nikolay/.cache/pypoetry/virtualenvs/sparklightautoml-749ciRtl-py3.9/lib/python3.9/site-packages/pyspark
+*     where pyspark has been installed with 'pip install pyspark==3.2.0'
+*   - ensure that SparkSession is created with a config option '.config("spark.jars", "target/scala-2.12/spark-lightautoml_2.12-0.1.jar")'
 * */
 class TestBalancedUnionPartitionCoalescer extends AnyFunSuite with BeforeAndAfterAll with Logging {
   val num_workers = 3
@@ -24,7 +32,7 @@ class TestBalancedUnionPartitionCoalescer extends AnyFunSuite with BeforeAndAfte
 
   val spark: SparkSession = SparkSession
           .builder()
-          .master(s"local-cluster[${num_workers}, ${num_cores}, 1024]")
+          .master(s"local-cluster[$num_workers, $num_cores, 1024]")
           .config("spark.jars", "target/scala-2.12/spark-lightautoml_2.12-0.1.jar")
           .getOrCreate()
 
@@ -33,7 +41,7 @@ class TestBalancedUnionPartitionCoalescer extends AnyFunSuite with BeforeAndAfte
   }
 
   test("Coalescers") {
-    import this.spark.sqlContext.implicits._
+    import spark.sqlContext.implicits._
     val df = spark
             .sparkContext.parallelize((0 until 5000)
             .map(x => (x, Random.nextInt(folds_count)))).toDF("data", "fold")
