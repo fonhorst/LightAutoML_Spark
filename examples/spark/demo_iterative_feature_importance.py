@@ -17,7 +17,7 @@ from lightautoml.pipelines.selection.permutation_importance_based import (
 )
 from sklearn.model_selection import train_test_split
 
-from examples_utils import get_spark_session
+from examples_utils import get_spark_session, get_dataset_attrs
 from sparklightautoml.automl.base import SparkAutoML
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
@@ -43,6 +43,12 @@ if __name__ == "__main__":
 
     logger.info("Load data...")
     data = pd.read_csv("examples/data/sampled_app_train.csv")
+
+    # for test purposes we may reduce number of active columns to use
+    required_cols = ["TARGET", "DAYS_BIRTH", "DAYS_EMPLOYED"]
+    cols = [c for c in data.columns if c not in required_cols][:10]
+    data = data[cols + required_cols]
+
     logger.info("Data loaded")
 
     logger.info("Features modification from user side...")

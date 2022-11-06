@@ -12,7 +12,8 @@ from pyspark.sql.types import StructField
 
 from sparklightautoml.pipelines.selection.base import SparkImportanceEstimator
 from ...dataset.base import LAMLDataset, SparkDataset
-from ...ml_algo.base import MLAlgo
+from ...ml_algo.base import MLAlgo, SparkTabularMLAlgo
+from ...validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,9 @@ class SparkNpPermutationImportanceEstimator(SparkImportanceEstimator):
 
     def fit(
         self,
-        train_valid: Optional[TrainValidIterator] = None,
-        ml_algo: Optional[MLAlgo] = None,
-        preds: Optional[LAMLDataset] = None,
+        train_valid: Optional[SparkBaseTrainValidIterator] = None,
+        ml_algo: Optional[SparkTabularMLAlgo] = None,
+        preds: Optional[SparkDataset] = None,
     ):
         """Find importances for each feature in dataset.
 
@@ -50,7 +51,12 @@ class SparkNpPermutationImportanceEstimator(SparkImportanceEstimator):
         """
         logger.info(f"Starting importance estimating with {type(self)}")
 
-        normal_score = ml_algo.score(preds)
+        assert train_valid is not None, "train_valid cannot be None"
+
+        preds_with_target = SparkDataset.concatenate(
+            [train_valid.get_validation_data()[:,[]], preds], name=f"{type(self).__name__}_preds_with_target"
+        )
+        normal_score = ml_algo.score(preds_with_target)
         logger.debug(f"Normal score = {normal_score}")
 
         valid_data = cast(SparkDataset, train_valid.get_validation_data())
