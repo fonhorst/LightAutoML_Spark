@@ -4,7 +4,7 @@ from copy import copy
 from typing import Optional, List, cast
 
 from lightautoml.dataset.base import RolesDict
-from lightautoml.pipelines.selection.base import SelectionPipeline, EmptySelector, ImportanceEstimator
+from lightautoml.pipelines.selection.base import SelectionPipeline, EmptySelector, ImportanceEstimator, ComposedSelector
 from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
 from pyspark.ml import Transformer
@@ -24,8 +24,8 @@ class SparkImportanceEstimator(ImportanceEstimator, ABC):
 class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutputRoles):
     def __init__(self, sel_pipe: SelectionPipeline):
         assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
-        assert isinstance(sel_pipe.features_pipeline, SparkFeaturesPipeline) or isinstance(sel_pipe, EmptySelector), \
-            "SelectionPipeline should have SparkFeaturePipeline as features_pipeline"
+        self._validate_sel_pipe(sel_pipe)
+
         self._sel_pipe = sel_pipe
         self._service_columns = None
         self._is_fitted = False
@@ -34,6 +34,13 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
         self._feature_pipeline = cast(SparkFeaturesPipeline, self._sel_pipe.features_pipeline)
         self._service_columns: Optional[List[str]] = None
         super().__init__()
+
+    def _validate_sel_pipe(self, sel_pipe: SelectionPipeline):
+        selectors = sel_pipe.selectors if isinstance(sel_pipe, ComposedSelector) else [sel_pipe]
+        for selp in selectors:
+            assert isinstance(selp, EmptySelector) or isinstance(selp.features_pipeline, SparkFeaturesPipeline), \
+                "SelectionPipeline should either be EmptySelector or have SparkFeaturePipeline as features_pipeline, " \
+                f"but it is {type(selp)} and have {type(selp.features_pipeline)}"
 
     def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
         if not self._sel_pipe.is_fitted:
