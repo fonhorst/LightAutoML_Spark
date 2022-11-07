@@ -116,15 +116,6 @@ class SparkBaseTrainValidIterator(TrainValidIterator, Unpersistable, ABC):
 
         return train_valid
 
-    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
-        # depending on train_valid logic there may be several ways of treating predictions results:
-        # 1. for folds iterators - join the results, it will yield the full train dataset
-        # 2. for holdout iterators - create None predictions in train_part and join with valid part
-        # 3. for custom iterators which may put the same records in
-        #   different folds: union + groupby + (optionally) union with None-fied train_part
-        # 4. for dummy - do nothing
-        raise NotImplementedError()
-
     def _split_by_fold(self, fold: int) -> Tuple[SparkDataset, SparkDataset, SparkDataset]:
         train = cast(SparkDataset, self.train)
         is_val_col = (

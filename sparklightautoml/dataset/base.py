@@ -94,7 +94,7 @@ class SparkDataset(LAMLDataset, Unpersistable):
 
         if any(not d.bucketized for d in datasets):
             warnings.warn(
-                f"NOT bucketized datasets are requested to be joined. It may severaly affect perfrormance",
+                f"NOT bucketized datasets are requested to be joined. It may severely affect performance",
                 RuntimeWarning
             )
 

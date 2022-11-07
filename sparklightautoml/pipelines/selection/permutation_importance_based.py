@@ -53,10 +53,7 @@ class SparkNpPermutationImportanceEstimator(SparkImportanceEstimator):
 
         assert train_valid is not None, "train_valid cannot be None"
 
-        preds_with_target = SparkDataset.concatenate(
-            [train_valid.get_validation_data()[:,[]], preds], name=f"{type(self).__name__}_preds_with_target"
-        )
-        normal_score = ml_algo.score(preds_with_target)
+        normal_score = ml_algo.score(preds)
         logger.debug(f"Normal score = {normal_score}")
 
         valid_data = cast(SparkDataset, train_valid.get_validation_data())

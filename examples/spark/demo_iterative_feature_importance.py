@@ -46,7 +46,7 @@ if __name__ == "__main__":
 
     # for test purposes we may reduce number of active columns to use
     required_cols = ["TARGET", "DAYS_BIRTH", "DAYS_EMPLOYED"]
-    cols = [c for c in data.columns if c not in required_cols][:10]
+    cols = [c for c in data.columns if c not in required_cols][:2]
     data = data[cols + required_cols]
 
     logger.info("Data loaded")

@@ -1,3 +1,4 @@
+import functools
 import logging
 from copy import copy
 from typing import Tuple, cast, List, Optional, Sequence
@@ -132,7 +133,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
                 model_prediction_col = f"{self.prediction_feature}_{n}"
                 model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
-                val_pred = val_pred.select(SparkDataset.ID_COLUMN, model_prediction_col)
+                val_pred = val_pred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
 
                 self._models_prediction_columns.append(model_prediction_col)
                 self.models.append(model)
@@ -166,7 +167,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         #     )
         #     for df in preds_dfs
         # ]
-        full_preds_df = train_valid_iterator.combine_val_preds(preds_dfs)
+        full_preds_df = self._combine_val_preds(train_valid_iterator.get_validation_data(), preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
         # create Spark MLlib Transformer and save to property var
         # self._transformer = self._clean_transformer_columns(
@@ -264,6 +265,29 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         output.set_data(preds, preds.columns, roles, name="single_prediction_dataset")
 
         return output
+
+    def _combine_val_preds(self, val_data: SparkDataset, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
+        # depending on train_valid logic there may be several ways of treating predictions results:
+        # 1. for folds iterators - join the results, it will yield the full train dataset
+        # 2. for holdout iterators - create None predictions in train_part and join with valid part
+        # 3. for custom iterators which may put the same records in
+        #   different folds: union + groupby + (optionally) union with None-fied train_part
+        # 4. for dummy - do nothing
+        assert len(val_preds) > 0
+
+        if len(val_preds) == 1:
+            return val_preds[0]
+
+        # we leave only service columns, e.g. id, fold, target columns
+        initial_df = cast(SparkDataFrame, val_data[:, []].data)
+
+        full_val_preds = functools.reduce(
+            lambda acc, x: acc.join(x, on=SparkDataset.ID_COLUMN, how='left'),
+            [val_pred.drop(val_data.target_column) for val_pred in val_preds],
+            initial_df
+        )
+
+        return full_val_preds
 
 
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParamsWritable, DefaultParamsReadable):

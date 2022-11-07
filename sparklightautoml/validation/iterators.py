@@ -7,7 +7,7 @@ from pyspark.sql import functions as sf
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal, SparkSelectionPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +54,6 @@ class SparkDummyIterator(SparkBaseTrainValidIterator):
     def unpersist(self, skip_val: bool = False):
         if not skip_val:
             self.train.unpersist()
-
-    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
-        assert len(val_preds) == 1
-        return val_preds[0]
 
     def get_validation_data(self) -> SparkDataset:
         return self.train
@@ -113,10 +109,10 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         return self
 
-    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
-        assert len(val_preds) == 1
-
-        return val_preds[0]
+    def apply_selector(self, selector: SparkSelectionPipeline) -> "SparkBaseTrainValidIterator":
+        train_valid = super().apply_selector(selector)
+        train_valid._valid = selector.select(train_valid._valid)
+        return train_valid
 
     def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
         train_valid = super().apply_feature_pipeline(features_pipeline)
@@ -228,20 +224,3 @@ class SparkFoldsIterator(SparkBaseTrainValidIterator):
         """
         _, train, valid = self._split_by_fold(0)
         return SparkHoldoutIterator(train, valid)
-
-    def combine_val_preds(self, val_preds: Sequence[SparkDataFrame]) -> SparkDataFrame:
-        assert len(val_preds) > 0
-
-        if len(val_preds) == 1:
-            return val_preds[0]
-
-        # we leave only service columns, e.g. id, fold, target columns
-        initial_df = cast(SparkDataFrame, self.get_validation_data()[:, []].data)
-
-        full_val_preds = functools.reduce(
-            lambda acc, x: acc.join(x, on=SparkDataset.ID_COLUMN, how='left'),
-            val_preds,
-            initial_df
-        )
-
-        return full_val_preds
