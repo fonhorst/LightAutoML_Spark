@@ -7,6 +7,7 @@ from typing import Dict, Optional, Tuple, Union, cast, List
 import lightgbm as lgb
 import pandas as pd
 import pyspark.sql.functions as sf
+from lightautoml.dataset.roles import ColumnRole
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.utils.timer import TaskTimer
@@ -25,6 +26,7 @@ from synapse.ml.lightgbm import (
 from synapse.ml.onnx import ONNXModel
 
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
+from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.mlwriters import (
     LightGBMModelWrapperMLReader,
@@ -163,7 +165,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self._use_single_dataset_mode = use_single_dataset_mode
         self._max_validation_size = max_validation_size
         self._seed = seed
-        self._models_feature_impotances = []
+        self._models_feature_importances = []
         self._chunk_size = chunk_size
         self._convert_to_onnx = convert_to_onnx
         self._mini_batch_size = mini_batch_size
@@ -458,7 +460,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             optional_remove_cols=[self._prediction_col_name, self._probability_col_name, self._raw_prediction_col_name],
         ).transform(val_pred)
 
-        self._models_feature_impotances.append(ml_model.getFeatureImportances(importance_type="gain"))
+        self._models_feature_importances.append(ml_model.getFeatureImportances(importance_type="gain"))
 
         if self._convert_to_onnx:
             logger.info("Model convert is started")
@@ -495,12 +497,24 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     def get_features_score(self) -> Series:
         imp = 0
-        for model_feature_impotances in self._models_feature_impotances:
+        for model_feature_impotances in self._models_feature_importances:
             imp = imp + pd.Series(model_feature_impotances)
 
-        imp = imp / len(self._models_feature_impotances)
+        imp = imp / len(self._models_feature_importances)
 
-        result = Series(list(imp), index=self.features).sort_values(ascending=False)
+        def flatten_features(feat: str):
+            role = self.input_roles[feat]
+            if isinstance(role, NumericVectorOrArrayRole):
+                return [f"{feat}_pos_{i}" for i in range(role.size)]
+            return [feat]
+
+        index = [
+            ff
+            for feat in self._assembler.getInputCols()
+            for ff in flatten_features(feat)
+        ]
+
+        result = Series(list(imp), index=index).sort_values(ascending=False)
         return result
 
     @staticmethod

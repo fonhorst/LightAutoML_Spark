@@ -171,10 +171,12 @@ class SparkLinearFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
         sparse_list.append(self.get_binned_data(train))
         # add numeric pipeline wo probs
         dense_list.append(self.get_numeric_data(train, prob=False))
+        dense_list.append(self.get_numeric_vectors_data(train, prob=False))
         # add ordinal categories
         dense_list.append(self.get_ordinal_encoding(train))
         # add probs
         probs_list.append(self.get_numeric_data(train, prob=True))
+        probs_list.append(self.get_numeric_vectors_data(train, prob=True))
         # add difference with base date
         dense_list.append(self.get_datetime_diffs(train))
 

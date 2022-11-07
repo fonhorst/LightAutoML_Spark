@@ -21,6 +21,7 @@ from pyspark.ml import Transformer, Estimator, Pipeline, PipelineModel
 from pyspark.sql import functions as sf
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.mlwriters import CommonPickleMLWritable, CommonPickleMLReadable
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.transformers.base import (
@@ -414,8 +415,6 @@ class SparkTabularDataFeatures:
             else:
                 feats_to_select = self._cols_by_role(train, "Numeric", prob=prob)
 
-            feats_to_select = [*feats_to_select, *self._cols_by_role(train, "NumericVectorOrArray")]
-
         if len(feats_to_select) == 0:
             return None
 
@@ -424,6 +423,38 @@ class SparkTabularDataFeatures:
         num_processing = SparkChangeRolesTransformer(
             input_cols=feats_to_select, input_roles=roles, role=NumericRole(np.float32)
         )
+
+        return num_processing
+
+    def get_numeric_vectors_data(
+            self,
+            train: SparkDataset,
+            feats_to_select: Optional[List[str]] = None,
+            prob: Optional[bool] = None
+    ):
+
+        if feats_to_select is None:
+            if prob is None:
+                feats_to_select = self._cols_by_role(train, "NumericVectorOrArray")
+            else:
+                feats_to_select = self._cols_by_role(train, "NumericVectorOrArray", prob=prob)
+
+        if len(feats_to_select) == 0:
+            return None
+
+        roles = cast(Dict[str, NumericVectorOrArrayRole], {f: train.roles[f] for f in feats_to_select})
+
+        new_roles = {
+            feat: NumericVectorOrArrayRole(
+                role.size,
+                role.element_col_name_template,
+                np.float32,
+                is_vector=role.is_vector
+            )
+            for feat, role in roles.items()
+        }
+
+        num_processing = SparkChangeRolesTransformer(input_cols=feats_to_select, input_roles=roles, roles=new_roles)
 
         return num_processing
 

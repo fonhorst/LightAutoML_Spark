@@ -397,12 +397,24 @@ class SparkChangeRolesTransformer(SparkBaseTransformer, CommonPickleMLWritable, 
     # Note: this trasnformer cannot be applied directly to input columns of a feature pipeline
     """
 
-    def __init__(self, input_cols: List[str], input_roles: RolesDict, role: ColumnRole):
+    def __init__(self,
+                 input_cols: List[str],
+                 input_roles: RolesDict,
+                 role: Optional[ColumnRole] = None,
+                 roles: Optional[RolesDict] = None):
+        assert (role and not roles) or (not role and roles), \
+            "Either role or roles shoud be defined. Both of them cannot be set simultaneously"
+
+        if role:
+            output_roles = {f: deepcopy(role) for f in input_cols}
+        else:
+            output_roles = deepcopy(roles)
+
         super().__init__(
             input_cols=input_cols,
             output_cols=input_cols,
             input_roles=input_roles,
-            output_roles={f: deepcopy(role) for f in input_cols},
+            output_roles=output_roles,
             do_replace_columns=True,
         )
 

@@ -59,6 +59,7 @@ class SparkLGBSimpleFeatures(SparkFeaturesPipeline, SparkTabularDataFeatures):
             transformers_list.append(dt_processing)
 
         transformers_list.append(self.get_numeric_data(train))
+        transformers_list.append(self.get_numeric_vectors_data(train))
 
         union_all = SparkUnionTransformer([x for x in transformers_list if x is not None])
 
@@ -217,6 +218,7 @@ class SparkLGBAdvancedPipeline(SparkFeaturesPipeline, SparkTabularDataFeatures):
             transformer_list.append(ints_part)
 
         transformer_list.append(self.get_numeric_data(train))
+        transformer_list.append(self.get_numeric_vectors_data(train))
         transformer_list.append(self.get_ordinal_encoding(train, ordinal))
         transformer_list.append(self.get_datetime_diffs(train))
         transformer_list.append(self.get_datetime_seasons(train, NumericRole(np.float32)))

@@ -41,6 +41,10 @@ class NumericVectorOrArrayRole(NumericRole):
         return self._size
 
     @property
+    def element_col_name_template(self):
+        return self._element_col_name_template
+
+    @property
     def is_vector(self):
         return self._is_vector
 
