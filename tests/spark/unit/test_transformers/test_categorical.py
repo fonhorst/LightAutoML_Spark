@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from lightautoml.dataset.np_pd_dataset import PandasDataset
-from lightautoml.dataset.roles import CategoryRole
+from lightautoml.dataset.roles import CategoryRole, NumericRole
 from lightautoml.pipelines.utils import get_columns_by_role
 from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.tasks import Task
@@ -19,7 +19,8 @@ from sparklightautoml.transformers.categorical import SparkLabelEncoderEstimator
     SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator, \
     SparkMulticlassTargetEncoderEstimator, SparkFreqEncoderTransformer
 from sparklightautoml.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
-from sparklightautoml.transformers.scala_wrappers.target_encoder_transformer import TargetEncoderTransformer
+from sparklightautoml.transformers.scala_wrappers.target_encoder_transformer import TargetEncoderTransformer, \
+    SparkTargetEncodeTransformer2
 from sparklightautoml.utils import SparkDataFrame, WrappingSelectingPipelineModel
 from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata, workdir
 from ..dataset_utils import get_test_datasets
@@ -189,13 +190,18 @@ def test_scala_target_encoder_transformer(spark: SparkSession, workdir: str):
 
     data_df = make_df(data)
 
-    tet = TargetEncoderTransformer.create(
+    te = TargetEncoderTransformer.create(
         enc=enc,
         oof_enc=oof_enc,
         fold_column=fold_column,
         apply_oof=True,
         input_cols=input_cols,
         output_cols=output_cols
+    )
+    tet = SparkTargetEncodeTransformer2(
+        te,
+        input_roles={feat: NumericRole(np.int32) for feat in input_cols},
+        output_roles={feat: NumericRole(np.float32) for feat in output_cols}
     )
 
     result_oof_enc = tet.transform(data_df).collect()
@@ -211,7 +217,7 @@ def test_scala_target_encoder_transformer(spark: SparkSession, workdir: str):
     te_path = os.path.join(workdir, "scala_te.transformer")
     tet.save(te_path)
 
-    tet_loaded = TargetEncoderTransformer.load(te_path)
+    tet_loaded = SparkTargetEncodeTransformer2.load(te_path)
     result_enc = tet_loaded.transform(data_df).collect()
     result_enc_2 = tet_loaded.transform(data_df).collect()
 
@@ -286,13 +292,18 @@ def test_wrapping_selection_pipeline_model(spark: SparkSession, workdir: str):
 
     data_df = make_df(data)
 
-    tet = TargetEncoderTransformer.create(
+    te = TargetEncoderTransformer.create(
         enc=enc,
         oof_enc=oof_enc,
         fold_column=fold_column,
         apply_oof=True,
         input_cols=input_cols,
         output_cols=output_cols
+    )
+    tet = SparkTargetEncodeTransformer2(
+        te,
+        input_roles={feat: NumericRole(np.int32) for feat in input_cols},
+        output_roles={feat: NumericRole(np.float32) for feat in output_cols}
     )
 
     excessive_out_cols = ["d", "e"]
@@ -314,7 +325,17 @@ def test_wrapping_selection_pipeline_model(spark: SparkSession, workdir: str):
     out_data_df = pmodel.transform(data_df)
     assert set(out_data_df.columns) == set(out_cols)
 
+    # path = os.path.join(workdir, "pmodel.transformer")
+    # PipelineModel(stages=[LAMLStringIndexerModel()]).save(path)
+    # PipelineModel.load(path)
+
     # TODO: SLAMA - add saving/loading checking
+    path = os.path.join(workdir, "wrapping_pmodel.transformer")
+    pmodel.save(path)
+
+    loaded_pmodel = WrappingSelectingPipelineModel.load(path)
+    out_data_df = loaded_pmodel.transform(data_df)
+    assert set(out_data_df.columns) == set(out_cols)
 
 
 # noinspection PyShadowingNames

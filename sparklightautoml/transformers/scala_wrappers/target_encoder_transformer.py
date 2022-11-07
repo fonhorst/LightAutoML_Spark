@@ -1,12 +1,20 @@
+import logging
+import os
 from typing import Dict, List
 from uuid import uuid4
 
+from lightautoml.dataset.base import RolesDict
 from pyspark.ml.common import inherit_doc
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
-from pyspark.ml.util import JavaMLReadable, JavaMLWritable
+from pyspark.ml.util import JavaMLWritable, MLWriter
 from pyspark.ml.wrapper import JavaTransformer, JavaParams
 
-from sparklightautoml.mlwriters import CommonJavaToPythonMLReadable
+from sparklightautoml.mlwriters import CommonJavaToPythonMLReadable, СommonPickleMLWriter, СommonPickleMLReader, \
+    CommonPickleMLWritable, CommonPickleMLReadable
+from sparklightautoml.transformers.base import SparkBaseTransformer
+from sparklightautoml.utils import SparkDataFrame
+
+logger = logging.getLogger(__name__)
 
 
 @inherit_doc
@@ -79,3 +87,70 @@ class TargetEncoderTransformer(JavaTransformer, HasInputCols, HasOutputCols,
         else:
             raise NotImplementedError("This Java stage cannot be loaded into Python currently: %r" % stage_name)
         return py_stage
+
+
+class SparkTargetEncoderTransformer2MLWriter(СommonPickleMLWriter):
+    """Implements saving an Estimator/Transformer instance to disk.
+    Used when saving a trained pipeline.
+    Implements MLWriter.saveImpl(path) method.
+    """
+
+    def __init__(self, instance: 'SparkTargetEncodeTransformer2'):
+        super().__init__(instance)
+        self.instance = instance
+
+    def saveImpl(self, path: str) -> None:
+        super().saveImpl(path)
+        tet_path = os.path.join(path, "scala_target_encoder_instance")
+        self.instance._target_encoder_transformer.save(tet_path)
+
+
+class SparkTargetEncoderTransformer2MLReader(СommonPickleMLReader):
+    def load(self, path) -> 'SparkTargetEncodeTransformer2':
+        """Load the ML instance from the input path."""
+        instance = super().load(path)
+        tet_path = os.path.join(path, "scala_target_encoder_instance")
+        instance._target_encoder_transformer = TargetEncoderTransformer.load(tet_path)
+
+        return instance
+
+
+class SparkTargetEncoderTransformer2MLWritable(CommonPickleMLWritable):
+    def write(self) -> MLWriter:
+        assert isinstance(self, SparkTargetEncodeTransformer2), \
+            f"This class can work only with {type(SparkTargetEncodeTransformer2)}"
+        """Returns MLWriter instance that can save the Transformer instance."""
+        return SparkTargetEncoderTransformer2MLWriter(self)
+
+
+class SparkTargetEncoderTransformer2MLReadable(CommonPickleMLReadable):
+    @classmethod
+    def read(cls):
+        """Returns an MLReader instance for this class."""
+        return SparkTargetEncoderTransformer2MLReader()
+
+
+class SparkTargetEncodeTransformer2(SparkBaseTransformer,
+                                    SparkTargetEncoderTransformer2MLWritable,
+                                    SparkTargetEncoderTransformer2MLReadable):
+    def __init__(self, tet: TargetEncoderTransformer, input_roles: RolesDict, output_roles: RolesDict):
+        super(SparkTargetEncodeTransformer2, self).__init__(
+            list(input_roles.keys()),
+            list(output_roles.keys()),
+            input_roles,
+            output_roles
+        )
+
+        self._target_encoder_transformer = tet
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        return self._target_encoder_transformer.transform(dataset)
+
+    def __getstate__(self):
+        # Copy the object's state from self.__dict__ which contains
+        # all our instance attributes. Always use the dict.copy()
+        # method to avoid modifying the original state.
+        state = self.__dict__.copy()
+        # Remove the unpicklable entries.
+        del state['_target_encoder_transformer']
+        return state
