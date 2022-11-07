@@ -11,16 +11,19 @@ from lightautoml.reader.base import PandasToPandasReader
 from lightautoml.tasks import Task
 from lightautoml.transformers.categorical import LabelEncoder, FreqEncoder, OrdinalEncoder, CatIntersectstions, \
     TargetEncoder, MultiClassTargetEncoder
+from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
+from sparklightautoml.pipelines.features.base import SparkNoOpTransformer
 from sparklightautoml.transformers.categorical import SparkLabelEncoderEstimator, SparkFreqEncoderEstimator, \
     SparkOrdinalEncoderEstimator, SparkCatIntersectionsEstimator, SparkTargetEncoderEstimator, \
     SparkMulticlassTargetEncoderEstimator, SparkFreqEncoderTransformer
 from sparklightautoml.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
 from sparklightautoml.transformers.scala_wrappers.target_encoder_transformer import TargetEncoderTransformer
-from sparklightautoml.utils import SparkDataFrame
+from sparklightautoml.utils import SparkDataFrame, WrappingSelectingPipelineModel
 from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata, workdir
 from ..dataset_utils import get_test_datasets
+from ..test_auto_ml.utils import FakeOpTransformer
 
 spark = spark_sess
 
@@ -214,6 +217,104 @@ def test_scala_target_encoder_transformer(spark: SparkSession, workdir: str):
 
     assert len(result_enc) == len(target_enc)
     assert len(result_enc_2) == len(target_enc)
+
+
+def test_wrapping_selection_pipeline_model(spark: SparkSession, workdir: str):
+    enc = {
+        "a": [0.0, -1.0, -2.0, -3.0, -4.0],
+        "b": [0.0, -1.0, -2.0],
+        "c": [0.0, -1.0, -2.0, -3.0]
+    }
+
+    oof_enc = {
+        "a": [
+            [0.0, 10.0, 20.0, 30.0, 40.0],
+            [0.0, 11.0, 12.0, 13.0, 14.0],
+            [0.0, 21.0, 22.0, 23.0, 24.0]
+        ],
+        "b": [
+            [0.0, 10.0, 20.0],
+            [0.0, 11.0, 12.0],
+            [0.0, 21.0, 22.0]
+        ],
+        "c": [
+            [0.0, 10.0, 20.0, 30.0],
+            [0.0, 11.0, 12.0, 13.0],
+            [0.0, 21.0, 22.0, 23.0]
+        ]
+    }
+
+    fold_column = "fold"
+    input_cols = ["a", "b", "c"]
+    output_cols = [f"te_{col}" for col in input_cols]
+    in_cols = ["id", fold_column, "some_other_col", *input_cols]
+
+    def make_df(data: List[List[float]]) -> SparkDataFrame:
+        # schema = StructType(fields=[StructField(col, IntegerType()) for col in in_cols])
+        df_data = [
+            {col: val for col, val in zip(in_cols, row)}
+            for row in data
+        ]
+        return spark.createDataFrame(df_data)  # , schema=schema)
+
+    data = [
+        [0, 0, 42, 1, 1, 1],
+        [1, 0, 43, 2, 1, 3],
+        [2, 1, 44, 1, 2, 3],
+        [3, 1, 45, 1, 2, 2],
+        [4, 2, 46, 3, 1, 1],
+        [5, 2, 47, 4, 1, 2],
+    ]
+
+    target_enc = [
+        [0, 0, 42, 1, 1, 1, -1.0, -1.0, -1.0],
+        [1, 0, 43, 2, 1, 3, -2.0, -1.0, -3.0],
+        [2, 1, 44, 1, 2, 3, -1.0, -2.0, -3.0],
+        [3, 1, 45, 1, 2, 2, -1.0, -2.0, -2.0],
+        [4, 2, 46, 3, 1, 1, -3.0, -1.0, -1.0],
+        [5, 2, 47, 4, 1, 2, -4.0, -1.0, -2.0],
+    ]
+
+    target_oof_enc = [
+        [0, 0, 42, 1, 1, 1, 10.0, 10.0, 10.0],
+        [1, 0, 43, 2, 1, 3, 20.0, 10.0, 30.0],
+        [2, 1, 44, 1, 2, 3, 11.0, 12.0, 13.0],
+        [3, 1, 45, 1, 2, 2, 11.0, 12.0, 12.0],
+        [4, 2, 46, 3, 1, 1, 23.0, 21.0, 21.0],
+        [5, 2, 47, 4, 1, 2, 24.0, 21.0, 22.0],
+    ]
+
+    data_df = make_df(data)
+
+    tet = TargetEncoderTransformer.create(
+        enc=enc,
+        oof_enc=oof_enc,
+        fold_column=fold_column,
+        apply_oof=True,
+        input_cols=input_cols,
+        output_cols=output_cols
+    )
+
+    excessive_out_cols = ["d", "e"]
+    stages = [tet, FakeOpTransformer(cols_to_generate=excessive_out_cols, n_classes=2)]
+    all_out_cols = [*in_cols, *output_cols, *excessive_out_cols]
+    out_cols = [*in_cols, *output_cols]
+
+    # regular pipeline model won't clean excessive columns
+    out_data_df = PipelineModel(stages=stages).transform(data_df)
+    assert set(out_data_df.columns) == set(all_out_cols)
+
+    pmodel = WrappingSelectingPipelineModel(
+        stages=stages,
+        input_columns=output_cols,
+        name="test"
+    )
+
+    # wrapping pipeline model will leave only input columns + desired generated columns
+    out_data_df = pmodel.transform(data_df)
+    assert set(out_data_df.columns) == set(out_cols)
+
+    # TODO: SLAMA - add saving/loading checking
 
 
 # noinspection PyShadowingNames
