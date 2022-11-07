@@ -1133,7 +1133,7 @@ class SparkScalaTargetEncoderTransformerWrapper(SparkBaseTransformer):
             output_roles
         )
 
-        self._transformer = TargetEncoderTransformer(
+        self._transformer = TargetEncoderTransformer.create(
             enc={k: v.tolist() for k, v in enc.items()},
             oof_enc={k: v.mapping.tolist() for k, v in oof_enc.items()},
             fold_column=fold_column,

@@ -27,8 +27,9 @@ class TargetEncoderTransformer(override val uid: String,
         extends Transformer
                 with HasInputCols
                 with HasOutputCols
-                with DefaultParamsWritable
-                with DefaultParamsReadable[TargetEncoderTransformer] {
+                with MLWritable {
+//                with DefaultParamsWritable
+//                with DefaultParamsReadable[TargetEncoderTransformer] {
 
   import TargetEncoderTransformer._
 
@@ -169,8 +170,6 @@ object TargetEncoderTransformer extends MLReadable[TargetEncoderTransformer] {
   override def read: MLReader[TargetEncoderTransformer] = new TargetEncoderTransformerReader
 
   override def load(path: String): TargetEncoderTransformer = super.load(path)
-
-  def just_a_brand_new_method: Integer = 42
 
   private[TargetEncoderTransformer] class TargetEncoderTransformerWriter(instance: TargetEncoderTransformer)
           extends MLWriter {

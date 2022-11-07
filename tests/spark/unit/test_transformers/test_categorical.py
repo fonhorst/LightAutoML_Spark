@@ -116,8 +116,8 @@ def test_cat_intersections(spark: SparkSession, dataset: DatasetForTest):
 
 
 def test_scala_target_encoder_transformer(spark: SparkSession, workdir: str):
-    # LAMLStringIndexerModel.load("...")
-    TargetEncoderTransformer.load("...")
+    # # LAMLStringIndexerModel.load("...")
+    # TargetEncoderTransformer.load("...")
 
     enc = {
         "a": [0.0, -1.0, -2.0, -3.0, -4.0],
@@ -186,7 +186,7 @@ def test_scala_target_encoder_transformer(spark: SparkSession, workdir: str):
 
     data_df = make_df(data)
 
-    tet = TargetEncoderTransformer(
+    tet = TargetEncoderTransformer.create(
         enc=enc,
         oof_enc=oof_enc,
         fold_column=fold_column,
