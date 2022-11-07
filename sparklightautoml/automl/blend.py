@@ -7,7 +7,7 @@ import numpy as np
 from lightautoml.automl.blend import WeightedBlender
 from lightautoml.dataset.roles import ColumnRole, NumericRole
 from lightautoml.reader.base import RolesDict
-from pyspark.ml import Transformer, Pipeline
+from pyspark.ml import Transformer, Pipeline, PipelineModel
 from pyspark.ml.feature import SQLTransformer
 
 from sparklightautoml.dataset.base import SparkDataset
@@ -62,7 +62,7 @@ class SparkBlender(TransformerInputOutputRoles, ABC):
         return self._transformer
 
     def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
-        raise NotImplementedError("This method should not be used for this class")
+        return self._transformer
 
     def fit_predict(
         self, predictions: SparkDataset, pipes: Sequence[SparkMLPipeline]
@@ -257,8 +257,9 @@ class SparkWeightedBlender(SparkBlender, WeightedBlender):
         remove_splitted_preds_cols: Optional[List[str]] = None,
     ) -> SparkDataset:
         avr = self._build_avr_transformer(splitted_preds, wts, remove_splitted_preds_cols)
+        vsh = self._build_vector_size_hint(self._single_prediction_col_name, self._pred_role)
 
-        weighted_preds_sdf = avr.transform(self._predictions_dataset.data)
+        weighted_preds_sdf = PipelineModel(stages=[avr, vsh]).transform(self._predictions_dataset.data)
 
         wpreds_sds = self._predictions_dataset.empty()
         wpreds_sds.set_data(
@@ -331,7 +332,7 @@ class SparkMeanBlender(SparkBlender):
 
         pred_cols = [pred_col for pred_col, _, _ in self.split_models(predictions, pipes)]
 
-        self._transformer = AveragingTransformer(
+        avr = AveragingTransformer(
             task_name=predictions.task.name,
             input_cols=pred_cols,
             output_col=self._single_prediction_col_name,
@@ -339,6 +340,9 @@ class SparkMeanBlender(SparkBlender):
             convert_to_array_first=not (predictions.task.name == "reg"),
             dim_num=self._outp_dim,
         )
+        vsh = self._build_vector_size_hint(self._single_prediction_col_name, self._pred_role)
+
+        self._transformer = PipelineModel(stages=[avr, vsh])
 
         df = self._transformer.transform(predictions.data)
 

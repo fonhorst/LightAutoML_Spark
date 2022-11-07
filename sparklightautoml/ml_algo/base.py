@@ -1,11 +1,11 @@
 import functools
 import logging
 from copy import copy
-from typing import Tuple, cast, List, Optional, Sequence
+from typing import Tuple, cast, List, Optional, Sequence, Union
 
 import numpy as np
 from lightautoml.dataset.base import RolesDict
-from lightautoml.dataset.roles import NumericRole, ColumnRole
+from lightautoml.dataset.roles import NumericRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.utils.timer import TaskTimer
 from pyspark.ml import PipelineModel, Transformer
@@ -46,7 +46,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         # names of columns that should contain predictions of individual models
         self._models_prediction_columns: Optional[List[str]] = None
 
-        self._prediction_role: Optional[ColumnRole] = None
+        self._prediction_role: Optional[Union[NumericRole, NumericVectorOrArrayRole]] = None
         self._input_roles: Optional[RolesDict] = None
         self._service_columns: Optional[List[str]] = None
 
@@ -74,7 +74,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         return f"{self._name}_prediction"
 
     @property
-    def prediction_role(self) -> ColumnRole:
+    def prediction_role(self) -> Union[NumericRole, NumericVectorOrArrayRole]:
         return self._prediction_role
 
     @property
@@ -147,33 +147,10 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
                         logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
                         break
 
-        # combining results for different folds
-        # 1. folds - union
-        # 2. dummy - nothing
-        # 3. holdout - nothing
-        # 4. custom - union + groupby
-        # neutral_element = (
-        #     array_to_vector(F.array(*[F.lit(float('nan')) for _ in range(self.n_classes)]))
-        #     if self.task.name in ["binary", "multiclass"]
-        #     else F.lit(float('nan'))
-        # )
-
-        neutral_element = None
-
-        # preds_dfs = [
-        #     df.select(
-        #         SparkDataset.ID_COLUMN,
-        #         *self._models_prediction_columns,
-        #     )
-        #     for df in preds_dfs
-        # ]
         full_preds_df = self._combine_val_preds(train_valid_iterator.get_validation_data(), preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
-        # create Spark MLlib Transformer and save to property var
-        # self._transformer = self._clean_transformer_columns(
-        #     self._build_transformer(),
-        #     train_valid_iterator.train.service_columns
-        # )
+        full_preds_df = self._build_vector_size_hint(self.prediction_feature, self._prediction_role)\
+            .transform(full_preds_df)
 
         pred_ds = valid_ds.empty()
         pred_ds.set_data(

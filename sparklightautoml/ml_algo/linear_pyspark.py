@@ -233,7 +233,12 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
                 ),
             ]
         ]
-        averaging_model = PipelineModel(stages=[self._assembler] + models + [avr])
+        averaging_model = PipelineModel(stages=[
+            self._assembler,
+            *models,
+            avr,
+            self._build_vector_size_hint(self.prediction_feature, self.prediction_role)
+        ])
         return averaging_model
 
     def _build_averaging_transformer(self) -> Transformer:

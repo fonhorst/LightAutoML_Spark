@@ -9,6 +9,7 @@ from lightautoml.dataset.roles import NumericRole
 from lightautoml.reader.base import UserDefinedRolesDict
 from lightautoml.reader.tabular_batch_generator import ReadableToDf
 from pyspark.ml import Transformer, PipelineModel
+from pyspark.ml.feature import VectorSizeHint
 from pyspark.ml.functions import array_to_vector
 
 from sparklightautoml.automl.blend import SparkWeightedBlender
@@ -157,6 +158,11 @@ class DummySparkMLPipeline(SparkMLPipeline):
                 for i, name in enumerate(self._output_roles.keys())
             ]
         )
+
+        vshs = PipelineModel(stages=[
+            VectorSizeHint(inputCol=name, size=n_classes) for name in self._output_roles.keys()
+        ])
+        sdf = vshs.transform(sdf)
 
         out_roles = copy(self._output_roles)
         out_roles.update(train_valid.train.roles)

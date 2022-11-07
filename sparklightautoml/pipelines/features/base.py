@@ -414,6 +414,8 @@ class SparkTabularDataFeatures:
             else:
                 feats_to_select = self._cols_by_role(train, "Numeric", prob=prob)
 
+            feats_to_select = [*feats_to_select, *self._cols_by_role(train, "NumericVectorOrArray")]
+
         if len(feats_to_select) == 0:
             return None
 

@@ -2,11 +2,14 @@ from abc import ABC, abstractmethod
 from typing import Optional, List
 
 from lightautoml.dataset.base import RolesDict
+from lightautoml.dataset.roles import ColumnRole
 from pyspark.ml import Transformer
+from pyspark.ml.feature import VectorSizeHint
 from pyspark.ml.pipeline import PipelineModel
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import ColumnsSelectorTransformer, WrappingSelectingPipelineModel
+from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
+from sparklightautoml.utils import ColumnsSelectorTransformer, WrappingSelectingPipelineModel, NoOpTransformer
 
 
 class TransformerInputOutputRoles(ABC):
@@ -61,3 +64,11 @@ class TransformerInputOutputRoles(ABC):
         out_ds.set_data(sdf, list(roles.keys()), roles)
 
         return out_ds
+
+    @classmethod
+    def _build_vector_size_hint(self, feat: str, role: ColumnRole):
+        if isinstance(role, NumericVectorOrArrayRole):
+            tr = VectorSizeHint(inputCol=feat, size=role.size)
+        else:
+            tr = NoOpTransformer()
+        return tr
