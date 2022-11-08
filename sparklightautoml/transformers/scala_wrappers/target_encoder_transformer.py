@@ -89,13 +89,13 @@ class TargetEncoderTransformer(JavaTransformer, HasInputCols, HasOutputCols,
         return py_stage
 
 
-class SparkTargetEncoderTransformer2MLWriter(СommonPickleMLWriter):
+class SparkTargetEncoderTransformerMLWriter(СommonPickleMLWriter):
     """Implements saving an Estimator/Transformer instance to disk.
     Used when saving a trained pipeline.
     Implements MLWriter.saveImpl(path) method.
     """
 
-    def __init__(self, instance: 'SparkTargetEncodeTransformer2'):
+    def __init__(self, instance: 'SparkTargetEncodeTransformer'):
         super().__init__(instance)
         self.instance = instance
 
@@ -105,8 +105,8 @@ class SparkTargetEncoderTransformer2MLWriter(СommonPickleMLWriter):
         self.instance._target_encoder_transformer.save(tet_path)
 
 
-class SparkTargetEncoderTransformer2MLReader(СommonPickleMLReader):
-    def load(self, path) -> 'SparkTargetEncodeTransformer2':
+class SparkTargetEncoderTransformerMLReader(СommonPickleMLReader):
+    def load(self, path) -> 'SparkTargetEncodeTransformer':
         """Load the ML instance from the input path."""
         instance = super().load(path)
         tet_path = os.path.join(path, "scala_target_encoder_instance")
@@ -115,26 +115,26 @@ class SparkTargetEncoderTransformer2MLReader(СommonPickleMLReader):
         return instance
 
 
-class SparkTargetEncoderTransformer2MLWritable(CommonPickleMLWritable):
+class SparkTargetEncoderTransformerMLWritable(CommonPickleMLWritable):
     def write(self) -> MLWriter:
-        assert isinstance(self, SparkTargetEncodeTransformer2), \
-            f"This class can work only with {type(SparkTargetEncodeTransformer2)}"
+        assert isinstance(self, SparkTargetEncodeTransformer), \
+            f"This class can work only with {type(SparkTargetEncodeTransformer)}"
         """Returns MLWriter instance that can save the Transformer instance."""
-        return SparkTargetEncoderTransformer2MLWriter(self)
+        return SparkTargetEncoderTransformerMLWriter(self)
 
 
-class SparkTargetEncoderTransformer2MLReadable(CommonPickleMLReadable):
+class SparkTargetEncoderTransformerMLReadable(CommonPickleMLReadable):
     @classmethod
     def read(cls):
         """Returns an MLReader instance for this class."""
-        return SparkTargetEncoderTransformer2MLReader()
+        return SparkTargetEncoderTransformerMLReader()
 
 
-class SparkTargetEncodeTransformer2(SparkBaseTransformer,
-                                    SparkTargetEncoderTransformer2MLWritable,
-                                    SparkTargetEncoderTransformer2MLReadable):
+class SparkTargetEncodeTransformer(SparkBaseTransformer,
+                                   SparkTargetEncoderTransformerMLWritable,
+                                   SparkTargetEncoderTransformerMLReadable):
     def __init__(self, tet: TargetEncoderTransformer, input_roles: RolesDict, output_roles: RolesDict):
-        super(SparkTargetEncodeTransformer2, self).__init__(
+        super(SparkTargetEncodeTransformer, self).__init__(
             list(input_roles.keys()),
             list(output_roles.keys()),
             input_roles,

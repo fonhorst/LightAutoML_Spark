@@ -20,7 +20,7 @@ from sparklightautoml.transformers.categorical import SparkLabelEncoderEstimator
     SparkMulticlassTargetEncoderEstimator, SparkFreqEncoderTransformer
 from sparklightautoml.transformers.scala_wrappers.laml_string_indexer import LAMLStringIndexerModel
 from sparklightautoml.transformers.scala_wrappers.target_encoder_transformer import TargetEncoderTransformer, \
-    SparkTargetEncodeTransformer2
+    SparkTargetEncodeTransformer
 from sparklightautoml.utils import SparkDataFrame, WrappingSelectingPipelineModel
 from .. import DatasetForTest, compare_sparkml_by_content, spark as spark_sess, compare_sparkml_by_metadata, workdir
 from ..dataset_utils import get_test_datasets
@@ -198,7 +198,7 @@ def test_scala_target_encoder_transformer(spark: SparkSession, workdir: str):
         input_cols=input_cols,
         output_cols=output_cols
     )
-    tet = SparkTargetEncodeTransformer2(
+    tet = SparkTargetEncodeTransformer(
         te,
         input_roles={feat: NumericRole(np.int32) for feat in input_cols},
         output_roles={feat: NumericRole(np.float32) for feat in output_cols}
@@ -217,7 +217,7 @@ def test_scala_target_encoder_transformer(spark: SparkSession, workdir: str):
     te_path = os.path.join(workdir, "scala_te.transformer")
     tet.save(te_path)
 
-    tet_loaded = SparkTargetEncodeTransformer2.load(te_path)
+    tet_loaded = SparkTargetEncodeTransformer.load(te_path)
     result_enc = tet_loaded.transform(data_df).collect()
     result_enc_2 = tet_loaded.transform(data_df).collect()
 
@@ -300,7 +300,7 @@ def test_wrapping_selection_pipeline_model(spark: SparkSession, workdir: str):
         input_cols=input_cols,
         output_cols=output_cols
     )
-    tet = SparkTargetEncodeTransformer2(
+    tet = SparkTargetEncodeTransformer(
         te,
         input_roles={feat: NumericRole(np.int32) for feat in input_cols},
         output_roles={feat: NumericRole(np.float32) for feat in output_cols}
