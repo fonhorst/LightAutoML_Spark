@@ -20,21 +20,21 @@ logger = logging.getLogger(__name__)
 
 # noinspection PyShadowingNames
 @pytest.mark.parametrize("persistence_manager", [
-    # PlainCachePersistenceManager(),
-    # LocalCheckpointPersistenceManager(),
-    # BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10),
-    # CompositePersistenceManager({
-    #     PersistenceLevel.READER: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10),
-    #     PersistenceLevel.REGULAR: PlainCachePersistenceManager(),
-    #     PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10)
-    # }),
-    # CompositePersistenceManager({
-    #     PersistenceLevel.READER: BucketedPersistenceManager(
-    #         bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
-    #     ),
-    #     PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
-    #     PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False)
-    # }),
+    PlainCachePersistenceManager(),
+    LocalCheckpointPersistenceManager(),
+    BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10),
+    CompositePersistenceManager({
+        PersistenceLevel.READER: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10),
+        PersistenceLevel.REGULAR: PlainCachePersistenceManager(),
+        PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(bucketed_datasets_folder="/tmp", bucket_nums=10)
+    }),
+    CompositePersistenceManager({
+        PersistenceLevel.READER: BucketedPersistenceManager(
+            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
+        ),
+        PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
+        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False)
+    }),
     CompositePersistenceManager({
         PersistenceLevel.READER: BucketedPersistenceManager(
             bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True

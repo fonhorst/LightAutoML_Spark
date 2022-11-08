@@ -1,19 +1,22 @@
 import logging
+import os
 import socket
 import time
 import warnings
 from contextlib import contextmanager
 from datetime import datetime
 from logging import Logger
-from typing import Optional, Tuple, Dict, List
+from typing import Optional, Tuple, Dict, List, cast
 
 import pyspark
 from pyspark import RDD
 from pyspark.ml import Transformer, Estimator
+from pyspark.ml.common import inherit_doc
 from pyspark.ml.param import Param, Params, TypeConverters
 from pyspark.ml.param.shared import HasInputCols, HasOutputCols
-from pyspark.ml.pipeline import PipelineModel
-from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable, MLReadable, MLWritable
+from pyspark.ml.pipeline import PipelineModel, PipelineSharedReadWrite, PipelineModelReader
+from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable, MLReadable, MLWritable, MLWriter, \
+    DefaultParamsWriter, MLReader, DefaultParamsReader
 from pyspark.sql import SparkSession
 
 from sparklightautoml.mlwriters import CommonPickleMLWritable, CommonPickleMLReadable
@@ -257,6 +260,57 @@ class NoOpTransformer(Transformer, DefaultParamsWritable, DefaultParamsReadable)
         return dataset
 
 
+@inherit_doc
+class WrappingSelectingPipelineModelWriter(MLWriter):
+    """
+    (Private) Specialization of :py:class:`MLWriter` for :py:class:`PipelineModel` types
+    """
+
+    def __init__(self, instance: 'WrappingSelectingPipelineModel'):
+        super(WrappingSelectingPipelineModelWriter, self).__init__()
+        self.instance = instance
+
+    def saveImpl(self, path: str):
+        stages = self.instance.stages
+        PipelineSharedReadWrite.validateStages(stages)
+
+        stageUids = [stage.uid for stage in stages]
+        jsonParams = {
+            'stageUids': stageUids,
+            'language': 'Python',
+            'instance_params': {param.name: value for param, value in self.instance.extractParamMap().items()}
+        }
+        DefaultParamsWriter.saveMetadata(self.instance, path, self.sc, paramMap=jsonParams)
+        stagesDir = os.path.join(path, "stages")
+        for index, stage in enumerate(stages):
+            stage.write().save(PipelineSharedReadWrite.getStagePath(stage.uid, index, len(stages), stagesDir))
+
+
+@inherit_doc
+class WrappingSelectionPipelineModelReader(MLReader):
+    """
+    (Private) Specialization of :py:class:`MLReader` for :py:class:`PipelineModel` types
+    """
+
+    def __init__(self, cls):
+        super(WrappingSelectionPipelineModelReader, self).__init__()
+        self.cls = cls
+
+    def load(self, path):
+        metadata = DefaultParamsReader.loadMetadata(path, self.sc)
+
+        uid, stages = PipelineSharedReadWrite.load(metadata, self.sc, path)
+        instance_params_map = cast(Dict, metadata['paramMap']['instance_params'])
+
+        wspm = WrappingSelectingPipelineModel(stages=stages)
+        wspm._resetUid(uid)
+        for param_name, value in instance_params_map.items():
+            param = wspm.getParam(param_name)
+            wspm.set(param, value)
+
+        return wspm
+
+
 class WrappingSelectingPipelineModel(PipelineModel, HasInputCols):
     name = Param(
         Params._dummy(), "name", "name.", typeConverter=TypeConverters.toString
@@ -268,11 +322,11 @@ class WrappingSelectingPipelineModel(PipelineModel, HasInputCols):
 
     def __init__(self,
                  stages: List[Transformer],
-                 input_columns: List[str],
+                 input_columns: Optional[List[str]] = None,
                  optional_columns: Optional[List[str]] = None,
                  name: Optional[str] = None):
         super().__init__(stages)
-        self.set(self.inputCols, input_columns)
+        self.set(self.inputCols, input_columns or [])
         self.set(self.optionalCols, optional_columns or [])
         self.set(self.name, name or "")
 
@@ -284,6 +338,15 @@ class WrappingSelectingPipelineModel(PipelineModel, HasInputCols):
         )
         ds = super()._transform(dataset)
         return cstr.transform(ds)
+
+    def write(self):
+        """Returns an MLWriter instance for this ML instance."""
+        return WrappingSelectingPipelineModelWriter(self)
+
+    @classmethod
+    def read(cls):
+        """Returns an MLReader instance for this class."""
+        return WrappingSelectionPipelineModelReader(cls)
 
 
 class Cacher(Estimator):
