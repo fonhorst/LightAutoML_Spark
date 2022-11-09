@@ -79,12 +79,13 @@ class BasePersistenceManager(PersistenceManager):
         return self._persistence_registry[persisted_dataframe.uid].pdf
 
     def unpersist(self, uid: str):
-        logger.debug(f"Manager {self._uid}: unpersisting dataset (uid={uid}).")
         persisted_pair = self._persistence_registry.get(uid, None)
 
         if not persisted_pair:
-            logger.debug(f"Manager {self._uid}: the dataset (uid={uid}) is not persisted yet. Nothing to do.")
+            logger.debug(f"Manager {self._uid} unpersist: the dataset (uid={uid}) is not persisted yet. Nothing to do.")
             return
+
+        logger.debug(f"Manager {self._uid}: unpersisting dataset (uid={uid}, name={persisted_pair.pdf.name}).")
 
         self._unpersist(persisted_pair.pdf)
 

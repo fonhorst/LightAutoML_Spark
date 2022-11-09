@@ -391,7 +391,7 @@ class SparkDataset(LAMLDataset, Unpersistable):
         self._validate_dataframe(data)
         super().set_data(data, None, roles)
         self._persistence_manager = persistence_manager or self._persistence_manager
-        self._dependencies = dependencies or self._dependencies
+        self._dependencies = dependencies if dependencies is not None else self._dependencies
         self._uid = uid or self._uid
         self._name = name or self._name
         self._frozen = frozen
