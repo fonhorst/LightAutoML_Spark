@@ -208,10 +208,10 @@ def plot_distribution_of_logits(input_data, path, scores_col_name, true_labels_c
     data["proba_logit"] = np.log(data[logits_col_name].values / (1 - data[logits_col_name].values))
 
     data_0 = data[data[true_labels_col_name] == 0]
-    sns.kdeplot(data_0["proba_logit"], shade=True, color="r", label="Class 0 logits", ax=axs, weights=data_0["count"])
+    sns.kdeplot(x=data_0["proba_logit"], fill=True, color="r", label="Class 0 logits", ax=axs, weights=data_0["count"])
 
     data_1 = data[data[true_labels_col_name] == 1]
-    sns.kdeplot(data_1["proba_logit"], shade=True, color="g", label="Class 1 logits", ax=axs, weights=data_1["count"])
+    sns.kdeplot(x=data_1["proba_logit"], fill=True, color="g", label="Class 1 logits", ax=axs, weights=data_1["count"])
     axs.set_xlabel("Logits")
     axs.set_ylabel("Density")
     axs.set_title("Logits distribution of object predictions (by classes)")
@@ -363,7 +363,7 @@ def plot_error_hist(data, path):
     sns.set(style="whitegrid", font_scale=1.5)
     fig, ax = plt.subplots(figsize=(16, 10))
 
-    sns.kdeplot(data["err"], shade=True, color="m", ax=ax, weights=data["count"])
+    sns.kdeplot(x=data["err"], fill=True, color="m", ax=ax, weights=data["count"])
     ax.set_xlabel("Error = y_pred - y_true")
     ax.set_ylabel("Density")
     ax.set_title("Error histogram")
