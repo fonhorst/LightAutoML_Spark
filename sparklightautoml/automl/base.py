@@ -241,7 +241,11 @@ class SparkAutoML(TransformerInputOutputRoles):
             len(self._levels) <= 1 or valid_data is None
         ), "Not possible to fit more than 1 level with holdout validation"
 
-        valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True) if valid_data else None
+        if valid_data:
+            valid_dataset = self.reader.read(valid_data, valid_features, add_array_attrs=True)\
+                .persist(PersistenceLevel.READER)
+        else:
+            valid_dataset = None
 
         train_valid = self._create_validation_iterator(train_dataset, valid_dataset, None, cv_iter=cv_iter)
         # train_valid.train_frozen = True
