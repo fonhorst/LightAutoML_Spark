@@ -190,11 +190,11 @@ class DummyTabularAutoML(SparkAutoMLPreset):
 
         first_level = [
             SparkMLPipeline(ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_0_{i}")])
-            for i in range(1)
+            for i in range(3)
         ]
         second_level = [
             SparkMLPipeline(ml_algos=[DummyMLAlgo(self._n_classes, name=f"dummy_1_{i}")])
-            for i in range(1)
+            for i in range(2)
         ]
 
         levels = [first_level, second_level]

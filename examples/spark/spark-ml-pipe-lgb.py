@@ -13,6 +13,7 @@ from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
+from sparklightautoml.pipelines.selection.base import BugFixSelectionPipelineWrapper
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
@@ -54,12 +55,12 @@ if __name__ == "__main__":
         spark_ml_algo = SparkBoostLGBM(freeze_defaults=False)
         spark_features_pipeline = SparkLGBAdvancedPipeline(**ml_alg_kwargs)
         spark_selector = SparkSelectionPipelineWrapper(
-            ImportanceCutoffSelector(
+            BugFixSelectionPipelineWrapper(ImportanceCutoffSelector(
                 cutoff=0.0,
                 feature_pipeline=SparkLGBSimpleFeatures(),
                 ml_algo=SparkBoostLGBM(freeze_defaults=False),
                 imp_estimator=ModelBasedImportanceEstimator()
-            )
+            ))
         )
 
         sdataset = sreader.fit_read(train_df, roles=roles, persistence_manager=persistence_manager)

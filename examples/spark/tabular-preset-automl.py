@@ -1,6 +1,7 @@
 import logging.config
 import os
 import uuid
+from typing import cast
 
 import pandas as pd
 import pyspark.sql.functions as sf
@@ -32,7 +33,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 3. use_algos = [["linear_l2"]]
     # 4. use_algos = [["lgb", "linear_l2"], ["lgb"]]
     use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    cv = 3
+    cv = 5
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     persistence_manager = CompositePlainCachePersistenceManager(bucket_nums=BUCKET_NUMS)

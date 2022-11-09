@@ -114,9 +114,11 @@ def get_spark_session(partitions_num: Optional[int] = None):
             SparkSession
             .builder
             .master("local[4]")
-            .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
-            .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
+            .config("spark.jars.packages",
+                    "com.microsoft.azure:synapseml_2.12:0.9.5,io.github.fonhorst:spark-lightautoml_2.12:0.1")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+            .config("spark.driver.extraJavaOptions", "-Dio.netty.tryReflectionSetAccessible=true")
+            .config("spark.executor.extraJavaOptions", "-Dio.netty.tryReflectionSetAccessible=true")
             .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .config("spark.kryoserializer.buffer.max", "512m")
             .config("spark.cleaner.referenceTracking.cleanCheckpoints", "true")

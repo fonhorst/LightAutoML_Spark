@@ -6,7 +6,7 @@ from typing import Dict, cast, List, Optional, Union
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import ColumnRole
 from lightautoml.transformers.base import (
-    LAMLTransformer,
+    LAMLTransformer
 )
 from pyspark.ml import Transformer, Estimator
 from pyspark.ml.functions import array_to_vector
