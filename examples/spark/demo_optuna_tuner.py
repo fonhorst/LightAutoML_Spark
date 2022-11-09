@@ -213,4 +213,8 @@ if __name__ == "__main__":
     logger.info("Feature scores for model_1:\n{}".format(model1.get_features_score()))
     logger.info("Feature scores for model_2:\n{}".format(model2.get_features_score()))
 
+    # this is necessary if persistence_manager is of CompositeManager type
+    # it may not be possible to obtain oof_predictions (predictions from fit_predict) after calling unpersist_all
+    persistence_manager.unpersist_all()
+
     spark.stop()

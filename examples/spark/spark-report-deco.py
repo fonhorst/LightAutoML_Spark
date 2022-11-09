@@ -48,3 +48,5 @@ if __name__ == "__main__":
         oof_preds = report_automl.fit_predict(train_data, roles=roles).persist()
         report_automl.predict(test_data, add_reader_attrs=True)
         oof_preds.unpersist()
+        # this is necessary if persistence_manager is of CompositeManager type
+        automl.persistence_manager.unpersist_all()

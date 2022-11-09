@@ -315,3 +315,27 @@ class CompositePersistenceManager(BasePersistenceManager):
         self._force = True
         super(CompositePersistenceManager, self).unpersist_all()
         self._force = False
+
+
+class CompositePlainCachePersistenceManager(CompositePersistenceManager):
+    def __init__(self, bucket_nums: int):
+        super(CompositePlainCachePersistenceManager, self).__init__({
+            PersistenceLevel.READER: BucketedPersistenceManager(
+                bucketed_datasets_folder="/tmp", bucket_nums=bucket_nums, no_unpersisting=True
+            ),
+            PersistenceLevel.REGULAR: PlainCachePersistenceManager(),
+            PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(),
+        })
+
+
+class CompositeBucketedPersistenceManager(CompositePersistenceManager):
+    def __init__(self, bucket_nums: int):
+        super(CompositeBucketedPersistenceManager, self).__init__({
+            PersistenceLevel.READER: BucketedPersistenceManager(
+                bucketed_datasets_folder="/tmp", bucket_nums=bucket_nums, no_unpersisting=True
+            ),
+            PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
+            PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(
+                bucketed_datasets_folder="/tmp", bucket_nums=bucket_nums
+            )
+        })

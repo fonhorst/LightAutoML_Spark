@@ -8,7 +8,7 @@ from examples_utils import get_spark_session, prepare_test_and_train, get_datase
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager, CompositePersistenceManager, \
-    BucketedPersistenceManager
+    BucketedPersistenceManager, CompositePlainCachePersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBAdvancedPipeline, SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
@@ -29,18 +29,8 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     bucket_nums = 16
     spark = get_spark_session(bucket_nums)
-    # persistence_manager = PlainCachePersistenceManager()
 
-    persistence_manager = CompositePersistenceManager({
-        PersistenceLevel.READER: BucketedPersistenceManager(
-            bucketed_datasets_folder="/tmp", bucket_nums=bucket_nums, no_unpersisting=True
-        ),
-        PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
-        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False),
-        # PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(
-        #     bucketed_datasets_folder="/tmp", bucket_nums=bucket_nums
-        # ),
-    })
+    persistence_manager = CompositePlainCachePersistenceManager(bucket_nums=bucket_nums)
 
     seed = 42
     cv = 5
@@ -120,5 +110,8 @@ if __name__ == "__main__":
     logger.info("Finished")
 
     oof_preds_ds.unpersist()
+    # this is necessary if persistence_manager is of CompositeManager type
+    # it may not be possible to obtain oof_predictions (predictions from fit_predict) after calling unpersist_all
+    persistence_manager.unpersist_all()
 
     spark.stop()

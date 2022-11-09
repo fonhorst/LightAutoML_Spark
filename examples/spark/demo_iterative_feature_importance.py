@@ -206,5 +206,8 @@ if __name__ == "__main__":
     logger.info(f"TEST score: {test_score}")
 
     oof_pred.unpersist()
+    # this is necessary if persistence_manager is of CompositeManager type
+    # it may not be possible to obtain oof_predictions (predictions from fit_predict) after calling unpersist_all
+    automl.persistence_manager.unpersist_all()
 
     spark.stop()

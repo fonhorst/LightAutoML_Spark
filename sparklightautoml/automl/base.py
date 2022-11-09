@@ -111,6 +111,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         self._input_roles: Optional[RolesDict] = None
         self._output_roles: Optional[RolesDict] = None
         self._service_columns: Optional[List[str]] = None
+        self._persistence_manager: Optional[PersistenceManager] = None
         if reader and levels:
             self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
@@ -121,6 +122,10 @@ class SparkAutoML(TransformerInputOutputRoles):
     @property
     def output_roles(self) -> Optional[RolesDict]:
         return self._output_roles
+
+    @property
+    def persistence_manager(self) -> Optional[PersistenceManager]:
+        return self._persistence_manager
 
     def transformer(self, return_all_predictions: bool = False, add_array_attrs: bool = True, **reader_args) \
             -> SparkPipelineModel:
@@ -227,9 +232,10 @@ class SparkAutoML(TransformerInputOutputRoles):
         set_stdout_level(verbosity_to_loglevel(verbose))
         self.timer.start()
 
-        persistence_manager = persistence_manager or PlainCachePersistenceManager()
+        self._persistence_manager = persistence_manager or PlainCachePersistenceManager()
 
-        train_dataset = self.reader.fit_read(train_data, train_features, roles, persistence_manager=persistence_manager)
+        train_dataset = self.reader.fit_read(train_data, train_features, roles,
+                                             persistence_manager=self._persistence_manager)
 
         train_dataset = train_dataset.persist(level=PersistenceLevel.REGULAR)
 

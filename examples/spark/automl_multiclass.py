@@ -8,7 +8,7 @@ from examples_utils import get_spark_session, prepare_test_and_train, get_datase
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.persistence import CompositePersistenceManager, BucketedPersistenceManager, \
-    PlainCachePersistenceManager
+    PlainCachePersistenceManager, CompositePlainCachePersistenceManager
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import VERBOSE_LOGGING_FORMAT
 from sparklightautoml.utils import log_exec_timer
@@ -25,16 +25,8 @@ BUCKET_NUMS = 16
 
 if __name__ == "__main__":
     spark = get_spark_session(BUCKET_NUMS)
-    persistence_manager = CompositePersistenceManager({
-        PersistenceLevel.READER: BucketedPersistenceManager(
-            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
-        ),
-        PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
-        PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False),
-        # PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(
-        #     bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS
-        # ),
-    })
+
+    persistence_manager = CompositePlainCachePersistenceManager(bucket_nums=BUCKET_NUMS)
 
     seed = 42
     cv = 2
@@ -118,5 +110,9 @@ if __name__ == "__main__":
     }
 
     print(f"EXP-RESULT: {result}")
+
+    # this is necessary if persistence_manager is of CompositeManager type
+    # it may not be possible to obtain oof_predictions (predictions from fit_predict) after calling unpersist_all
+    persistence_manager.unpersist_all()
 
     spark.stop()

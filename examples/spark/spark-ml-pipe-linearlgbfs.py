@@ -91,10 +91,12 @@ if __name__ == "__main__":
         )
         test_score = score(test_pred_df)
         logger.info(f"Test score (#2 way): {test_score}")
-        persistence_manager.unpersist_all()
 
     logger.info("Finished")
 
     oof_preds_ds.unpersist()
+    # this is necessary if persistence_manager is of CompositeManager type
+    # it may not be possible to obtain oof_predictions (predictions from fit_predict) after calling unpersist_all
+    persistence_manager.unpersist_all()
 
     spark.stop()

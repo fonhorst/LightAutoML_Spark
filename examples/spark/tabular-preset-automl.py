@@ -9,9 +9,8 @@ from pyspark.sql import SparkSession
 
 from examples_utils import get_dataset_attrs, prepare_test_and_train, get_spark_session
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
-from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
-from sparklightautoml.dataset.persistence import LocalCheckpointPersistenceManager, CompositePersistenceManager, \
-    BucketedPersistenceManager, PlainCachePersistenceManager
+from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.persistence import CompositePlainCachePersistenceManager
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
@@ -33,20 +32,11 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 3. use_algos = [["linear_l2"]]
     # 4. use_algos = [["lgb", "linear_l2"], ["lgb"]]
     use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    # use_algos = [["lgb", "linear_l2"], ["lgb"]]
     cv = 3
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
-    persistence_manager = CompositePersistenceManager({
-        PersistenceLevel.READER: BucketedPersistenceManager(
-            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS, no_unpersisting=True
-        ),
-        PersistenceLevel.REGULAR: PlainCachePersistenceManager(prune_history=False),
-        # PersistenceLevel.CHECKPOINT: PlainCachePersistenceManager(prune_history=False),
-        PersistenceLevel.CHECKPOINT: BucketedPersistenceManager(
-            bucketed_datasets_folder="/tmp", bucket_nums=BUCKET_NUMS
-        ),
-    })
+    persistence_manager = CompositePlainCachePersistenceManager(bucket_nums=BUCKET_NUMS)
+    # persistence_manager = CompositeBucketedPersistenceManager(bucket_nums=BUCKET_NUMS)
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
@@ -80,6 +70,9 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     transformer = automl.transformer()
 
     oof_predictions.unpersist()
+    # this is necessary if persistence_manager is of CompositeManager type
+    # it may not be possible to obtain oof_predictions (predictions from fit_predict) after calling unpersist_all
+    automl.persistence_manager.unpersist_all()
 
     with log_exec_timer("spark-lama predicting on test (#1 way)") as predict_timer:
         te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
