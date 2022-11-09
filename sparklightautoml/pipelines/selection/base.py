@@ -23,7 +23,7 @@ class SparkImportanceEstimator(ImportanceEstimator, ABC):
 
 class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutputRoles):
     def __init__(self, sel_pipe: SelectionPipeline):
-        assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
+        # assert not sel_pipe.is_fitted, "Cannot work with prefitted SelectionPipeline"
         self._validate_sel_pipe(sel_pipe)
 
         self._sel_pipe = sel_pipe
@@ -81,7 +81,9 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
 
     def fit(self, train_valid: SparkBaseTrainValidIterator):
         self._service_columns = train_valid.train.service_columns
-        self._sel_pipe.fit(train_valid)
+
+        if not self._sel_pipe.is_fitted:
+            self._sel_pipe.fit(train_valid)
         self._is_fitted = True
 
         self._input_roles = copy(train_valid.train.roles)

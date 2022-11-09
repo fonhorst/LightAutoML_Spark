@@ -153,11 +153,11 @@ if __name__ == "__main__":
     pipe = SparkLGBSimpleFeatures()
     logger.info("Pipe created")
 
-    params_tuner1 = OptunaTuner(n_trials=2, timeout=300)
+    params_tuner1 = OptunaTuner(n_trials=10, timeout=300)
     model1 = SparkBoostLGBM(default_params={"learningRate": 0.05, "numLeaves": 128})
     logger.info("Tuner1 and model1 created")
 
-    params_tuner2 = OptunaTuner(n_trials=5, timeout=300)
+    params_tuner2 = OptunaTuner(n_trials=100, timeout=300)
     model2 = SparkBoostLGBM(default_params={"learningRate": 0.025, "numLeaves": 64})
     logger.info("Tuner2 and model2 created")
 
