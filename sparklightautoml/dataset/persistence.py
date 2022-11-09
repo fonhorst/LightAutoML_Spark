@@ -274,6 +274,7 @@ class CompositePersistenceManager(BasePersistenceManager):
                  parent: Optional['PersistenceManager'] = None):
         super().__init__(parent)
         self._level2manager = level2manager
+        self._force = False
 
     def _persist(self, pdf: PersistableDataFrame, level: PersistenceLevel) -> PersistableDataFrame:
         assert level in self._level2manager, \
@@ -295,9 +296,22 @@ class CompositePersistenceManager(BasePersistenceManager):
     def _unpersist(self, pdf: PersistableDataFrame):
         for lvl, manager in self._level2manager.items():
             if manager.is_persisted(pdf):
-                manager.unpersist(pdf.uid)
+                # we cannot unpersist anything in BucketedPersistenceManager
+                # when it is working with other managers of different types
+                # If an other persistence manager is of PlainCachePersistenceManager type
+                # and is used to persist a dataset referencing some dataset persisted with BucketedPersistenceManager,
+                # than after unpersisting with deleting for that referenced dataset will lead to failing of calculation
+                # for the first dataset due to inability to obtain info about the source file
+                # All such persisted datasets should be unpersisted with unpersist_all method in the end of a scenario
+                if not isinstance(manager, BucketedPersistenceManager) or self._force:
+                    manager.unpersist(pdf.uid)
                 break
 
     def _create_child(self) -> PersistenceManager:
         level2managers = {lvl: manager.child() for lvl, manager in self._level2manager.items()}
         return CompositePersistenceManager(level2managers, self)
+
+    def unpersist_all(self):
+        self._force = True
+        super(CompositePersistenceManager, self).unpersist_all()
+        self._force = False
