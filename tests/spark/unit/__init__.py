@@ -1,25 +1,35 @@
-import time
 from copy import copy
-from typing import Tuple, get_args, cast, List, Optional, Dict, Union
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Tuple
+from typing import Union
+from typing import cast
+from typing import get_args
 
 import numpy as np
 import pandas as pd
 import pytest
+
+from importlib_metadata import version
+from lightautoml.dataset.base import LAMLDataset
+from lightautoml.dataset.np_pd_dataset import NumpyDataset
+from lightautoml.dataset.np_pd_dataset import PandasDataset
+from lightautoml.dataset.roles import ColumnRole
+from lightautoml.transformers.base import LAMLTransformer
+from lightautoml.transformers.numeric import NumpyTransformable
 from pyspark.ml import Estimator
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-from lightautoml.dataset.base import LAMLDataset
-from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
-from lightautoml.dataset.roles import ColumnRole, CategoryRole
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.tasks.base import SparkTask as SparkTask
-from sparklightautoml.transformers.base import ObsoleteSparkTransformer, SparkBaseEstimator, SparkBaseTransformer, \
-    SparkColumnsAndRoles
+from sparklightautoml.transformers.base import ObsoleteSparkTransformer
+from sparklightautoml.transformers.base import SparkBaseEstimator
+from sparklightautoml.transformers.base import SparkBaseTransformer
+from sparklightautoml.transformers.base import SparkColumnsAndRoles
 from sparklightautoml.utils import log_exec_time
-from lightautoml.transformers.base import LAMLTransformer
-from lightautoml.transformers.numeric import NumpyTransformable
 
 
 # NOTE!!!
@@ -436,6 +446,11 @@ def from_pandas_to_spark(p: PandasDataset,
     obj_columns = list(pdf.select_dtypes(include=['object']))
     pdf[obj_columns] = pdf[obj_columns].astype(str)
     sdf = spark.createDataFrame(data=pdf)
+    # WARNING: this code can replace the None values 
+    # that were in the dataframe before the call to createDataFrame().
+    # createDataFrame() from old pyspark versions converts NaN to None
+    if version("pyspark") == '3.0.1' or version("pyspark") == '3.1.1':
+        sdf = sdf.na.fill(value=float("nan"))
 
     if to_vector:
         cols = [c for c in pdf.columns if c != SparkDataset.ID_COLUMN]
