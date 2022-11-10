@@ -188,7 +188,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             score *= 0.5
         return score
 
-    def get_selector(self, cacher_key: str, n_level: Optional[int] = 1) -> SparkSelectionPipelineWrapper:
+    def get_selector(self, n_level: Optional[int] = 1) -> SparkSelectionPipelineWrapper:
         selection_params = self.selection_params
         # lgb_params
         lgb_params = deepcopy(self.lgb_params)
@@ -243,7 +243,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 )
 
                 pre_selector = ComposedSelector([pre_selector, extra_selector])
-	pre_selector = BugFixSelectionPipelineWrapper(pre_selector)
+
+        pre_selector = BugFixSelectionPipelineWrapper(pre_selector)
         return SparkSelectionPipelineWrapper(pre_selector)
 
     def get_linear(
@@ -324,7 +325,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         self.infer_auto_params(train_data, multilevel_avail)
         reader = SparkToSparkReader(task=self.task, **self.reader_params)
 
-        pre_selector = self.get_selector(cacher_key="selector_cache")
+        pre_selector = self.get_selector()
 
         levels = []
 

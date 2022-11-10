@@ -37,7 +37,6 @@ if __name__ == "__main__":
         'output_categories': True,
         'top_intersections': 4
     }
-    cacher_key = "main_cache"
 
     with log_exec_time():
         train_df, test_df = prepare_test_and_train(spark, path, seed)

@@ -38,9 +38,11 @@ class SparkSelectionPipelineWrapper(SparkSelectionPipeline, TransformerInputOutp
     def _validate_sel_pipe(self, sel_pipe: SelectionPipeline):
         selectors = sel_pipe.selectors if isinstance(sel_pipe, ComposedSelector) else [sel_pipe]
         for selp in selectors:
-            assert isinstance(selp, EmptySelector) or isinstance(selp.features_pipeline, SparkFeaturesPipeline), \
-                "SelectionPipeline should either be EmptySelector or have SparkFeaturePipeline as features_pipeline, " \
-                f"but it is {type(selp)} and have {type(selp.features_pipeline)}"
+            assert isinstance(selp, EmptySelector) \
+                   or isinstance(selp, BugFixSelectionPipelineWrapper) \
+                   or isinstance(selp.features_pipeline, SparkFeaturesPipeline), \
+                    "SelectionPipeline should either be EmptySelector or have SparkFeaturePipeline as " \
+                    "features_pipeline, but it is {type(selp)} and have {type(selp.features_pipeline)}"
 
     def _build_transformer(self, *args, **kwargs) -> Optional[Transformer]:
         if not self._sel_pipe.is_fitted:
