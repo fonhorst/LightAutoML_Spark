@@ -12,7 +12,7 @@ from sparklightautoml.pipelines.ml.base import SparkMLPipeline
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
-from sparklightautoml.validation.iterators import SparkHoldoutIterator
+from sparklightautoml.validation.iterators import SparkFoldsIterator
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -48,13 +48,12 @@ if __name__ == "__main__":
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
         sdataset = sreader.fit_read(train_df, roles=roles)
 
-        iterator = SparkHoldoutIterator(sdataset)
+        iterator = SparkFoldsIterator(sdataset).convert_to_holdout_iterator()
 
-        spark_ml_algo = SparkBoostLGBM(cacher_key=cacher_key, freeze_defaults=False, use_single_dataset_mode=False)
-        spark_features_pipeline = SparkLGBSimpleFeatures(cacher_key=cacher_key)
+        spark_ml_algo = SparkBoostLGBM(freeze_defaults=False, use_single_dataset_mode=False)
+        spark_features_pipeline = SparkLGBSimpleFeatures()
 
         ml_pipe = SparkMLPipeline(
-            cacher_key=cacher_key,
             ml_algos=[spark_ml_algo],
             pre_selection=None,
             features_pipeline=spark_features_pipeline,
@@ -72,7 +71,7 @@ if __name__ == "__main__":
         logger.info(f"Test score (#1 way): {test_score}")
 
         # 2. second way (Spark ML API, save-load-predict)
-        transformer = PipelineModel(stages=[sreader.make_transformer(add_array_attrs=True), ml_pipe.transformer])
+        transformer = PipelineModel(stages=[sreader.transformer(add_array_attrs=True), ml_pipe.transformer()])
         transformer.write().overwrite().save("/tmp/reader_and_spark_ml_pipe_lgb")
 
         pipeline_model = PipelineModel.load("/tmp/reader_and_spark_ml_pipe_lgb")
