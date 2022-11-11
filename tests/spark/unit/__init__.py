@@ -1,4 +1,4 @@
-import logging
+import logging.config
 import logging.config
 import os
 import shutil
@@ -8,6 +8,7 @@ from typing import Tuple, get_args, cast, List, Optional, Dict, Union
 import numpy as np
 import pandas as pd
 import pytest
+from hdfs import InsecureClient
 from lightautoml.dataset.base import LAMLDataset
 from lightautoml.dataset.np_pd_dataset import PandasDataset, NumpyDataset
 from lightautoml.dataset.roles import ColumnRole
@@ -31,7 +32,11 @@ from sparklightautoml.utils import log_exec_time, logging_config, VERBOSE_LOGGIN
 JAR_PATH = 'jars/spark-lightautoml_2.12-0.1.jar'
 PARTITIONS_NUM = 8
 BUCKET_NUMS = PARTITIONS_NUM
-HDFS_TMP_SLAMA_DIR = "/tmp/slama_test_dir"
+TMP_SLAMA_DIR = "/tmp/slama_test_dir"
+HDFS_TMP_SLAMA_DIR = TMP_SLAMA_DIR
+# TODO: SLAMA - should probably get hdfs settings from an external config
+HDFS_NAME_PORT = "node21.bdcl:9000"
+HDFS_WEB_NAME_PORT = "node21.bdcl:9870"
 
 
 logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/lama.log'))
@@ -40,8 +45,8 @@ set_stdout_level(verbosity_to_loglevel(verbosity=5))
 logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="session")
-def spark() -> SparkSession:
+def create_spark_session(warehouse_path: str):
+    shutil.rmtree(warehouse_path, ignore_errors=True)
 
     spark = (
         SparkSession
@@ -55,6 +60,7 @@ def spark() -> SparkSession:
         .config("spark.sql.shuffle.partitions", PARTITIONS_NUM)
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
         .config("spark.sql.autoBroadcastJoinThreshold", "-1")
+        .config("spark.sql.warehouse.dir", warehouse_path)
         .getOrCreate()
     )
 
@@ -65,6 +71,56 @@ def spark() -> SparkSession:
     yield spark
 
     spark.stop()
+
+    shutil.rmtree(warehouse_path, ignore_errors=True)
+
+
+@pytest.fixture(scope="session")
+def spark() -> SparkSession:
+    for sess in create_spark_session(warehouse_path=TMP_SLAMA_DIR):
+        yield sess
+
+
+@pytest.fixture(scope="function")
+def spark_for_function() -> SparkSession:
+    for sess in create_spark_session(warehouse_path=TMP_SLAMA_DIR):
+        yield sess
+
+
+@pytest.fixture(scope="function")
+def spark_hdfs() -> SparkSession:
+    client = InsecureClient(f'http://{HDFS_WEB_NAME_PORT}')
+    # delete work dir if it exists
+    if client.status(HDFS_TMP_SLAMA_DIR, strict=False):
+        client.delete(HDFS_TMP_SLAMA_DIR, recursive=True)
+
+    spark = (
+        SparkSession
+        .builder
+        .appName("LAMA-test-app")
+        .master("local-cluster[2,2,2048]")
+        .config("spark.driver.memory", "8g")
+        .config("spark.jars", JAR_PATH)
+        # .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
+        # .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+        .config("spark.sql.shuffle.partitions", PARTITIONS_NUM)
+        .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        .config("spark.sql.autoBroadcastJoinThreshold", "-1")
+        .config("spark.sql.warehouse.dir", f"hdfs://{HDFS_NAME_PORT}{HDFS_TMP_SLAMA_DIR}")
+        .getOrCreate()
+    )
+
+    spark.sparkContext.setLogLevel("WARN")
+
+    print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
+
+    yield spark
+
+    spark.stop()
+
+    # delete work dir if it exists
+    if client.status(HDFS_TMP_SLAMA_DIR, strict=False):
+        client.delete(HDFS_TMP_SLAMA_DIR, recursive=True)
 
 
 @pytest.fixture(scope="session")
@@ -74,33 +130,6 @@ def spark_with_deps() -> SparkSession:
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4") \
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven") \
         .getOrCreate()
-
-    print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
-
-    yield spark
-
-    spark.stop()
-
-
-@pytest.fixture(scope="session")
-def spark_hdfs() -> SparkSession:
-    spark = (
-        SparkSession
-        .builder
-        .appName("LAMA-test-app")
-        .master("local-cluster[2,2,2048]")
-        .config("spark.driver.memory", "8g")
-        .config("spark.jars", JAR_PATH)
-        # .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
-        # .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
-        .config("spark.sql.shuffle.partitions", PARTITIONS_NUM)
-        .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
-        .config("spark.sql.autoBroadcastJoinThreshold", "-1")
-        .config("spark.sql.warehouse.dir", f"hdfs://node21.bdcl:9000{HDFS_TMP_SLAMA_DIR}")
-        .getOrCreate()
-    )
-
-    spark.sparkContext.setLogLevel("WARN")
 
     print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
 

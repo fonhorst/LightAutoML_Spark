@@ -220,6 +220,9 @@ class BucketedPersistenceManager(BasePersistenceManager):
 
         with JobGroup("Persisting",
                       f"{type(self)} saving bucketed table of df (uid={pdf.uid}, name={pdf.name}). Table path: {path}"):
+            # If we directly put path in .saveAsTable(...), than Spark will create an external table
+            # that cannot be physically deleted with .sql("DROP TABLE <name>")
+            # Without stating the path, Spark will create a managed table
             (
                 pdf.sdf
                 .repartition(self._bucket_nums, SparkDataset.ID_COLUMN)
@@ -227,7 +230,7 @@ class BucketedPersistenceManager(BasePersistenceManager):
                 .mode('overwrite')
                 .bucketBy(self._bucket_nums, SparkDataset.ID_COLUMN)
                 .sortBy(SparkDataset.ID_COLUMN)
-                .saveAsTable(name, format='parquet', path=path)
+                .saveAsTable(name, format='parquet')
             )
         ds = spark.table(name)
 
@@ -248,9 +251,7 @@ class BucketedPersistenceManager(BasePersistenceManager):
             f"for the dataset (uid={pdf.uid}, name={pdf.name}) with name {name} on path {path}."
         )
 
-        # TODO: SLAMA - add file removing on hdfs
-        # TODO: SLAMA - only local path is supported
-        shutil.rmtree(path)
+        SparkSession.getActiveSession().sql(f"DROP TABLE {name}")
 
         logger.debug(
             f"Manager {self._uid}: the bucketed table has been removed"
