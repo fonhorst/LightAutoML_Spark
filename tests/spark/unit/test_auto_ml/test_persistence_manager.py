@@ -1,17 +1,16 @@
 import logging.config
 import os
-from typing import List
 
+import numpy as np
 from lightautoml.dataset.roles import NumericRole
 from pyspark.sql import SparkSession
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.persistence import BucketedPersistenceManager
-from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, SparkDataFrame
-from .. import spark as spark_sess, BUCKET_NUMS
-import numpy as np
+from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
+from .. import BUCKET_NUMS, spark_hdfs, HDFS_TMP_SLAMA_DIR
 
-spark = spark_sess
+spark = spark_hdfs
 
 logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/lama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
@@ -29,7 +28,7 @@ def test_bucketed_persistence_manager(spark: SparkSession):
             [5, 2, 47, 4, 1, 2],
         ]
 
-        in_cols = ["id", "fold", "seed", "a", "b", "c"]
+        in_cols = ["_id", "fold", "seed", "a", "b", "c"]
 
         roles = {col: NumericRole(np.int32) for col in in_cols}
 
@@ -37,14 +36,14 @@ def test_bucketed_persistence_manager(spark: SparkSession):
             {col: val for col, val in zip(in_cols, row)}
             for row in data
         ]
-        df = spark.createDataFrame(df_data)#, schema=schema)
+        df = spark.createDataFrame(df_data)
 
         return SparkDataset(df, roles, name=name)
 
     os.environ["HADOOP_HOME"] = "/etc/hadoop-bdcl/"
 
     pmanager = BucketedPersistenceManager(
-        bucketed_datasets_folder="hdfs:///tmp/slama_test_workdir",
+        bucketed_datasets_folder=f"hdfs://node21.bdcl:9000{HDFS_TMP_SLAMA_DIR}",
         bucket_nums=BUCKET_NUMS
     )
 

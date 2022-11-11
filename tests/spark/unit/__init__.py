@@ -31,6 +31,7 @@ from sparklightautoml.utils import log_exec_time, logging_config, VERBOSE_LOGGIN
 JAR_PATH = 'jars/spark-lightautoml_2.12-0.1.jar'
 PARTITIONS_NUM = 8
 BUCKET_NUMS = PARTITIONS_NUM
+HDFS_TMP_SLAMA_DIR = "/tmp/slama_test_dir"
 
 
 logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/lama.log'))
@@ -73,6 +74,33 @@ def spark_with_deps() -> SparkSession:
         .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.4") \
         .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven") \
         .getOrCreate()
+
+    print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
+
+    yield spark
+
+    spark.stop()
+
+
+@pytest.fixture(scope="session")
+def spark_hdfs() -> SparkSession:
+    spark = (
+        SparkSession
+        .builder
+        .appName("LAMA-test-app")
+        .master("local-cluster[2,2,2048]")
+        .config("spark.driver.memory", "8g")
+        .config("spark.jars", JAR_PATH)
+        # .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
+        # .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
+        .config("spark.sql.shuffle.partitions", PARTITIONS_NUM)
+        .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        .config("spark.sql.autoBroadcastJoinThreshold", "-1")
+        .config("spark.sql.warehouse.dir", f"hdfs://node21.bdcl:9000{HDFS_TMP_SLAMA_DIR}")
+        .getOrCreate()
+    )
+
+    spark.sparkContext.setLogLevel("WARN")
 
     print(f"Spark WebUI url: {spark.sparkContext.uiWebUrl}")
 
