@@ -4,7 +4,7 @@ import pytest
 from pyspark.ml import PipelineModel
 from pyspark.sql import functions as sf
 
-from examples.spark.examples_utils import get_persistence_manager, BUCKET_NUMS
+from examples_utils import get_persistence_manager, BUCKET_NUMS
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
 from sparklightautoml.dataset.base import SparkDataset

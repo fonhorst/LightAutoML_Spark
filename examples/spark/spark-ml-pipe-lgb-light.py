@@ -4,7 +4,7 @@ import logging.config
 from pyspark.ml import PipelineModel
 from pyspark.sql import functions as F
 
-from examples.spark.examples_utils import get_persistence_manager
+from examples_utils import get_persistence_manager
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM

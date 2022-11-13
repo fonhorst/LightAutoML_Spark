@@ -5,7 +5,7 @@ import pyspark.sql.functions as sf
 from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from pyspark.ml import PipelineModel
 
-from examples.spark.examples_utils import get_persistence_manager
+from examples_utils import get_persistence_manager
 from examples_utils import get_spark_session, get_dataset_attrs, prepare_test_and_train
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM

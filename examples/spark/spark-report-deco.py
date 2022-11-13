@@ -1,6 +1,6 @@
 import logging.config
 
-from examples.spark.examples_utils import get_persistence_manager
+from examples_utils import get_persistence_manager
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
 from sparklightautoml.report import SparkReportDeco
