@@ -112,7 +112,7 @@ def prepare_test_and_train(spark: SparkSession, path: str, seed: int) -> Tuple[S
 
 
 def get_spark_session(partitions_num: Optional[int] = None):
-    partitions_num = partitions_num if partitions_num else 16
+    partitions_num = partitions_num if partitions_num else BUCKET_NUMS
 
     if os.environ.get("SCRIPT_ENV", None) == "cluster":
         spark_sess = SparkSession.builder.getOrCreate()
