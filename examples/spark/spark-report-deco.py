@@ -1,5 +1,6 @@
 import logging.config
 
+from examples.spark.examples_utils import get_persistence_manager
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
 from sparklightautoml.report import SparkReportDeco
@@ -45,7 +46,11 @@ if __name__ == "__main__":
             interpretation=True
         )(automl)
 
-        oof_preds = report_automl.fit_predict(train_data, roles=roles).persist()
+        oof_preds = report_automl.fit_predict(
+            train_data,
+            roles=roles,
+            persistence_manager=get_persistence_manager()
+        ).persist()
         report_automl.predict(test_data, add_reader_attrs=True)
         oof_preds.unpersist()
         # this is necessary if persistence_manager is of CompositeManager type

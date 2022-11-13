@@ -4,11 +4,10 @@ import pytest
 from pyspark.ml import PipelineModel
 from pyspark.sql import functions as sf
 
+from examples.spark.examples_utils import get_persistence_manager, BUCKET_NUMS
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
-from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
-from sparklightautoml.dataset.persistence import CompositePersistenceManager, BucketedPersistenceManager, \
-    PlainCachePersistenceManager, CompositePlainCachePersistenceManager
+from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import VERBOSE_LOGGING_FORMAT
 from sparklightautoml.utils import log_exec_timer
@@ -21,12 +20,10 @@ logger = logging.getLogger(__name__)
 # NOTE! This demo requires datasets to be downloaded into a local folder.
 # Run ./bin/download-datasets.sh to get required datasets into the folder.
 
-BUCKET_NUMS = 16
-
 if __name__ == "__main__":
     spark = get_spark_session(BUCKET_NUMS)
 
-    persistence_manager = CompositePlainCachePersistenceManager(bucket_nums=BUCKET_NUMS)
+    persistence_manager = get_persistence_manager()
 
     seed = 42
     cv = 2

@@ -4,6 +4,7 @@ import logging.config
 from pyspark.ml import PipelineModel
 from pyspark.sql import functions as F
 
+from examples.spark.examples_utils import get_persistence_manager
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
@@ -30,6 +31,8 @@ if __name__ == "__main__":
     dataset_name = "lama_test_dataset"
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
+    persistence_manager = get_persistence_manager()
+
     ml_alg_kwargs = {
         'auto_unique_co': 10,
         'max_intersection_depth': 3,
@@ -45,7 +48,7 @@ if __name__ == "__main__":
         score = task.get_dataset_metric()
 
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
-        sdataset = sreader.fit_read(train_df, roles=roles)
+        sdataset = sreader.fit_read(train_df, roles=roles, persistence_manager=persistence_manager)
 
         iterator = SparkFoldsIterator(sdataset).convert_to_holdout_iterator()
 

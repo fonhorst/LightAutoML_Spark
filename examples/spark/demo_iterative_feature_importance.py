@@ -17,20 +17,16 @@ from lightautoml.pipelines.selection.permutation_importance_based import (
 )
 from sklearn.model_selection import train_test_split
 
-from examples_utils import get_spark_session, get_dataset_attrs
+from examples_utils import get_spark_session
 from sparklightautoml.automl.base import SparkAutoML
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
-from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.pipelines.selection.base import BugFixSelectionPipelineWrapper
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
-
-from examples_utils import get_spark_session
-from pyspark.sql import functions as F
-
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT
 
 logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))

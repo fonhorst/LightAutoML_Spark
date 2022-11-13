@@ -1,17 +1,16 @@
 import logging.config
 import os
 import uuid
-from typing import cast
 
 import pandas as pd
 import pyspark.sql.functions as sf
 from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
+from examples.spark.examples_utils import get_persistence_manager, BUCKET_NUMS
 from examples_utils import get_dataset_attrs, prepare_test_and_train, get_spark_session
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import CompositePlainCachePersistenceManager
 from sparklightautoml.tasks.base import SparkTask
 from sparklightautoml.utils import log_exec_timer, logging_config, VERBOSE_LOGGING_FORMAT
 
@@ -21,8 +20,6 @@ logger = logging.getLogger(__name__)
 
 # NOTE! This demo requires datasets to be downloaded into a local folder.
 # Run ./bin/download-datasets.sh to get required datasets into the folder.
-
-BUCKET_NUMS = 16
 
 
 def main(spark: SparkSession, dataset_name: str, seed: int):
@@ -36,8 +33,10 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     cv = 3
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
-    persistence_manager = CompositePlainCachePersistenceManager(bucket_nums=BUCKET_NUMS)
-    # persistence_manager = CompositeBucketedPersistenceManager(bucket_nums=BUCKET_NUMS)
+    persistence_manager = get_persistence_manager()
+    # Alternative ways to define persistence_manager
+    # persistence_manager = get_persistence_manager("CompositePlainCachePersistenceManager")
+    # persistence_manager = CompositePlainCachePersistenceManager(bucket_nums=BUCKET_NUMS)
 
     with log_exec_timer("spark-lama training") as train_timer:
         task = SparkTask(task_type)
@@ -154,6 +153,8 @@ def multirun(spark: SparkSession, dataset_name: str):
 
 
 if __name__ == "__main__":
+    # if one uses bucketing based persistence manager,
+    # the argument below number should be equal to what is set to 'bucket_nums' of the manager
     spark_sess = get_spark_session(BUCKET_NUMS)
     # One can run:
     # 1. main(dataset_name="lama_test_dataste", seed=42)

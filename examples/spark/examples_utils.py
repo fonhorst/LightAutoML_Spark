@@ -1,9 +1,16 @@
 import os
+import inspect
 from typing import Tuple, Optional
 
 from pyspark.sql import SparkSession
 
 from sparklightautoml.utils import SparkDataFrame
+from sparklightautoml.dataset import persistence
+
+
+BUCKET_NUMS = 16
+PERSISTENCE_MANAGER_ENV_VAR = "PERSISTENCE_MANAGER"
+
 
 used_cars_params = {
     "task_type": "reg",
@@ -140,3 +147,24 @@ def get_spark_session(partitions_num: Optional[int] = None):
     spark_sess.sparkContext.setLogLevel("WARN")
 
     return spark_sess
+
+
+def get_persistence_manager(name: Optional[str] = None):
+    arg_vals = {
+        "bucket_nums": BUCKET_NUMS
+    }
+
+    class_name = name or os.environ.get(PERSISTENCE_MANAGER_ENV_VAR, None) or "CompositePlainCachePersistenceManager"
+    clazz = getattr(persistence, class_name)
+    sig = inspect.signature(getattr(clazz, "__init__"))
+
+    ctr_arg_vals = {
+        name: arg_vals.get(name, None if p.default is p.empty else p.default)
+        for name, p in sig.parameters.items() if name != 'self'
+    }
+
+    none_val_args = [name for name, val in ctr_arg_vals.items() if val is None]
+    assert len(none_val_args) == 0, f"Cannot instantiate class {class_name}. " \
+                                    f"Values for the following arguments have not been found: {none_val_args}"
+
+    return clazz(**ctr_arg_vals)

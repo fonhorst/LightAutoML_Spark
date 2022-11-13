@@ -23,6 +23,8 @@ from lightautoml.pipelines.selection.importance_based import (
     ImportanceCutoffSelector,
     ModelBasedImportanceEstimator,
 )
+
+from examples.spark.examples_utils import get_persistence_manager
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
@@ -50,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     spark = get_spark_session()
-    persistence_manager = PlainCachePersistenceManager()
+    persistence_manager = get_persistence_manager()
 
     # Read data from file
     logger.info("Read data from file")

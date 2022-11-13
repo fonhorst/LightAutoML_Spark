@@ -2,19 +2,19 @@ import logging.config
 import logging.config
 
 import pyspark.sql.functions as sf
+from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from pyspark.ml import PipelineModel
 
+from examples.spark.examples_utils import get_persistence_manager
 from examples_utils import get_spark_session, get_dataset_attrs, prepare_test_and_train
-from lightautoml.pipelines.selection.importance_based import ImportanceCutoffSelector, ModelBasedImportanceEstimator
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.ml_algo.linear_pyspark import SparkLinearLBFGS
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.pipelines.features.linear_pipeline import SparkLinearFeatures
 from sparklightautoml.pipelines.ml.base import SparkMLPipeline
-from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.pipelines.selection.base import BugFixSelectionPipelineWrapper
+from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     spark = get_spark_session()
-    persistence_manager = PlainCachePersistenceManager()
+    persistence_manager = get_persistence_manager()
 
     seed = 42
     cv = 3
