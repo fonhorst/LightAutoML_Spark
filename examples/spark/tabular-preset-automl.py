@@ -49,7 +49,13 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
             spark=spark,
             task=task,
             general_params={"use_algos": use_algos},
-            lgb_params={'use_single_dataset_mode': True, 'convert_to_onnx': False, 'mini_batch_size': 1000},
+            lgb_params={
+                'default_params': {'numIterations': 500},
+                'freeze_defaults': True,
+                'use_single_dataset_mode': True,
+                'convert_to_onnx': False,
+                'mini_batch_size': 1000
+            },
             linear_l2_params={'default_params': {'regParam': [1e-5]}},
             reader_params={"cv": cv, "advanced_roles": False}
         )
