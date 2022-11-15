@@ -396,7 +396,7 @@ class SparkDataset(LAMLDataset, Unpersistable):
         self._name = name or self._name
         self._frozen = frozen
 
-    def persist(self, level: Optional[PersistenceLevel] = None) -> 'SparkDataset':
+    def persist(self, level: Optional[PersistenceLevel] = None, force: bool=False) -> 'SparkDataset':
         """
         Materializes current Spark DataFrame and unpersists all its dependencies
         Args:
@@ -412,7 +412,14 @@ class SparkDataset(LAMLDataset, Unpersistable):
 
         logger.debug(f"Persisting SparkDataset (uid={self.uid}, name={self.name})")
         level = level if level is not None else PersistenceLevel.REGULAR
-        persisted_dataset = self.persistence_manager.persist(self, level).to_dataset()
+
+        if force:
+            ds = self.empty()
+            ds.set_data(self.data, self.features, self.roles)
+            persisted_dataset = self.persistence_manager.persist(ds, level).to_dataset()
+        else:
+            persisted_dataset = self.persistence_manager.persist(self, level).to_dataset()
+
         self._unpersist_dependencies()
         self._is_persisted = True
 

@@ -272,7 +272,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             with train_valid.frozen() as frozen_train_valid:
                 for k, ml_pipe in enumerate(level):
                     pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(frozen_train_valid))\
-                        .persist(level=PersistenceLevel.CHECKPOINT)
+                        .persist(level=PersistenceLevel.CHECKPOINT, force=True)
 
                     all_pipes_predictions.append(pipe_predictions)
                     pipes.append(ml_pipe)

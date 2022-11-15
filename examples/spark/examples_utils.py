@@ -154,7 +154,7 @@ def get_persistence_manager(name: Optional[str] = None):
         "bucket_nums": BUCKET_NUMS
     }
 
-    class_name = name or os.environ.get(PERSISTENCE_MANAGER_ENV_VAR, None) or "CompositePlainCachePersistenceManager"
+    class_name = name or os.environ.get(PERSISTENCE_MANAGER_ENV_VAR, None) or "CompositeBucketedPersistenceManager"
     clazz = getattr(persistence, class_name)
     sig = inspect.signature(getattr(clazz, "__init__"))
 
