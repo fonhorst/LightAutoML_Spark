@@ -30,7 +30,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 3. use_algos = [["linear_l2"]]
     # 4. use_algos = [["lgb", "linear_l2"], ["lgb"]]
     use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    cv = 3
+    cv = 5
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     persistence_manager = get_persistence_manager()
@@ -50,8 +50,6 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
             task=task,
             general_params={"use_algos": use_algos},
             lgb_params={
-                'default_params': {'numIterations': 500},
-                'freeze_defaults': True,
                 'use_single_dataset_mode': True,
                 'convert_to_onnx': False,
                 'mini_batch_size': 1000
