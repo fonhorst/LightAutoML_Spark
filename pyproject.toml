@@ -59,6 +59,7 @@ pre-commit = "*"
 notebook = "*"
 mypy = "^0.910"
 tox = "*"
+hdfs = "^2.7.0"
 
 
 [tool.pytest.ini_options]
