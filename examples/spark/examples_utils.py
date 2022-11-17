@@ -151,6 +151,7 @@ def get_spark_session(partitions_num: Optional[int] = None):
 
 def get_persistence_manager(name: Optional[str] = None):
     arg_vals = {
+        "bucketed_datasets_folder": "/tmp",
         "bucket_nums": BUCKET_NUMS
     }
 
