@@ -412,14 +412,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
             valid_data = valid_data.sample(fraction=max_val_size / valid_size, seed=self._seed)
 
-            # rest_cols = list(train_data.columns)
-            # rest_cols.remove(self.validation_column)
-            #
-            # replace_col = sf.when(sf.rand(self._seed) < max_val_size / valid_size, sf.lit(True)).otherwise(sf.lit(False))
-            # val_filter_cond = sf.when(sf.col(self.validation_column) == 1, replace_col).otherwise(sf.lit(True))
-            #
-            # train_data = train_data.where(val_filter_cond)
-
         td = train_data.select('*', sf.lit(False).alias(self.validation_column))
         vd = valid_data.select('*', sf.lit(True).alias(self.validation_column))
         full_data = td.unionByName(vd)

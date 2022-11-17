@@ -149,6 +149,8 @@ def workdir() -> str:
     """
 
     workdir_path = os.path.join("/tmp/slama_tests_workdir")
+    if os.path.exists(workdir_path):
+        shutil.rmtree(workdir_path)
     os.makedirs(workdir_path)
 
     yield workdir_path

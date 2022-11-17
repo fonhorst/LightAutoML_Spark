@@ -184,7 +184,7 @@ class SparkLabelEncoderTransformer(
         logger.info(f"[{type(self)} (LE)] transform is started")
 
         columns = self._input_intermediate_columns
-        out_columns = sorted(self.getOutputCols())
+        out_columns = self.getOutputCols()
 
         model: LAMLStringIndexerModel = (
             self.indexer_model.setDefaultValue(self._fillna_val)
