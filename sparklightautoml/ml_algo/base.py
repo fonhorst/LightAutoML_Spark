@@ -127,10 +127,9 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self._models_prediction_columns = []
 
         with train_valid_iterator.frozen() as frozen_train_valid_iterator:
-            self.models, preds_dfs = self._parallel_fit(parallelism=1, train_valid_iterator=frozen_train_valid_iterator)
+            self.models, preds_dfs, self._models_prediction_columns = \
+                self._parallel_fit(parallelism=1, train_valid_iterator=frozen_train_valid_iterator)
 
-            # TODO: SLAMA - preds cols
-            self._models_prediction_columns.append(model_prediction_col)
             # TODO: SLAMA - working with timer
             # TODO: SLAMA - logging
 
@@ -309,23 +308,25 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         return full_val_preds
 
     def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) \
-            -> Tuple[List[Model], List[SparkDataFrame]]:
+            -> Tuple[List[Model], List[SparkDataFrame], List[str]]:
         num_folds = train_valid_iterator.train.num_folds
 
         pool = ThreadPool(processes=min(parallelism, num_folds))
 
-        def fit_tasks():
-            for i, (train, valid) in enumerate(train_valid_iterator):
-                model_prediction_col = f"{self.prediction_feature}_{i}"
+        fit_tasks = []
+        model_prediction_cols = []
+        for i, (train, valid) in enumerate(train_valid_iterator):
+            model_prediction_col = f"{self.prediction_feature}_{i}"
 
-                def do_fit() -> Tuple[Model, SparkDataFrame]:
-                    mdl, vpred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
-                    vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
-                    return mdl, vpred
+            def do_fit() -> Tuple[Model, SparkDataFrame]:
+                mdl, vpred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
+                vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
+                return mdl, vpred
 
-                yield do_fit
+            fit_tasks.append(do_fit)
+            model_prediction_cols.append(model_prediction_col)
 
-        tasks = map(inheritable_thread_target, fit_tasks())
+        tasks = map(inheritable_thread_target, fit_tasks)
 
         models = [None for _ in range(num_folds)]
         val_preds = [None for _ in range(num_folds)]
@@ -333,7 +334,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             models[j] = model
             val_preds[j] = val_pred
 
-        return models, val_preds
+        return models, val_preds, model_prediction_cols
 
 
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParamsWritable, DefaultParamsReadable):
