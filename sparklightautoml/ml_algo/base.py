@@ -127,61 +127,67 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self._models_prediction_columns = []
 
         with train_valid_iterator.frozen() as frozen_train_valid_iterator:
+            self.models, preds_dfs = self._parallel_fit(parallelism=1, train_valid_iterator=frozen_train_valid_iterator)
+
+            # TODO: SLAMA - preds cols
+            self._models_prediction_columns.append(model_prediction_col)
+            # TODO: SLAMA - working with timer
+            # TODO: SLAMA - logging
 
             # TODO: SLAMA - alternative branch
             # TODO: SLAMA - make an estimator
             # model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
-            self.timer.set_control_point()
-
-            cv = CrossValidator(
-                estimator=lr,
-                estimatorParamMaps=None,
-                evaluator=train_valid_iterator.train.task.get_dataset_metric(),
-                parallelism=2,
-                collectSubModels=True,
-                foldCol=train_valid_iterator.train.folds_column
-            )
-
-            cv_model = cast(CrossValidatorModel, cv.fit(frozen_train_valid_iterator.train))
-
-            # TODO: SLAMA - set prediction column
-            models = [smodels[0] for smodels in cv_model.subModels]
-
-            for n, (model, (_, valid)) in enumerate(zip(models, frozen_train_valid_iterator)):
-                model_prediction_col = f"{self.prediction_feature}_{n}"
-                val_pred = model.transform(valid)
-                val_pred = val_pred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
-
-                self._models_prediction_columns.append(model_prediction_col)
-                self.models.append(model)
-                preds_dfs.append(val_pred)
-
-            self.timer.write_run_info()
-
-            # TODO: SLAMA - alternative branch
-            for n, (train, valid) in enumerate(frozen_train_valid_iterator):
-                if iterator_len > 1:
-                    logger.info2(
-                        "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
-                        "=====".format(n, self._name)
-                    )
-                self.timer.set_control_point()
-
-                model_prediction_col = f"{self.prediction_feature}_{n}"
-                model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
-                val_pred = val_pred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
-
-                self._models_prediction_columns.append(model_prediction_col)
-                self.models.append(model)
-                preds_dfs.append(val_pred)
-
-                self.timer.write_run_info()
-
-                if (n + 1) != len(frozen_train_valid_iterator):
-                    # split into separate cases because timeout checking affects parent pipeline timer
-                    if self.timer.time_limit_exceeded():
-                        logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
-                        break
+            # self.timer.set_control_point()
+            #
+            # # cv = CrossValidator(
+            # #     estimator=lr,
+            # #     estimatorParamMaps=None,
+            # #     evaluator=train_valid_iterator.train.task.get_dataset_metric(),
+            # #     parallelism=2,
+            # #     collectSubModels=True,
+            # #     foldCol=train_valid_iterator.train.folds_column
+            # # )
+            # #
+            # # cv_model = cast(CrossValidatorModel, cv.fit(frozen_train_valid_iterator.train))
+            # #
+            # # # TODO: SLAMA - set prediction column
+            # # models = [smodels[0] for smodels in cv_model.subModels]
+            # #
+            # # for n, (model, (_, valid)) in enumerate(zip(models, frozen_train_valid_iterator)):
+            # #     model_prediction_col = f"{self.prediction_feature}_{n}"
+            # #     val_pred = model.transform(valid)
+            # #     val_pred = val_pred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
+            # #
+            # #     self._models_prediction_columns.append(model_prediction_col)
+            # #     self.models.append(model)
+            # #     preds_dfs.append(val_pred)
+            #
+            # self.timer.write_run_info()
+            #
+            # # TODO: SLAMA - alternative branch
+            # for n, (train, valid) in enumerate(frozen_train_valid_iterator):
+            #     if iterator_len > 1:
+            #         logger.info2(
+            #             "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
+            #             "=====".format(n, self._name)
+            #         )
+            #     self.timer.set_control_point()
+            #
+            #     model_prediction_col = f"{self.prediction_feature}_{n}"
+            #     model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
+            #     val_pred = val_pred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
+            #
+            #     self._models_prediction_columns.append(model_prediction_col)
+            #     self.models.append(model)
+            #     preds_dfs.append(val_pred)
+            #
+            #     self.timer.write_run_info()
+            #
+            #     if (n + 1) != len(frozen_train_valid_iterator):
+            #         # split into separate cases because timeout checking affects parent pipeline timer
+            #         if self.timer.time_limit_exceeded():
+            #             logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
+            #             break
 
         full_preds_df = self._combine_val_preds(train_valid_iterator.get_validation_data(), preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
@@ -302,6 +308,33 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
         return full_val_preds
 
+    def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) \
+            -> Tuple[List[Model], List[SparkDataFrame]]:
+        num_folds = train_valid_iterator.train.num_folds
+
+        pool = ThreadPool(processes=min(parallelism, num_folds))
+
+        def fit_tasks():
+            for i, (train, valid) in enumerate(train_valid_iterator):
+                model_prediction_col = f"{self.prediction_feature}_{i}"
+
+                def do_fit() -> Tuple[Model, SparkDataFrame]:
+                    mdl, vpred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
+                    vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
+                    return mdl, vpred
+
+                yield do_fit
+
+        tasks = map(inheritable_thread_target, fit_tasks())
+
+        models = [None for _ in range(num_folds)]
+        val_preds = [None for _ in range(num_folds)]
+        for j, (model, val_pred) in pool.imap_unordered(lambda f: f(), tasks):
+            models[j] = model
+            val_preds[j] = val_pred
+
+        return models, val_preds
+
 
 class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParamsWritable, DefaultParamsReadable):
     """
@@ -413,102 +446,3 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
         logger.debug(f"Out {type(self)}. Columns: {sorted(out_df.columns)}")
 
         return out_df
-
-
-class CustomCrossValidator(CrossValidator):
-    @keyword_only
-    def __init__(self, *,
-                 prediction_feature_prefix: str,
-                 estimator_func: Callable[[str, SparkDataset, SparkDataset], Tuple[SparkMLModel, SparkDataFrame, str]],
-                 train_valid_iterator: SparkFoldsIterator,
-                 seed=None,
-                 parallelism=1):
-        super(CustomCrossValidator, self).__init__(
-            estimator=None,
-            estimatorParamMaps=None,
-            evaluator=None,
-            numFolds=train_valid_iterator.train.num_folds,
-            seed=seed,
-            parallelism=parallelism,
-            collectSubModels=True,
-            foldCol=train_valid_iterator.train.folds_column
-        )
-
-        self._prediction_feature_prefix = prediction_feature_prefix
-        self._estimator_func = estimator_func
-        self._train_valid_iterator = train_valid_iterator
-
-    def _fit(self, dataset):
-        # est = self.getOrDefault(self.estimator)
-        # epm = self.getOrDefault(self.estimatorParamMaps)
-        # numModels = len(epm)
-        # eva = self.getOrDefault(self.evaluator)
-        # nFolds = self.getOrDefault(self.numFolds)
-        # metrics = [0.0] * numModels
-
-        nFolds = self.getOrDefault(self.numFolds)
-
-        pool = ThreadPool(processes=min(self.getParallelism(), nFolds))
-
-        def fit_tasks():
-            for i, (train, valid) in enumerate(self._train_valid_iterator):
-                def do_fit() -> Model:
-                    model, val_pred, _ = self._estimator_func(f"{self._prediction_feature_prefix}_{i}", train, valid)
-                    return model
-                yield do_fit
-
-        tasks = map(inheritable_thread_target, fit_tasks())
-
-        subModels = [None for _ in range(nFolds)]
-        for j, subModel in pool.imap_unordered(lambda f: f(), tasks):
-            subModels[j] = subModel
-
-        # TODO: SLAMA - add AveragingTransformer
-        return self._copyValues(CrossValidatorModel(bestModel, metrics, subModels))
-
-
-def _parallelFitTasks(est, train, eva, validation, epm, collectSubModel):
-    """
-    Creates a list of callables which can be called from different threads to fit and evaluate
-    an estimator in parallel. Each callable returns an `(index, metric)` pair.
-
-    Parameters
-    ----------
-    est : :py:class:`pyspark.ml.baseEstimator`
-        he estimator to be fit.
-    train : :py:class:`pyspark.sql.DataFrame`
-        DataFrame, training data set, used for fitting.
-    eva : :py:class:`pyspark.ml.evaluation.Evaluator`
-        used to compute `metric`
-    validation : :py:class:`pyspark.sql.DataFrame`
-        DataFrame, validation data set, used for evaluation.
-    epm : :py:class:`collections.abc.Sequence`
-        Sequence of ParamMap, params maps to be used during fitting & evaluation.
-    collectSubModel : bool
-        Whether to collect sub model.
-
-    Returns
-    -------
-    tuple
-        (int, float, subModel), an index into `epm` and the associated metric value.
-    """
-    modelIter = est.fitMultiple(train, epm)
-
-    def singleTask():
-        index, model = next(modelIter)
-        # TODO: duplicate evaluator to take extra params from input
-        #  Note: Supporting tuning params in evaluator need update method
-        #  `MetaAlgorithmReadWrite.getAllNestedStages`, make it return
-        #  all nested stages and evaluators
-        metric = eva.evaluate(model.transform(validation, epm[index]))
-        return index, metric, model if collectSubModel else None
-
-    return [singleTask] * len(epm)
-
-
-class _SingleFoldFitEstimator(Estimator):
-    def __init__(self, callable):
-        super(_SingleFoldFitEstimator, self).__init__()
-
-    def _fit(self, dataset: SparkDataFrame) -> Model:
-        pass
