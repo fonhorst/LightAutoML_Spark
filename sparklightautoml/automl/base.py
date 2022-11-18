@@ -2,6 +2,7 @@
 import logging
 import os
 from copy import copy
+from multiprocessing.pool import ThreadPool
 from typing import Any, Callable, Tuple, cast, Union
 from typing import Dict
 from typing import Iterable
@@ -13,6 +14,7 @@ from lightautoml.dataset.base import RolesDict
 from lightautoml.reader.base import RolesDict
 from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
 from lightautoml.utils.timer import PipelineTimer
+from pyspark import inheritable_thread_target
 from pyspark.ml import PipelineModel, Transformer
 from pyspark.sql.session import SparkSession
 
@@ -254,47 +256,23 @@ class SparkAutoML(TransformerInputOutputRoles):
             valid_dataset = None
 
         train_valid = self._create_validation_iterator(train_dataset, valid_dataset, None, cv_iter=cv_iter)
-        # train_valid.train_frozen = True
-        # train_valid.val_frozen = True
 
         pipes: List[SparkMLPipeline] = []
         self.levels = []
         level_ds: Optional[SparkDataset] = None
         for leven_number, level in enumerate(self._levels, 1):
-            pipes = []
-            flg_last_level = leven_number == len(self._levels)
-
             logger.info(
                 f"Layer \x1b[1m{leven_number}\x1b[0m train process start. Time left {self.timer.time_left:.2f} secs"
             )
 
-            all_pipes_predictions: List[SparkDataset] = []
             with train_valid.frozen() as frozen_train_valid:
-                for k, ml_pipe in enumerate(level):
-                    pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(frozen_train_valid))\
-                        .persist(level=PersistenceLevel.CHECKPOINT, force=True)
+                pipes, all_pipes_predictions, flg_last_level = self._parallel_level(
+                    parallelism=1,
+                    level=level,
+                    train_valid_iterator=frozen_train_valid
+                )
 
-                    all_pipes_predictions.append(pipe_predictions)
-                    pipes.append(ml_pipe)
-
-                    logger.info("Time left {:.2f} secs\n".format(self.timer.time_left))
-
-                    if self.timer.time_limit_exceeded():
-                        logger.info(
-                            "Time limit exceeded. Last level models will be blended "
-                            "and unused pipelines will be pruned.\n"
-                        )
-
-                        flg_last_level = True
-                        break
-                    else:
-                        if self.timer.child_out_of_time:
-                            logger.info(
-                                "Time limit exceeded in one of the tasks. AutoML will blend level {0} models.\n".format(
-                                    leven_number
-                                )
-                            )
-                            flg_last_level = True
+            flg_last_level = flg_last_level or leven_number == len(self._levels)
 
             logger.info("\x1b[1mLayer {} training completed.\x1b[0m\n".format(leven_number))
 
@@ -314,43 +292,6 @@ class SparkAutoML(TransformerInputOutputRoles):
 
             train_valid.unpersist(skip_val=self.skip_conn)
             train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
-
-
-
-            # if flg_last_level:
-            #     # checkpointing
-            #     level_ds = SparkDataset.concatenate(all_pipes_predictions, name=level_ds_name)
-            #     level_ds = level_ds.persist(level=PersistenceLevel.CHECKPOINT)
-            #     train_valid.train_frozen = False
-            #     train_valid.val_frozen = False
-            #     train_valid.unpersist()
-            #     break
-            #
-            # self.levels.append(pipes)
-            #
-            # # checkpointing
-            # level_ds = (
-            #     SparkDataset
-            #     .concatenate(all_pipes_predictions, name=level_ds_name)
-            #     .persist(level=PersistenceLevel.CHECKPOINT)
-            # )
-            #
-            # if self.skip_conn:
-            #     level_ds = SparkDataset.concatenate(
-            #         [train_valid.get_validation_data(), level_ds],
-            #         name=f"{level_ds_name}_skip_conn"
-            #     )
-            #     train_valid.train_frozen = False
-            #     train_valid.unpersist()
-            #     train_valid.val_frozen = False
-            # else:
-            #     train_valid.val_frozen = False
-            #     train_valid.train_frozen = False
-            #     train_valid.unpersist()
-
-            # train_valid = self._create_validation_iterator(level_ds, None, n_folds=None, cv_iter=None)
-            # train_valid.train_frozen = True
-            # train_valid.val_frozen = True
 
         blended_prediction, last_pipes = self.blender.fit_predict(level_ds, pipes)
         self.levels.append(last_pipes)
@@ -552,3 +493,53 @@ class SparkAutoML(TransformerInputOutputRoles):
 
     def _get_read_csv_params(self) -> Dict:
         return {}
+
+    def _parallel_level(self,
+                        parallelism: int,
+                        level: Sequence[SparkMLPipeline],
+                        train_valid_iterator: SparkBaseTrainValidIterator) \
+            -> Tuple[List[SparkMLPipeline], List[SparkDataset], bool]:
+
+        pool = ThreadPool(processes=min(parallelism, len(level)))
+
+        fit_tasks = []
+        for k, ml_pipe in enumerate(level):
+            # TODO: SLAMA - need an additional test for it
+            timer = copy(self.timer)
+            iterator = copy(train_valid_iterator)
+
+            waiting_to_start_pipe_timer = timer.get_task_timer(f"{ml_pipe.name}_start")
+            waiting_to_start_pipe_timer.set_control_point()
+
+            # TODO: SLAMA - make persistence manager thread-safe
+            def do_fit() -> Optional[Tuple[SparkMLPipeline, SparkDataset]]:
+                if waiting_to_start_pipe_timer.time_limit_exceeded():
+                    logger.info(f"No time to calculate {ml_pipe.name}. Time limit is already exceeded")
+                    return None
+
+                # TODO: SLAMA - set timer?
+                pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(iterator)) \
+                    .persist(level=PersistenceLevel.CHECKPOINT, force=True)
+
+                waiting_to_start_pipe_timer.write_run_info()
+
+                return ml_pipe, pipe_predictions
+
+            fit_tasks.append(do_fit)
+
+        tasks = map(inheritable_thread_target, fit_tasks)
+        results = [result for result in pool.imap_unordered(lambda f: f(), tasks) if result]
+
+        ml_pipes = [ml_pipe for ml_pipe, _ in results]
+        ml_pipes_preds = [pipe_preds for _, pipe_preds in results]
+
+        # TODO: SLAMA - need to "join" timers here?
+        if len(results) < len(level):
+            flg_last_level = True
+        elif self.timer.time_limit_exceeded() or self.timer.child_out_of_time:
+            # if all pipes have been fitted, but generally we don't have time anymore
+            flg_last_level = True
+        else:
+            flg_last_level = False
+
+        return ml_pipes, ml_pipes_preds, flg_last_level

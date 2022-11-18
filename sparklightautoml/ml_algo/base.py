@@ -249,15 +249,13 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             -> Tuple[List[Model], List[SparkDataFrame], List[str]]:
         num_folds = len(train_valid_iterator)
 
-
         pool = ThreadPool(processes=min(parallelism, num_folds))
 
         fit_tasks = []
         for i, (train, valid) in enumerate(train_valid_iterator):
             mdl_pred_col = f"{self.prediction_feature}_{i}"
 
-            # TODO: SLAMA - is it correct to do so?
-            # TODO: SLAMA - add name to the timer?
+            # TODO: SLAMA - need to have an additional test for that
             timer = copy(self.timer)
             timer.set_control_point()
 
@@ -288,6 +286,8 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         models = [model for _, model, _, _ in results]
         val_preds = [val_pred for _, _, val_pred, _ in results]
         model_prediction_cols = [model_prediction_col for _, _, _, model_prediction_col in results]
+
+        # TODO: SLAMA - probably need to update parent timer here ?
 
         return models, val_preds, model_prediction_cols
 
