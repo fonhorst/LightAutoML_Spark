@@ -12,6 +12,7 @@ from pyspark.ml import PipelineModel, Transformer
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.param import Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
+from pyspark.ml.tuning import CrossValidator, CrossValidatorModel
 from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as sf
 from pyspark.sql.types import IntegerType
@@ -123,6 +124,38 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self._models_prediction_columns = []
 
         with train_valid_iterator.frozen() as frozen_train_valid_iterator:
+
+            # TODO: SLAMA - alternative branch
+            # TODO: SLAMA - make an estimator
+            # model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
+            self.timer.set_control_point()
+
+            cv = CrossValidator(
+                estimator=lr,
+                estimatorParamMaps=None,
+                evaluator=train_valid_iterator.train.task.get_dataset_metric(),
+                parallelism=2,
+                collectSubModels=True,
+                foldCol=train_valid_iterator.train.folds_column
+            )
+
+            cv_model = cast(CrossValidatorModel, cv.fit(frozen_train_valid_iterator.train))
+
+            # TODO: SLAMA - set prediction column
+            models = [smodels[0] for smodels in cv_model.subModels]
+
+            for n, (model, (_, valid)) in enumerate(zip(models, frozen_train_valid_iterator)):
+                model_prediction_col = f"{self.prediction_feature}_{n}"
+                val_pred = model.transform(valid)
+                val_pred = val_pred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
+
+                self._models_prediction_columns.append(model_prediction_col)
+                self.models.append(model)
+                preds_dfs.append(val_pred)
+
+            self.timer.write_run_info()
+
+            # TODO: SLAMA - alternative branch
             for n, (train, valid) in enumerate(frozen_train_valid_iterator):
                 if iterator_len > 1:
                     logger.info2(
