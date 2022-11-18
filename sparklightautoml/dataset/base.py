@@ -267,6 +267,10 @@ class SparkDataset(LAMLDataset, Unpersistable):
         return [sc for sc in self._service_columns if sc in self.data.columns]
 
     @property
+    def num_folds(self) -> int:
+        return self.data.select(self.folds_column).distinct().count()
+
+    @property
     def persistence_manager(self) -> 'PersistenceManager':
         return self._persistence_manager
 

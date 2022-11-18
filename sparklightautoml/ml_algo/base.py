@@ -1,14 +1,16 @@
 import functools
 import logging
 from copy import copy
-from typing import Tuple, cast, List, Optional, Sequence, Union
+from multiprocessing.pool import ThreadPool
+from typing import Tuple, cast, List, Optional, Sequence, Union, Callable
 
 import numpy as np
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import NumericRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.utils.timer import TaskTimer
-from pyspark.ml import PipelineModel, Transformer
+from pyspark import keyword_only, inheritable_thread_target
+from pyspark.ml import PipelineModel, Transformer, Estimator, Model
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.param import Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
@@ -22,6 +24,7 @@ from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import SparkDataFrame, log_exception
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+from sparklightautoml.validation.iterators import SparkFoldsIterator
 
 logger = logging.getLogger(__name__)
 
@@ -410,3 +413,102 @@ class AveragingTransformer(Transformer, HasInputCols, HasOutputCol, DefaultParam
         logger.debug(f"Out {type(self)}. Columns: {sorted(out_df.columns)}")
 
         return out_df
+
+
+class CustomCrossValidator(CrossValidator):
+    @keyword_only
+    def __init__(self, *,
+                 prediction_feature_prefix: str,
+                 estimator_func: Callable[[str, SparkDataset, SparkDataset], Tuple[SparkMLModel, SparkDataFrame, str]],
+                 train_valid_iterator: SparkFoldsIterator,
+                 seed=None,
+                 parallelism=1):
+        super(CustomCrossValidator, self).__init__(
+            estimator=None,
+            estimatorParamMaps=None,
+            evaluator=None,
+            numFolds=train_valid_iterator.train.num_folds,
+            seed=seed,
+            parallelism=parallelism,
+            collectSubModels=True,
+            foldCol=train_valid_iterator.train.folds_column
+        )
+
+        self._prediction_feature_prefix = prediction_feature_prefix
+        self._estimator_func = estimator_func
+        self._train_valid_iterator = train_valid_iterator
+
+    def _fit(self, dataset):
+        # est = self.getOrDefault(self.estimator)
+        # epm = self.getOrDefault(self.estimatorParamMaps)
+        # numModels = len(epm)
+        # eva = self.getOrDefault(self.evaluator)
+        # nFolds = self.getOrDefault(self.numFolds)
+        # metrics = [0.0] * numModels
+
+        nFolds = self.getOrDefault(self.numFolds)
+
+        pool = ThreadPool(processes=min(self.getParallelism(), nFolds))
+
+        def fit_tasks():
+            for i, (train, valid) in enumerate(self._train_valid_iterator):
+                def do_fit() -> Model:
+                    model, val_pred, _ = self._estimator_func(f"{self._prediction_feature_prefix}_{i}", train, valid)
+                    return model
+                yield do_fit
+
+        tasks = map(inheritable_thread_target, fit_tasks())
+
+        subModels = [None for _ in range(nFolds)]
+        for j, subModel in pool.imap_unordered(lambda f: f(), tasks):
+            subModels[j] = subModel
+
+        # TODO: SLAMA - add AveragingTransformer
+        return self._copyValues(CrossValidatorModel(bestModel, metrics, subModels))
+
+
+def _parallelFitTasks(est, train, eva, validation, epm, collectSubModel):
+    """
+    Creates a list of callables which can be called from different threads to fit and evaluate
+    an estimator in parallel. Each callable returns an `(index, metric)` pair.
+
+    Parameters
+    ----------
+    est : :py:class:`pyspark.ml.baseEstimator`
+        he estimator to be fit.
+    train : :py:class:`pyspark.sql.DataFrame`
+        DataFrame, training data set, used for fitting.
+    eva : :py:class:`pyspark.ml.evaluation.Evaluator`
+        used to compute `metric`
+    validation : :py:class:`pyspark.sql.DataFrame`
+        DataFrame, validation data set, used for evaluation.
+    epm : :py:class:`collections.abc.Sequence`
+        Sequence of ParamMap, params maps to be used during fitting & evaluation.
+    collectSubModel : bool
+        Whether to collect sub model.
+
+    Returns
+    -------
+    tuple
+        (int, float, subModel), an index into `epm` and the associated metric value.
+    """
+    modelIter = est.fitMultiple(train, epm)
+
+    def singleTask():
+        index, model = next(modelIter)
+        # TODO: duplicate evaluator to take extra params from input
+        #  Note: Supporting tuning params in evaluator need update method
+        #  `MetaAlgorithmReadWrite.getAllNestedStages`, make it return
+        #  all nested stages and evaluators
+        metric = eva.evaluate(model.transform(validation, epm[index]))
+        return index, metric, model if collectSubModel else None
+
+    return [singleTask] * len(epm)
+
+
+class _SingleFoldFitEstimator(Estimator):
+    def __init__(self, callable):
+        super(_SingleFoldFitEstimator, self).__init__()
+
+    def _fit(self, dataset: SparkDataFrame) -> Model:
+        pass
