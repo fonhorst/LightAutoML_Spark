@@ -2,19 +2,18 @@ import functools
 import logging
 from copy import copy
 from multiprocessing.pool import ThreadPool
-from typing import Tuple, cast, List, Optional, Sequence, Union, Callable
+from typing import Tuple, cast, List, Optional, Sequence, Union
 
 import numpy as np
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import NumericRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.utils.timer import TaskTimer
-from pyspark import keyword_only, inheritable_thread_target
-from pyspark.ml import PipelineModel, Transformer, Estimator, Model
+from pyspark import inheritable_thread_target
+from pyspark.ml import PipelineModel, Transformer, Model
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.param import Params
 from pyspark.ml.param.shared import HasInputCols, HasOutputCol, Param
-from pyspark.ml.tuning import CrossValidator, CrossValidatorModel
 from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as sf
 from pyspark.sql.types import IntegerType
@@ -24,7 +23,6 @@ from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import SparkDataFrame, log_exception
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
-from sparklightautoml.validation.iterators import SparkFoldsIterator
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +41,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
         optimization_search_space: Optional[dict] = None,
+        parallelism: int = 1,
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
@@ -53,6 +52,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self._prediction_role: Optional[Union[NumericRole, NumericVectorOrArrayRole]] = None
         self._input_roles: Optional[RolesDict] = None
         self._service_columns: Optional[List[str]] = None
+        self._parallelism = parallelism
 
     @property
     def features(self) -> Optional[List[str]]:
@@ -120,73 +120,11 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
         self.task = train_valid_iterator.train.task
 
         valid_ds = cast(SparkDataset, train_valid_iterator.get_validation_data())
-
         self._infer_and_set_prediction_role(valid_ds)
-
-        preds_dfs: List[SparkDataFrame] = []
-        self._models_prediction_columns = []
 
         with train_valid_iterator.frozen() as frozen_train_valid_iterator:
             self.models, preds_dfs, self._models_prediction_columns = \
-                self._parallel_fit(parallelism=1, train_valid_iterator=frozen_train_valid_iterator)
-
-            # TODO: SLAMA - working with timer
-            # TODO: SLAMA - logging
-
-            # TODO: SLAMA - alternative branch
-            # TODO: SLAMA - make an estimator
-            # model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
-            # self.timer.set_control_point()
-            #
-            # # cv = CrossValidator(
-            # #     estimator=lr,
-            # #     estimatorParamMaps=None,
-            # #     evaluator=train_valid_iterator.train.task.get_dataset_metric(),
-            # #     parallelism=2,
-            # #     collectSubModels=True,
-            # #     foldCol=train_valid_iterator.train.folds_column
-            # # )
-            # #
-            # # cv_model = cast(CrossValidatorModel, cv.fit(frozen_train_valid_iterator.train))
-            # #
-            # # # TODO: SLAMA - set prediction column
-            # # models = [smodels[0] for smodels in cv_model.subModels]
-            # #
-            # # for n, (model, (_, valid)) in enumerate(zip(models, frozen_train_valid_iterator)):
-            # #     model_prediction_col = f"{self.prediction_feature}_{n}"
-            # #     val_pred = model.transform(valid)
-            # #     val_pred = val_pred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
-            # #
-            # #     self._models_prediction_columns.append(model_prediction_col)
-            # #     self.models.append(model)
-            # #     preds_dfs.append(val_pred)
-            #
-            # self.timer.write_run_info()
-            #
-            # # TODO: SLAMA - alternative branch
-            # for n, (train, valid) in enumerate(frozen_train_valid_iterator):
-            #     if iterator_len > 1:
-            #         logger.info2(
-            #             "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
-            #             "=====".format(n, self._name)
-            #         )
-            #     self.timer.set_control_point()
-            #
-            #     model_prediction_col = f"{self.prediction_feature}_{n}"
-            #     model, val_pred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
-            #     val_pred = val_pred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
-            #
-            #     self._models_prediction_columns.append(model_prediction_col)
-            #     self.models.append(model)
-            #     preds_dfs.append(val_pred)
-            #
-            #     self.timer.write_run_info()
-            #
-            #     if (n + 1) != len(frozen_train_valid_iterator):
-            #         # split into separate cases because timeout checking affects parent pipeline timer
-            #         if self.timer.time_limit_exceeded():
-            #             logger.info("Time limit exceeded after calculating fold {0}\n".format(n))
-            #             break
+                self._parallel_fit(parallelism=self._parallelism, train_valid_iterator=frozen_train_valid_iterator)
 
         full_preds_df = self._combine_val_preds(train_valid_iterator.get_validation_data(), preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
@@ -309,30 +247,47 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
     def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) \
             -> Tuple[List[Model], List[SparkDataFrame], List[str]]:
-        num_folds = train_valid_iterator.train.num_folds
+        num_folds = len(train_valid_iterator)
+
 
         pool = ThreadPool(processes=min(parallelism, num_folds))
 
         fit_tasks = []
-        model_prediction_cols = []
         for i, (train, valid) in enumerate(train_valid_iterator):
-            model_prediction_col = f"{self.prediction_feature}_{i}"
+            mdl_pred_col = f"{self.prediction_feature}_{i}"
 
-            def do_fit() -> Tuple[Model, SparkDataFrame]:
-                mdl, vpred, _ = self.fit_predict_single_fold(model_prediction_col, train, valid)
-                vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, model_prediction_col)
-                return mdl, vpred
+            # TODO: SLAMA - is it correct to do so?
+            # TODO: SLAMA - add name to the timer?
+            timer = copy(self.timer)
+            timer.set_control_point()
+
+            def do_fit() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
+                if num_folds > 1:
+                    logger.info2(
+                                "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
+                                "=====".format(i, self._name)
+                    )
+
+                if timer.time_limit_exceeded():
+                    logger.info(f"No time to calculate fold {i}/{num_folds} (Time limit is already exceeded)")
+                    return None
+
+                mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, train, valid)
+                vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, mdl_pred_col)
+
+                timer.write_run_info()
+
+                return i, mdl, vpred, mdl_pred_col
 
             fit_tasks.append(do_fit)
-            model_prediction_cols.append(model_prediction_col)
 
         tasks = map(inheritable_thread_target, fit_tasks)
+        results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
+        results = sorted(results, key=lambda x: x[0])
 
-        models = [None for _ in range(num_folds)]
-        val_preds = [None for _ in range(num_folds)]
-        for j, (model, val_pred) in pool.imap_unordered(lambda f: f(), tasks):
-            models[j] = model
-            val_preds[j] = val_pred
+        models = [model for _, model, _, _ in results]
+        val_preds = [val_pred for _, _, val_pred, _ in results]
+        model_prediction_cols = [model_prediction_col for _, _, _, model_prediction_col in results]
 
         return models, val_preds, model_prediction_cols
 
