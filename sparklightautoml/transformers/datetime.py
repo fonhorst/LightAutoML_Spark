@@ -1,7 +1,8 @@
+import itertools
 from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime
-from typing import Iterator, Optional, Sequence, List, cast, Dict, Tuple, Set
+from typing import Iterator, Optional, Sequence, List, cast, Dict, Set
 
 import holidays
 import numpy as np
@@ -17,7 +18,7 @@ from pyspark.sql.types import IntegerType
 
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.transformers.base import SparkBaseTransformer, SparkBaseEstimator
-
+from sparklightautoml.transformers.scala_wrappers.is_holiday_transformer import IsHolidayTransformer
 
 _DateSeasonsTransformations = Dict[str, List[str]]
 
@@ -194,7 +195,7 @@ class SparkDateSeasonsEstimator(SparkBaseEstimator):
     def _infer_output_cols_and_roles(self, output_role: ColumnRole):
         input_roles = self.get_input_roles()
         self.transformations: _DateSeasonsTransformations = OrderedDict()
-        self.seasons_out_cols = dict()
+        self.seasons_out_cols: Dict[str, List[str]] = dict()
         self.holidays_out_cols = []
         for col in self.getInputCols():
             rdt = cast(DatetimeRole, input_roles[col])
@@ -204,7 +205,7 @@ class SparkDateSeasonsEstimator(SparkBaseEstimator):
             if rdt.country is not None:
                 self.holidays_out_cols.append(f"{self._fname_prefix}_hol__{col}")
 
-        output_cols = [*self.seasons_out_cols.values(), *self.holidays_out_cols]
+        output_cols = [*itertools.chain(*self.seasons_out_cols.values()), *self.holidays_out_cols]
         output_roles = {f: deepcopy(output_role) for f in output_cols}
 
         self.set(self.outputCols, output_cols)
@@ -221,7 +222,7 @@ class SparkDateSeasonsEstimator(SparkBaseEstimator):
         holidays_cols_dates: Dict[str, Set[str]] = {
             col:
                 set(holidays.country_holidays(
-                    years=list(range(min_y, max_y)),
+                    years=list(range(min_y, max_y + 1)),
                     country=roles[col].country,
                     prov=roles[col].prov,
                     state=roles[col].state
@@ -265,7 +266,7 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer,
         seasons_transformations: _DateSeasonsTransformations,
         holidays_dates: Dict[str, Set[str]]
     ):
-        output_cols = [*seasons_out_cols.values(), *holidays_out_cols]
+        output_cols = [*itertools.chain(*seasons_out_cols.values()), *holidays_out_cols]
         super().__init__(input_cols, output_cols, input_roles, output_roles)
 
         self.set(self.seasonOutCols, seasons_out_cols)
@@ -294,8 +295,12 @@ class SparkDateSeasonsTransformer(SparkBaseTransformer,
             ]
             new_cols.extend(seas_cols)
 
-        mapping_transformer = None
-        df = mapping_transformer.transform(df.select("*", new_cols))
+        holidays_transformer = IsHolidayTransformer.create(
+            holidays_dates=holidays_dates,
+            input_cols=self.getInputCols(),
+            output_cols=holidays_out_cols
+        )
+        df = holidays_transformer.transform(df.select("*", *new_cols))
 
         return df
 
