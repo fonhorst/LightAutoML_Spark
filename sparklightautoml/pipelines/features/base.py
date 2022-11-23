@@ -41,7 +41,7 @@ from sparklightautoml.transformers.categorical import (
     SparkMulticlassTargetEncoderEstimator,
 )
 from sparklightautoml.transformers.categorical import SparkTargetEncoderEstimator
-from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
+from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsEstimator
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
 from sparklightautoml.utils import Cacher, warn_if_not_cached, SparkDataFrame, ColumnsSelectorTransformer
 

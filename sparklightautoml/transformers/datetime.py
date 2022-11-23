@@ -1,24 +1,23 @@
+import itertools
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Dict, Iterator, Optional, Sequence, List
-from collections import defaultdict, OrderedDict
-from itertools import chain, combinations
 from datetime import datetime
+from typing import Dict, Set
 from typing import Iterator, Optional, Sequence, List, cast
 
 import holidays
 import numpy as np
 import pandas as pd
 from lightautoml.dataset.base import RolesDict
-from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole, DatetimeRole
+from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
+from lightautoml.dataset.roles import DatetimeRole
 from lightautoml.transformers.datetime import datetime_check, date_attrs
+from pyspark.ml import Transformer
 from pyspark.ml.param.shared import Param, Params
 from pyspark.sql import functions as sf, DataFrame as SparkDataFrame
 from pyspark.sql.pandas.functions import pandas_udf
 from pyspark.sql.types import IntegerType
 
-from lightautoml.dataset.base import RolesDict
-from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.transformers.base import SparkBaseTransformer, SparkBaseEstimator
 from sparklightautoml.transformers.scala_wrappers.is_holiday_transformer import IsHolidayTransformer
