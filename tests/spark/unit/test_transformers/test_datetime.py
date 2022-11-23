@@ -7,7 +7,7 @@ from pyspark.sql import SparkSession
 
 from lightautoml.dataset.np_pd_dataset import PandasDataset
 from lightautoml.dataset.roles import DatetimeRole
-from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer, \
+from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, ObsoleteSparkDateSeasonsTransformer, \
     SparkTimeToNumTransformer
 from lightautoml.tasks import Task
 from lightautoml.transformers.datetime import TimeToNum, BaseDiff, DateSeasons
@@ -122,4 +122,4 @@ def test_date_seasons(spark: SparkSession, dataset: DatasetForTest):
     ds = PandasDataset(dataset.dataset, roles=dataset.roles, task=Task("binary"))
 
     compare_sparkml_by_content(spark, ds, DateSeasons(),
-                               SparkDateSeasonsTransformer(input_cols=ds.features, input_roles=ds.roles))
+                               ObsoleteSparkDateSeasonsTransformer(input_cols=ds.features, input_roles=ds.roles))

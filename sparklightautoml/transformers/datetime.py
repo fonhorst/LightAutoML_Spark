@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime
-from typing import Iterator, Optional, Sequence, List, cast
+from typing import Iterator, Optional, Sequence, List, cast, Dict, Tuple, Set
 
 import holidays
 import numpy as np
@@ -9,13 +9,17 @@ import pandas as pd
 from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import CategoryRole, NumericRole, ColumnRole, DatetimeRole
 from lightautoml.transformers.datetime import datetime_check, date_attrs
+from pyspark.ml import Transformer
 from pyspark.ml.param.shared import Param, Params
 from pyspark.sql import functions as sf, DataFrame as SparkDataFrame
 from pyspark.sql.pandas.functions import pandas_udf
 from pyspark.sql.types import IntegerType
 
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
-from sparklightautoml.transformers.base import SparkBaseTransformer
+from sparklightautoml.transformers.base import SparkBaseTransformer, SparkBaseEstimator
+
+
+_DateSeasonsTransformations = Dict[str, List[str]]
 
 
 def get_unit_of_timestamp_column(seas: str, col: str):
@@ -173,7 +177,130 @@ class SparkBaseDiffTransformer(
         return df
 
 
-class SparkDateSeasonsTransformer(
+class SparkDateSeasonsEstimator(SparkBaseEstimator):
+    _fname_prefix = "season"
+
+    def __init__(
+        self,
+        input_cols: List[str],
+        input_roles: RolesDict,
+        output_role: Optional[ColumnRole] = None
+    ):
+        output_role = output_role or CategoryRole(np.int32)
+
+        super().__init__(input_cols, input_roles, output_role=output_role)
+        self._infer_output_cols_and_roles(output_role)
+
+    def _infer_output_cols_and_roles(self, output_role: ColumnRole):
+        input_roles = self.get_input_roles()
+        self.transformations: _DateSeasonsTransformations = OrderedDict()
+        self.seasons_out_cols = dict()
+        self.holidays_out_cols = []
+        for col in self.getInputCols():
+            rdt = cast(DatetimeRole, input_roles[col])
+            seas = list(rdt.seasonality)
+            self.transformations[col] = seas
+            self.seasons_out_cols[col] = [f"{self._fname_prefix}_{s}__{col}" for s in seas]
+            if rdt.country is not None:
+                self.holidays_out_cols.append(f"{self._fname_prefix}_hol__{col}")
+
+        output_cols = [*self.seasons_out_cols.values(), *self.holidays_out_cols]
+        output_roles = {f: deepcopy(output_role) for f in output_cols}
+
+        self.set(self.outputCols, output_cols)
+        self.set(self.outputRoles, output_roles)
+
+    def _fit(self, dataset: SparkDataFrame) -> Transformer:
+        roles = self.get_input_roles()
+
+        min_max_years = dataset.select(*[
+            sf.struct(sf.year(sf.min(in_col)).alias('min'), sf.year(sf.max(in_col)).alias('max')).alias(in_col)
+            for in_col in self.getInputCols()
+        ]).first().asDict()
+
+        holidays_cols_dates: Dict[str, Set[str]] = {
+            col:
+                set(holidays.country_holidays(
+                    years=list(range(min_y, max_y)),
+                    country=roles[col].country,
+                    prov=roles[col].prov,
+                    state=roles[col].state
+                ).keys())
+            for col, (min_y, max_y) in min_max_years.items()
+        }
+
+        return SparkDateSeasonsTransformer(
+            input_cols=self.getInputCols(),
+            seasons_out_cols=self.seasons_out_cols,
+            holidays_out_cols=self.holidays_out_cols,
+            input_roles=self.get_input_roles(),
+            output_roles=self.get_output_roles(),
+            seasons_transformations=self.transformations,
+            holidays_dates=holidays_cols_dates
+        )
+
+
+class SparkDateSeasonsTransformer(SparkBaseTransformer,
+                                  SparkDatetimeHelper,
+                                  CommonPickleMLWritable,
+                                  CommonPickleMLReadable):
+    """
+    Extracts unit of time from Datetime values and marks holiday dates.
+    """
+
+    _fname_prefix = "season"
+
+    seasonOutCols = Param(Params._dummy(), "seasonOutCols", "seasonOutCols")
+    holidaysOutCols = Param(Params._dummy(), "holidaysOutCols", "holidaysOutCols")
+    seasonsTransformations = Param(Params._dummy(), "seasonsTransformations", "seasonsTransformations")
+    holidaysDates = Param(Params._dummy(), "holidaysDates", "holidaysDates")
+
+    def __init__(
+        self,
+        input_cols: List[str],
+        seasons_out_cols: Dict[str, List[str]],
+        holidays_out_cols: List[str],
+        input_roles: RolesDict,
+        output_roles: RolesDict,
+        seasons_transformations: _DateSeasonsTransformations,
+        holidays_dates: Dict[str, Set[str]]
+    ):
+        output_cols = [*seasons_out_cols.values(), *holidays_out_cols]
+        super().__init__(input_cols, output_cols, input_roles, output_roles)
+
+        self.set(self.seasonOutCols, seasons_out_cols)
+        self.set(self.holidaysOutCols, holidays_out_cols)
+        self.set(self.seasonsTransformations, seasons_transformations)
+        self.set(self.holidaysDates, holidays_dates)
+
+    def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
+        df = dataset
+
+        seasons_out_cols = self.getOrDefault(self.seasonOutCols)
+        holidays_out_cols = self.getOrDefault(self.holidaysOutCols)
+        seasons_transformations = self.getOrDefault(self.seasonsTransformations)
+        holidays_dates = self.getOrDefault(self.holidaysDates)
+
+        new_cols = []
+        for col, transformations in seasons_transformations.items():
+            fcol = sf.to_timestamp(sf.col(col)).cast("long")
+            seas_cols = [
+                (
+                    sf.when(sf.isnan(fcol) | sf.isnull(fcol), None)
+                    .otherwise(get_unit_of_timestamp_column(seas, col))
+                    .alias(out_col)
+                )
+                for out_col, seas in zip(seasons_out_cols[col], transformations)
+            ]
+            new_cols.extend(seas_cols)
+
+        mapping_transformer = None
+        df = mapping_transformer.transform(df.select("*", new_cols))
+
+        return df
+
+
+class ObsoleteSparkDateSeasonsTransformer(
     SparkBaseTransformer, SparkDatetimeHelper, CommonPickleMLWritable, CommonPickleMLReadable
 ):
     """
@@ -227,7 +354,6 @@ class SparkDateSeasonsTransformer(
             new_cols.extend(seas_cols)
 
             if roles[col].country is not None:
-
                 @pandas_udf(IntegerType())
                 def is_holiday(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
                     for x in arrs:
