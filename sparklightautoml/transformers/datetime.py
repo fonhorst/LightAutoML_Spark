@@ -221,7 +221,7 @@ class SparkDateSeasonsEstimator(SparkBaseEstimator):
 
         holidays_cols_dates: Dict[str, Set[str]] = {
             col:
-                set(holidays.country_holidays(
+                set(dt.strftime("%Y-%m-%d") for dt in holidays.country_holidays(
                     years=list(range(min_y, max_y + 1)),
                     country=roles[col].country,
                     prov=roles[col].prov,
