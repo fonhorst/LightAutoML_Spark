@@ -32,6 +32,10 @@ class IsHolidayTransformer(override val uid: String, private var holidays_dates:
     this
   }
 
+  def setInputCols(cols: Array[String]): this.type = set(inputCols, cols)
+
+  def setOutputCols(cols: Array[String]): this.type = set(outputCols, cols)
+
   def getHolidaysDates: Option[Map[String, Set[String]]] = Some(holidays_dates)
 
   private def validateAndTransformField(schema: StructType,
@@ -39,7 +43,7 @@ class IsHolidayTransformer(override val uid: String, private var holidays_dates:
                                         outputColName: String): StructField = {
     val inputDataType = schema(inputColName).dataType
     require(inputDataType == DateType || inputDataType == TimestampType
-            || inputDataType == LongType || inputDataType == StringType,
+            || inputDataType == LongType || inputDataType == IntegerType || inputDataType == StringType,
       s"The input column $inputColName must be of date or timestamp  or long or string type, " +
               s"but got $inputDataType.")
     require(schema.fields.forall(_.name != outputColName),
@@ -84,6 +88,7 @@ class IsHolidayTransformer(override val uid: String, private var holidays_dates:
           case _: DateType => date_format(to_timestamp(col(in_col)), dt_format)
           case _: TimestampType => date_format(col(in_col), dt_format)
           case _: LongType => date_format(col(in_col).cast(TimestampType), dt_format)
+          case _: IntegerType => date_format(col(in_col).cast(TimestampType), dt_format)
           case _: StringType => col(in_col)
         }
         func(lit(in_col).cast(StringType), dt_col).alias(out_col)
@@ -115,11 +120,11 @@ object IsHolidayTransformer extends MLReadable[IsHolidayTransformer] {
   private[IsHolidayTransformer] class IsHolidayTransformerWriter(instance: IsHolidayTransformer)
           extends MLWriter {
 
-    private case class Data(holidays_dates: Map[String, Set[String]])
+    private case class Data(holidays_dates: Map[String, Array[String]])
 
     override protected def saveImpl(path: String): Unit = {
       DefaultParamsWriter.saveMetadata(instance, path, sc)
-      val data = Data(instance.getHolidaysDates.get)
+      val data = Data(instance.getHolidaysDates.get.map{case (col_name, dates) => (col_name, dates.toArray)}.toMap)
       val dataPath = new Path(path, "data").toString
       sparkSession.createDataFrame(Seq(data)).repartition(1).write.parquet(dataPath)
     }
