@@ -146,4 +146,16 @@ class TestTransformers extends BaseFunSuite {
     checkResult(loaded_te.transform(df), df, result_enc)
     checkResult(loaded_te.transform(df), df, result_enc)
   }
+
+//  test("testing IsHolidayTransformer") {
+//    val in_cols = Seq("a", "b", "c", "d").toArray
+//    val data = Seq(
+//      Row(0, Date(), ),
+//      Row(1, 0, 43, 2, 1, 3),
+//      Row(2, 1, 44, 1, 2, 3),
+//      Row(3, 1, 45, 1, 2, 2),
+//      Row(4, 2, 46, 3, 1, 1),
+//      Row(5, 2, 47, 4, 1, 2),
+//    ).toList.asJava
+//  }
 }

@@ -8,9 +8,9 @@ import org.apache.spark.ml.feature.lightautoml.IsHolidayTransformer.IsHolidayTra
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.ml.param.shared.{HasInputCols, HasOutputCols}
 import org.apache.spark.ml.util._
-import org.apache.spark.sql.functions.{col, lit, udf}
+import org.apache.spark.sql.functions.{col, date_format, lit, to_timestamp, udf}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession, functions}
 import org.apache.spark.util.VersionUtils.majorMinorVersion
 
 import scala.collection.JavaConverters._
@@ -38,8 +38,9 @@ class IsHolidayTransformer(override val uid: String, private var holidays_dates:
                                         inputColName: String,
                                         outputColName: String): StructField = {
     val inputDataType = schema(inputColName).dataType
-    require(inputDataType == DateType || inputDataType == TimestampType || inputDataType == LongType,
-      s"The input column $inputColName must be integer type or short type, " +
+    require(inputDataType == DateType || inputDataType == TimestampType
+            || inputDataType == LongType || inputDataType == StringType,
+      s"The input column $inputColName must be of date or timestamp  or long or string type, " +
               s"but got $inputDataType.")
     require(schema.fields.forall(_.name != outputColName),
       s"Output column $outputColName already exists.")
@@ -76,9 +77,16 @@ class IsHolidayTransformer(override val uid: String, private var holidays_dates:
       holidaysDatesBcst.value(col_name)(date)
     })
 
+    val dt_format = "yyyy-MM-dd"
     val outColumns = getInputCols.zip(getOutputCols).map {
       case (in_col, out_col) =>
-        func(lit(in_col).cast(StringType), col(in_col)).alias(out_col)
+        val dt_col = dataset.schema(in_col).dataType match {
+          case _: DateType => date_format(to_timestamp(col(in_col)), dt_format)
+          case _: TimestampType => date_format(col(in_col), dt_format)
+          case _: LongType => date_format(col(in_col).cast(TimestampType), dt_format)
+          case _: StringType => col(in_col)
+        }
+        func(lit(in_col).cast(StringType), dt_col).alias(out_col)
     }
 
     dataset.withColumns(getOutputCols, outColumns)
