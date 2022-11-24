@@ -176,8 +176,9 @@ class SparkDataset(LAMLDataset, Unpersistable):
         return self._name
 
     @property
-    def spark_session(self):
-        return SparkSession.getActiveSession()
+    def spark_session(self) -> SparkSession:
+        # return SparkSession.getActiveSession()
+        return self.data.sql_ctx.sparkSession
 
     @property
     def data(self) -> SparkDataFrame:

@@ -513,9 +513,9 @@ class SparkAutoML(TransformerInputOutputRoles):
 
             # TODO: SLAMA - make persistence manager thread-safe
             def do_fit() -> Optional[Tuple[SparkMLPipeline, SparkDataset]]:
-                if waiting_to_start_pipe_timer.time_limit_exceeded():
-                    logger.info(f"No time to calculate {ml_pipe.name}. Time limit is already exceeded")
-                    return None
+                # if waiting_to_start_pipe_timer.time_limit_exceeded():
+                #     logger.info(f"No time to calculate {ml_pipe.name}. Time limit is already exceeded")
+                #     return None
 
                 # TODO: SLAMA - set timer?
                 pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(iterator)) \

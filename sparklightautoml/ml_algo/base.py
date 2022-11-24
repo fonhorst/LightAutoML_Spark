@@ -257,7 +257,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
 
             # TODO: SLAMA - need to have an additional test for that
             timer = copy(self.timer)
-            timer.set_control_point()
+            # timer.set_control_point()
 
             def do_fit() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
                 if num_folds > 1:
@@ -266,9 +266,9 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
                                 "=====".format(i, self._name)
                     )
 
-                if timer.time_limit_exceeded():
-                    logger.info(f"No time to calculate fold {i}/{num_folds} (Time limit is already exceeded)")
-                    return None
+                # if timer.time_limit_exceeded():
+                #     logger.info(f"No time to calculate fold {i}/{num_folds} (Time limit is already exceeded)")
+                #     return None
 
                 mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, train, valid)
                 vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, mdl_pred_col)
