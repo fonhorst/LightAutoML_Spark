@@ -154,9 +154,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         convert_to_onnx: bool = False,
         mini_batch_size: int = 5000,
         seed: int = 42,
+        parallelism: int = 1
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
-        SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults, timer, optimization_search_space)
+        SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults,
+                                    timer, optimization_search_space, parallelism)
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
         self._raw_prediction_col_name = "raw_prediction"

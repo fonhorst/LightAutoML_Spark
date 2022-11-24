@@ -27,7 +27,7 @@ if __name__ == "__main__":
     spark = get_spark_session()
 
     seed = 42
-    cv = 5
+    cv = 3
     dataset_name = "lama_test_dataset"
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
@@ -50,9 +50,9 @@ if __name__ == "__main__":
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
         sdataset = sreader.fit_read(train_df, roles=roles, persistence_manager=persistence_manager)
 
-        iterator = SparkFoldsIterator(sdataset).convert_to_holdout_iterator()
+        iterator = SparkFoldsIterator(sdataset)#.convert_to_holdout_iterator()
 
-        spark_ml_algo = SparkBoostLGBM(freeze_defaults=False, use_single_dataset_mode=False)
+        spark_ml_algo = SparkBoostLGBM(freeze_defaults=False, use_single_dataset_mode=False, parallelism=2)
         spark_features_pipeline = SparkLGBSimpleFeatures()
 
         ml_pipe = SparkMLPipeline(
@@ -72,19 +72,19 @@ if __name__ == "__main__":
         test_score = score(test_preds_ds[:, spark_ml_algo.prediction_feature])
         logger.info(f"Test score (#1 way): {test_score}")
 
-        # 2. second way (Spark ML API, save-load-predict)
-        transformer = PipelineModel(stages=[sreader.transformer(add_array_attrs=True), ml_pipe.transformer()])
-        transformer.write().overwrite().save("/tmp/reader_and_spark_ml_pipe_lgb")
-
-        pipeline_model = PipelineModel.load("/tmp/reader_and_spark_ml_pipe_lgb")
-        test_pred_df = pipeline_model.transform(test_df)
-        test_pred_df = test_pred_df.select(
-            SparkDataset.ID_COLUMN,
-            F.col(roles['target']).alias('target'),
-            F.col(spark_ml_algo.prediction_feature).alias('prediction')
-        )
-        test_score = score(test_pred_df)
-        logger.info(f"Test score (#3 way): {test_score}")
+        # # 2. second way (Spark ML API, save-load-predict)
+        # transformer = PipelineModel(stages=[sreader.transformer(add_array_attrs=True), ml_pipe.transformer()])
+        # transformer.write().overwrite().save("/tmp/reader_and_spark_ml_pipe_lgb")
+        #
+        # pipeline_model = PipelineModel.load("/tmp/reader_and_spark_ml_pipe_lgb")
+        # test_pred_df = pipeline_model.transform(test_df)
+        # test_pred_df = test_pred_df.select(
+        #     SparkDataset.ID_COLUMN,
+        #     F.col(roles['target']).alias('target'),
+        #     F.col(spark_ml_algo.prediction_feature).alias('prediction')
+        # )
+        # test_score = score(test_pred_df)
+        # logger.info(f"Test score (#3 way): {test_score}")
 
     logger.info("Finished")
 
