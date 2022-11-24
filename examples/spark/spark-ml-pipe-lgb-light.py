@@ -27,7 +27,7 @@ if __name__ == "__main__":
     spark = get_spark_session()
 
     seed = 42
-    cv = 5
+    cv = 3
     dataset_name = "lama_test_dataset"
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
@@ -50,7 +50,7 @@ if __name__ == "__main__":
         sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
         sdataset = sreader.fit_read(train_df, roles=roles, persistence_manager=persistence_manager)
 
-        iterator = SparkFoldsIterator(sdataset).convert_to_holdout_iterator()
+        iterator = SparkFoldsIterator(sdataset)#.convert_to_holdout_iterator()
 
         spark_ml_algo = SparkBoostLGBM(freeze_defaults=False, use_single_dataset_mode=False)
         spark_features_pipeline = SparkLGBSimpleFeatures()

@@ -259,25 +259,31 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             timer = copy(self.timer)
             # timer.set_control_point()
 
-            def do_fit() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
-                if num_folds > 1:
-                    logger.info2(
-                                "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
-                                "=====".format(i, self._name)
-                    )
+            print(f"BEFORE: {mdl_pred_col}")
 
-                # if timer.time_limit_exceeded():
-                #     logger.info(f"No time to calculate fold {i}/{num_folds} (Time limit is already exceeded)")
-                #     return None
+            def make_do_fit(i, mdl_pred_col, train, valid):
+                def do_fit() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
+                    if num_folds > 1:
+                        logger.info2(
+                                    "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
+                                    "=====".format(i, self._name)
+                        )
 
-                mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, train, valid)
-                vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, mdl_pred_col)
+                    # if timer.time_limit_exceeded():
+                    #     logger.info(f"No time to calculate fold {i}/{num_folds} (Time limit is already exceeded)")
+                    #     return None
 
-                timer.write_run_info()
+                    print(f"DURING: {mdl_pred_col}")
 
-                return i, mdl, vpred, mdl_pred_col
+                    mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, train, valid)
+                    vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, mdl_pred_col)
 
-            fit_tasks.append(do_fit)
+                    timer.write_run_info()
+
+                    return i, mdl, vpred, mdl_pred_col
+                return do_fit
+
+            fit_tasks.append(make_do_fit(i, mdl_pred_col, train, valid))
 
         tasks = map(inheritable_thread_target, fit_tasks)
         results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
