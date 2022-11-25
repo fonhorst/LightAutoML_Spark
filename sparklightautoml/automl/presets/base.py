@@ -45,6 +45,7 @@ class SparkAutoMLPreset(SparkAutoML):
         gpu_ids: Optional[str] = "all",
         timing_params: Optional[dict] = None,
         config_path: Optional[str] = None,
+        parallelism: int = 1,
         **kwargs: Any,
     ):
         """
@@ -75,7 +76,7 @@ class SparkAutoMLPreset(SparkAutoML):
             **kwargs: Not used.
 
         """
-        super().__init__()
+        super().__init__(parallelism=parallelism)
 
         self._set_config(config_path)
 

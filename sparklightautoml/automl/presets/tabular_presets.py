@@ -97,11 +97,12 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         linear_l2_params: Optional[dict] = None,
         gbm_pipeline_params: Optional[dict] = None,
         linear_pipeline_params: Optional[dict] = None,
-        persistence_manager: Optional[PersistenceManager] = None
+        persistence_manager: Optional[PersistenceManager] = None,
+        parallelism: int = 1
     ):
         if config_path is None:
             config_path = os.path.join(base_dir, self._default_config_path)
-        super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path)
+        super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path, parallelism)
 
         self._persistence_manager = persistence_manager or PlainCachePersistenceManager()
 

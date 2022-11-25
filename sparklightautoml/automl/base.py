@@ -81,6 +81,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         blender: Optional[SparkBlender] = None,
         skip_conn: bool = False,
         return_all_predictions: bool = False,
+        parallelism: int = 1
     ):
         """
 
@@ -116,6 +117,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         self._persistence_manager: Optional[PersistenceManager] = None
         if reader and levels:
             self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
+        self._parallelism = parallelism
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
@@ -267,7 +269,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
             with train_valid.frozen() as frozen_train_valid:
                 pipes, all_pipes_predictions, flg_last_level = self._parallel_level(
-                    parallelism=1,
+                    parallelism=self._parallelism,
                     level=level,
                     train_valid_iterator=frozen_train_valid
                 )
@@ -509,10 +511,10 @@ class SparkAutoML(TransformerInputOutputRoles):
             iterator = copy(train_valid_iterator)
 
             waiting_to_start_pipe_timer = timer.get_task_timer(f"{ml_pipe.name}_start")
-            waiting_to_start_pipe_timer.set_control_point()
+            # waiting_to_start_pipe_timer.set_control_point()
 
             # TODO: SLAMA - make persistence manager thread-safe
-            def do_fit() -> Optional[Tuple[SparkMLPipeline, SparkDataset]]:
+            def do_fit(ml_pipe=ml_pipe) -> Optional[Tuple[SparkMLPipeline, SparkDataset]]:
                 # if waiting_to_start_pipe_timer.time_limit_exceeded():
                 #     logger.info(f"No time to calculate {ml_pipe.name}. Time limit is already exceeded")
                 #     return None
@@ -521,7 +523,7 @@ class SparkAutoML(TransformerInputOutputRoles):
                 pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(iterator)) \
                     .persist(level=PersistenceLevel.CHECKPOINT, force=True)
 
-                waiting_to_start_pipe_timer.write_run_info()
+                # waiting_to_start_pipe_timer.write_run_info()
 
                 return ml_pipe, pipe_predictions
 
