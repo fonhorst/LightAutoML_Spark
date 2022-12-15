@@ -136,7 +136,7 @@ params = {
         'minGainToSplit': 0.0,
         'maxBin': 255,
         'minDataInLeaf': 5,
-        'numIterations': 500,
+        'numIterations': 3000,
         'earlyStoppingRound': 200,
         'objective': 'binary',
         'metric': 'auc',
@@ -164,6 +164,7 @@ def train_model(fold:int, train_df: DataFrame, test_df: DataFrame) -> Tuple[int,
         useSingleDatasetMode=True,
         isProvideTrainingMetric=True,
         chunkSize=4_000_000,
+        useBarrierExecutionMode=True
     )
 
     train_df = train_df.withColumn('is_val', sf.col('reader_fold_num') == fold)
@@ -183,10 +184,11 @@ def train_model(fold:int, train_df: DataFrame, test_df: DataFrame) -> Tuple[int,
 
 
 def main():
-    spark = get_spark_session()
+    partitions_num = 6
+    spark = get_spark_session(partitions_num=partitions_num)
 
-    train_df = spark.read.parquet("/opt/slama_data/train.parquet")
-    test_df = spark.read.parquet("/opt/slama_data/test.parquet")
+    train_df = spark.read.parquet("/opt/slama_data/train.parquet").repartition(partitions_num)
+    test_df = spark.read.parquet("/opt/slama_data/test.parquet").repartition(partitions_num)
 
     tasks =[
         functools.partial(
@@ -198,13 +200,15 @@ def main():
         for fold in range(3)
     ]
 
-    pool = ThreadPool(processes=1)
+    pool = ThreadPool(processes=3)
     tasks = map(inheritable_thread_target, tasks)
     results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
     results = sorted(results, key=lambda x: x[0])
 
     for fold, metric_value in results:
         print(f"Metric value (fold = {fold}): {metric_value}")
+
+    k = 0
 
 
 if __name__ == "__main__":
