@@ -1,3 +1,9 @@
+import functools
+from multiprocessing.pool import ThreadPool
+from typing import Tuple
+
+from pandas import DataFrame
+from pyspark import inheritable_thread_target
 from pyspark.ml.feature import VectorAssembler
 from pyspark.sql import SparkSession
 from synapse.ml.lightgbm import LightGBMClassifier
@@ -142,12 +148,7 @@ params = {
     }
 
 
-def main():
-    spark = get_spark_session()
-
-    train_df = spark.read.parquet("/opt/slama_data/train.parquet")
-    test_df = spark.read.parquet("/opt/slama_data/test.parquet")
-
+def train_model(fold:int, train_df: DataFrame, test_df: DataFrame) -> Tuple[int, float]:
     assembler = VectorAssembler(
         inputCols=train_features,
         outputCol=f"LightGBM_vassembler_features",
@@ -158,12 +159,14 @@ def main():
         **params,
         featuresCol=assembler.getOutputCol(),
         labelCol='TARGET',
-        # validationIndicatorCol='is_val',
+        validationIndicatorCol='is_val',
         verbosity=1,
         useSingleDatasetMode=True,
         isProvideTrainingMetric=True,
         chunkSize=4_000_000,
     )
+
+    train_df = train_df.withColumn('is_val', sf.col('reader_fold_num') == fold)
 
     transformer = lgbm.fit(assembler.transform(train_df))
     preds_df = transformer.transform(assembler.transform(test_df))
@@ -176,8 +179,32 @@ def main():
             sf.col(params['probabilityCol']).alias('prediction')
         )
     )
+    return fold, metric_value
 
-    print(f"Metric value: {metric_value}")
+
+def main():
+    spark = get_spark_session()
+
+    train_df = spark.read.parquet("/opt/slama_data/train.parquet")
+    test_df = spark.read.parquet("/opt/slama_data/test.parquet")
+
+    tasks =[
+        functools.partial(
+            train_model,
+            fold,
+            train_df,
+            test_df
+        )
+        for fold in range(3)
+    ]
+
+    pool = ThreadPool(processes=1)
+    tasks = map(inheritable_thread_target, tasks)
+    results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
+    results = sorted(results, key=lambda x: x[0])
+
+    for fold, metric_value in results:
+        print(f"Metric value (fold = {fold}): {metric_value}")
 
 
 if __name__ == "__main__":
