@@ -144,7 +144,7 @@ params = {
         'probabilityCol': 'LightGBM_prediction_0',
         'predictionCol': 'prediction',
         'isUnbalance': True,
-        'numThreads': 3
+        # 'numThreads': 3
     }
 
 
@@ -164,7 +164,9 @@ def train_model(fold:int, train_df: DataFrame, test_df: DataFrame) -> Tuple[int,
         useSingleDatasetMode=True,
         isProvideTrainingMetric=True,
         chunkSize=4_000_000,
-        useBarrierExecutionMode=True
+        useBarrierExecutionMode=True,
+        numTasks=2,
+        numThreads=2
     )
 
     train_df = train_df.withColumn('is_val', sf.col('reader_fold_num') == fold)
