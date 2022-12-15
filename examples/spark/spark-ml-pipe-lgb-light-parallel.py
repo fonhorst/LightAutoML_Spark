@@ -64,7 +64,7 @@ if __name__ == "__main__":
         test_sds = sreader.read(test_df, add_array_attrs=True)
         test_sds = spark_features_pipeline.fit_transform(test_sds)
 
-        sdataset.data.write.parquet("/opt/slama_data/test.parquet", mode='overwrite')
+        test_sds.data.write.parquet("/opt/slama_data/test.parquet", mode='overwrite')
 
         test_preds_ds = spark_ml_algo.predict(test_sds)
         test_score = score(test_preds_ds[:, spark_ml_algo.prediction_feature])
