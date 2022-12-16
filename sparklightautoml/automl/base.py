@@ -1,4 +1,5 @@
 """Base AutoML class."""
+import functools
 import logging
 import os
 from copy import copy
@@ -504,30 +505,10 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         pool = ThreadPool(processes=min(parallelism, len(level)))
 
-        fit_tasks = []
-        for k, ml_pipe in enumerate(level):
-            # TODO: SLAMA - need an additional test for it
-            timer = copy(self.timer)
-            iterator = copy(train_valid_iterator)
-
-            waiting_to_start_pipe_timer = timer.get_task_timer(f"{ml_pipe.name}_start")
-            # waiting_to_start_pipe_timer.set_control_point()
-
-            # TODO: SLAMA - make persistence manager thread-safe
-            def do_fit(ml_pipe=ml_pipe) -> Optional[Tuple[SparkMLPipeline, SparkDataset]]:
-                # if waiting_to_start_pipe_timer.time_limit_exceeded():
-                #     logger.info(f"No time to calculate {ml_pipe.name}. Time limit is already exceeded")
-                #     return None
-
-                # TODO: SLAMA - set timer?
-                pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(iterator)) \
-                    .persist(level=PersistenceLevel.CHECKPOINT, force=True)
-
-                # waiting_to_start_pipe_timer.write_run_info()
-
-                return ml_pipe, pipe_predictions
-
-            fit_tasks.append(do_fit)
+        fit_tasks = [
+            functools.partial(_do_fit, ml_pipe, copy(train_valid_iterator))
+            for k, ml_pipe in enumerate(level)
+        ]
 
         tasks = map(inheritable_thread_target, fit_tasks)
         results = [result for result in pool.imap_unordered(lambda f: f(), tasks) if result]
@@ -535,7 +516,6 @@ class SparkAutoML(TransformerInputOutputRoles):
         ml_pipes = [ml_pipe for ml_pipe, _ in results]
         ml_pipes_preds = [pipe_preds for _, pipe_preds in results]
 
-        # TODO: SLAMA - need to "join" timers here?
         if len(results) < len(level):
             flg_last_level = True
         elif self.timer.time_limit_exceeded() or self.timer.child_out_of_time:
@@ -545,3 +525,11 @@ class SparkAutoML(TransformerInputOutputRoles):
             flg_last_level = False
 
         return ml_pipes, ml_pipes_preds, flg_last_level
+
+
+def _do_fit(ml_pipe: SparkMLPipeline, iterator: SparkBaseTrainValidIterator) \
+        -> Optional[Tuple[SparkMLPipeline, SparkDataset]]:
+    pipe_predictions = cast(SparkDataset, ml_pipe.fit_predict(iterator)) \
+            .persist(level=PersistenceLevel.CHECKPOINT, force=True)
+
+    return ml_pipe, pipe_predictions
