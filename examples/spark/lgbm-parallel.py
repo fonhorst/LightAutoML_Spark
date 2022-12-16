@@ -2,10 +2,9 @@ import functools
 from multiprocessing.pool import ThreadPool
 from typing import Tuple
 
-from pandas import DataFrame
 from pyspark import inheritable_thread_target
 from pyspark.ml.feature import VectorAssembler
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
 from synapse.ml.lightgbm import LightGBMClassifier
 from pyspark.sql import functions as sf
 
@@ -149,6 +148,12 @@ params = {
 
 
 def train_model(fold:int, train_df: DataFrame, test_df: DataFrame) -> Tuple[int, float]:
+    train_df.sql_ctx.sparkSession.sparkContext.setLocalProperty("spark.scheduler.mode", "FAIR")
+    train_df.sql_ctx.sparkSession.sparkContext.setLocalProperty("spark.task.cpus", "6")
+    # train_df.sql_ctx.sparkSession.sparkContext.setLocalProperty("spark.task.cpus", "6")
+
+    train_df.sql_ctx.sparkSession.conf.set("spark.tasks.cpus", "6")
+
     assembler = VectorAssembler(
         inputCols=train_features,
         outputCol=f"LightGBM_vassembler_features",
@@ -173,6 +178,8 @@ def train_model(fold:int, train_df: DataFrame, test_df: DataFrame) -> Tuple[int,
 
     transformer = lgbm.fit(assembler.transform(train_df))
     preds_df = transformer.transform(assembler.transform(test_df))
+
+    print(f"Props: {train_df.sql_ctx.sparkSession.sparkContext.getLocalProperty('spark.task.cpus')}")
 
     score = SparkTask("binary").get_dataset_metric()
     metric_value = score(
