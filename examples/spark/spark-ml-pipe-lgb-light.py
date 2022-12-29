@@ -28,7 +28,8 @@ if __name__ == "__main__":
 
     seed = 42
     cv = 3
-    dataset_name = "lama_test_dataset"
+    # dataset_name = "lama_test_dataset"
+    dataset_name = "used_cars_dataset"
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     persistence_manager = get_persistence_manager()
@@ -52,7 +53,7 @@ if __name__ == "__main__":
 
         iterator = SparkFoldsIterator(sdataset)#.convert_to_holdout_iterator()
 
-        spark_ml_algo = SparkBoostLGBM(freeze_defaults=False, use_single_dataset_mode=False)
+        spark_ml_algo = SparkBoostLGBM(freeze_defaults=False, use_single_dataset_mode=True)
         spark_features_pipeline = SparkLGBSimpleFeatures()
 
         ml_pipe = SparkMLPipeline(

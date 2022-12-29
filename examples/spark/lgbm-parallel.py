@@ -1,129 +1,24 @@
 import functools
+import logging
+import os
+import pickle
+import shutil
 from multiprocessing.pool import ThreadPool
-from typing import Tuple
+from typing import Tuple, List, Dict, Any
 
 from pyspark import inheritable_thread_target
 from pyspark.ml.feature import VectorAssembler
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as sf
-from synapse.ml.lightgbm import LightGBMClassifier
+from synapse.ml.lightgbm import LightGBMClassifier, LightGBMRegressor
 
-from examples.spark.examples_utils import get_spark_session
+from examples.spark.examples_utils import get_spark_session, get_dataset_attrs, prepare_test_and_train
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
+from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
 
-train_features = [
-    'ENTRANCES_MEDI',
-    'OWN_CAR_AGE',
-    'DAYS_ID_PUBLISH',
-    'DEF_60_CNT_SOCIAL_CIRCLE',
-    'AMT_ANNUITY',
-    'AMT_CREDIT',
-    'FLAG_DOCUMENT_3',
-    'APARTMENTS_MEDI',
-    'APARTMENTS_AVG',
-    'ord__CODE_GENDER',
-    'ord__NAME_TYPE_SUITE',
-    'YEARS_BEGINEXPLUATATION_MEDI',
-    'REGION_RATING_CLIENT',
-    'COMMONAREA_AVG',
-    'FLAG_DOCUMENT_19',
-    'NONLIVINGAPARTMENTS_MODE',
-    'REG_REGION_NOT_LIVE_REGION',
-    'COMMONAREA_MODE',
-    'LIVINGAPARTMENTS_AVG',
-    'TOTALAREA_MODE',
-    'FLOORSMAX_MODE',
-    'DAYS_LAST_PHONE_CHANGE',
-    'FLOORSMIN_AVG',
-    'FLAG_EMP_PHONE',
-    'ord__NAME_CONTRACT_TYPE',
-    'ord__WALLSMATERIAL_MODE',
-    'YEARS_BUILD_MEDI',
-    'BASEMENTAREA_AVG',
-    'AMT_REQ_CREDIT_BUREAU_MON',
-    'LIVINGAPARTMENTS_MEDI',
-    'OBS_30_CNT_SOCIAL_CIRCLE',
-    'FLAG_DOCUMENT_5',
-    'FLAG_DOCUMENT_18',
-    'FLAG_DOCUMENT_16',
-    'FLOORSMIN_MODE',
-    'LANDAREA_MEDI',
-    'FLAG_DOCUMENT_8',
-    'ord__NAME_INCOME_TYPE',
-    'NONLIVINGAREA_MEDI',
-    'FLOORSMAX_AVG',
-    'LIVINGAREA_MODE',
-    'APARTMENTS_MODE',
-    'EXT_SOURCE_3',
-    'YEARS_BUILD_MODE',
-    'NONLIVINGAREA_AVG',
-    'YEARS_BEGINEXPLUATATION_MODE',
-    'ord__OCCUPATION_TYPE',
-    'FLOORSMIN_MEDI',
-    'DEF_30_CNT_SOCIAL_CIRCLE',
-    'REGION_RATING_CLIENT_W_CITY',
-    'ord__NAME_EDUCATION_TYPE',
-    'EXT_SOURCE_2',
-    'FLAG_EMAIL',
-    'HOUR_APPR_PROCESS_START',
-    'NONLIVINGAPARTMENTS_MEDI',
-    'ENTRANCES_MODE',
-    'FLAG_DOCUMENT_14',
-    'LANDAREA_AVG',
-    'ELEVATORS_MODE',
-    'ord__FONDKAPREMONT_MODE',
-    'AMT_REQ_CREDIT_BUREAU_QRT',
-    'AMT_REQ_CREDIT_BUREAU_YEAR',
-    'FLAG_CONT_MOBILE',
-    'ord__FLAG_OWN_CAR',
-    'BASEMENTAREA_MEDI',
-    'YEARS_BEGINEXPLUATATION_AVG',
-    'LANDAREA_MODE',
-    'FLAG_DOCUMENT_9',
-    'CNT_FAM_MEMBERS',
-    'ENTRANCES_AVG',
-    'AMT_GOODS_PRICE',
-    'ord__WEEKDAY_APPR_PROCESS_START',
-    'AMT_REQ_CREDIT_BUREAU_WEEK',
-    'DAYS_REGISTRATION',
-    'LIVINGAREA_AVG',
-    'LIVE_REGION_NOT_WORK_REGION',
-    'AMT_REQ_CREDIT_BUREAU_DAY',
-    'NONLIVINGAPARTMENTS_AVG',
-    'YEARS_BUILD_AVG',
-    'REGION_POPULATION_RELATIVE',
-    'ord__ORGANIZATION_TYPE',
-    'ord__NAME_HOUSING_TYPE',
-    'ord__FLAG_OWN_REALTY',
-    'LIVINGAPARTMENTS_MODE',
-    'FLAG_DOCUMENT_13',
-    'FLOORSMAX_MEDI',
-    'ord__EMERGENCYSTATE_MODE',
-    'AMT_INCOME_TOTAL',
-    'AMT_REQ_CREDIT_BUREAU_HOUR',
-    'EXT_SOURCE_1',
-    'ELEVATORS_MEDI',
-    'OBS_60_CNT_SOCIAL_CIRCLE',
-    'REG_CITY_NOT_WORK_CITY',
-    'ord__NAME_FAMILY_STATUS',
-    'NONLIVINGAREA_MODE',
-    'REG_CITY_NOT_LIVE_CITY',
-    'DAYS_EMPLOYED',
-    'LIVE_CITY_NOT_WORK_CITY',
-    'LIVINGAREA_MEDI',
-    'FLAG_DOCUMENT_11',
-    'FLAG_DOCUMENT_6',
-    'COMMONAREA_MEDI',
-    'ord__HOUSETYPE_MODE',
-    'FLAG_WORK_PHONE',
-    'DAYS_BIRTH',
-    'ELEVATORS_AVG',
-    'FLAG_PHONE',
-    'BASEMENTAREA_MODE',
-    'CNT_CHILDREN',
-    'REG_REGION_NOT_WORK_REGION'
-]
+logger = logging.getLogger(__name__)
 
 
 params = {
@@ -139,80 +34,197 @@ params = {
     'numIterations': 3000,
     'earlyStoppingRound': 200,
     'objective': 'binary',
-    'metric': 'auc',
-    'rawPredictionCol': 'raw_prediction',
-    'probabilityCol': 'LightGBM_prediction_0',
-    'predictionCol': 'prediction',
-    'isUnbalance': True
+    'metric': 'auc'
 }
 
 
-def train_model(fold:int, train_df: DataFrame, test_df: DataFrame) -> Tuple[int, float]:
-    train_df.sql_ctx.sparkSession.sparkContext.setLocalProperty("spark.scheduler.mode", "FAIR")
-    # train_df.sql_ctx.sparkSession.sparkContext.setLocalProperty("spark.task.cpus", "6")
+class ParallelExperiment:
+    def __init__(self, spark: SparkSession, dataset_name: str):
+        self.spark = spark
+        self.dataset_name = dataset_name
+        self.partitions_num = 4
+        self.base_dataset_path = f"/opt/slama_data_{dataset_name}"
+        self.train_path = os.path.join(self.base_dataset_path, "train.parquet")
+        self.test_path = os.path.join(self.base_dataset_path, "test.parquet")
+        self.metadata_path = os.path.join(self.base_dataset_path, "metadata.pickle")
 
-    assembler = VectorAssembler(
-        inputCols=train_features,
-        outputCol=f"LightGBM_vassembler_features",
-        handleInvalid="keep"
-    )
+    def prepare_dataset(self, force=True):
+        logger.info(f"Preparing dataset {self.dataset_name}. "
+                    f"Writing train, test and metadata to {self.base_dataset_path}")
 
-    lgbm = LightGBMClassifier(
-        **params,
-        featuresCol=assembler.getOutputCol(),
-        labelCol='TARGET',
-        validationIndicatorCol='is_val',
-        verbosity=1,
-        useSingleDatasetMode=True,
-        isProvideTrainingMetric=True,
-        chunkSize=4_000_000,
-        useBarrierExecutionMode=True,
-        numTasks=2,
-        numThreads=2
-    )
+        if os.path.exists(self.base_dataset_path) and not force:
+            logger.info(f"Found existing {self.base_dataset_path}. Skipping writing dataset files")
+            return
+        elif os.path.exists(self.base_dataset_path):
+            logger.info(f"Found existing {self.base_dataset_path}. "
+                        f"Removing existing files because force is set to True")
+            shutil.rmtree(self.base_dataset_path)
 
-    train_df = train_df.withColumn('is_val', sf.col('reader_fold_num') == fold)
+        seed = 42
+        cv = 5
+        path, task_type, roles, dtype = get_dataset_attrs(self.dataset_name)
 
-    transformer = lgbm.fit(assembler.transform(train_df))
-    preds_df = transformer.transform(assembler.transform(test_df))
+        train_df, test_df = prepare_test_and_train(self.spark, path, seed)
 
-    print(f"Props: {train_df.sql_ctx.sparkSession.sparkContext.getLocalProperty('spark.task.cpus')}")
+        task = SparkTask(task_type)
 
-    score = SparkTask("binary").get_dataset_metric()
-    metric_value = score(
-        preds_df.select(
-            SparkDataset.ID_COLUMN,
-            sf.col('TARGET').alias('target'),
-            sf.col(params['probabilityCol']).alias('prediction')
+        sreader = SparkToSparkReader(task=task, cv=cv, advanced_roles=False)
+        spark_features_pipeline = SparkLGBSimpleFeatures()
+
+        # prepare train
+        train_sdataset = sreader.fit_read(train_df, roles=roles)
+        train_sdataset = spark_features_pipeline.fit_transform(train_sdataset)
+
+        # prepare test
+        test_sdataset = sreader.read(test_df, add_array_attrs=True)
+        test_sdataset = spark_features_pipeline.transform(test_sdataset)
+
+        os.makedirs(self.base_dataset_path)
+
+        train_sdataset.data.write.parquet(self.train_path)
+        test_sdataset.data.write.parquet(self.test_path)
+
+        metadata = {
+            "roles": train_sdataset.roles,
+            "task_type": task_type,
+            "target": roles["target"]
+        }
+
+        with open(self.metadata_path, "wb") as f:
+            pickle.dump(metadata, f)
+
+        logger.info(f"Dataset {self.dataset_name} has been prepared.")
+
+    @property
+    def train_dataset(self) -> DataFrame:
+        return self.spark.read.parquet(self.train_path)
+
+    @property
+    def test_dataset(self) -> DataFrame:
+        return self.spark.read.parquet(self.test_path)
+
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        with open(self.metadata_path, "rb") as f:
+            return pickle.load(f)
+
+    def train_model(self, fold: int) -> Tuple[int, float]:
+        logger.info(f"Starting to train the model for fold #{fold}")
+
+        train_df = self.train_dataset
+        test_df = self.test_dataset
+        md = self.metadata
+        task_type = md["task_type"]
+
+        train_df.sql_ctx.sparkSession.sparkContext.setLocalProperty("spark.scheduler.mode", "FAIR")
+        # train_df.sql_ctx.sparkSession.sparkContext.setLocalProperty("spark.task.cpus", "6")
+
+        prediction_col = 'LightGBM_prediction_0'
+        if task_type in ["binary", "multiclass"]:
+            params["rawPredictionCol"] = 'raw_prediction'
+            params["probabilityCol"] = prediction_col
+            params["predictionCol"] = 'prediction'
+            params["isUnbalance"] = True
+        else:
+            params["predictionCol"] = prediction_col
+
+        if task_type == "reg":
+            params["objective"] = "regression"
+            params["metric"] = "mse"
+        elif task_type == "binary":
+            params["objective"] = "binary"
+            params["metric"] = "auc"
+        elif task_type == "multiclass":
+            params["objective"] = "multiclass"
+            params["metric"] = "multiclass"
+        else:
+            raise ValueError(f"Unsupported task type: {task_type}")
+
+        if task_type != "reg":
+            if "alpha" in params:
+                del params["alpha"]
+            if "lambdaL1" in params:
+                del params["lambdaL1"]
+            if "lambdaL2" in params:
+                del params["lambdaL2"]
+
+        assembler = VectorAssembler(
+            inputCols=list(md['roles'].keys()),
+            outputCol=f"LightGBM_vassembler_features",
+            handleInvalid="keep"
         )
-    )
-    return fold, metric_value
+
+        lgbm_booster = LightGBMRegressor if task_type == "reg" else LightGBMClassifier
+
+        lgbm = lgbm_booster(
+            **params,
+            featuresCol=assembler.getOutputCol(),
+            labelCol=md['target'],
+            validationIndicatorCol='is_val',
+            verbosity=1,
+            useSingleDatasetMode=False,
+            isProvideTrainingMetric=True,
+            chunkSize=4_000_000,
+            useBarrierExecutionMode=True,
+            numTasks=2,
+            numThreads=2
+        )
+
+        if task_type == "reg":
+            lgbm.setAlpha(0.5).setLambdaL1(0.0).setLambdaL2(0.0)
+
+        train_df = train_df.withColumn('is_val', sf.col('reader_fold_num') == fold)
+
+        transformer = lgbm.fit(assembler.transform(train_df))
+        preds_df = transformer.transform(assembler.transform(test_df))
+
+        print(f"Props #{fold}: {train_df.sql_ctx.sparkSession.sparkContext.getLocalProperty('spark.task.cpus')}")
+
+        score = SparkTask(task_type).get_dataset_metric()
+        metric_value = score(
+            preds_df.select(
+                SparkDataset.ID_COLUMN,
+                sf.col(md['target']).alias('target'),
+                sf.col(prediction_col).alias('prediction')
+            )
+        )
+
+        logger.info(f"Finished training the model for fold #{fold}")
+
+        return fold, metric_value
+
+    def run(self) -> List[Tuple[int, float]]:
+        logger.info("Starting to run the experiment")
+
+        tasks = [
+            functools.partial(
+                self.train_model,
+                fold
+            )
+            for fold in range(3)
+        ]
+
+        pool = ThreadPool(processes=3)
+        tasks = map(inheritable_thread_target, tasks)
+        results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
+        results = sorted(results, key=lambda x: x[0])
+
+        logger.info("The experiment is finished")
+        return results
 
 
 def main():
     partitions_num = 6
     spark = get_spark_session(partitions_num=partitions_num)
 
-    train_df = spark.read.parquet("/opt/slama_data/train.parquet").repartition(partitions_num)
-    test_df = spark.read.parquet("/opt/slama_data/test.parquet").repartition(partitions_num)
-
-    tasks =[
-        functools.partial(
-            train_model,
-            fold,
-            train_df,
-            test_df
-        )
-        for fold in range(3)
-    ]
-
-    pool = ThreadPool(processes=3)
-    tasks = map(inheritable_thread_target, tasks)
-    results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
-    results = sorted(results, key=lambda x: x[0])
+    exp = ParallelExperiment(spark, dataset_name="used_cars_dataset")
+    exp.prepare_dataset()
+    results = exp.run()
 
     for fold, metric_value in results:
         print(f"Metric value (fold = {fold}): {metric_value}")
+
+    spark.stop()
 
 
 if __name__ == "__main__":
