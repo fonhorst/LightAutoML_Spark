@@ -43,7 +43,7 @@ class ParallelExperiment:
         self.spark = spark
         self.dataset_name = dataset_name
         self.partitions_num = 4
-        self.base_dataset_path = f"/opt/slama_data_{dataset_name}"
+        self.base_dataset_path = f"/opt/spark_data/parallel_slama_{dataset_name}"
         self.train_path = os.path.join(self.base_dataset_path, "train.parquet")
         self.test_path = os.path.join(self.base_dataset_path, "test.parquet")
         self.metadata_path = os.path.join(self.base_dataset_path, "metadata.pickle")
