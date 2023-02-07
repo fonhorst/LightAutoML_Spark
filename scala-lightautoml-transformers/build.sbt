@@ -11,11 +11,13 @@ resolvers ++= Seq(
         .withAllowInsecureProtocol(true)
 )
 
+val sparkVersion = "3.1.3"
+
 libraryDependencies ++= Seq(
-    "com.microsoft.azure" % "synapseml_2.12" % "0.9.5",
-    "org.apache.spark" %% "spark-core" % "3.2.0" % "provided",
-    "org.apache.spark" %% "spark-sql" % "3.2.0" % "provided",
-    "org.apache.spark" %% "spark-mllib" % "3.2.0" % "provided",
+    "com.microsoft.azure" % "synapseml_2.12" % "0.9.5-35-e962330b-SNAPSHOT",
+    "org.apache.spark" %% "spark-core" % sparkVersion % "provided",
+    "org.apache.spark" %% "spark-sql" % sparkVersion % "provided",
+    "org.apache.spark" %% "spark-mllib" % sparkVersion % "provided",
     "org.scalatest" %% "scalatest" % "3.2.14" % Test
 )
 
