@@ -6,6 +6,7 @@ import shutil
 from multiprocessing.pool import ThreadPool
 from typing import Tuple, List, Dict, Any
 
+# noinspection PyUnresolvedReferences
 from pyspark import inheritable_thread_target
 from pyspark.ml.feature import VectorAssembler
 from pyspark.sql import DataFrame, SparkSession
@@ -17,6 +18,7 @@ from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
+from sparklightautoml.utils import log_exec_timer
 
 logger = logging.getLogger(__name__)
 
@@ -194,23 +196,24 @@ class ParallelExperiment:
         return fold, metric_value
 
     def run(self) -> List[Tuple[int, float]]:
-        logger.info("Starting to run the experiment")
+        with log_exec_timer("Parallel experiment runtime"):
+            logger.info("Starting to run the experiment")
 
-        tasks = [
-            functools.partial(
-                self.train_model,
-                fold
-            )
-            for fold in range(3)
-        ]
+            tasks = [
+                functools.partial(
+                    self.train_model,
+                    fold
+                )
+                for fold in range(3)
+            ]
 
-        pool = ThreadPool(processes=3)
-        tasks = map(inheritable_thread_target, tasks)
-        results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
-        results = sorted(results, key=lambda x: x[0])
+            pool = ThreadPool(processes=3)
+            tasks = map(inheritable_thread_target, tasks)
+            results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
+            results = sorted(results, key=lambda x: x[0])
 
-        logger.info("The experiment is finished")
-        return results
+            logger.info("The experiment is finished")
+            return results
 
 
 def main():
