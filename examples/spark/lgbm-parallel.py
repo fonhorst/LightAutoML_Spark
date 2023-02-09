@@ -18,6 +18,8 @@ from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
+from sparklightautoml.transformers.scala_wrappers.balanced_union_partitions_coalescer import \
+    BalancedUnionPartitionsCoalescerTransformer
 from sparklightautoml.utils import log_exec_timer
 
 logger = logging.getLogger(__name__)
@@ -164,7 +166,7 @@ class ParallelExperiment:
             labelCol=md['target'],
             validationIndicatorCol='is_val',
             verbosity=1,
-            useSingleDatasetMode=False,
+            useSingleDatasetMode=True,
             isProvideTrainingMetric=True,
             chunkSize=4_000_000,
             useBarrierExecutionMode=True,
@@ -177,10 +179,15 @@ class ParallelExperiment:
 
         train_df = train_df.withColumn('is_val', sf.col('reader_fold_num') == fold)
 
-        transformer = lgbm.fit(assembler.transform(train_df))
+        valid_df = train_df.where('is_val')
+        train_df = train_df.where(~sf.col('is_val'))
+        full_data = valid_df.unionByName(train_df)
+        full_data = BalancedUnionPartitionsCoalescerTransformer().transform(full_data)
+
+        transformer = lgbm.fit(assembler.transform(full_data))
         preds_df = transformer.transform(assembler.transform(test_df))
 
-        print(f"Props #{fold}: {train_df.sql_ctx.sparkSession.sparkContext.getLocalProperty('spark.task.cpus')}")
+        print(f"Props #{fold}: {full_data.sql_ctx.sparkSession.sparkContext.getLocalProperty('spark.task.cpus')}")
 
         score = SparkTask(task_type).get_dataset_metric()
         metric_value = score(
