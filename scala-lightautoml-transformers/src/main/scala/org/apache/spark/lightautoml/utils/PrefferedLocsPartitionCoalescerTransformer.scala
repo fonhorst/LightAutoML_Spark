@@ -12,10 +12,12 @@ class PrefferedLocsPartitionCoalescerTransformer(override val uid: String, val p
 
     // real numPartitions is identified from the incoming dataset
     val coalesced_rdd = ds.rdd.coalesce(
-      numPartitions = 100,
-      shuffle = false,
+      numPartitions = 2,
+      shuffle = true,
       partitionCoalescer = Some(new PrefferedLocsPartitionCoalescer(prefLoc))
     )
+
+    coalesced_rdd.count()
 
     val coalesced_df = spark.createDataFrame(coalesced_rdd, schema = dataset.schema)
 
