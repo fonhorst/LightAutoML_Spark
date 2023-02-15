@@ -28,3 +28,8 @@ class PrefferedLocsPartitionCoalescerTransformer(override val uid: String, val p
 
   override def transformSchema(schema: StructType): StructType = schema.copy()
 }
+
+
+object PrefferedLocsPartitionCoalescerTransformer {
+  def func[T](x: T): T = x
+}

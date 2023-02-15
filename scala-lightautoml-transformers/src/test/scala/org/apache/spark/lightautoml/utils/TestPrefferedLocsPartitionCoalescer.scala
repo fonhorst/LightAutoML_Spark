@@ -1,7 +1,7 @@
 package org.apache.spark.lightautoml.utils
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{coalesce, col}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
@@ -46,6 +46,12 @@ class TestPrefferedLocsPartitionCoalescer extends AnyFunSuite with BeforeAndAfte
     coalesced_df.write.mode("overwrite").format("noop").save()
 
     coalesced_df.count()
+
+    try{
+      coalesced_df.rdd.barrier().mapPartitions(PrefferedLocsPartitionCoalescerTransformer.func).count()
+    } catch {
+      case _: Throwable => println("Got some other kind of Throwable exception")
+    }
 
     val k = 0
   }
