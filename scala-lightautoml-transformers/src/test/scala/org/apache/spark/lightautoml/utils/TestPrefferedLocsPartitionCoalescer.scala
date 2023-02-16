@@ -42,9 +42,9 @@ class TestPrefferedLocsPartitionCoalescer extends AnyFunSuite with BeforeAndAfte
             .filter(_.executorId != "driver")
             .head
 
-    val prefLoc = s"executor_${executor.host}_${executor.executorId}"
+    val prefLocs = List(s"executor_${executor.host}_1", s"executor_${executor.host}_2")
 
-    val coalescerTransformer = new PrefferedLocsPartitionCoalescerTransformer(uid = "some uid", prefLoc = prefLoc)
+    val coalescerTransformer = new PrefferedLocsPartitionCoalescerTransformer(uid = "some uid", prefLocs)
     var coalesced_df = coalescerTransformer.transform(df)
 
     coalesced_df = coalesced_df.cache()

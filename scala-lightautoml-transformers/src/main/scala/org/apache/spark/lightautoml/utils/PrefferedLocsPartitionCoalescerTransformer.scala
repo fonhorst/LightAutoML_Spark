@@ -5,26 +5,40 @@ import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.types.StructType
 
-class PrefferedLocsPartitionCoalescerTransformer(override val uid: String, val prefLoc: String) extends Transformer  {
+class PrefferedLocsPartitionCoalescerTransformer(override val uid: String, val prefLocs: List[String]) extends Transformer  {
   override def transform(dataset: Dataset[_]): DataFrame = {
     val spark = SparkSession.active
     val ds = dataset.asInstanceOf[Dataset[Row]]
+    val master = spark.sparkContext.master
 
-    // real numPartitions is identified from the incoming dataset
+    val foundCoresNum = spark.conf.getOption("spark.executor.cores") match {
+      case Some(cores_option) => Some(cores_option.toInt)
+      case None => if (master.startsWith("local-cluster")){
+        val cores = master.slice("local-cluster[".length, master.length - 1).split(',')(1).trim.toInt
+        Some(cores)
+      } else if (master.startsWith("local")) {
+        val num_cores = master.slice("local[".length, master.length - 1)
+        val cores = if (num_cores == "*") { java.lang.Runtime.getRuntime.availableProcessors } else { num_cores.toInt }
+        Some(cores)
+      } else {
+        None
+      }
+    }
+
+    assert(foundCoresNum.nonEmpty, "Cannot find number of used cores per executor")
+
+    val execCores = foundCoresNum.get
+
     val coalesced_rdd = ds.rdd.coalesce(
-      numPartitions = 2,
+      numPartitions = execCores * prefLocs.size,
       shuffle = true,
-      partitionCoalescer = Some(new PrefferedLocsPartitionCoalescer(prefLoc))
+      partitionCoalescer = Some(new PrefferedLocsPartitionCoalescer(prefLocs))
     )
 
-    coalesced_rdd.count()
-
-    val coalesced_df = spark.createDataFrame(coalesced_rdd, schema = dataset.schema)
-
-    coalesced_df
+    spark.createDataFrame(coalesced_rdd, schema = dataset.schema)
   }
 
-  override def copy(extra: ParamMap): Transformer = new PrefferedLocsPartitionCoalescerTransformer(uid, prefLoc)
+  override def copy(extra: ParamMap): Transformer = new PrefferedLocsPartitionCoalescerTransformer(uid, prefLocs)
 
   override def transformSchema(schema: StructType): StructType = schema.copy()
 }
