@@ -37,7 +37,12 @@ class TestPrefferedLocsPartitionCoalescer extends AnyFunSuite with BeforeAndAfte
 
 //    val prefLoc = spark.sparkContext.getExecutorMemoryStatus.keys.filter(!_.startsWith("fedora")).head
 
-    val prefLoc = "executor_192.168.1.68_1"
+    val executor = spark.sparkContext.env.blockManager.master.getMemoryStatus
+            .map { case (blockManagerId, _) => blockManagerId}
+            .filter(_.executorId != "driver")
+            .head
+
+    val prefLoc = s"executor_${executor.host}_${executor.executorId}"
 
     val coalescerTransformer = new PrefferedLocsPartitionCoalescerTransformer(uid = "some uid", prefLoc = prefLoc)
     var coalesced_df = coalescerTransformer.transform(df)
