@@ -53,7 +53,7 @@ class TestPrefferedLocsPartitionCoalescer extends AnyFunSuite with BeforeAndAfte
     coalesced_df.count()
 
     try{
-      coalesced_df.rdd.barrier().mapPartitions(PrefferedLocsPartitionCoalescerTransformer.func).count()
+      coalesced_df.rdd.barrier().mapPartitions(SomeFunctions.func).count()
     } catch {
       case _: Throwable => println("Got some other kind of Throwable exception")
     }

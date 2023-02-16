@@ -44,6 +44,15 @@ class PrefferedLocsPartitionCoalescerTransformer(override val uid: String, val p
 }
 
 
-object PrefferedLocsPartitionCoalescerTransformer {
+object SomeFunctions {
   def func[T](x: T): T = x
+
+  def executors(): java.util.List[java.lang.String] = {
+    import scala.collection.JavaConverters._
+    SparkSession.active.sparkContext.env.blockManager.master.getMemoryStatus
+            .map { case (blockManagerId, _) => blockManagerId}
+            .filter(_.executorId != "driver")
+            .map { executor => s"executor_${executor.host}_${executor.executorId}"}
+            .toList.asJava
+  }
 }
