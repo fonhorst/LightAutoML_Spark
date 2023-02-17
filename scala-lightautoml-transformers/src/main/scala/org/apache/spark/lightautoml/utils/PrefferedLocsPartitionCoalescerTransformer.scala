@@ -4,8 +4,12 @@ import org.apache.spark.ml.Transformer
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.types.StructType
+import scala.collection.JavaConverters._
 
 class PrefferedLocsPartitionCoalescerTransformer(override val uid: String, val prefLocs: List[String]) extends Transformer  {
+
+  def this(uid: String, prefLocs: java.util.List[String]) = this(uid, prefLocs.asScala.toList)
+
   override def transform(dataset: Dataset[_]): DataFrame = {
     val spark = SparkSession.active
     val ds = dataset.asInstanceOf[Dataset[Row]]
