@@ -27,6 +27,17 @@ else
 fi
 
 
+if [[ -z "${SLAMA_IMAGE}" ]]
+then
+  SLAMA_IMAGE="slama"
+fi
+
+if [[ -z "${SLAMA_IMAGE_TAG}" ]]
+then
+  SLAMA_IMAGE_TAG="py39-spark3.2.0-synapseml0.9.5"
+fi
+
+
 function build_jars() {
   cur_dir=$(pwd)
 
@@ -73,13 +84,19 @@ function build_pyspark_images() {
 
 function build_lama_dist() {
   # shellcheck disable=SC2094
-  poetry export -f requirements.txt > requirements.txt
+  poetry export --without-hashes -f requirements.txt > requirements.txt
   poetry build
+}
+
+function build_slama_image() {
+    build_lama_dist
+
+    docker build -t ${SLAMA_IMAGE}:${SLAMA_IMAGE_TAG} -f docker/slama.dockerfile .
 }
 
 function build_lama_image() {
   # shellcheck disable=SC2094
-  poetry export -f requirements.txt > requirements.txt
+  poetry export --without-hashes -f requirements.txt > requirements.txt
   poetry build
 
   docker build \
@@ -100,6 +117,17 @@ function build_dist() {
     build_jars
     build_pyspark_images
     build_lama_image
+}
+
+function run() {
+  if [[ -z "$1" ]]
+  then
+    script_name=tabular-preset-automl.py
+  else
+    script_name=$1
+  fi
+
+  docker run -it --rm -v /opt/spark_data:/opt/spark_data -p 4040:4040 ${SLAMA_IMAGE}:${SLAMA_IMAGE_TAG} "${script_name}"
 }
 
 function submit_job() {
@@ -317,6 +345,14 @@ function main () {
 
     "build-lama-image")
         build_lama_image
+        ;;
+
+    "build-slama-image")
+        build_slama_image
+        ;;
+
+    "run")
+        run "${@}"
         ;;
 
     "build-dist")
