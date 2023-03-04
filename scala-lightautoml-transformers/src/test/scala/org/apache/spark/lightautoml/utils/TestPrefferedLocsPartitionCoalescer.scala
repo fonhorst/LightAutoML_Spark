@@ -44,7 +44,7 @@ class TestPrefferedLocsPartitionCoalescer extends AnyFunSuite with BeforeAndAfte
 
     val prefLocs = List(s"executor_${executor.host}_1", s"executor_${executor.host}_2")
 
-    val coalescerTransformer = new PrefferedLocsPartitionCoalescerTransformer(uid = "some uid", prefLocs)
+    val coalescerTransformer = new PrefferedLocsPartitionCoalescerTransformer(uid = "some uid", prefLocs, true)
     var coalesced_df = coalescerTransformer.transform(df)
 
     coalesced_df = coalesced_df.cache()

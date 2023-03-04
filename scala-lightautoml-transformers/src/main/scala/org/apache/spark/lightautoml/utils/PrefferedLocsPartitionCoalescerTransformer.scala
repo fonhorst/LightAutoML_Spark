@@ -6,9 +6,11 @@ import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.types.StructType
 import scala.collection.JavaConverters._
 
-class PrefferedLocsPartitionCoalescerTransformer(override val uid: String, val prefLocs: List[String]) extends Transformer  {
+class PrefferedLocsPartitionCoalescerTransformer(override val uid: String,
+                                                 val prefLocs: List[String],
+                                                 val do_shuffle: Boolean) extends Transformer  {
 
-  def this(uid: String, prefLocs: java.util.List[String]) = this(uid, prefLocs.asScala.toList)
+  def this(uid: String, prefLocs: java.util.List[String], do_shuffle: Boolean) = this(uid, prefLocs.asScala.toList, do_shuffle)
 
   override def transform(dataset: Dataset[_]): DataFrame = {
     val spark = SparkSession.active
@@ -35,14 +37,14 @@ class PrefferedLocsPartitionCoalescerTransformer(override val uid: String, val p
 
     val coalesced_rdd = ds.rdd.coalesce(
       numPartitions = execCores * prefLocs.size,
-      shuffle = true,
+      shuffle = do_shuffle,
       partitionCoalescer = Some(new PrefferedLocsPartitionCoalescer(prefLocs))
     )
 
     spark.createDataFrame(coalesced_rdd, schema = dataset.schema)
   }
 
-  override def copy(extra: ParamMap): Transformer = new PrefferedLocsPartitionCoalescerTransformer(uid, prefLocs)
+  override def copy(extra: ParamMap): Transformer = new PrefferedLocsPartitionCoalescerTransformer(uid, prefLocs, do_shuffle)
 
   override def transformSchema(schema: StructType): StructType = schema.copy()
 }
