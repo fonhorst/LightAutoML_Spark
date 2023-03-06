@@ -22,6 +22,7 @@ from pyspark.sql.session import SparkSession
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
+from ..parallel.manager import compute_parallel, PoolType
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline
@@ -503,15 +504,12 @@ class SparkAutoML(TransformerInputOutputRoles):
                         train_valid_iterator: SparkBaseTrainValidIterator) \
             -> Tuple[List[SparkMLPipeline], List[SparkDataset], bool]:
 
-        pool = ThreadPool(processes=min(parallelism, len(level)))
-
         fit_tasks = [
             functools.partial(_do_fit, ml_pipe, copy(train_valid_iterator))
             for k, ml_pipe in enumerate(level)
         ]
 
-        tasks = map(inheritable_thread_target, fit_tasks)
-        results = [result for result in pool.imap_unordered(lambda f: f(), tasks) if result]
+        results = compute_parallel(fit_tasks, pool_type=PoolType.ML_PIPELINES)
 
         ml_pipes = [ml_pipe for ml_pipe, _ in results]
         ml_pipes_preds = [pipe_preds for _, pipe_preds in results]

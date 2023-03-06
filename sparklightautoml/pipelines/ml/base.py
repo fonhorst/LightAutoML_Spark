@@ -6,6 +6,7 @@ from typing import List, cast, Sequence, Union, Tuple, Optional
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.ml_algo.tuning.base import ParamsTuner
+from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from lightautoml.pipelines.selection.base import EmptySelector
@@ -16,6 +17,7 @@ from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset, PersistenceLevel, PersistenceManager
 from ...ml_algo.base import SparkTabularMLAlgo
+from ...parallel.manager import compute_parallel, PoolType
 from ...utils import ColumnsSelectorTransformer
 from ...validation.base import SparkBaseTrainValidIterator
 
@@ -118,20 +120,31 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         # train and apply post selection
         train_valid = train_valid.apply_selector(self.post_selection)
 
-        preds: List[SparkDataset] = []
         with train_valid.frozen() as frozen_train_valid:
-            for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc):
-                ml_algo, curr_preds = tune_and_fit_predict(ml_algo, param_tuner, frozen_train_valid, force_calc)
-                ml_algo = cast(SparkTabularMLAlgo, ml_algo)
-                if ml_algo is not None:
-                    curr_preds = cast(SparkDataset, curr_preds)
-                    self.ml_algos.append(ml_algo)
-                    preds.append(curr_preds)
-                else:
-                    warnings.warn(
-                        "Current ml_algo has not been trained by some reason. " "Check logs for more details.",
-                        RuntimeWarning,
-                    )
+
+            def build_fit_func(ml_algo: SparkTabularMLAlgo, param_tuner: ParamsTuner, force_calc: bool):
+                def func():
+                    fitted_ml_algo, curr_preds = tune_and_fit_predict(ml_algo, param_tuner, frozen_train_valid, force_calc)
+                    fitted_ml_algo, curr_preds = cast(SparkTabularMLAlgo, fitted_ml_algo), cast(SparkDataset, curr_preds)
+
+                    if ml_algo is None:
+                        warnings.warn(
+                            "Current ml_algo has not been trained by some reason. " "Check logs for more details.",
+                            RuntimeWarning,
+                        )
+
+                    return fitted_ml_algo, curr_preds
+                return func
+
+            fit_tasks = [
+                build_fit_func(ml_algo, param_tuner, force_calc)
+                for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc)
+            ]
+
+            results = compute_parallel(fit_tasks, pool_type=PoolType.ML_ALGOS)
+
+            self.ml_algos.extend([ml_algo for ml_algo, _ in results])
+            preds = [pred for _, pred in results]
 
             assert (
                 len(self.ml_algos) > 0
