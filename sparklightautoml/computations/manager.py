@@ -1,3 +1,4 @@
+import logging
 import os
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -7,11 +8,17 @@ from mypy.typeshed.stdlib.multiprocessing.pool import ThreadPool
 from mypy.typeshed.stdlib.typing import Callable, Optional
 from pyspark import inheritable_thread_target
 
+logger = logging.getLogger(__name__)
+
 ENV_VAR_SLAMA_COMPUTATIONS_MANAGER = "SLAMA_COMPUTATIONS_MANAGER"
 
 __computations_manager__: Optional['ComputationsManager'] = None
 
 T = TypeVar("T")
+
+
+def _compute_sequential(tasks: List[Callable[[], T]]) -> List[T]:
+    return [task() for task in tasks]
 
 
 class PoolType(Enum):
@@ -27,12 +34,27 @@ class ComputationsManager(ABC):
 
 
 class ParallelComputationsManager(ComputationsManager):
-    def get_pool(self, pool_type: str) -> ThreadPool:
-        pool = ThreadPool(processes=min(1, 2))
-        return pool
+    def __init__(self, ml_pipes_pool_size: int, ml_algos_pool_size: int, default_pool_size: int):
+        self._ml_pipes_pool: Optional[ThreadPool] = \
+            ThreadPool(processes=ml_pipes_pool_size) if ml_pipes_pool_size > 0 else None
+        self._ml_algos_pool: Optional[ThreadPool] = \
+            ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 0 else None
+        self._default_pool: Optional[ThreadPool] = \
+            ThreadPool(processes=default_pool_size) if default_pool_size > 0 else None
 
-    def compute(self, tasks: List[Callable[[], T]], pool_type: str) -> List[T]:
+    def get_pool(self, pool_type: PoolType) -> Optional[ThreadPool]:
+        if pool_type == pool_type.ML_PIPELINES:
+            return self._ml_pipes_pool
+        elif pool_type == pool_type.ML_ALGOS:
+            return self._ml_algos_pool
+        else:
+            return self._default_pool
+
+    def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType) -> List[T]:
         pool = self.get_pool(pool_type)
+
+        if not pool:
+            return _compute_sequential(tasks)
 
         ptasks = map(inheritable_thread_target, tasks)
         results = sorted(
@@ -45,16 +67,19 @@ class ParallelComputationsManager(ComputationsManager):
 
 class SequentialComputationsManager(ComputationsManager):
     def compute(self, tasks: list[Callable[T]], pool_type: PoolType) -> List[T]:
-        return [task() for task in tasks]
+        return _compute_sequential(tasks)
 
 
 def computations_manager() -> ComputationsManager:
     global __computations_manager__
     if not __computations_manager__:
         comp_manager_type = os.environ.get(ENV_VAR_SLAMA_COMPUTATIONS_MANAGER, "sequential")
-        if comp_manager_type == "parallel":
-            comp_manager = ParallelComputationsManager()
-        elif comp_manager_type == "sequential":
+        logger.info(f"Initializing computations manager with type and params: {comp_manager_type}")
+        if comp_manager_type.startswith("parallel"):
+            comp_manager_args = comp_manager_type[comp_manager_type.index('[') + 1: comp_manager_type.index(']')]
+            comp_manager_args = [int(arg.strip()) for arg in comp_manager_args.split(',')]
+            comp_manager = ParallelComputationsManager(*comp_manager_args)
+        elif comp_manager_type.startswith("sequential"):
             comp_manager = SequentialComputationsManager()
         else:
             raise Exception(f"Incorrect computations manager type: {comp_manager_type}. "
