@@ -1,7 +1,6 @@
 import functools
 import logging
 from copy import copy
-from multiprocessing.pool import ThreadPool
 from typing import Tuple, cast, List, Optional, Sequence, Union
 
 import numpy as np
@@ -9,7 +8,6 @@ from lightautoml.dataset.base import RolesDict
 from lightautoml.dataset.roles import NumericRole
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.utils.timer import TaskTimer
-from pyspark import inheritable_thread_target
 from pyspark.ml import PipelineModel, Transformer, Model
 from pyspark.ml.functions import vector_to_array, array_to_vector
 from pyspark.ml.param import Params
@@ -20,6 +18,7 @@ from pyspark.sql.types import IntegerType
 
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
+from sparklightautoml.parallel.manager import compute_parallel
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import SparkDataFrame, log_exception
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
@@ -249,18 +248,8 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             -> Tuple[List[Model], List[SparkDataFrame], List[str]]:
         num_folds = len(train_valid_iterator)
 
-        pool = ThreadPool(processes=min(parallelism, num_folds))
-
-        fit_tasks = []
-        for i, (train, valid) in enumerate(train_valid_iterator):
-            mdl_pred_col = f"{self.prediction_feature}_{i}"
-
-            # TODO: SLAMA - need to have an additional test for that
-            timer = copy(self.timer)
-            # timer.set_control_point()
-
-            def do_fit(i=i, mdl_pred_col=mdl_pred_col, train=train, valid=valid) \
-                    -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
+        def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset, valid: SparkDataset):
+            def func() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
                 if num_folds > 1:
                     logger.info2(
                         "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
@@ -279,18 +268,18 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
                 timer.write_run_info()
 
                 return i, mdl, vpred, mdl_pred_col
+            return func
 
-            fit_tasks.append(do_fit)
+        fit_tasks = [
+            build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}", train, valid)
+            for i, (train, valid) in enumerate(train_valid_iterator)
+        ]
 
-        tasks = map(inheritable_thread_target, fit_tasks)
-        results = (result for result in pool.imap_unordered(lambda f: f(), tasks) if result)
-        results = sorted(results, key=lambda x: x[0])
+        results = compute_parallel(fit_tasks)
 
         models = [model for _, model, _, _ in results]
         val_preds = [val_pred for _, _, val_pred, _ in results]
         model_prediction_cols = [model_prediction_col for _, _, _, model_prediction_col in results]
-
-        # TODO: SLAMA - probably need to update parent timer here ?
 
         return models, val_preds, model_prediction_cols
 
