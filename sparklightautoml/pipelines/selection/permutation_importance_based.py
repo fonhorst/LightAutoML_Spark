@@ -13,7 +13,7 @@ from pyspark.sql.types import StructField
 from sparklightautoml.pipelines.selection.base import SparkImportanceEstimator
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import MLAlgo, SparkTabularMLAlgo
-from ...parallel.manager import compute_parallel
+from ...parallel.manager import compute_tasks
 from ...validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ class SparkNpPermutationImportanceEstimator(SparkImportanceEstimator):
                 return feat, (normal_score - shuffled_score)
             return func
 
-        results = compute_parallel([build_score_func(it, feat) for it, feat in enumerate(valid_data.features)])
+        results = compute_tasks([build_score_func(it, feat) for it, feat in enumerate(valid_data.features)])
 
         permutation_importance = {feat: diff_score for feat, diff_score in results}
 

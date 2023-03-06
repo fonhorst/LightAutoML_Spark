@@ -18,7 +18,7 @@ from pyspark.sql.types import IntegerType
 
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
-from sparklightautoml.parallel.manager import compute_parallel
+from sparklightautoml.parallel.manager import compute_tasks
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import SparkDataFrame, log_exception
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
@@ -275,7 +275,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
             for i, (train, valid) in enumerate(train_valid_iterator)
         ]
 
-        results = compute_parallel(fit_tasks)
+        results = compute_tasks(fit_tasks)
 
         models = [model for _, model, _, _ in results]
         val_preds = [val_pred for _, _, val_pred, _ in results]

@@ -22,7 +22,7 @@ from pyspark.sql.session import SparkSession
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
-from ..parallel.manager import compute_parallel, PoolType
+from ..parallel.manager import compute_tasks, PoolType
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline
@@ -509,7 +509,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             for k, ml_pipe in enumerate(level)
         ]
 
-        results = compute_parallel(fit_tasks, pool_type=PoolType.ML_PIPELINES)
+        results = compute_tasks(fit_tasks, pool_type=PoolType.ML_PIPELINES)
 
         ml_pipes = [ml_pipe for ml_pipe, _ in results]
         ml_pipes_preds = [pipe_preds for _, pipe_preds in results]

@@ -17,7 +17,7 @@ from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset, PersistenceLevel, PersistenceManager
 from ...ml_algo.base import SparkTabularMLAlgo
-from ...parallel.manager import compute_parallel, PoolType
+from ...parallel.manager import compute_tasks, PoolType
 from ...utils import ColumnsSelectorTransformer
 from ...validation.base import SparkBaseTrainValidIterator
 
@@ -141,7 +141,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
                 for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc)
             ]
 
-            results = compute_parallel(fit_tasks, pool_type=PoolType.ML_ALGOS)
+            results = compute_tasks(fit_tasks, pool_type=PoolType.ML_ALGOS)
 
             self.ml_algos.extend([ml_algo for ml_algo, _ in results])
             preds = [pred for _, pred in results]
