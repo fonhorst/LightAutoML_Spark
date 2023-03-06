@@ -13,6 +13,7 @@ from pyspark.sql.types import StructField
 from sparklightautoml.pipelines.selection.base import SparkImportanceEstimator
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import MLAlgo, SparkTabularMLAlgo
+from ...parallel.manager import compute_parallel
 from ...validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)
@@ -58,38 +59,42 @@ class SparkNpPermutationImportanceEstimator(SparkImportanceEstimator):
 
         valid_data = cast(SparkDataset, train_valid.get_validation_data())
 
-        permutation_importance = {}
+        def build_score_func(it: int, feat: str):
+            def func():
+                logger.info(f"Start processing ({it},{feat})")
+                df = valid_data.data
 
-        for it, feat in enumerate(valid_data.features):
-            logger.info(f"Start processing ({it},{feat})")
-            df = valid_data.data
+                field: StructField = df.schema[feat]
 
-            field: StructField = df.schema[feat]
+                @pandas_udf(returnType=field.dataType)
+                def permutate(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
+                    permutator = np.random.RandomState(seed=self.random_state)
+                    # one may get list of arrs and concatenate them to perform permutation
+                    # in the whole partition
+                    for x in arrs:
+                        px = permutator.permutation(x)
+                        yield pd.Series(px)
 
-            @pandas_udf(returnType=field.dataType)
-            def permutate(arrs: Iterator[pd.Series]) -> Iterator[pd.Series]:
-                permutator = np.random.RandomState(seed=self.random_state)
-                # one may get list of arrs and concatenate them to perform permutation
-                # in the whole partition
-                for x in arrs:
-                    px = permutator.permutation(x)
-                    yield pd.Series(px)
+                permutated_df = df.withColumn(feat, permutate(feat))
 
-            permutated_df = df.withColumn(feat, permutate(feat))
+                ds: SparkDataset = valid_data.empty()
+                ds.set_data(permutated_df, valid_data.features, valid_data.roles, name=type(self).__name__)
+                logger.debug("Dataframe with shuffled column prepared")
 
-            ds: SparkDataset = valid_data.empty()
-            ds.set_data(permutated_df, valid_data.features, valid_data.roles, name=type(self).__name__)
-            logger.debug("Dataframe with shuffled column prepared")
-
-            # Calculate predict and metric
-            new_preds = ml_algo.predict(ds)
-            shuffled_score = ml_algo.score(new_preds)
-            logger.debug(
-                "Shuffled score for col {} = {}, difference with normal = {}".format(
-                    feat, shuffled_score, normal_score - shuffled_score
+                # Calculate predict and metric
+                new_preds = ml_algo.predict(ds)
+                shuffled_score = ml_algo.score(new_preds)
+                logger.debug(
+                    "Shuffled score for col {} = {}, difference with normal = {}".format(
+                        feat, shuffled_score, normal_score - shuffled_score
+                    )
                 )
-            )
-            permutation_importance[feat] = normal_score - shuffled_score
+                return feat, (normal_score - shuffled_score)
+            return func
+
+        results = compute_parallel([build_score_func(it, feat) for it, feat in enumerate(valid_data.features)])
+
+        permutation_importance = {feat: diff_score for feat, diff_score in results}
 
         self.raw_importances = Series(permutation_importance).sort_values(ascending=False)
 
