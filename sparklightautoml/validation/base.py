@@ -64,6 +64,11 @@ class SparkBaseTrainValidIterator(TrainValidIterator, Unpersistable, ABC):
     def unpersist(self, skip_val: bool = False):
         ...
 
+    @property
+    @abstractmethod
+    def train_val_single_dataset(self) -> 'SparkDataset':
+        ...
+
     @contextmanager
     def _child_persistence_context(self) -> 'SparkBaseTrainValidIterator':
         train_valid = copy(self)

@@ -1,17 +1,21 @@
 import logging
 from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable, Union
 
 import optuna
 from lightautoml.dataset.base import LAMLDataset
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner, TunableAlgo
 from lightautoml.validation.base import TrainValidIterator, HoldoutIterator
 
+from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+
 logger = logging.getLogger(__name__)
 
 
-class ParallelOptunaTuner(OptunaTuner):
+class SparkOptunaTuner(OptunaTuner):
     def __init__(self,
                  timeout: Optional[int] = 1000,
                  n_trials: Optional[int] = 100,
@@ -22,8 +26,8 @@ class ParallelOptunaTuner(OptunaTuner):
         super().__init__(timeout, n_trials, direction, fit_on_holdout, random_state)
         self._max_parallelism = max_parallelism
 
-    def fit(self, ml_algo: TunableAlgo, train_valid_iterator: Optional[TrainValidIterator] = None) \
-            -> Tuple[Optional[TunableAlgo], Optional[LAMLDataset]]:
+    def fit(self, ml_algo: SparkTabularMLAlgo, train_valid_iterator: Optional[SparkBaseTrainValidIterator] = None) \
+            -> Tuple[Optional[SparkTabularMLAlgo], Optional[SparkDataset]]:
         """Tune model.
 
                Args:

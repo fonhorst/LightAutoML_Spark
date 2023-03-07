@@ -1,4 +1,5 @@
 import logging
+import math
 import multiprocessing
 import warnings
 from copy import copy
@@ -14,7 +15,7 @@ from lightautoml.utils.timer import TaskTimer
 from lightautoml.validation.base import TrainValidIterator
 from lightgbm import Booster
 from pandas import Series
-from pyspark.ml import Transformer, PipelineModel
+from pyspark.ml import Transformer, PipelineModel, Model
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.util import MLWritable, MLReadable, MLWriter
 from synapse.ml.lightgbm import (
@@ -154,7 +155,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         convert_to_onnx: bool = False,
         mini_batch_size: int = 5000,
         seed: int = 42,
-        parallelism: int = 1
+        parallelism: int = 1,
+        experimental_parallel_mode: bool = False
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
         SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults,
@@ -171,6 +173,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self._chunk_size = chunk_size
         self._convert_to_onnx = convert_to_onnx
         self._mini_batch_size = mini_batch_size
+        self._experimental_parallel_mode = experimental_parallel_mode
 
     def _infer_params(self) -> Tuple[dict, int]:
         """Infer all parameters in lightgbm format.
@@ -430,6 +433,42 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                       f"due to empty partitions"
             warnings.warn(message, RuntimeWarning)
 
+        # # TODO: section of lightgbm settings
+        #
+        # max_parallelism = 5
+        # num_executors = 7
+        # num_cores_per_exec = 6
+        # num_available_cores = num_cores_per_exec * num_executors
+        # experimental_mode = True
+        #
+        # if not self._use_single_dataset_mode:
+        #     numTasks = max(1, math.floor(num_available_cores / max_parallelism))
+        #     useBarrierExecutionMode = True
+        # elif not experimental_mode:
+        #     numTasks = max(1, math.floor(num_available_cores / max_parallelism))
+        #     useBarrierExecutionMode = True
+        #
+        #     if numTasks <= num_executors:
+        #         numThreads = 1
+        #     elif numTasks % num_executors == 0:
+        #         numThreads = numTasks / num_executors
+        #         # raise overcommit warning
+        #     else:
+        #         numThreads = math.floor(numTasks / num_executors)
+        #         # raise overcommit warning +  raise unbalanced number of threads
+        # else:
+        #     numTasks = max(1, math.floor(num_available_cores / max_parallelism))
+        #
+        #     # if numTasks % num_cores_per_exec != 0:
+        #     #     raise warning "cannot use this mode"
+        #     # fallback to normal mode
+        #
+        #     # required dataset preparation
+        #     # should be performed beforehand
+        #     # 1. get list of executors
+        #     # 2. assign desired partitions
+        #     # 3. perform coalescing to desired executors
+
         lgbm = lgbm_booster(
             **params,
             featuresCol=self._assembler.getOutputCol(),
@@ -591,3 +630,23 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         logger.info("Finished LGBM fit")
         return res
+
+    def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) -> Tuple[
+        List[Model], List[SparkDataFrame], List[str]]:
+        # TODO: prepare train_valid_iterator
+        # 1. check if we need to run in experimental parallel mode
+        # 2. lock further running and prepare the train valid iteratorS
+        if self._experimental_parallel_mode:
+            # TODO: locking by the same lock
+            # TODO: is it possible to run exclusively or not?
+            dataset = train_valid_iterator.train_val_single_dataset
+            num_execs = 7
+            num_cores_per_exec = 5
+            num_tasks = (num_execs * num_cores_per_exec) / parallelism
+            if num_tasks % num_cores_per_exec != 0:
+                # TODO: warning bad data
+                pass
+            # TODO: prepare dataset (set of base datasets) + rewrite the whole method of _parallel_fit
+            # TODO: switch impl in the fit_predict_single_fold
+
+        return super()._parallel_fit(parallelism, train_valid_iterator)

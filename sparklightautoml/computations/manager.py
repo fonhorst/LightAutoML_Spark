@@ -29,7 +29,11 @@ class PoolType(Enum):
 
 class ComputationsManager(ABC):
     @abstractmethod
-    def compute(self, tasks: list[Callable[T]], pool_type: PoolType) -> List[T]:
+    def compute(self, tasks: List[Callable[T]], pool_type: PoolType) -> List[T]:
+        ...
+
+    @abstractmethod
+    def compute_exclusively(self, tasks: List[Callable[T]]) -> List[T]:
         ...
 
 
@@ -91,3 +95,7 @@ def computations_manager() -> ComputationsManager:
 
 def compute_tasks(tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.DEFAULT) -> List[T]:
     return computations_manager().compute(tasks, pool_type)
+
+
+def compute_tasks_exclusively(tasks: List[Callable[[], T]]) -> List[T]:
+    raise NotImplementedError()
