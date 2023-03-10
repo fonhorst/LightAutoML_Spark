@@ -4,6 +4,7 @@ import logging.config
 from pyspark.ml import PipelineModel
 from pyspark.sql import functions as sf
 
+from examples.spark.examples_utils import check_columns
 from examples_utils import get_persistence_manager
 from examples_utils import get_spark_session, prepare_test_and_train, get_dataset_attrs
 from sparklightautoml.dataset.base import SparkDataset
@@ -76,9 +77,7 @@ if __name__ == "__main__":
         test_score = score(test_preds_ds[:, spark_ml_algo.prediction_feature])
         logger.info(f"Test score (#1 way): {test_score}")
 
-        absent_columns = set(test_df.columns).difference(test_preds_ds.data.columns)
-        assert len(absent_columns) == 0, \
-            f"Some columns of the original dataframe is absent from the processed dataset: {absent_columns}"
+        check_columns(test_df, test_preds_ds.data)
 
         # 2. second way (Spark ML API, save-load-predict)
         transformer = PipelineModel(stages=[sreader.transformer(add_array_attrs=True), ml_pipe.transformer()])
@@ -88,9 +87,7 @@ if __name__ == "__main__":
         pipeline_model = PipelineModel.load("/tmp/reader_and_spark_ml_pipe_lgb")
         test_pred_df = pipeline_model.transform(test_df)
 
-        absent_columns = set(test_df.columns).difference(test_pred_df.columns)
-        assert len(absent_columns) == 0, \
-            f"Some columns of the original dataframe is absent from the processed dataset: {absent_columns}"
+        check_columns(test_df, test_pred_df)
 
         test_pred_df = test_pred_df.select(
             SparkDataset.ID_COLUMN,
