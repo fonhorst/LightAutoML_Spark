@@ -333,7 +333,7 @@ class WrappingSelectingPipelineModel(PipelineModel, HasInputCols):
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         cstr = ColumnsSelectorTransformer(
             name=f"{type(self).__name__}({self.getOrDefault(self.name)})",
-            input_cols=[*dataset.columns, *self.getInputCols()],
+            input_cols=list({*dataset.columns, *self.getInputCols()}),
             optional_cols=self.getOrDefault(self.optionalCols)
         )
         ds = super()._transform(dataset)

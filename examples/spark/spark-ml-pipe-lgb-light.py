@@ -80,10 +80,16 @@ if __name__ == "__main__":
 
         # 2. second way (Spark ML API, save-load-predict)
         transformer = PipelineModel(stages=[sreader.transformer(add_array_attrs=True), ml_pipe.transformer()])
+
         transformer.write().overwrite().save("/tmp/reader_and_spark_ml_pipe_lgb")
 
         pipeline_model = PipelineModel.load("/tmp/reader_and_spark_ml_pipe_lgb")
         test_pred_df = pipeline_model.transform(test_df)
+
+        absent_columns = set(test_df.columns).difference(test_pred_df.columns)
+        assert len(absent_columns) == 0, \
+            f"Some columns of the original dataframe is absent from the processed dataset: {absent_columns}"
+
         test_pred_df = test_pred_df.select(
             SparkDataset.ID_COLUMN,
             sf.col(roles['target']).alias('target'),
@@ -91,8 +97,6 @@ if __name__ == "__main__":
         )
         test_score = score(test_pred_df)
         logger.info(f"Test score (#2 way): {test_score}")
-
-        assert test_column in test_pred_df.columns, f"{test_column} should be in the processed dataset"
 
     logger.info("Finished")
 
