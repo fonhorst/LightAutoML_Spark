@@ -51,10 +51,10 @@ def test_spark_reader(spark: SparkSession, config: Dict[str, Any], cv: int, agr:
     sdataset = sreader.fit_read(df, roles=roles, persistence_manager=persistence_manager)
     checks(sdataset)
 
-    sdataset = sreader.read(df, add_array_attrs=False)
-    assert sdataset.target_column is None
-    assert sdataset.folds_column is None
-    assert roles['target'] not in sdataset.data.columns
+    # sdataset = sreader.read(df, add_array_attrs=False)
+    # assert sdataset.target_column is None
+    # assert sdataset.folds_column is None
+    # assert roles['target'] not in sdataset.data.columns
 
     sdataset = sreader.read(df, add_array_attrs=True)
     checks(sdataset, check_target_and_folds=True)

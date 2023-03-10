@@ -1,4 +1,3 @@
-import itertools
 from abc import ABC, abstractmethod
 from typing import Optional, List
 
@@ -61,11 +60,11 @@ class TransformerInputOutputRoles(ABC):
 
         sdf = PipelineModel(stages=[
             self.transformer(*args, **kwargs),
-            # ColumnsSelectorTransformer(
-            #     name=f"{type(self).__name__}._make_transformed_dataset",
-            #     input_cols=list(roles.keys()),
-            #     optional_cols=[*dataset.service_columns, *dataset.ignored_features]
-            # )
+            ColumnsSelectorTransformer(
+                name=f"{type(self).__name__}._make_transformed_dataset",
+                input_cols=list(roles.keys()),
+                optional_cols=[*dataset.service_columns]
+            )
         ]).transform(dataset.data)
 
         out_ds = dataset.empty()

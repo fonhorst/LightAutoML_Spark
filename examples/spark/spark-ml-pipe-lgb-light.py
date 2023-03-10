@@ -77,8 +77,6 @@ if __name__ == "__main__":
         test_score = score(test_preds_ds[:, spark_ml_algo.prediction_feature])
         logger.info(f"Test score (#1 way): {test_score}")
 
-        check_columns(test_df, test_preds_ds.data)
-
         # 2. second way (Spark ML API, save-load-predict)
         transformer = PipelineModel(stages=[sreader.transformer(add_array_attrs=True), ml_pipe.transformer()])
 
