@@ -15,7 +15,7 @@ from sparklightautoml.tasks.base import SparkTask as SparkTask
 from sparklightautoml.utils import logging_config, VERBOSE_LOGGING_FORMAT, log_exec_time
 from sparklightautoml.validation.iterators import SparkFoldsIterator
 
-logging.config.dictConfig(logging_config(level=logging.INFO, log_filename='/tmp/slama.log'))
+logging.config.dictConfig(logging_config(level=logging.DEBUG, log_filename='/tmp/slama.log'))
 logging.basicConfig(level=logging.DEBUG, format=VERBOSE_LOGGING_FORMAT)
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,9 @@ if __name__ == "__main__":
         test_score = score(test_preds_ds[:, spark_ml_algo.prediction_feature])
         logger.info(f"Test score (#1 way): {test_score}")
 
-        # assert test_column in test_preds_ds.data.columns, f"{test_column} should be in the processed dataset"
+        absent_columns = set(test_df.columns).difference(test_preds_ds.data.columns)
+        assert len(absent_columns) == 0, \
+            f"Some columns of the original dataframe is absent from the processed dataset: {absent_columns}"
 
         # 2. second way (Spark ML API, save-load-predict)
         transformer = PipelineModel(stages=[sreader.transformer(add_array_attrs=True), ml_pipe.transformer()])

@@ -161,6 +161,8 @@ class SparkDataset(LAMLDataset, Unpersistable):
         # }
         self._service_columns: Set[str] = base_service_columns
 
+        # self._ignored_columns = {c for c in data.columns if c not in roles and c not in base_service_columns}
+
         roles = roles if roles else dict()
 
         # currently only target is supported
@@ -216,7 +218,7 @@ class SparkDataset(LAMLDataset, Unpersistable):
         """
         return [
             c for c in self.data.columns
-            if c not in self._service_columns
+            if c in self.roles and c not in self._service_columns #and c not in self._ignored_columns
         ] if self.data else []
 
     @features.setter
@@ -229,6 +231,10 @@ class SparkDataset(LAMLDataset, Unpersistable):
         """
         pass
         # raise NotImplementedError("The operation is not supported")
+
+    # @property
+    # def ignored_features(self) -> List[str]:
+    #     return [c for c in self.data.columns if c in self._ignored_columns]
 
     @property
     def roles(self) -> RolesDict:
@@ -252,15 +258,17 @@ class SparkDataset(LAMLDataset, Unpersistable):
 
         """
         if type(val) is dict:
-            self._roles = dict(((x, val[x]) for x in self.features))
-            # diff = set(val.keys()).difference(self.features)
-            # assert len(diff) == 0, f"Not all roles have features in the dataset. Absent features: {diff}."
-            # self._roles = copy(val)
+            # self._roles = dict(((x, val[x]) for x in self.features))
+            diff = set(val.keys()).difference(self.data.columns)
+            assert len(diff) == 0, f"Not all roles have features in the dataset. Absent features: {diff}."
+            self._roles = copy(val)
         elif type(val) is list:
-            self._roles = dict(zip(self.features, val))
+            # self._roles = dict(zip(self.features, val))
+            raise ValueError("Unsupported argument type for this dataset type")
         elif val:
-            role = cast(ColumnRole, val)
-            self._roles = dict(((x, role) for x in self.features))
+            # role = cast(ColumnRole, val)
+            # self._roles = dict(((x, role) for x in self.features))
+            raise ValueError("Unsupported argument type for this dataset type")
         else:
             raise ValueError()
 
@@ -410,7 +418,7 @@ class SparkDataset(LAMLDataset, Unpersistable):
             roles: Dict with roles.
         """
         self._validate_dataframe(data)
-        super().set_data(data, None, roles)
+        super().set_data(data, list(roles.keys()), roles)
         self._persistence_manager = persistence_manager or self._persistence_manager
         self._dependencies = dependencies if dependencies is not None else self._dependencies
         self._uid = uid or self._uid
