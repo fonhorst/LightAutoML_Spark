@@ -412,6 +412,7 @@ class SparkDataset(LAMLDataset, Unpersistable):
             features: `ignored, always None. just for same interface.
             roles: Dict with roles.
         """
+
         self._validate_dataframe(data)
         super().set_data(data, features, roles)
         self._persistence_manager = persistence_manager or self._persistence_manager
