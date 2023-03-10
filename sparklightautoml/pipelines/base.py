@@ -46,12 +46,9 @@ class TransformerInputOutputRoles(ABC):
 
     def _clean_transformer_columns(self, transformer: Transformer, service_columns: Optional[List[str]] = None):
         # we don't service_columns cause they should be available in the input by default
-        # input_cols = list(self.output_roles.keys())
-        # optional_cols = [c for c in self._get_service_columns() if c not in input_cols]
         return WrappingSelectingPipelineModel(
             stages=[transformer],
             input_columns=list(self.output_roles.keys()),
-            # optional_columns=optional_cols,
             name=type(self).__name__
         )
 
