@@ -26,7 +26,7 @@ from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel, Persis
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.mlwriters import CommonPickleMLReadable, CommonPickleMLWritable
 from sparklightautoml.reader.guess_roles import get_numeric_roles_stat, get_category_roles_stat, get_null_scores
-from sparklightautoml.utils import SparkDataFrame
+from sparklightautoml.utils import SparkDataFrame, JobGroup
 
 logger = logging.getLogger(__name__)
 
@@ -308,8 +308,12 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             else:
                 fraction = self.samples / total_number
             subsample = train_data.sample(fraction=fraction, seed=self.random_state).cache()
+            with JobGroup("Reader: Subsampling materailization", "Reader: Subsampling materailization"):
+                subsample.count()
+            unpersist_subsample = True
         else:
             subsample = train_data
+            unpersist_subsample = False
 
         logger.debug("SparkToSparkReader infer roles is started")
         # infer roles
@@ -361,9 +365,12 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         logger.debug("SparkToSparkReader infer roles is finished")
 
-        ok_features = self._ok_features(train_data, feats_to_guess)
+        ok_features = self._ok_features(subsample, feats_to_guess)
         guessed_feats = self._guess_role(subsample, ok_features)
         inferred_feats.update(guessed_feats)
+
+        if unpersist_subsample:
+            subsample.unpersist()
 
         # # set back
         for feat, r in inferred_feats.items():
