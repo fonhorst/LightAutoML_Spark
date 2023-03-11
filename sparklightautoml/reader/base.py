@@ -637,24 +637,45 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             ],
         ).first()
 
-        estimated_features = []
-        for feat in features:
-            if row[f"{feat}_nan_rate"] >= self.max_nan_rate:
-                estimated_features.append((feat, False))
-                continue
+        # TODO: this part may be optimized using sampling
+        estimated_features_1 = [
+            (feat, False) for feat in features if row[f"{feat}_nan_rate"] >= self.max_nan_rate
+        ]
 
-            # TODO: this part may be optimized using sampling
-            crow = (
+        import functools
+        fdf = functools.reduce(
+            lambda acc, y: acc.unionByName(y),
+            [(
                 train_data.groupby(feat)
                 .agg(sf.count("*").alias("count"))
-                .select((sf.max("count")).alias("count"))
-                .first()
-            )
-            if crow["count"] / row["count"] >= self.max_constant_rate:
-                estimated_features.append((feat, False))
-                continue
+                .select(sf.lit(feat).alias("name"), sf.max("count").alias("count"))
+            ) for feat in features if row[f"{feat}_nan_rate"] < self.max_nan_rate]
+        )
+        crows = {r['name']: r['count'] / row["count"] for r in fdf.collect()}
 
-            estimated_features.append((feat, True))
+        estimated_features_2 = [
+            (feat, coeff < self.max_constant_rate) for feat, coeff in crows.items()
+        ]
+
+        estimated_features = [*estimated_features_1, *estimated_features_2]
+
+        # estimated_features = []
+        # for feat in features:
+        #     if row[f"{feat}_nan_rate"] >= self.max_nan_rate:
+        #         estimated_features.append((feat, False))
+        #         continue
+        #
+        #     crow = (
+        #         train_data.groupby(feat)
+        #         .agg(sf.count("*").alias("count"))
+        #         .select((sf.max("count")).alias("count"))
+        #         .first()
+        #     )
+        #     if crow["count"] / row["count"] >= self.max_constant_rate:
+        #         estimated_features.append((feat, False))
+        #         continue
+        #
+        #     estimated_features.append((feat, True))
 
         logger.debug("SparkToSparkReader._ok_features() is finished")
         return estimated_features
