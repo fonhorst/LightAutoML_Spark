@@ -1,0 +1,34 @@
+df = pipeline_model.transform(test_df)
+import pickle
+pickle.dumps(sreader)
+sr = pickle.dumps(sreader)
+spark_features_pipeline.__dict__
+URI(path)
+{}
+{*['a', 'b'], *['c', 'd']}
+a = ['AMT_ANNUITY', 'AMT_CREDIT', 'AMT_GOODS_PRICE', 'AMT_INCOME_TOTAL', 'AMT_REQ_CREDIT_BUREAU_DAY', 'AMT_REQ_CREDIT_BUREAU_HOUR', 'AMT_REQ_CREDIT_BUREAU_MON', 'AMT_REQ_CREDIT_BUREAU_QRT', 'AMT_REQ_CREDIT_BUREAU_WEEK', 'AMT_REQ_CREDIT_BUREAU_YEAR', 'APARTMENTS_AVG', 'APARTMENTS_MEDI', 'APARTMENTS_MODE', 'BASEMENTAREA_AVG', 'BASEMENTAREA_MEDI', 'BASEMENTAREA_MODE', 'CNT_CHILDREN', 'CNT_FAM_MEMBERS', 'COMMONAREA_AVG', 'COMMONAREA_MEDI', 'COMMONAREA_MODE', 'DAYS_BIRTH', 'DAYS_EMPLOYED', 'DAYS_ID_PUBLISH', 'DAYS_LAST_PHONE_CHANGE', 'DAYS_REGISTRATION', 'DEF_30_CNT_SOCIAL_CIRCLE', 'DEF_60_CNT_SOCIAL_CIRCLE', 'ELEVATORS_AVG', 'ELEVATORS_MEDI', 'ELEVATORS_MODE', 'ENTRANCES_AVG', 'ENTRANCES_MEDI', 'ENTRANCES_MODE', 'EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3', 'FLAG_CONT_MOBILE', 'FLAG_DOCUMENT_11', 'FLAG_DOCUMENT_13', 'FLAG_DOCUMENT_14', 'FLAG_DOCUMENT_16', 'FLAG_DOCUMENT_18', 'FLAG_DOCUMENT_19', 'FLAG_DOCUMENT_3', 'FLAG_DOCUMENT_5', 'FLAG_DOCUMENT_6', 'FLAG_DOCUMENT_8', 'FLAG_DOCUMENT_9', 'FLAG_EMAIL', 'FLAG_EMP_PHONE', 'FLAG_PHONE', 'FLAG_WORK_PHONE', 'FLOORSMAX_AVG', 'FLOORSMAX_MEDI', 'FLOORSMAX_MODE', 'FLOORSMIN_AVG', 'FLOORSMIN_MEDI', 'FLOORSMIN_MODE', 'HOUR_APPR_PROCESS_START', 'LANDAREA_AVG', 'LANDAREA_MEDI', 'LANDAREA_MODE', 'LIVE_CITY_NOT_WORK_CITY', 'LIVE_REGION_NOT_WORK_REGION', 'LIVINGAPARTMENTS_AVG', 'LIVINGAPARTMENTS_MEDI', 'LIVINGAPARTMENTS_MODE', 'LIVINGAREA_AVG', 'LIVINGAREA_MEDI', 'LIVINGAREA_MODE', 'NONLIVINGAPARTMENTS_AVG', 'NONLIVINGAPARTMENTS_MEDI', 'NONLIVINGAPARTMENTS_MODE', 'NONLIVINGAREA_AVG', 'NONLIVINGAREA_MEDI', 'NONLIVINGAREA_MODE', 'OBS_30_CNT_SOCIAL_CIRCLE', 'OBS_60_CNT_SOCIAL_CIRCLE', 'OWN_CAR_AGE', 'REGION_POPULATION_RELATIVE', 'REGION_RATING_CLIENT', 'REGION_RATING_CLIENT_W_CITY', 'REG_CITY_NOT_LIVE_CITY', 'REG_CITY_NOT_WORK_CITY', 'REG_REGION_NOT_LIVE_REGION', 'REG_REGION_NOT_WORK_REGION', 'TARGET', 'TOTALAREA_MODE', 'YEARS_BEGINEXPLUATATION_AVG', 'YEARS_BEGINEXPLUATATION_MEDI', 'YEARS_BEGINEXPLUATATION_MODE', 'YEARS_BUILD_AVG', 'YEARS_BUILD_MEDI', 'YEARS_BUILD_MODE', '_id', 'le__CODE_GENDER', 'le__EMERGENCYSTATE_MODE', 'le__FLAG_OWN_CAR', 'le__FLAG_OWN_REALTY', 'le__FONDKAPREMONT_MODE', 'le__HOUSETYPE_MODE', 'le__NAME_CONTRACT_TYPE', 'le__NAME_EDUCATION_TYPE', 'le__NAME_FAMILY_STATUS', 'le__NAME_HOUSING_TYPE', 'le__NAME_INCOME_TYPE', 'le__NAME_TYPE_SUITE', 'le__OCCUPATION_TYPE', 'le__WALLSMATERIAL_MODE', 'le__WEEKDAY_APPR_PROCESS_START', 'logodds__oof__inter__(CODE_GENDER__EMERGENCYSTATE_MODE)', 'logodds__oof__inter__(CODE_GENDER__EMERGENCYSTATE_MODE__FLAG_OWN_CAR)', 'logodds__oof__inter__(CODE_GENDER__EMERGENCYSTATE_MODE__FLAG_OWN_REALTY)', 'logodds__oof__inter__(CODE_GENDER__FLAG_OWN_CAR)', 'logodds__oof__inter__(CODE_GENDER__FLAG_OWN_CAR__FLAG_OWN_REALTY)', 'logodds__oof__inter__(CODE_GENDER__FLAG_OWN_REALTY)', 'logodds__oof__inter__(EMERGENCYSTATE_MODE__FLAG_OWN_CAR)', 'logodds__oof__inter__(EMERGENCYSTATE_MODE__FLAG_OWN_CAR__FLAG_OWN_REALTY)', 'logodds__oof__inter__(EMERGENCYSTATE_MODE__FLAG_OWN_REALTY)', 'logodds__oof__inter__(FLAG_OWN_CAR__FLAG_OWN_REALTY)', 'logodds__oof__le__ORGANIZATION_TYPE', 'reader_fold_num']
+
+import pprint
+pprint.pprint(a)
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.getOrCreate()
+df = spark.read.parquet("/opt/tmp/not_averaged_dataset.parquet")
+df.printSchema()
+from pyspark.ml import functions as mf
+new_df = df.select(*(mf.vector_to_array(f"Mod_0_LightGBM_prediction_{i}") for i in range(5)))
+new_df = df.select(*(mf.vector_to_array(f"Mod_0_LightGBM_prediction_{i}").alias(f"Mod_0_LightGBM_prediction_{i}") for i in range(5)))
+new_df
+from pyspark.sql import functions as sf
+new_df = df.select("_id", "TARGET", *(sf.col(f"Mod_0_LightGBM_prediction_{i}") for i in range(5)))
+v = sf.col("")
+v.getItem(0)
+new_df = df.select("_id", "TARGET", *(mf.vector_to_array(f"Mod_0_LightGBM_prediction_{i}") for i in range(5)))
+new_df = new_df.select("_id", "TARGET", *(sf.col(f"Mod_0_LightGBM_prediction_{i}").getItem(j) for i in range(5) for j in range(2)))
+new_df = df.select("_id", "TARGET", *(mf.vector_to_array(f"Mod_0_LightGBM_prediction_{i}").alias(f"Mod_0_LightGBM_prediction_{i}") for i in range(5)))
+new_df = new_df.select("_id", "TARGET", *(sf.col(f"Mod_0_LightGBM_prediction_{i}").getItem(j).alias(f"p_{i}_{j}") for i in range(5) for j in range(2)))
+new_df.printSchema()
+new_df.select('p_0_0').describe()
+new_df = df.select(*(sf.isnull(f"Mod_0_LightGBM_prediction_{i}").ali for i in range(5)))
+new_df = df.select(*(sf.isnull(f"Mod_0_LightGBM_prediction_{i}").astype('int').alias(f"Mod_0_LightGBM_prediction_{i}") for i in range(5)))
+new_df.select(*((sf.sum(f"Mod_0_LightGBM_prediction_{i}") / sf.count(f"Mod_0_LightGBM_prediction_{i}")).alias(f"p_{i}") for i in range(5)))
+new_df.select(*((sf.sum(f"Mod_0_LightGBM_prediction_{i}") / sf.count(f"Mod_0_LightGBM_prediction_{i}")).alias(f"p_{i}") for i in range(5))).first()
