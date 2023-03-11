@@ -132,7 +132,7 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
     def __init__(
         self,
         task: Task,
-        samples: Optional[int] = 100000,
+        samples: Optional[int] = None,#100000,
         max_nan_rate: float = 0.999,
         max_constant_rate: float = 0.999,
         cv: int = 5,
@@ -301,16 +301,15 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
 
         train_data = self._create_target(train_data, target_col=self.target_col)
 
-        # TODO: SLAMA - fix this sampling
         total_number = train_data.count()
-        # if self.samples is not None:
-        #     if self.samples > total_number:
-        #         fraction = 1.0
-        #     else:
-        #         fraction = self.samples/total_number
-        #     subsample = train_data.sample(fraction=fraction, seed=self.random_state).cache()
-        # else:
-        subsample = train_data
+        if self.samples is not None:
+            if self.samples > total_number:
+                fraction = 1.0
+            else:
+                fraction = self.samples / total_number
+            subsample = train_data.sample(fraction=fraction, seed=self.random_state).cache()
+        else:
+            subsample = train_data
 
         logger.debug("SparkToSparkReader infer roles is started")
         # infer roles
