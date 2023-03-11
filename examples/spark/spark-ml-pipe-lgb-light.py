@@ -28,8 +28,9 @@ if __name__ == "__main__":
     spark = get_spark_session()
 
     seed = 42
-    cv = 3
-    dataset_name = "lama_test_dataset"
+    cv = 5
+    # dataset_name = "lama_test_dataset"
+    dataset_name = "used_cars_dataset"
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     persistence_manager = get_persistence_manager()
@@ -74,7 +75,7 @@ if __name__ == "__main__":
         test_sds = sreader.read(test_df, add_array_attrs=True)
         test_preds_ds = ml_pipe.predict(test_sds)
 
-        test_preds_ds.data.write.parquet("/tmp/tmp_dataset.parquet")
+        test_preds_ds.data.write.parquet("/tmp/tmp_dataset.parquet", mode='overwrite')
 
         test_score = score(test_preds_ds[:, spark_ml_algo.prediction_feature])
         logger.info(f"Test score (#1 way): {test_score}")
