@@ -115,7 +115,7 @@ def prepare_test_and_train(spark: SparkSession, path: str, seed: int, is_csv: bo
     train_data.write.mode('overwrite').format('noop').save()
     test_data.write.mode('overwrite').format('noop').save()
 
-    data.unpersist()
+    # data.unpersist()
 
     return train_data, test_data
 
