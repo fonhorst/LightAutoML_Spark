@@ -4,6 +4,7 @@ import threading
 from abc import ABC, abstractmethod
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
+from dataclasses import dataclass
 from enum import Enum
 from typing import TypeVar, List, Iterator
 
@@ -20,11 +21,24 @@ ENV_VAR_SLAMA_COMPUTATIONS_MANAGER = "SLAMA_COMPUTATIONS_MANAGER"
 __computations_manager__: Optional['ComputationsManager'] = None
 
 T = TypeVar("T")
-S = TypeVar("S")
+S = TypeVar("S", bound='Slot')
 
 
 def _compute_sequential(tasks: List[Callable[[], T]]) -> List[T]:
     return [task() for task in tasks]
+
+
+class Slot(ABC):
+    ...
+
+
+@dataclass
+class LGBMDatasetSlot(Slot):
+    train_df: SparkDataFrame
+    num_tasks: int
+    num_threads: int
+    free: bool
+
 
 
 class PoolType(Enum):
@@ -39,7 +53,7 @@ class ComputationsManager(ABC):
         ...
 
     @abstractmethod
-    def compute_with_slots(self, name: str, prepare_slots: Callable[List[S]],
+    def compute_with_slots(self, name: str, slots: List[S],
                            tasks: List[Callable[[S], T]], pool_type: PoolType) -> List[T]:
         ...
 
@@ -73,7 +87,7 @@ class ParallelComputationsManager(ComputationsManager):
 
         return results
 
-    def compute_with_slots(self, name: str, prepare_slots: Callable[List[S]],
+    def compute_with_slots(self, name: str, slots: List[S],
                            tasks: List[Callable[[S], T]], pool_type: PoolType) -> List[T]:
         with self._block_all_pools(pool_type):
             # check pools
@@ -82,7 +96,7 @@ class ParallelComputationsManager(ComputationsManager):
             pool = self._get_pool(pool_type)
             # TODO: check the pool is empty or check threads by name?
 
-            slots = prepare_slots()
+
             slots_lock = threading.Lock()
 
             @contextmanager
@@ -112,6 +126,10 @@ class ParallelComputationsManager(ComputationsManager):
 
 
 class SequentialComputationsManager(ComputationsManager):
+    def compute_with_slots(self, name: str, prepare_slots: Callable[List[S]], tasks: List[Callable[[S], T]],
+                           pool_type: PoolType) -> List[T]:
+        raise NotImplementedError()
+
     def compute(self, tasks: list[Callable[T]], pool_type: PoolType) -> List[T]:
         return _compute_sequential(tasks)
 
@@ -137,7 +155,3 @@ def computations_manager() -> ComputationsManager:
 
 def compute_tasks(tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.DEFAULT) -> List[T]:
     return computations_manager().compute(tasks, pool_type)
-
-
-def compute_tasks_exclusively(tasks: List[Callable[[], T]]) -> List[T]:
-    raise NotImplementedError()

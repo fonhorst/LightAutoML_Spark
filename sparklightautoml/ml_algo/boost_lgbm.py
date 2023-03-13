@@ -26,6 +26,7 @@ from synapse.ml.lightgbm import (
 )
 from synapse.ml.onnx import ONNXModel
 
+from sparklightautoml.computations.manager import computations_manager, PoolType, LGBMDatasetSlot
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -362,7 +363,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         return pred
 
     def fit_predict_single_fold(
-        self, fold_prediction_column: str, train: SparkDataset, valid: SparkDataset
+        self,
+            fold_prediction_column: str,
+            train: SparkDataset,
+            valid: Optional[SparkDataset] = None,
+            slot: Optional[LGBMDatasetSlot] = None
     ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         # assert self.validation_column in train.data.columns, "Train should contain validation column"
 
@@ -404,6 +409,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         else:
             params["numThreads"] = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
 
+        # TODO: move to the right place
         train_data = train.data
         valid_data = valid.data
         valid_size = valid.data.count()
@@ -417,57 +423,29 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
             valid_data = valid_data.sample(fraction=max_val_size / valid_size, seed=self._seed)
 
-        td = train_data.select('*', sf.lit(False).alias(self.validation_column))
-        vd = valid_data.select('*', sf.lit(True).alias(self.validation_column))
-        full_data = td.unionByName(vd)
+        if valid_data is not None:
+            td = train_data.select('*', sf.lit(False).alias(self.validation_column))
+            vd = valid_data.select('*', sf.lit(True).alias(self.validation_column))
+            full_data = td.unionByName(vd)
 
-        if train_data.rdd.getNumPartitions() == valid_data.rdd.getNumPartitions():
-            full_data = BalancedUnionPartitionsCoalescerTransformer().transform(full_data)
+            if train_data.rdd.getNumPartitions() == valid_data.rdd.getNumPartitions():
+                full_data = BalancedUnionPartitionsCoalescerTransformer().transform(full_data)
+            else:
+                message = f"Cannot apply BalancedUnionPartitionsCoalescer " \
+                          f"due to train and val datasets doesn't have the same number of partitions. " \
+                          f"The train dataset has {train_data.rdd.getNumPartitions()} partitions " \
+                          f"while the val dataset has {valid_data.rdd.getNumPartitions()} partitions." \
+                          f"Continue with plain union." \
+                          f"In some situations it may negatively affect behavior of SynapseML LightGBM " \
+                          f"due to empty partitions"
+                warnings.warn(message, RuntimeWarning)
         else:
-            message = f"Cannot apply BalancedUnionPartitionsCoalescer " \
-                      f"due to train and val datasets doesn't have the same number of partitions. " \
-                      f"The train dataset has {train_data.rdd.getNumPartitions()} partitions " \
-                      f"while the val dataset has {valid_data.rdd.getNumPartitions()} partitions." \
-                      f"Continue with plain union." \
-                      f"In some situations it may negatively affect behavior of SynapseML LightGBM " \
-                      f"due to empty partitions"
-            warnings.warn(message, RuntimeWarning)
+            assert self.validation_column in train_data.columns
+            full_data = train_data
 
-        # # TODO: section of lightgbm settings
-        #
-        # max_parallelism = 5
-        # num_executors = 7
-        # num_cores_per_exec = 6
-        # num_available_cores = num_cores_per_exec * num_executors
-        # experimental_mode = True
-        #
-        # if not self._use_single_dataset_mode:
-        #     numTasks = max(1, math.floor(num_available_cores / max_parallelism))
-        #     useBarrierExecutionMode = True
-        # elif not experimental_mode:
-        #     numTasks = max(1, math.floor(num_available_cores / max_parallelism))
-        #     useBarrierExecutionMode = True
-        #
-        #     if numTasks <= num_executors:
-        #         numThreads = 1
-        #     elif numTasks % num_executors == 0:
-        #         numThreads = numTasks / num_executors
-        #         # raise overcommit warning
-        #     else:
-        #         numThreads = math.floor(numTasks / num_executors)
-        #         # raise overcommit warning +  raise unbalanced number of threads
-        # else:
-        #     numTasks = max(1, math.floor(num_available_cores / max_parallelism))
-        #
-        #     # if numTasks % num_cores_per_exec != 0:
-        #     #     raise warning "cannot use this mode"
-        #     # fallback to normal mode
-        #
-        #     # required dataset preparation
-        #     # should be performed beforehand
-        #     # 1. get list of executors
-        #     # 2. assign desired partitions
-        #     # 3. perform coalescing to desired executors
+        if slot is not None:
+            params["numTasks"] = slot.num_tasks
+            params["numThreads"] = slot.num_threads
 
         lgbm = lgbm_booster(
             **params,
@@ -640,13 +618,49 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # TODO: locking by the same lock
             # TODO: is it possible to run exclusively or not?
             dataset = train_valid_iterator.train_val_single_dataset
-            num_execs = 7
-            num_cores_per_exec = 5
-            num_tasks = (num_execs * num_cores_per_exec) / parallelism
-            if num_tasks % num_cores_per_exec != 0:
-                # TODO: warning bad data
-                pass
-            # TODO: prepare dataset (set of base datasets) + rewrite the whole method of _parallel_fit
-            # TODO: switch impl in the fit_predict_single_fold
+
+            # TODO: lock
+            # TODO: prepare slots
+            slots: List[LGBMDatasetSlot] = list()
+
+            num_folds = len(train_valid_iterator)
+
+            def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str):
+                def func(slot: LGBMDatasetSlot) -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
+                    if num_folds > 1:
+                        logger.info2(
+                            "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
+                            "=====".format(i, self._name)
+                        )
+
+                    mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, slot.train_df, slot=slot)
+                    vpred = vpred.select(SparkDataset.ID_COLUMN, slot.train_df.target_column, mdl_pred_col)
+
+                    timer.write_run_info()
+
+                    return i, mdl, vpred, mdl_pred_col
+
+                return func
+
+            fit_tasks = [
+                build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}", train, valid)
+                for i, (train, valid) in enumerate(train_valid_iterator)
+            ]
+
+            manager = computations_manager()
+            results = manager.compute_with_slots(
+                name=self.name,
+                slots=slots,
+                tasks=fit_tasks,
+                pool_type=PoolType.DEFAULT
+            )
+
+            models = [model for _, model, _, _ in results]
+            val_preds = [val_pred for _, _, val_pred, _ in results]
+            model_prediction_cols = [model_prediction_col for _, _, _, model_prediction_col in results]
+
+            # unprepare dataset
+
+            return models, val_preds, model_prediction_cols
 
         return super()._parallel_fit(parallelism, train_valid_iterator)
