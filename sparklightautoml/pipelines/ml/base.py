@@ -17,7 +17,7 @@ from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
 from ...dataset.base import LAMLDataset, SparkDataset, PersistenceLevel, PersistenceManager
 from ...ml_algo.base import SparkTabularMLAlgo
-from ...parallel.manager import compute_tasks, PoolType
+from ...computations.manager import compute_tasks, PoolType
 from ...utils import ColumnsSelectorTransformer
 from ...validation.base import SparkBaseTrainValidIterator
 

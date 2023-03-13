@@ -22,7 +22,7 @@ from pyspark.sql.session import SparkSession
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
-from ..parallel.manager import compute_tasks, PoolType
+from ..computations.manager import compute_tasks, PoolType
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline

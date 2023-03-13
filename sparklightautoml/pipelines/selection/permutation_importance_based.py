@@ -13,7 +13,7 @@ from pyspark.sql.types import StructField
 from sparklightautoml.pipelines.selection.base import SparkImportanceEstimator
 from ...dataset.base import LAMLDataset, SparkDataset
 from ...ml_algo.base import MLAlgo, SparkTabularMLAlgo
-from ...parallel.manager import compute_tasks
+from ...computations.manager import compute_tasks
 from ...validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)

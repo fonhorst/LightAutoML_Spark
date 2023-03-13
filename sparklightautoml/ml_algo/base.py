@@ -18,7 +18,7 @@ from pyspark.sql.types import IntegerType
 
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
-from sparklightautoml.parallel.manager import compute_tasks
+from sparklightautoml.computations.manager import compute_tasks
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import SparkDataFrame, log_exception
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
