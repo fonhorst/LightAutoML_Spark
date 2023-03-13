@@ -80,7 +80,7 @@ class ParallelComputationsManager(ComputationsManager):
             assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
                 f"All thread pools except {pool_type} should be None"
             pool = self._get_pool(pool_type)
-            # TODO: check the pool is empty
+            # TODO: check the pool is empty or check threads by name?
 
             slots = prepare_slots()
             slots_lock = threading.Lock()
