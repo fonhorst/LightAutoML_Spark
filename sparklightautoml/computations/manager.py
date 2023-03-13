@@ -12,6 +12,7 @@ from mypy.typeshed.stdlib.multiprocessing.pool import ThreadPool
 from mypy.typeshed.stdlib.typing import Callable, Optional
 from pyspark import inheritable_thread_target
 
+from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
@@ -34,9 +35,10 @@ class Slot(ABC):
 
 @dataclass
 class LGBMDatasetSlot(Slot):
-    train_df: SparkDataFrame
+    dataset: SparkDataset
     num_tasks: int
     num_threads: int
+    use_barrier_execution_mode: bool
     free: bool
 
 
@@ -95,8 +97,6 @@ class ParallelComputationsManager(ComputationsManager):
                 f"All thread pools except {pool_type} should be None"
             pool = self._get_pool(pool_type)
             # TODO: check the pool is empty or check threads by name?
-
-
             slots_lock = threading.Lock()
 
             @contextmanager
