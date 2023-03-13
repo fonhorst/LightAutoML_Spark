@@ -411,19 +411,20 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         # TODO: move to the right place
         train_data = train.data
-        valid_data = valid.data
-        valid_size = valid.data.count()
-        max_val_size = self._max_validation_size
-        if valid_size > max_val_size:
-            warnings.warn(
-                f"Maximum validation size for SparkBoostLGBM is exceeded: {valid_size} > {max_val_size}. "
-                f"Reducing validation size down to maximum.",
-                category=RuntimeWarning,
-            )
 
-            valid_data = valid_data.sample(fraction=max_val_size / valid_size, seed=self._seed)
+        if valid is not None:
+            valid_data = valid.data
+            valid_size = valid.data.count()
+            max_val_size = self._max_validation_size
+            if valid_size > max_val_size:
+                warnings.warn(
+                    f"Maximum validation size for SparkBoostLGBM is exceeded: {valid_size} > {max_val_size}. "
+                    f"Reducing validation size down to maximum.",
+                    category=RuntimeWarning,
+                )
 
-        if valid_data is not None:
+                valid_data = valid_data.sample(fraction=max_val_size / valid_size, seed=self._seed)
+
             td = train_data.select('*', sf.lit(False).alias(self.validation_column))
             vd = valid_data.select('*', sf.lit(True).alias(self.validation_column))
             full_data = td.unionByName(vd)
@@ -441,6 +442,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                 warnings.warn(message, RuntimeWarning)
         else:
             assert self.validation_column in train_data.columns
+            # TODO: make filtering of excessive valid dataset
             full_data = train_data
 
         if slot is not None:
