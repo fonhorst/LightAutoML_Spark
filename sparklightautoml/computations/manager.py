@@ -2,18 +2,16 @@ import logging
 import os
 import threading
 from abc import ABC, abstractmethod
-from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
+from multiprocessing.pool import ThreadPool
+from typing import Callable, Optional
 from typing import TypeVar, List, Iterator
 
-from mypy.typeshed.stdlib.multiprocessing.pool import ThreadPool
-from mypy.typeshed.stdlib.typing import Callable, Optional
 from pyspark import inheritable_thread_target
 
 from sparklightautoml.dataset.base import SparkDataset
-from sparklightautoml.utils import SparkDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +49,7 @@ class PoolType(Enum):
 
 class ComputationsManager(ABC):
     @abstractmethod
-    def compute(self, tasks: List[Callable[T]], pool_type: PoolType) -> List[T]:
+    def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType) -> List[T]:
         ...
 
     @abstractmethod
@@ -126,11 +124,11 @@ class ParallelComputationsManager(ComputationsManager):
 
 
 class SequentialComputationsManager(ComputationsManager):
-    def compute_with_slots(self, name: str, prepare_slots: Callable[List[S]], tasks: List[Callable[[S], T]],
+    def compute_with_slots(self, name: str, prepare_slots: Callable[[], List[S]], tasks: List[Callable[[S], T]],
                            pool_type: PoolType) -> List[T]:
         raise NotImplementedError()
 
-    def compute(self, tasks: list[Callable[T]], pool_type: PoolType) -> List[T]:
+    def compute(self, tasks: list[Callable[[], T]], pool_type: PoolType) -> List[T]:
         return _compute_sequential(tasks)
 
 
