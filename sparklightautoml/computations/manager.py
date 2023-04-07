@@ -3,15 +3,17 @@ import os
 import threading
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing.pool import ThreadPool
-from typing import Callable, Optional
+from typing import Callable, Optional, Iterator, Iterable
 from typing import TypeVar, List, Iterator
 
 from pyspark import inheritable_thread_target
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal
 
 logger = logging.getLogger(__name__)
 
@@ -127,19 +129,18 @@ class ParallelComputationsManager(ComputationsManager):
             slots_lock = threading.Lock()
             slots = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
             def iterator():
-                with self._block_all_pools(pool_type):
-                    assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
-                        f"All thread pools except {pool_type} should be None"
-                    pool = self._get_pool(pool_type)
-                    # TODO: check the pool is empty or check threads by name?
-                    with slots_lock:
-                        free_slot = next((slot for slot in slots if slot.free))
-                        free_slot.free = False
+                assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
+                    f"All thread pools except {pool_type} should be None"
+                pool = self._get_pool(pool_type)
+                # TODO: check the pool is empty or check threads by name?
+                with slots_lock:
+                    free_slot = next((slot for slot in slots if slot.free))
+                    free_slot.free = False
 
-                    yield free_slot
+                yield free_slot
 
-                    with slots_lock:
-                        free_slot.free = True
+                with slots_lock:
+                    free_slot.free = True
 
             yield iterator()
 
@@ -259,3 +260,79 @@ def computations_manager() -> ComputationsManager:
 
 def compute_tasks(tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.DEFAULT) -> List[T]:
     return computations_manager().compute(tasks, pool_type)
+
+
+class _SlotBasedTVIter(SparkBaseTrainValidIterator):
+    def __init__(self, slots: Iterator[Slot], tviter: SparkBaseTrainValidIterator):
+        super().__init__(None)
+        self._slots = slots
+        self._tviter = tviter
+        self._curr_pos = 0
+
+    def __iter__(self) -> Iterable:
+        self._curr_pos = 0
+        return self
+
+    def __next__(self) -> TrainVal:
+        with next(self._slots) as slot:
+            tviter = deepcopy(self._tviter)
+            tviter.train = slot.dataset
+
+            try:
+                curr_tv = None
+                for i in range(self._curr_pos):
+                    curr_tv = next(tviter)
+
+                self._curr_pos += 1
+            except StopIteration:
+                self._curr_pos = 0
+                raise StopIteration()
+
+        return curr_tv
+
+    def freeze(self) -> 'SparkBaseTrainValidIterator':
+        raise NotImplementedError()
+
+    def unpersist(self, skip_val: bool = False):
+        raise NotImplementedError()
+
+    @property
+    def train_val_single_dataset(self) -> 'SparkDataset':
+        return self._tviter.train_val_single_dataset
+
+    def get_validation_data(self) -> SparkDataset:
+        return self._tviter.get_validation_data()
+
+
+class _SlotInitiatedTVIter(SparkBaseTrainValidIterator):
+    def __init__(self, slots: Iterator[Slot], tviter: SparkBaseTrainValidIterator):
+        super().__init__(None)
+        self._slots = slots
+        self._tviter = deepcopy(tviter)
+        self._current_iter: Optional[SparkBaseTrainValidIterator] = None
+
+    def __iter__(self) -> Iterable:
+        def _iter():
+            with next(self._slots) as slot:
+                tviter = deepcopy(self._tviter)
+                tviter.train = slot.dataset
+                for elt in tviter:
+                    yield elt
+
+        return _iter()
+
+    def __next__(self):
+        raise NotImplementedError()
+
+    def freeze(self) -> 'SparkBaseTrainValidIterator':
+        raise NotImplementedError()
+
+    def unpersist(self, skip_val: bool = False):
+        raise NotImplementedError()
+
+    @property
+    def train_val_single_dataset(self) -> 'SparkDataset':
+        return self._tviter.train_val_single_dataset
+
+    def get_validation_data(self) -> SparkDataset:
+        return self._tviter.get_validation_data()

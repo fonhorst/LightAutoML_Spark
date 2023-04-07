@@ -1,15 +1,12 @@
 import logging
-import math
 import multiprocessing
-import threading
 import warnings
-from copy import copy, deepcopy
-from typing import Dict, Optional, Tuple, Union, cast, List, Iterable, Iterator
+from copy import copy
+from typing import Dict, Optional, Tuple, Union, cast, List
 
 import lightgbm as lgb
 import pandas as pd
 import pyspark.sql.functions as sf
-from lightautoml.dataset.roles import ColumnRole
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.utils.timer import TaskTimer
@@ -27,8 +24,8 @@ from synapse.ml.lightgbm import (
 )
 from synapse.ml.onnx import ONNXModel
 
-from sparklightautoml.computations.manager import computations_manager, PoolType, LGBMDatasetSlot, Slot
-from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
+from sparklightautoml.computations.manager import computations_manager, PoolType, LGBMDatasetSlot, _SlotBasedTVIter
+from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.mlwriters import (
@@ -45,7 +42,7 @@ from sparklightautoml.transformers.base import (
 from sparklightautoml.transformers.scala_wrappers.balanced_union_partitions_coalescer import \
     BalancedUnionPartitionsCoalescerTransformer
 from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)
 
@@ -93,49 +90,6 @@ class ONNXModelWrapper(Transformer, MLWritable, MLReadable):
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return self.model.transform(dataset)
-
-
-class _SlotBasedTVIter(SparkBaseTrainValidIterator):
-    def __init__(self, slots: Iterator[Slot], tviter: SparkBaseTrainValidIterator):
-        super().__init__(None)
-        self._slots = slots
-        self._tviter = tviter
-        self._curr_pos = 0
-
-    def __iter__(self) -> Iterable:
-        self._curr_pos = 0
-        return self
-
-    def __next__(self) -> TrainVal:
-        slot =  next(self._slots)
-
-        tviter = deepcopy(self._tviter)
-        tviter.train = slot.dataset
-
-        try:
-            curr_tv = None
-            for i in range(self._curr_pos):
-                curr_tv = next(tviter)
-
-            self._curr_pos += 1
-        except StopIteration:
-            self._curr_pos = 0
-            raise StopIteration()
-
-        return curr_tv
-
-    def freeze(self) -> 'SparkBaseTrainValidIterator':
-        raise NotImplementedError()
-
-    def unpersist(self, skip_val: bool = False):
-        raise NotImplementedError()
-
-    @property
-    def train_val_single_dataset(self) -> 'SparkDataset':
-        return self._tviter.train_val_single_dataset
-
-    def get_validation_data(self) -> SparkDataset:
-        return self._tviter.get_validation_data()
 
 
 class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
