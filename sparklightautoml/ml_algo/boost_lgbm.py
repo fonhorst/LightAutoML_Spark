@@ -711,9 +711,15 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         # 1. check if we need to run in experimental parallel mode
         # 2. lock further running and prepare the train valid iteratorS
         if self._experimental_parallel_mode:
-            # TODO: locking by the same lock
+            # TODO: 1. locking by the same lock
             # TODO: is it possible to run exclusively or not?
+            # TODO: 2. create slot-based train_val_iterator
+            # TODO: 3. Redefine params through setInternalParallelismParams(...) which is added with redefined infer_params(...)
+
+
+
             dataset = train_valid_iterator.train_val_single_dataset
+
             slots: List[LGBMDatasetSlot] = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
 
             # 1. take dataset from train_valid_iterator
