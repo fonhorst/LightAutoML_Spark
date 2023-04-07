@@ -642,6 +642,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
                             timer.write_run_info()
 
+                        # The previous way also should be ok, because:
+                        # - fold based computations often happen in the end of MLPipeline
+                        # and thus are subjects for "checkpointing" before the next level (e.g. writing on disk)
+                        # - the dataset should not be too great in size to avoid shuffling at all
+
                         # Alternative way of obtaining vpred
                         # we predict on all executors instead only on part of them
                         # probably it should be run as a separate set of tasks after finishing this part of computations
