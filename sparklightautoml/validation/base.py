@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
-from typing import Tuple, cast, Sequence, Optional, Union, Any
+from typing import Tuple, cast, Sequence, Optional, Union, Any, Iterator
 
 from lightautoml.dataset.base import LAMLDataset
 from lightautoml.ml_algo.base import MLAlgo
@@ -12,6 +12,7 @@ from lightautoml.validation.base import TrainValidIterator
 from pyspark.sql import functions as sf
 
 from sparklightautoml import VALIDATION_COLUMN
+from sparklightautoml.computations.manager import Slot
 from sparklightautoml.dataset.base import SparkDataset, Unpersistable
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.utils import SparkDataFrame
@@ -153,7 +154,6 @@ class SparkBaseTrainValidIterator(TrainValidIterator, Unpersistable, ABC):
 
         return train_ds, train_part_ds, valid_part_ds
 
+    @abstractmethod
     def get_validation_data(self) -> SparkDataset:
         ...
-
-

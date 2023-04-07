@@ -57,6 +57,10 @@ class ComputationsManager(ABC):
                            tasks: List[Callable[[S], T]], pool_type: PoolType) -> List[T]:
         ...
 
+    @abstractmethod
+    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Iterator[Slot]:
+        ...
+
 
 class ParallelComputationsManager(ComputationsManager):
     def __init__(self, ml_pipes_pool_size: int = 10, ml_algos_pool_size: int = 20, default_pool_size: int = 10):
@@ -116,11 +120,110 @@ class ParallelComputationsManager(ComputationsManager):
 
             return self.compute(f_tasks, pool_type.DEFAULT)
 
+    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Iterator[Slot]:
+        slots_lock = threading.Lock()
+        slots = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
+        def iterator():
+            with self._block_all_pools(pool_type):
+                assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
+                    f"All thread pools except {pool_type} should be None"
+                pool = self._get_pool(pool_type)
+                # TODO: check the pool is empty or check threads by name?
+                with slots_lock:
+                    free_slot = next((slot for slot in slots if slot.free))
+                    free_slot.free = False
+
+                yield free_slot
+
+                with slots_lock:
+                    free_slot.free = True
+
+        return iterator()
+
     @contextmanager
     def _block_all_pools(self, pool_type: PoolType):
         # need to block pool
         with self._pools_lock:
             yield self._get_pool(pool_type)
+
+    def _prepare_trains(self, paralellism_mode, train_df, max_job_parallelism: int) -> List[DatasetSlot]:
+        if self.parallelism_mode == ParallelismMode.pref_locs:
+            execs_per_job = max(1, math.floor(len(self._executors) / max_job_parallelism))
+
+            if len(self._executors) % max_job_parallelism != 0:
+                warnings.warn(f"Uneven number of executors per job. Setting execs per job: {execs_per_job}.")
+
+            slots_num = int(len(self._executors) / execs_per_job)
+
+            _train_slots = []
+
+            def _coalesce_df_to_locs(df: SparkDataFrame, pref_locs: List[str]):
+                df = PrefferedLocsPartitionCoalescerTransformer(pref_locs=pref_locs).transform(df)
+                df = df.cache()
+                df.write.mode('overwrite').format('noop').save()
+                return df
+
+            for i in range(slots_num):
+                pref_locs = self._executors[i * execs_per_job: (i + 1) * execs_per_job]
+
+                # prepare train
+                train_df = _coalesce_df_to_locs(train_df, pref_locs)
+
+                # prepare test
+                test_df = _coalesce_df_to_locs(test_df, pref_locs)
+
+                _train_slots.append(DatasetSlot(
+                    train_df=train_df,
+                    test_df=test_df,
+                    pref_locs=pref_locs,
+                    num_tasks=len(pref_locs) * self._cores_per_exec,
+                    num_threads=-1,
+                    use_single_dataset_mode=True,
+                    free=True
+                ))
+
+                print(f"Pref lcos for slot #{i}: {pref_locs}")
+        elif self.parallelism_mode == ParallelismMode.no_single_dataset_mode:
+            num_tasks_per_job = max(1, math.floor(len(self._executors) * self._cores_per_exec / max_job_parallelism))
+            _train_slots = [DatasetSlot(
+                train_df=self.train_dataset,
+                test_df=self.test_dataset,
+                pref_locs=None,
+                num_tasks=num_tasks_per_job,
+                num_threads=-1,
+                use_single_dataset_mode=False,
+                free=False
+            )]
+        elif self.parallelism_mode == ParallelismMode.single_dataset_mode:
+            num_tasks_per_job = max(1, math.floor(len(self._executors) * self._cores_per_exec / max_job_parallelism))
+            num_threads_per_exec = max(1, math.floor(num_tasks_per_job / len(self._executors)))
+
+            if num_threads_per_exec != 1:
+                warnings.warn(f"Num threads per exec {num_threads_per_exec} != 1. "
+                              f"Overcommitting or undercommiting may happen due to "
+                              f"uneven allocations of cores between executors for a job")
+
+            _train_slots = [DatasetSlot(
+                train_df=self.train_dataset,
+                test_df=self.test_dataset,
+                pref_locs=None,
+                num_tasks=num_tasks_per_job,
+                num_threads=num_threads_per_exec,
+                use_single_dataset_mode=True,
+                free=False
+            )]
+        else:
+            _train_slots = [DatasetSlot(
+                train_df=self.train_dataset,
+                test_df=self.test_dataset,
+                pref_locs=None,
+                num_tasks=self.train_dataset.rdd.getNumPartitions(),
+                num_threads=-1,
+                use_single_dataset_mode=True,
+                free=False
+            )]
+
+        return _train_slots
 
 
 class SequentialComputationsManager(ComputationsManager):

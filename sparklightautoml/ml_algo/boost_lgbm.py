@@ -1,9 +1,10 @@
 import logging
 import math
 import multiprocessing
+import threading
 import warnings
-from copy import copy
-from typing import Dict, Optional, Tuple, Union, cast, List
+from copy import copy, deepcopy
+from typing import Dict, Optional, Tuple, Union, cast, List, Iterable, Iterator
 
 import lightgbm as lgb
 import pandas as pd
@@ -26,7 +27,7 @@ from synapse.ml.lightgbm import (
 )
 from synapse.ml.onnx import ONNXModel
 
-from sparklightautoml.computations.manager import computations_manager, PoolType, LGBMDatasetSlot
+from sparklightautoml.computations.manager import computations_manager, PoolType, LGBMDatasetSlot, Slot
 from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -44,7 +45,7 @@ from sparklightautoml.transformers.base import (
 from sparklightautoml.transformers.scala_wrappers.balanced_union_partitions_coalescer import \
     BalancedUnionPartitionsCoalescerTransformer
 from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,49 @@ class ONNXModelWrapper(Transformer, MLWritable, MLReadable):
 
     def _transform(self, dataset: SparkDataFrame) -> SparkDataFrame:
         return self.model.transform(dataset)
+
+
+class _SlotBasedTVIter(SparkBaseTrainValidIterator):
+    def __init__(self, slots: Iterator[Slot], tviter: SparkBaseTrainValidIterator):
+        super().__init__(None)
+        self._slots = slots
+        self._tviter = tviter
+        self._curr_pos = 0
+
+    def __iter__(self) -> Iterable:
+        self._curr_pos = 0
+        return self
+
+    def __next__(self) -> TrainVal:
+        slot =  next(self._slots)
+
+        tviter = deepcopy(self._tviter)
+        tviter.train = slot.dataset
+
+        try:
+            curr_tv = None
+            for i in range(self._curr_pos):
+                curr_tv = next(tviter)
+
+            self._curr_pos += 1
+        except StopIteration:
+            self._curr_pos = 0
+            raise StopIteration()
+
+        return curr_tv
+
+    def freeze(self) -> 'SparkBaseTrainValidIterator':
+        raise NotImplementedError()
+
+    def unpersist(self, skip_val: bool = False):
+        raise NotImplementedError()
+
+    @property
+    def train_val_single_dataset(self) -> 'SparkDataset':
+        return self._tviter.train_val_single_dataset
+
+    def get_validation_data(self) -> SparkDataset:
+        return self._tviter.get_validation_data()
 
 
 class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
@@ -626,85 +670,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         logger.info("Finished LGBM fit")
         return res
 
-    def _prepare_trains(self, paralellism_mode, train_df, max_job_parallelism: int) -> List[DatasetSlot]:
-        if self.parallelism_mode == ParallelismMode.pref_locs:
-            execs_per_job = max(1, math.floor(len(self._executors) / max_job_parallelism))
-
-            if len(self._executors) % max_job_parallelism != 0:
-                warnings.warn(f"Uneven number of executors per job. Setting execs per job: {execs_per_job}.")
-
-            slots_num = int(len(self._executors) / execs_per_job)
-
-            _train_slots = []
-
-            def _coalesce_df_to_locs(df: SparkDataFrame, pref_locs: List[str]):
-                df = PrefferedLocsPartitionCoalescerTransformer(pref_locs=pref_locs).transform(df)
-                df = df.cache()
-                df.write.mode('overwrite').format('noop').save()
-                return df
-
-            for i in range(slots_num):
-                pref_locs = self._executors[i * execs_per_job: (i + 1) * execs_per_job]
-
-                # prepare train
-                train_df = _coalesce_df_to_locs(train_df, pref_locs)
-
-                # prepare test
-                test_df = _coalesce_df_to_locs(test_df, pref_locs)
-
-                _train_slots.append(DatasetSlot(
-                    train_df=train_df,
-                    test_df=test_df,
-                    pref_locs=pref_locs,
-                    num_tasks=len(pref_locs) * self._cores_per_exec,
-                    num_threads=-1,
-                    use_single_dataset_mode=True,
-                    free=True
-                ))
-
-                print(f"Pref lcos for slot #{i}: {pref_locs}")
-        elif self.parallelism_mode == ParallelismMode.no_single_dataset_mode :
-            num_tasks_per_job = max(1, math.floor(len(self._executors) * self._cores_per_exec / max_job_parallelism))
-            _train_slots = [DatasetSlot(
-                train_df=self.train_dataset,
-                test_df=self.test_dataset,
-                pref_locs=None,
-                num_tasks=num_tasks_per_job,
-                num_threads=-1,
-                use_single_dataset_mode=False,
-                free=False
-            )]
-        elif self.parallelism_mode == ParallelismMode.single_dataset_mode:
-            num_tasks_per_job = max(1, math.floor(len(self._executors) * self._cores_per_exec / max_job_parallelism))
-            num_threads_per_exec = max(1, math.floor(num_tasks_per_job / len(self._executors)))
-
-            if num_threads_per_exec != 1:
-                warnings.warn(f"Num threads per exec {num_threads_per_exec} != 1. "
-                              f"Overcommitting or undercommiting may happen due to "
-                              f"uneven allocations of cores between executors for a job")
-
-            _train_slots = [DatasetSlot(
-                train_df=self.train_dataset,
-                test_df=self.test_dataset,
-                pref_locs=None,
-                num_tasks=num_tasks_per_job,
-                num_threads=num_threads_per_exec,
-                use_single_dataset_mode=True,
-                free=False
-            )]
-        else:
-            _train_slots = [DatasetSlot(
-                train_df=self.train_dataset,
-                test_df=self.test_dataset,
-                pref_locs=None,
-                num_tasks=self.train_dataset.rdd.getNumPartitions(),
-                num_threads=-1,
-                use_single_dataset_mode=True,
-                free=False
-            )]
-
-        return _train_slots
-
     def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) -> Tuple[
         List[Model], List[SparkDataFrame], List[str]]:
         # TODO: prepare train_valid_iterator
@@ -716,57 +681,13 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # TODO: 2. create slot-based train_val_iterator
             # TODO: 3. Redefine params through setInternalParallelismParams(...) which is added with redefined infer_params(...)
 
-
-
-            dataset = train_valid_iterator.train_val_single_dataset
-
-            slots: List[LGBMDatasetSlot] = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
-
-            # 1. take dataset from train_valid_iterator
-            # 2. squash it for train_valid
-            # 3. convert it to a new train_valid iterator
-
-            num_folds = len(train_valid_iterator)
-
-            def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str):
-                def func(slot: LGBMDatasetSlot) -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
-                    if num_folds > 1:
-                        logger.info2(
-                            "===== Start working with \x1b[1mfold {}\x1b[0m for \x1b[1m{}\x1b[0m "
-                            "=====".format(i, self._name)
-                        )
-
-                    # TODO: need to filter it according to fold or is_val sign
-                    ds = slot.dataset
-
-                    mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, ds, slot=slot)
-                    vpred = vpred.select(SparkDataset.ID_COLUMN, ds.target_column, mdl_pred_col)
-
-                    timer.write_run_info()
-
-                    return i, mdl, vpred, mdl_pred_col
-
-                return func
-
-            fit_tasks = [
-                build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}")
-                for i, _ in enumerate(train_valid_iterator)
-            ]
-
             manager = computations_manager()
-            results = manager.compute_with_slots(
-                name=self.name,
-                slots=slots,
-                tasks=fit_tasks,
+            # TODO: blocking other threads here
+            slots = manager.slots(
+                train_valid_iterator.train_val_single_dataset,
+                parallelism=parallelism,
                 pool_type=PoolType.DEFAULT
             )
-
-            models = [model for _, model, _, _ in results]
-            val_preds = [val_pred for _, _, val_pred, _ in results]
-            model_prediction_cols = [model_prediction_col for _, _, _, model_prediction_col in results]
-
-            # unprepare dataset
-
-            return models, val_preds, model_prediction_cols
+            train_valid_iterator = _SlotBasedTVIter(slots, train_valid_iterator)
 
         return super()._parallel_fit(parallelism, train_valid_iterator)
