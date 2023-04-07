@@ -635,11 +635,44 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # TODO: 2. create slot-based train_val_iterator
             # TODO: 3. Redefine params through setInternalParallelismParams(...) which is added with redefined infer_params(...)
 
-            manager = computations_manager()
+
+        if self._experimental_parallel_mode:
+            # TODO: 1. locking by the same lock
+            # TODO: is it possible to run exclusively or not?
+            # TODO: 2. create slot-based train_val_iterator
+            # TODO: 3. Redefine params through setInternalParallelismParams(...) which is added with redefined infer_params(...)
+
             # TODO: blocking other threads here
+            manager = computations_manager()
             with manager.slots(train_valid_iterator.train_val_single_dataset,
                                parallelism=parallelism, pool_type=PoolType.DEFAULT) as slots:
-                train_valid_iterator = _SlotBasedTVIter(slots, train_valid_iterator)
-                return super()._parallel_fit(parallelism, train_valid_iterator)
+                def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str):
+                    def func() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
+                        with slots() as slot:
+                            ds = slot.dataset
+                            mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, ds, slot=slot)
+                            vpred = vpred.select(SparkDataset.ID_COLUMN, ds.target_column, mdl_pred_col)
+
+                            timer.write_run_info()
+
+                        return i, mdl, vpred, mdl_pred_col
+                    return func
+
+                fit_tasks = [
+                    build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}")
+                    for i, _ in enumerate(train_valid_iterator)
+                ]
+
+                results = manager.compute(fit_tasks, pool_type=PoolType.DEFAULT)
+
+            models = [model for _, model, _, _ in results]
+            val_preds = [val_pred for _, _, val_pred, _ in results]
+            model_prediction_cols = [model_prediction_col for _, _, _, model_prediction_col in results]
+
+            # unprepare dataset
+
+            return models, val_preds, model_prediction_cols
+
+
 
         return super()._parallel_fit(parallelism, train_valid_iterator)
