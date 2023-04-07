@@ -646,8 +646,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                         # - fold based computations often happen in the end of MLPipeline
                         # and thus are subjects for "checkpointing" before the next level (e.g. writing on disk)
                         # - the dataset should not be too great in size to avoid shuffling at all
+                        # - PravdaML also refer to shuffling due to how they treat parallelism
 
-                        # Alternative way of obtaining vpred
+                        #  Alternative way of obtaining vpred
                         # we predict on all executors instead only on part of them
                         # probably it should be run as a separate set of tasks after finishing this part of computations
                         # vpred = self.predict_single_fold(val, mdl)
