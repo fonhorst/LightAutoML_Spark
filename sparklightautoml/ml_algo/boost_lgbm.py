@@ -1,7 +1,7 @@
 import logging
 import multiprocessing
 import warnings
-from copy import copy
+from copy import copy, deepcopy
 from typing import Dict, Optional, Tuple, Union, cast, List
 
 import lightgbm as lgb
@@ -350,15 +350,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         return optimization_search_space
 
-    def predict_single_fold(
-        self, dataset: SparkDataset, model: Union[LightGBMRegressor, LightGBMClassifier]
-    ) -> SparkDataFrame:
-
-        temp_sdf = self._assembler.transform(dataset.data)
-
-        pred = model.transform(temp_sdf)
-
-        return pred
+    def predict_single_fold(self, dataset: SparkDataset, model: PipelineModel) -> SparkDataFrame:
+        return model.transform(dataset.data)
 
     def _get_num_threads(self, train: SparkDataFrame):
         master_addr = train.spark_session.conf.get("spark.master")
@@ -626,16 +619,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) -> Tuple[
         List[Model], List[SparkDataFrame], List[str]]:
-        # TODO: prepare train_valid_iterator
-        # 1. check if we need to run in experimental parallel mode
-        # 2. lock further running and prepare the train valid iteratorS
-        if self._experimental_parallel_mode:
-            # TODO: 1. locking by the same lock
-            # TODO: is it possible to run exclusively or not?
-            # TODO: 2. create slot-based train_val_iterator
-            # TODO: 3. Redefine params through setInternalParallelismParams(...) which is added with redefined infer_params(...)
-
-
         if self._experimental_parallel_mode:
             # TODO: 1. locking by the same lock
             # TODO: is it possible to run exclusively or not?
@@ -646,21 +629,30 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             manager = computations_manager()
             with manager.slots(train_valid_iterator.train_val_single_dataset,
                                parallelism=parallelism, pool_type=PoolType.DEFAULT) as slots:
-                def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str):
+                def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset, val: SparkDataset):
                     def func() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
                         with slots() as slot:
-                            ds = slot.dataset
-                            mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, ds, slot=slot)
-                            vpred = vpred.select(SparkDataset.ID_COLUMN, ds.target_column, mdl_pred_col)
+                            tviter = deepcopy(train_valid_iterator)
+                            tviter.train = slot.dataset
+                            for _ in range(i + 1):
+                                slot_train, slot_val = next(tviter)
+
+                            mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, slot_train, slot_val, slot=slot)
+                            vpred = vpred.select(SparkDataset.ID_COLUMN, slot.dataset.target_column, mdl_pred_col)
 
                             timer.write_run_info()
+
+                        # Alternative way of obtaining vpred
+                        # we predict on all executors instead only on part of them
+                        # probably it should be run as a separate set of tasks after finishing this part of computations
+                        # vpred = self.predict_single_fold(val, mdl)
 
                         return i, mdl, vpred, mdl_pred_col
                     return func
 
                 fit_tasks = [
-                    build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}")
-                    for i, _ in enumerate(train_valid_iterator)
+                    build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}", train, val)
+                    for i, (train, val) in enumerate(train_valid_iterator)
                 ]
 
                 results = manager.compute(fit_tasks, pool_type=PoolType.DEFAULT)
