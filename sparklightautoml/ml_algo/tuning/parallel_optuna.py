@@ -1,7 +1,7 @@
 import logging
 from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
-from typing import Optional, Tuple, Callable, Union
+from typing import Optional, Tuple, Callable, Union, Iterator
 
 import optuna
 from lightautoml.dataset.base import LAMLDataset
@@ -9,7 +9,7 @@ from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner, TunableAlgo
 from lightautoml.validation.base import TrainValidIterator, HoldoutIterator
 
-from sparklightautoml.computations.manager import computations_manager
+from sparklightautoml.computations.manager import computations_manager, Slot
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
@@ -29,7 +29,11 @@ class SparkOptunaTuner(OptunaTuner):
         super().__init__(timeout, n_trials, direction, fit_on_holdout, random_state)
         self._max_parallelism = max_parallelism
 
-    def _get_objective(self, ml_algo: TunableAlgo, estimated_n_trials: int, train_valid_iterator: TrainValidIterator) \
+    def _get_objective(self,
+                       ml_algo: TunableAlgo,
+                       estimated_n_trials: int,
+                       train_valid_iterator: TrainValidIterator,
+                       slots: Optional[Iterator[Slot]] = None) \
             -> Callable[[optuna.trial.Trial], Union[float, int]]:
         """Get objective.
 
@@ -48,9 +52,6 @@ class SparkOptunaTuner(OptunaTuner):
         # TODO: prepare slots
         # TODO: slot-based train-valid iterator
         # TODO: ml_algo = deepcopy(ml_algo); ml_algo.setInternalParallelismParamas(NoParallelism, numTask, numThreads, useExecutionBarrierMode); ml_algo.setSettings(...)
-
-        manager = computations_manager()
-        slots = manager.slots(train_valid_iterator.train, parallelism=self._max_parallelism, pool_type=)
 
         def objective(trial: optuna.trial.Trial) -> float:
             slot = next(slots)
@@ -147,18 +148,21 @@ class SparkOptunaTuner(OptunaTuner):
             # TODO: block pool and create slots, send slots to get objective
             # TODO: set no parallelism for the algo
 
-            self.study.optimize(
-                func=self._get_objective(
-                    ml_algo=ml_algo,
-                    estimated_n_trials=self.estimated_n_trials,
-                    train_valid_iterator=train_valid_iterator,
-                ),
-                n_jobs=self._max_parallelism,
-                n_trials=self.n_trials,
-                timeout=self.timeout,
-                callbacks=[update_trial_time],
-                # show_progress_bar=True,
-            )
+            with computations_manager().slots(train_valid_iterator.train,
+                                              parallelism=self._max_parallelism, pool_type=) as slots:
+                self.study.optimize(
+                    func=self._get_objective(
+                        ml_algo=ml_algo,
+                        estimated_n_trials=self.estimated_n_trials,
+                        train_valid_iterator=train_valid_iterator,
+                        slots=slots
+                    ),
+                    n_jobs=self._max_parallelism,
+                    n_trials=self.n_trials,
+                    timeout=self.timeout,
+                    callbacks=[update_trial_time],
+                    # show_progress_bar=True,
+                )
 
             # need to update best params here
             self._best_params = self.study.best_params

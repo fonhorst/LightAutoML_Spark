@@ -57,6 +57,7 @@ class ComputationsManager(ABC):
                            tasks: List[Callable[[S], T]], pool_type: PoolType) -> List[T]:
         ...
 
+    @contextmanager
     @abstractmethod
     def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Iterator[Slot]:
         ...
@@ -120,25 +121,27 @@ class ParallelComputationsManager(ComputationsManager):
 
             return self.compute(f_tasks, pool_type.DEFAULT)
 
+    @contextmanager
     def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Iterator[Slot]:
-        slots_lock = threading.Lock()
-        slots = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
-        def iterator():
-            with self._block_all_pools(pool_type):
-                assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
-                    f"All thread pools except {pool_type} should be None"
-                pool = self._get_pool(pool_type)
-                # TODO: check the pool is empty or check threads by name?
-                with slots_lock:
-                    free_slot = next((slot for slot in slots if slot.free))
-                    free_slot.free = False
+        with self._block_all_pools(pool_type):
+            slots_lock = threading.Lock()
+            slots = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
+            def iterator():
+                with self._block_all_pools(pool_type):
+                    assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
+                        f"All thread pools except {pool_type} should be None"
+                    pool = self._get_pool(pool_type)
+                    # TODO: check the pool is empty or check threads by name?
+                    with slots_lock:
+                        free_slot = next((slot for slot in slots if slot.free))
+                        free_slot.free = False
 
-                yield free_slot
+                    yield free_slot
 
-                with slots_lock:
-                    free_slot.free = True
+                    with slots_lock:
+                        free_slot.free = True
 
-        return iterator()
+            yield iterator()
 
     @contextmanager
     def _block_all_pools(self, pool_type: PoolType):

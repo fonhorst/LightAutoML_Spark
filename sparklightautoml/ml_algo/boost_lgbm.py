@@ -683,11 +683,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
             manager = computations_manager()
             # TODO: blocking other threads here
-            slots = manager.slots(
-                train_valid_iterator.train_val_single_dataset,
-                parallelism=parallelism,
-                pool_type=PoolType.DEFAULT
-            )
-            train_valid_iterator = _SlotBasedTVIter(slots, train_valid_iterator)
+            with manager.slots(train_valid_iterator.train_val_single_dataset,
+                               parallelism=parallelism, pool_type=PoolType.DEFAULT) as slots:
+                train_valid_iterator = _SlotBasedTVIter(slots, train_valid_iterator)
+                return super()._parallel_fit(parallelism, train_valid_iterator)
 
         return super()._parallel_fit(parallelism, train_valid_iterator)
