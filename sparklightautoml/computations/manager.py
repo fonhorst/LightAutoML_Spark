@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing.pool import ThreadPool
-from typing import Callable, Optional, Iterator, Iterable
+from typing import Callable, Optional, Iterator, Iterable, ContextManager
 from typing import TypeVar, List, Iterator
 
 from pyspark import inheritable_thread_target
@@ -61,7 +61,7 @@ class ComputationsManager(ABC):
 
     @contextmanager
     @abstractmethod
-    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Iterator[Slot]:
+    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Callable[[], Slot]:
         ...
 
 
@@ -124,10 +124,12 @@ class ParallelComputationsManager(ComputationsManager):
             return self.compute(f_tasks, pool_type.DEFAULT)
 
     @contextmanager
-    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Iterator[Slot]:
+    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Callable[[], Slot]:
         with self._block_all_pools(pool_type):
             slots_lock = threading.Lock()
             slots = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
+
+            @contextmanager
             def iterator():
                 assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
                     f"All thread pools except {pool_type} should be None"
@@ -142,7 +144,7 @@ class ParallelComputationsManager(ComputationsManager):
                 with slots_lock:
                     free_slot.free = True
 
-            yield iterator()
+            yield iterator
 
     @contextmanager
     def _block_all_pools(self, pool_type: PoolType):
@@ -263,7 +265,7 @@ def compute_tasks(tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.D
 
 
 class _SlotBasedTVIter(SparkBaseTrainValidIterator):
-    def __init__(self, slots: Iterator[Slot], tviter: SparkBaseTrainValidIterator):
+    def __init__(self, slots: Callable[[], Slot], tviter: SparkBaseTrainValidIterator):
         super().__init__(None)
         self._slots = slots
         self._tviter = tviter
@@ -274,16 +276,16 @@ class _SlotBasedTVIter(SparkBaseTrainValidIterator):
         return self
 
     def __next__(self) -> TrainVal:
-        with next(self._slots) as slot:
+        with self._slots() as slot:
             tviter = deepcopy(self._tviter)
             tviter.train = slot.dataset
+
+            self._curr_pos += 1
 
             try:
                 curr_tv = None
                 for i in range(self._curr_pos):
                     curr_tv = next(tviter)
-
-                self._curr_pos += 1
             except StopIteration:
                 self._curr_pos = 0
                 raise StopIteration()
@@ -305,15 +307,14 @@ class _SlotBasedTVIter(SparkBaseTrainValidIterator):
 
 
 class _SlotInitiatedTVIter(SparkBaseTrainValidIterator):
-    def __init__(self, slots: Iterator[Slot], tviter: SparkBaseTrainValidIterator):
+    def __init__(self, slots: Callable[[], Slot], tviter: SparkBaseTrainValidIterator):
         super().__init__(None)
         self._slots = slots
         self._tviter = deepcopy(tviter)
-        self._current_iter: Optional[SparkBaseTrainValidIterator] = None
 
     def __iter__(self) -> Iterable:
         def _iter():
-            with next(self._slots) as slot:
+            with self._slots() as slot:
                 tviter = deepcopy(self._tviter)
                 tviter.train = slot.dataset
                 for elt in tviter:
@@ -322,13 +323,13 @@ class _SlotInitiatedTVIter(SparkBaseTrainValidIterator):
         return _iter()
 
     def __next__(self):
-        raise NotImplementedError()
+        raise NotImplementedError("NotSupportedMethod")
 
     def freeze(self) -> 'SparkBaseTrainValidIterator':
-        raise NotImplementedError()
+        raise NotImplementedError("NotSupportedMethod")
 
     def unpersist(self, skip_val: bool = False):
-        raise NotImplementedError()
+        raise NotImplementedError("NotSupportedMethod")
 
     @property
     def train_val_single_dataset(self) -> 'SparkDataset':
