@@ -1,18 +1,14 @@
 import logging
-from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
-from typing import Optional, Tuple, Callable, Union, Iterator
+from typing import Optional, Tuple, Callable
 
 import optuna
-from lightautoml.dataset.base import LAMLDataset
-from lightautoml.ml_algo.base import MLAlgo
-from lightautoml.ml_algo.tuning.optuna import OptunaTuner, TunableAlgo
-from lightautoml.validation.base import TrainValidIterator, HoldoutIterator
+from lightautoml.ml_algo.tuning.optuna import OptunaTuner
+from lightautoml.validation.base import HoldoutIterator
 
-from sparklightautoml.computations.manager import computations_manager, DatasetSlot, _SlotInitiatedTVIter, SlotAllocator
+from sparklightautoml.computations.manager import computations_manager, _SlotInitiatedTVIter, SlotAllocator
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
-from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)
@@ -112,6 +108,10 @@ class ParallelOptunaTuner(OptunaTuner):
         sampler = optuna.samplers.TPESampler(seed=self.random_state)
         self.study = optuna.create_study(direction=self.direction, sampler=sampler)
 
+        # TODO: unify with the rest
+        ml_algo = deepcopy(ml_algo)
+        ml_algo.performance_params = {"parallelism_mode": "no_parallelism"}
+
         self.study.optimize(
             func=self._get_objective(
                 ml_algo=ml_algo,
@@ -135,17 +135,18 @@ class SlotBasedParallelOptunaTuner(ParallelOptunaTuner):
                                           parallelism=self._max_parallelism, pool_type=) as allocator:
             allocator: SlotAllocator = allocator
             ml_algo = deepcopy(ml_algo)
-            # TODO: set performance_params algorithm dependent way
+            # TODO: Describe Performance Params as a special dataclass that is respected by all algorithms
             ml_algo.performance_params = {
                 "num_tasks": allocator.slot_size.num_tasks,
-                "num_threads": allocator.slot_size.num_threads_per_executor
+                "num_threads": allocator.slot_size.num_threads_per_executor,
+                "parallelism_mode": "no_parallelism"
             }
 
             self.study.optimize(
                 func=self._get_objective(
                     ml_algo=ml_algo,
                     estimated_n_trials=self.estimated_n_trials,
-                    train_valid_iterator=_SlotInitiatedTVIter(slots, train_valid_iterator),
+                    train_valid_iterator=_SlotInitiatedTVIter(allocator, train_valid_iterator),
                 ),
                 n_jobs=self._max_parallelism,
                 n_trials=self.n_trials,
