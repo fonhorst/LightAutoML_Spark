@@ -24,7 +24,7 @@ from synapse.ml.lightgbm import (
 )
 from synapse.ml.onnx import ONNXModel
 
-from sparklightautoml.computations.manager import computations_manager, PoolType, LGBMDatasetSlot, _SlotBasedTVIter
+from sparklightautoml.computations.manager import computations_manager, PoolType, SlotAllocator
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -441,8 +441,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self,
             fold_prediction_column: str,
             train: SparkDataset,
-            valid: Optional[SparkDataset] = None,
-            slot: Optional[LGBMDatasetSlot] = None
+            valid: Optional[SparkDataset] = None
     ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
         if self.task is None:
             self.task = train.task
@@ -637,16 +636,18 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # TODO: blocking other threads here
             manager = computations_manager()
             with manager.slots(train_valid_iterator.train_val_single_dataset,
-                               parallelism=parallelism, pool_type=PoolType.DEFAULT) as slots:
+                               parallelism=parallelism, pool_type=PoolType.DEFAULT) as allocator:
+                allocator: SlotAllocator = allocator
+
                 def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset, val: SparkDataset):
                     def func() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
-                        with slots() as slot:
+                        with allocator.allocate() as slot:
                             tviter = deepcopy(train_valid_iterator)
                             tviter.train = slot.dataset
                             for _ in range(i + 1):
                                 slot_train, slot_val = next(tviter)
 
-                            mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, slot_train, slot_val, slot=slot)
+                            mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, slot_train, slot_val)
                             vpred = vpred.select(SparkDataset.ID_COLUMN, slot.dataset.target_column, mdl_pred_col)
 
                             timer.write_run_info()

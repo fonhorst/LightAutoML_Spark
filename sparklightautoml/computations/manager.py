@@ -29,24 +29,59 @@ def _compute_sequential(tasks: List[Callable[[], T]]) -> List[T]:
     return [task() for task in tasks]
 
 
-class Slot(ABC):
-    ...
 
 
 @dataclass
-class LGBMDatasetSlot(Slot):
+class DatasetSlot:
     dataset: SparkDataset
-    num_tasks: int
-    num_threads: int
-    use_barrier_execution_mode: bool
     free: bool
 
+
+@dataclass
+class SlotSize:
+    num_tasks: int
+    num_threads_per_executor: int
 
 
 class PoolType(Enum):
     ML_PIPELINES = "ML_PIPELINES"
     ML_ALGOS = "ML_ALGOS"
     DEFAULT = "DEFAULT"
+
+
+class SlotAllocator(ABC):
+    @abstractmethod
+    @contextmanager
+    def allocate(self) -> DatasetSlot:
+        ...
+
+    @property
+    @abstractmethod
+    def slot_size(self) -> SlotSize:
+        ...
+
+
+class ParallelSlotAllocator(SlotAllocator):
+    def __init__(self, slot_size: SlotSize, slots: List[DatasetSlot], pool: ThreadPool):
+        self._slot_size = slot_size
+        self._slots = slots
+        self._pool = pool
+        self._slots_lock = threading.Lock()
+
+    @property
+    def slot_size(self) -> SlotSize:
+        return self._slot_size
+
+    @contextmanager
+    def allocate(self) -> DatasetSlot:
+        with self._slots_lock:
+            free_slot = next((slot for slot in self._slots if slot.free))
+            free_slot.free = False
+
+        yield free_slot
+
+        with self._slots_lock:
+            free_slot.free = True
 
 
 class ComputationsManager(ABC):
@@ -61,7 +96,7 @@ class ComputationsManager(ABC):
 
     @contextmanager
     @abstractmethod
-    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Callable[[], Slot]:
+    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
         ...
 
 
@@ -124,27 +159,17 @@ class ParallelComputationsManager(ComputationsManager):
             return self.compute(f_tasks, pool_type.DEFAULT)
 
     @contextmanager
-    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> Callable[[], Slot]:
+    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
         with self._block_all_pools(pool_type):
-            slots_lock = threading.Lock()
+            assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
+                f"All thread pools except {pool_type} should be None"
+
+            pool = self._get_pool(pool_type)
+            # TODO: parallel
+            slot_size = SlotSize(num_tasks=, num_threads_per_executor=)
             slots = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
 
-            @contextmanager
-            def iterator():
-                assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
-                    f"All thread pools except {pool_type} should be None"
-                pool = self._get_pool(pool_type)
-                # TODO: check the pool is empty or check threads by name?
-                with slots_lock:
-                    free_slot = next((slot for slot in slots if slot.free))
-                    free_slot.free = False
-
-                yield free_slot
-
-                with slots_lock:
-                    free_slot.free = True
-
-            yield iterator
+            yield ParallelSlotAllocator(slot_size, slots, pool)
 
     @contextmanager
     def _block_all_pools(self, pool_type: PoolType):
@@ -265,7 +290,7 @@ def compute_tasks(tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.D
 
 
 class _SlotBasedTVIter(SparkBaseTrainValidIterator):
-    def __init__(self, slots: Callable[[], Slot], tviter: SparkBaseTrainValidIterator):
+    def __init__(self, slots: Callable[[], DatasetSlot], tviter: SparkBaseTrainValidIterator):
         super().__init__(None)
         self._slots = slots
         self._tviter = tviter
@@ -307,14 +332,14 @@ class _SlotBasedTVIter(SparkBaseTrainValidIterator):
 
 
 class _SlotInitiatedTVIter(SparkBaseTrainValidIterator):
-    def __init__(self, slots: Callable[[], Slot], tviter: SparkBaseTrainValidIterator):
+    def __init__(self, slot_allocator: SlotAllocator, tviter: SparkBaseTrainValidIterator):
         super().__init__(None)
-        self._slots = slots
+        self._slot_allocator = slot_allocator
         self._tviter = deepcopy(tviter)
 
     def __iter__(self) -> Iterable:
         def _iter():
-            with self._slots() as slot:
+            with self._slot_allocator.allocate() as slot:
                 tviter = deepcopy(self._tviter)
                 tviter.train = slot.dataset
                 for elt in tviter:

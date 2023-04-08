@@ -9,7 +9,7 @@ from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner, TunableAlgo
 from lightautoml.validation.base import TrainValidIterator, HoldoutIterator
 
-from sparklightautoml.computations.manager import computations_manager, Slot, _SlotInitiatedTVIter
+from sparklightautoml.computations.manager import computations_manager, DatasetSlot, _SlotInitiatedTVIter, SlotAllocator
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
@@ -132,10 +132,14 @@ class SlotBasedParallelOptunaTuner(ParallelOptunaTuner):
         self.study = optuna.create_study(direction=self.direction, sampler=sampler)
 
         with computations_manager().slots(train_valid_iterator.train,
-                                          parallelism=self._max_parallelism, pool_type=) as slots:
+                                          parallelism=self._max_parallelism, pool_type=) as allocator:
+            allocator: SlotAllocator = allocator
             ml_algo = deepcopy(ml_algo)
-            # TODO: make calculation
-            ml_algo.performance_params =
+            # TODO: set performance_params algorithm dependent way
+            ml_algo.performance_params = {
+                "num_tasks": allocator.slot_size.num_tasks,
+                "num_threads": allocator.slot_size.num_threads_per_executor
+            }
 
             self.study.optimize(
                 func=self._get_objective(

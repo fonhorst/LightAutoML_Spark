@@ -2,6 +2,7 @@ import functools
 import logging
 from abc import ABC, abstractmethod
 from copy import copy
+from dataclasses import dataclass
 from typing import Tuple, cast, List, Optional, Sequence, Union, Any, Dict
 
 import numpy as np

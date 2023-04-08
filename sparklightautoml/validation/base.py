@@ -12,7 +12,7 @@ from lightautoml.validation.base import TrainValidIterator
 from pyspark.sql import functions as sf
 
 from sparklightautoml import VALIDATION_COLUMN
-from sparklightautoml.computations.manager import Slot
+from sparklightautoml.computations.manager import DatasetSlot
 from sparklightautoml.dataset.base import SparkDataset, Unpersistable
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.utils import SparkDataFrame
