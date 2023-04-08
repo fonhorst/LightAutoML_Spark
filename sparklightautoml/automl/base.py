@@ -3,6 +3,7 @@ import functools
 import logging
 import os
 from copy import copy
+from dataclasses import dataclass
 from multiprocessing.pool import ThreadPool
 from typing import Any, Callable, Tuple, cast, Union
 from typing import Dict
@@ -35,6 +36,14 @@ logger = logging.getLogger(__name__)
 
 # Either path/full url, or pyspark.sql.DataFrame
 ReadableIntoSparkDf = Union[str, SparkDataFrame]
+
+
+@dataclass
+class ParallelismParams:
+    ml_algo_parallelism: int
+    feature_selector_parallelism: int
+    optuna_parallelism: int
+    mlpipe_parallelism: int
 
 
 class SparkAutoML(TransformerInputOutputRoles):
@@ -83,7 +92,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         blender: Optional[SparkBlender] = None,
         skip_conn: bool = False,
         return_all_predictions: bool = False,
-        parallelism: int = 1
+        parallelism_mode: Union[str, Dict[str, Any]] = "no_parallelism"
     ):
         """
 
@@ -119,7 +128,10 @@ class SparkAutoML(TransformerInputOutputRoles):
         self._persistence_manager: Optional[PersistenceManager] = None
         if reader and levels:
             self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
-        self._parallelism = parallelism
+
+
+
+        self._parallelism_mode = parallelism
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
