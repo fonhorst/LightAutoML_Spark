@@ -105,7 +105,7 @@ class ParallelOptunaTuner(OptunaTuner):
             return None, None
 
     def _optimize(self,
-                  ml_algo: MLAlgo,
+                  ml_algo: SparkTabularMLAlgo,
                   train_valid_iterator: SparkBaseTrainValidIterator,
                   update_trial_time: Callable[[optuna.study.Study, optuna.trial.FrozenTrial], None]):
 
@@ -126,13 +126,17 @@ class ParallelOptunaTuner(OptunaTuner):
 
 
 class SlotBasedParallelOptunaTuner(ParallelOptunaTuner):
-    def _optimize(self, ml_algo: MLAlgo, train_valid_iterator: SparkBaseTrainValidIterator,
+    def _optimize(self, ml_algo: SparkTabularMLAlgo, train_valid_iterator: SparkBaseTrainValidIterator,
                   update_trial_time: Callable[[optuna.study.Study, optuna.trial.FrozenTrial], None]):
         sampler = optuna.samplers.TPESampler(seed=self.random_state)
         self.study = optuna.create_study(direction=self.direction, sampler=sampler)
 
         with computations_manager().slots(train_valid_iterator.train,
                                           parallelism=self._max_parallelism, pool_type=) as slots:
+            ml_algo = deepcopy(ml_algo)
+            # TODO: make calculation
+            ml_algo.performance_params =
+
             self.study.optimize(
                 func=self._get_objective(
                     ml_algo=ml_algo,

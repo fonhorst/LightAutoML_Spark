@@ -300,6 +300,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                     n_trials=self.tuning_params["max_tuning_iter"],
                     timeout=self.tuning_params["max_tuning_time"],
                     fit_on_holdout=self.tuning_params["fit_on_holdout"],
+                    max_parallelism=
                 )
                 gbm_model = (gbm_model, gbm_tuner)
             ml_algos.append(gbm_model)

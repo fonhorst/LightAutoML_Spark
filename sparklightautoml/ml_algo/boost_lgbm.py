@@ -2,7 +2,7 @@ import logging
 import multiprocessing
 import warnings
 from copy import copy, deepcopy
-from typing import Dict, Optional, Tuple, Union, cast, List
+from typing import Dict, Optional, Tuple, Union, cast, List, Any
 
 import lightgbm as lgb
 import pandas as pd
@@ -173,6 +173,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self._convert_to_onnx = convert_to_onnx
         self._mini_batch_size = mini_batch_size
         self._experimental_parallel_mode = experimental_parallel_mode
+        self._performance_params: Optional[Dict[str, Any]] = None
 
     def _infer_params(self) -> Tuple[dict, int]:
         """Infer all parameters in lightgbm format.
@@ -213,9 +214,17 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             if "lambdaL2" in params:
                 del params["lambdaL2"]
 
-        params = {**params}
+        params = {**params, **self.performance_params}
 
         return params, verbose_eval
+
+    @property
+    def performance_params(self):
+        return self._performance_params or {"numThreads": self._get_num_threads(train.data)}
+
+    @performance_params.setter
+    def performance_params(self, value: Dict[str, Any]):
+        self._performance_params = value
 
     def init_params_on_input(self, train_valid_iterator: TrainValidIterator) -> dict:
         self.task = train_valid_iterator.train.task
@@ -459,12 +468,12 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # TODO: make filtering of excessive valid dataset
             full_data = train_data
 
-        if slot is not None:
-            params["numTasks"] = slot.num_tasks
-            params["numThreads"] = slot.num_threads
-            params["useBarrierExecutionMode"] = slot.use_barrier_execution_mode
-        else:
-            params["numThreads"] = self._get_num_threads(train.data)
+        # if slot is not None:
+        #     params["numTasks"] = slot.num_tasks
+        #     params["numThreads"] = slot.num_threads
+        #     params["useBarrierExecutionMode"] = slot.use_barrier_execution_mode
+        # else:
+        #     params["numThreads"] = self._get_num_threads(train.data)
 
         # prepare assembler
         if self._assembler is None:
@@ -670,7 +679,5 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # unprepare dataset
 
             return models, val_preds, model_prediction_cols
-
-
 
         return super()._parallel_fit(parallelism, train_valid_iterator)

@@ -1,7 +1,8 @@
 import functools
 import logging
+from abc import ABC, abstractmethod
 from copy import copy
-from typing import Tuple, cast, List, Optional, Sequence, Union
+from typing import Tuple, cast, List, Optional, Sequence, Union, Any, Dict
 
 import numpy as np
 from lightautoml.dataset.base import RolesDict
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 SparkMLModel = PipelineModel
 
 
-class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
+class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
     """Machine learning algorithms that accepts numpy arrays as input."""
 
     _name: str = "SparkTabularMLAlgo"
@@ -83,6 +84,16 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles):
     @property
     def validation_column(self) -> str:
         return self._default_validation_col_name
+
+    @property
+    @abstractmethod
+    def performance_params(self) -> Dict[str, Any]:
+        ...
+
+    @performance_params.setter
+    @abstractmethod
+    def performance_params(self, value: Dict[str, Any]):
+        ...
 
     @log_exception(logger=logger)
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
