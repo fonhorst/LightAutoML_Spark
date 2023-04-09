@@ -407,6 +407,12 @@ class _SlotBasedTVIter(SparkBaseTrainValidIterator):
 
 
 class _SlotInitiatedTVIter(SparkBaseTrainValidIterator):
+    def __len__(self) -> Optional[int]:
+        return len(self._tviter)
+
+    def convert_to_holdout_iterator(self):
+        return _SlotInitiatedTVIter(self._slot_allocator, self._tviter.convert_to_holdout_iterator())
+
     def __init__(self, slot_allocator: SlotAllocator, tviter: SparkBaseTrainValidIterator):
         super().__init__(None)
         self._slot_allocator = slot_allocator

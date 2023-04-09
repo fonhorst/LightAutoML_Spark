@@ -6,7 +6,7 @@ import optuna
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.validation.base import HoldoutIterator
 
-from sparklightautoml.computations.manager import default_computations_manager, _SlotInitiatedTVIter, SlotAllocator, \
+from sparklightautoml.computations.manager import _SlotInitiatedTVIter, SlotAllocator, \
     PoolType, \
     SequentialComputationsManager, ComputationsManager
 from sparklightautoml.dataset.base import SparkDataset
@@ -144,7 +144,7 @@ class SlotBasedParallelOptunaTuner(ParallelOptunaTuner):
         self.study = optuna.create_study(direction=self.direction, sampler=sampler)
 
         with self._computations_manager.slots(train_valid_iterator.train,
-                                                  parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
+                                              parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
             allocator: SlotAllocator = allocator
             ml_algo = deepcopy(ml_algo)
             ml_algo.computations_manager = SequentialComputationsManager()
