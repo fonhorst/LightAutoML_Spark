@@ -155,6 +155,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         mini_batch_size: int = 5000,
         seed: int = 42,
         parallelism: int = 1,
+        use_barrier_execution_mode: bool = False,
         experimental_parallel_mode: bool = False
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
@@ -172,6 +173,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self._chunk_size = chunk_size
         self._convert_to_onnx = convert_to_onnx
         self._mini_batch_size = mini_batch_size
+        self._parallelism = parallelism
+        self._use_barrier_execution_mode = use_barrier_execution_mode
         self._experimental_parallel_mode = experimental_parallel_mode
         self._performance_params: Optional[Dict[str, Any]] = None
 

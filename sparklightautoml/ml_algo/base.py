@@ -41,8 +41,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
         default_params: Optional[dict] = None,
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
-        optimization_search_space: Optional[dict] = None,
-        parallelism: int = 1,
+        optimization_search_space: Optional[dict] = None
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
@@ -53,7 +52,6 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
         self._prediction_role: Optional[Union[NumericRole, NumericVectorOrArrayRole]] = None
         self._input_roles: Optional[RolesDict] = None
         self._service_columns: Optional[List[str]] = None
-        self._parallelism = parallelism
 
     @property
     def features(self) -> Optional[List[str]]:
@@ -135,7 +133,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
 
         with train_valid_iterator.frozen() as frozen_train_valid_iterator:
             self.models, preds_dfs, self._models_prediction_columns = \
-                self._parallel_fit(parallelism=self._parallelism, train_valid_iterator=frozen_train_valid_iterator)
+                self._parallel_fit(train_valid_iterator=frozen_train_valid_iterator)
 
         full_preds_df = self._combine_val_preds(train_valid_iterator.get_validation_data(), preds_dfs)
         full_preds_df = self._build_averaging_transformer().transform(full_preds_df)
@@ -256,7 +254,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
 
         return full_val_preds
 
-    def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) \
+    def _parallel_fit(self, train_valid_iterator: SparkBaseTrainValidIterator) \
             -> Tuple[List[Model], List[SparkDataFrame], List[str]]:
         num_folds = len(train_valid_iterator)
 

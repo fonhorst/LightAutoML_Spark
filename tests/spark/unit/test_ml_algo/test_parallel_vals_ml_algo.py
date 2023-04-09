@@ -33,7 +33,7 @@ ml_alg_kwargs = {
 @pytest.mark.parametrize("fp,algo_builder", [
     (
         SparkLinearFeatures(**ml_alg_kwargs),
-        lambda parallelism: SparkLinearLBFGS(parallelism=parallelism, default_params={'regParam': [1e-5]})
+        lambda parallelism: SparkLinearLBFGS(coeff_opt_parallelism=parallelism, default_params={'regParam': [1e-5]})
     ),
     (
         SparkLGBSimpleFeatures(),

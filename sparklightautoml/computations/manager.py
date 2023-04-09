@@ -37,14 +37,7 @@ def _compute_sequential(tasks: List[Callable[[], T]]) -> List[T]:
 
 def build_named_parallelism_settings(config_name: str, parallelism: int):
     parallelism_config = {
-        "no_parallelism": {
-            PoolType.ml_pipelines.name: 1,
-            PoolType.ml_algos.name: 1,
-            PoolType.job.name: 1,
-            "tuner": 1,
-            "linear_l2": {},
-            "lgb": {}
-        },
+        "no_parallelism": None,
         "intra_mlpipe_parallelism": {
             PoolType.ml_pipelines.name: 1,
             PoolType.ml_algos.name: 1,
@@ -54,8 +47,9 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
                 "coeff_opt_parallelism": 1
             },
             "lgb": {
+                "parallelism": parallelism,
                 "use_barrier_execution_mode": True,
-                "use_slot_based_parallelism": False
+                "experimental_parallel_mode": False
             }
         },
         "intra_mlpipe_parallelism_with_experimental_features": {
@@ -67,15 +61,16 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
                 "coeff_opt_parallelism": 1
             },
             "lgb": {
+                "parallelism": parallelism,
                 "use_barrier_execution_mode": True,
-                "use_slot_based_parallelism": True
+                "experimental_parallel_mode": True
             }
         },
         "mlpipe_level_parallelism": {
             PoolType.ml_pipelines.name: parallelism,
             PoolType.ml_algos.name: 1,
             PoolType.job.name: 1,
-            "tuner": parallelism,
+            "tuner": 1,
             "linear_l2": {},
             "lgb": {}
         },
@@ -88,8 +83,9 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
                 "coeff_opt_parallelism": parallelism
             },
             "lgb": {
+                "parallelism": parallelism,
                 "use_barrier_execution_mode": True,
-                "use_slot_based_parallelism": False
+                "experimental_parallel_mode": False
             }
         },
         "all_levels_parallelism": {
@@ -101,8 +97,9 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
                 "coeff_opt_parallelism": parallelism
             },
             "lgb": {
+                "parallelism": parallelism,
                 "use_barrier_execution_mode": True,
-                "use_slot_based_parallelism": False
+                "experimental_parallel_mode": False
             }
         }
     }

@@ -86,10 +86,10 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
         optimization_search_space: Optional[dict] = None,
-        parallelism: int = 1,
+        coeff_opt_parallelism: int = 1,
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
-        super().__init__(default_params, freeze_defaults, timer, optimization_search_space, parallelism)
+        super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
 
         self._prediction_col = f"prediction_{self._name}"
         self.task = None
@@ -100,6 +100,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         self._raw_prediction_col_name = "raw_prediction"
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
+        self._coeff_opt_parallelism = coeff_opt_parallelism
 
     def _infer_params(
         self, train: SparkDataset, fold_prediction_column: str
