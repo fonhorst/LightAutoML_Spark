@@ -71,9 +71,7 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
             PoolType.ml_algos.name: 1,
             PoolType.job.name: parallelism,
             "tuner": parallelism,
-            "linear_l2": {
-                "coeff_opt_parallelism": 1
-            },
+            "linear_l2": {},
             "lgb": {
                 "parallelism": parallelism,
                 "use_barrier_execution_mode": True,
@@ -85,9 +83,7 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
             PoolType.ml_algos.name: 1,
             PoolType.job.name: parallelism,
             "tuner": parallelism,
-            "linear_l2": {
-                "coeff_opt_parallelism": 1
-            },
+            "linear_l2": {},
             "lgb": {
                 "parallelism": parallelism,
                 "use_barrier_execution_mode": True,
@@ -107,9 +103,7 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
             PoolType.ml_algos.name: parallelism,
             PoolType.job.name: parallelism,
             "tuner": parallelism,
-            "linear_l2": {
-                "coeff_opt_parallelism": parallelism
-            },
+            "linear_l2": {},
             "lgb": {
                 "parallelism": parallelism,
                 "use_barrier_execution_mode": True,
@@ -121,9 +115,7 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
             PoolType.ml_algos.name: parallelism,
             PoolType.job.name: parallelism,
             "tuner": parallelism,
-            "linear_l2": {
-                "coeff_opt_parallelism": parallelism
-            },
+            "linear_l2": {},
             "lgb": {
                 "parallelism": parallelism,
                 "use_barrier_execution_mode": True,

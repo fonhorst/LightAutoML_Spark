@@ -29,7 +29,7 @@ from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.dataset.persistence import PlainCachePersistenceManager
 from sparklightautoml.ml_algo.boost_lgbm import SparkBoostLGBM
 from sparklightautoml.ml_algo.linear_pyspark import SparkLinearLBFGS
-from sparklightautoml.ml_algo.tuning.parallel_optuna import SlotBasedParallelOptunaTuner
+from sparklightautoml.ml_algo.tuning.parallel_optuna import SlotBasedParallelOptunaTuner, ParallelOptunaTuner
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
 from sparklightautoml.pipelines.features.linear_pipeline import SparkLinearFeatures
 from sparklightautoml.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline
@@ -257,7 +257,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         linear_l2_timer = self.timer.get_task_timer("reg_l2", time_score)
         linear_l2_params = {
             **self.linear_l2_params,
-            **(self._parallelism_settings['linear_l2'] if self._parallelism_settings else {})
+            **(self._parallelism_settings.get('linear_l2', dict()) if self._parallelism_settings else dict())
         }
         linear_l2_model = SparkLinearLBFGS(timer=linear_l2_timer, **linear_l2_params)
         linear_l2_feats = SparkLinearFeatures(
@@ -292,7 +292,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             if algo_key == "lgb":
                 lgb_params = {
                     **self.lgb_params,
-                    **(self._parallelism_settings["lgb"] if self._parallelism_settings else {})
+                    **(self._parallelism_settings.get("lgb", dict()) if self._parallelism_settings else dict())
                 }
                 gbm_model = SparkBoostLGBM(timer=gbm_timer, **lgb_params)
             elif algo_key == "cb":
@@ -300,17 +300,28 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             else:
                 raise ValueError("Wrong algo key")
 
-            if tuned:
+            if tuned and lgb_params.get('experimental_parallel_mode', False):
                 gbm_model.set_prefix("Tuned")
 
-                # TODO: PARALLEL - choose tuner depending on the parallelism mode
                 gbm_tuner = SlotBasedParallelOptunaTuner(
+                    n_trials=self.tuning_params["max_tuning_iter"],
+                    timeout=self.tuning_params["max_tuning_time"],
+                    fit_on_holdout=self.tuning_params["fit_on_holdout"],
+                    parallelism=self._parallelism_settings["tuner"],
+                    computations_manager=self._computations_manager
+                )
+                gbm_model = (gbm_model, gbm_tuner)
+            elif tuned:
+                gbm_model.set_prefix("Tuned")
+
+                gbm_tuner = ParallelOptunaTuner(
                     n_trials=self.tuning_params["max_tuning_iter"],
                     timeout=self.tuning_params["max_tuning_time"],
                     fit_on_holdout=self.tuning_params["fit_on_holdout"],
                     parallelism=self._parallelism_settings["tuner"]
                 )
                 gbm_model = (gbm_model, gbm_tuner)
+
             ml_algos.append(gbm_model)
             force_calc.append(force)
 

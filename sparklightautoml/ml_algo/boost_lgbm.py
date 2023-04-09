@@ -1,5 +1,4 @@
 import logging
-import multiprocessing
 import warnings
 from copy import copy, deepcopy
 from typing import Dict, Optional, Tuple, Union, cast, List
@@ -24,7 +23,7 @@ from synapse.ml.lightgbm import (
 )
 from synapse.ml.onnx import ONNXModel
 
-from sparklightautoml.computations.manager import default_computations_manager, PoolType, SlotAllocator, ComputationsManager
+from sparklightautoml.computations.manager import PoolType, SlotAllocator, ComputationsManager
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -601,11 +600,12 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         logger.info("Finished LGBM fit")
         return res
 
-    def _parallel_fit(self, train_valid_iterator: SparkBaseTrainValidIterator) -> Tuple[
-        List[Model], List[SparkDataFrame], List[str]]:
-        if self._experimental_parallel_mode and self.computations_manager.can_support_slots:
-
-            # TODO: PARALLEL - raise warning if cannot support slots
+    def _parallel_fit(self, train_valid_iterator: SparkBaseTrainValidIterator) \
+            -> Tuple[List[Model], List[SparkDataFrame], List[str]]:
+        if self._experimental_parallel_mode and not self.computations_manager.can_support_slots:
+            warnings.warn("Experimental parallel mode is set, "
+                          "but computations manager doesn't support slots allocation")
+        elif self._experimental_parallel_mode:
             with self.computations_manager.slots(train_valid_iterator.train_val_single_dataset,
                                                  parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
                 allocator: SlotAllocator = allocator
