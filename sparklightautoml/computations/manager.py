@@ -42,7 +42,7 @@ def get_executors() -> List[str]:
     return sc._jvm.org.apache.spark.lightautoml.utils.SomeFunctions.get_executors()
 
 
-def get_executors_core(train: SparkDataFrame):
+def get_executors_cores(train: SparkDataFrame):
     master_addr = train.spark_session.conf.get("spark.master")
     if master_addr.startswith("local-cluster"):
         # exec_str, cores_str, mem_mb_str
@@ -199,12 +199,22 @@ class ParallelSlotAllocator(SlotAllocator):
 
 class ComputationsManager(ABC):
     @abstractmethod
-    def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType) -> List[T]:
+    def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.job) -> List[T]:
         ...
 
     @abstractmethod
     def compute_with_slots(self, name: str, slots: List[S],
                            tasks: List[Callable[[S], T]], pool_type: PoolType) -> List[T]:
+        ...
+
+    @property
+    @abstractmethod
+    def default_slot_size(self) -> Optional[SlotSize]:
+        ...
+
+    @property
+    @abstractmethod
+    def can_support_slots(self) -> bool:
         ...
 
     @contextmanager
@@ -214,19 +224,31 @@ class ComputationsManager(ABC):
 
 
 class ParallelComputationsManager(ComputationsManager):
-    def __init__(self, ml_pipes_pool_size: int = 1, ml_algos_pool_size: int = 1, job_pool_size: int = 1):
+    def __init__(self,
+                 ml_pipes_pool_size: int = 1,
+                 ml_algos_pool_size: int = 1,
+                 job_pool_size: int = 1,
+                 default_slot_size: Optional[SlotSize] = None):
         self._pools ={
             PoolType.ml_pipelines: ThreadPool(processes=ml_pipes_pool_size) if ml_pipes_pool_size > 1 else None,
             PoolType.ml_algos: ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 1 else None,
             PoolType.job: ThreadPool(processes=job_pool_size) if job_pool_size > 1 else None
         }
-
         self._pools_lock = threading.Lock()
+        self._default_slot_size = default_slot_size
 
     def _get_pool(self, pool_type: PoolType) -> Optional[ThreadPool]:
         return self._pools.get(pool_type, None)
 
-    def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType) -> List[T]:
+    @property
+    def can_support_slots(self) -> bool:
+        return True
+
+    @property
+    def default_slot_size(self) -> Optional[SlotSize]:
+        return self._default_slot_size
+
+    def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.job) -> List[T]:
         # TODO: PARALLEL - wouldn't be it a problem
         pool = self._get_pool(pool_type)
 
@@ -269,7 +291,7 @@ class ParallelComputationsManager(ComputationsManager):
 
             f_tasks = [_func(task) for task in tasks]
 
-            return self.compute(f_tasks, pool_type.job)
+            return self.compute(f_tasks)
 
     @contextmanager
     def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
@@ -295,7 +317,7 @@ class ParallelComputationsManager(ComputationsManager):
     @staticmethod
     def _prepare_trains(dataset: SparkDataset, parallelism: int) -> Tuple[SlotSize, List[DatasetSlot]]:
         execs = get_executors()
-        exec_cores = get_executors_core(dataset.data)
+        exec_cores = get_executors_cores(dataset.data)
         execs_per_slot = max(1, math.floor(len(execs) / parallelism))
         slots_num = int(len(execs) / execs_per_slot)
         slot_size = SlotSize(num_tasks=execs_per_slot * exec_cores, num_threads_per_executor=exec_cores)
@@ -328,6 +350,18 @@ class ParallelComputationsManager(ComputationsManager):
 
 
 class SequentialComputationsManager(ComputationsManager):
+    def __init__(self, default_slot_size: Optional[SlotSize] = None):
+        super(SequentialComputationsManager, self).__init__()
+        self._default_slot_size = default_slot_size
+
+    @property
+    def default_slot_size(self) -> Optional[SlotSize]:
+        return self._default_slot_size
+
+    @property
+    def can_support_slots(self) -> bool:
+        return False
+
     def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
         raise NotImplementedError("Not supported by this computational manager")
 
@@ -335,7 +369,7 @@ class SequentialComputationsManager(ComputationsManager):
                            pool_type: PoolType) -> List[T]:
         raise NotImplementedError()
 
-    def compute(self, tasks: list[Callable[[], T]], pool_type: PoolType) -> List[T]:
+    def compute(self, tasks: list[Callable[[], T]], pool_type: PoolType = PoolType.job) -> List[T]:
         return _compute_sequential(tasks)
 
 

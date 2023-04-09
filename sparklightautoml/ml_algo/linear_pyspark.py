@@ -15,6 +15,7 @@ from pyspark.sql import functions as sf
 
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+from ..computations.manager import ComputationsManager
 from ..dataset.base import SparkDataset, PersistenceManager
 from ..transformers.base import DropColumnsTransformer
 from ..utils import SparkDataFrame, log_exception
@@ -87,9 +88,10 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         timer: Optional[TaskTimer] = None,
         optimization_search_space: Optional[dict] = None,
         coeff_opt_parallelism: int = 1,
+        computations_manager: Optional[ComputationsManager] = None
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
-        super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
+        super().__init__(default_params, freeze_defaults, timer, optimization_search_space, computations_manager)
 
         self._prediction_col = f"prediction_{self._name}"
         self.task = None
@@ -100,6 +102,7 @@ class SparkLinearLBFGS(SparkTabularMLAlgo):
         self._raw_prediction_col_name = "raw_prediction"
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
+        # TODO: PARALLEL - remove this part
         self._coeff_opt_parallelism = coeff_opt_parallelism
 
     def _infer_params(

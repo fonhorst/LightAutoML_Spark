@@ -509,6 +509,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             for k, ml_pipe in enumerate(level)
         ]
 
+        # TODO: PARALLEL - replace with computation manager
         results = compute_tasks(fit_tasks, pool_type=PoolType.ml_pipelines)
 
         ml_pipes = [ml_pipe for ml_pipe, _ in results]

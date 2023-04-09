@@ -141,6 +141,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
                 for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc)
             ]
 
+            # TODO: PARALLEL - replace with computation manager
             results = compute_tasks(fit_tasks, pool_type=PoolType.ml_algos)
 
             self.ml_algos.extend([ml_algo for ml_algo, _ in results])

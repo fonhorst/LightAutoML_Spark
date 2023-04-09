@@ -2,7 +2,7 @@ import logging
 import multiprocessing
 import warnings
 from copy import copy, deepcopy
-from typing import Dict, Optional, Tuple, Union, cast, List, Any
+from typing import Dict, Optional, Tuple, Union, cast, List
 
 import lightgbm as lgb
 import pandas as pd
@@ -24,7 +24,7 @@ from synapse.ml.lightgbm import (
 )
 from synapse.ml.onnx import ONNXModel
 
-from sparklightautoml.computations.manager import computations_manager, PoolType, SlotAllocator
+from sparklightautoml.computations.manager import computations_manager, PoolType, SlotAllocator, ComputationsManager
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
@@ -156,11 +156,12 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         seed: int = 42,
         parallelism: int = 1,
         use_barrier_execution_mode: bool = False,
-        experimental_parallel_mode: bool = False
+        experimental_parallel_mode: bool = False,
+        computations_manager: Optional[ComputationsManager] = None
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
         SparkTabularMLAlgo.__init__(self, default_params, freeze_defaults,
-                                    timer, optimization_search_space, parallelism)
+                                    timer, optimization_search_space, computations_manager)
         self._probability_col_name = "probability"
         self._prediction_col_name = "prediction"
         self._raw_prediction_col_name = "raw_prediction"
@@ -176,7 +177,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         self._parallelism = parallelism
         self._use_barrier_execution_mode = use_barrier_execution_mode
         self._experimental_parallel_mode = experimental_parallel_mode
-        self._performance_params: Optional[Dict[str, Any]] = None
 
     def _infer_params(self) -> Tuple[dict, int]:
         """Infer all parameters in lightgbm format.
@@ -217,17 +217,13 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             if "lambdaL2" in params:
                 del params["lambdaL2"]
 
-        params = {**params, **self.performance_params}
+        slot_size = self.computations_manager.default_slot_size
+        perf_params = {"num_tasks": slot_size.num_tasks, "num_threads": slot_size.num_threads_per_executor} \
+            if slot_size else dict()
+
+        params = {**params, **perf_params}
 
         return params, verbose_eval
-
-    @property
-    def performance_params(self):
-        return self._performance_params or {"numThreads": self._get_num_threads(train.data)}
-
-    @performance_params.setter
-    def performance_params(self, value: Dict[str, Any]):
-        self._performance_params = value
 
     def init_params_on_input(self, train_valid_iterator: TrainValidIterator) -> dict:
         self.task = train_valid_iterator.train.task
@@ -364,22 +360,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
     def predict_single_fold(self, dataset: SparkDataset, model: PipelineModel) -> SparkDataFrame:
         return model.transform(dataset.data)
-
-    def _get_num_threads(self, train: SparkDataFrame):
-        master_addr = train.spark_session.conf.get("spark.master")
-        if master_addr.startswith("local-cluster"):
-            # exec_str, cores_str, mem_mb_str
-            _, cores_str, _ = master_addr[len("local-cluster["): -1].split(",")
-            cores = int(cores_str)
-            num_threads = max(cores - 1, 1)
-        elif master_addr.startswith("local"):
-            cores_str = master_addr[len("local["): -1]
-            cores = int(cores_str) if cores_str != "*" else multiprocessing.cpu_count()
-            num_threads = max(cores - 1, 1)
-        else:
-            num_threads = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
-
-        return num_threads
 
     def _do_convert_to_onnx(self, train: SparkDataset, ml_model):
         logger.info("Model convert is started")
@@ -621,12 +601,13 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         logger.info("Finished LGBM fit")
         return res
 
-    def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) -> Tuple[
+    def _parallel_fit(self, train_valid_iterator: SparkBaseTrainValidIterator) -> Tuple[
         List[Model], List[SparkDataFrame], List[str]]:
-        if self._experimental_parallel_mode:
-            manager = computations_manager()
-            with manager.slots(train_valid_iterator.train_val_single_dataset,
-                               parallelism=parallelism, pool_type=PoolType.job) as allocator:
+        if self._experimental_parallel_mode and self.computations_manager.can_support_slots:
+
+            # TODO: PARALLEL - raise warning if cannot support slots
+            with self.computations_manager.slots(train_valid_iterator.train_val_single_dataset,
+                                                 parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
                 allocator: SlotAllocator = allocator
 
                 def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset, val: SparkDataset):
@@ -661,7 +642,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                     for i, (train, val) in enumerate(train_valid_iterator)
                 ]
 
-                results = manager.compute(fit_tasks, pool_type=PoolType.job)
+                results = self.computations_manager.compute(fit_tasks, pool_type=PoolType.job)
 
             models = [model for _, model, _, _ in results]
             val_preds = [val_pred for _, _, val_pred, _ in results]
@@ -671,4 +652,4 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
             return models, val_preds, model_prediction_cols
 
-        return super()._parallel_fit(parallelism, train_valid_iterator)
+        return super()._parallel_fit(train_valid_iterator)

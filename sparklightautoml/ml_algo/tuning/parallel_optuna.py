@@ -6,7 +6,8 @@ import optuna
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.validation.base import HoldoutIterator
 
-from sparklightautoml.computations.manager import computations_manager, _SlotInitiatedTVIter, SlotAllocator, PoolType
+from sparklightautoml.computations.manager import computations_manager, _SlotInitiatedTVIter, SlotAllocator, PoolType, \
+    SequentialComputationsManager
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
@@ -106,9 +107,8 @@ class ParallelOptunaTuner(OptunaTuner):
         sampler = optuna.samplers.TPESampler(seed=self.random_state)
         self.study = optuna.create_study(direction=self.direction, sampler=sampler)
 
-        # TODO: PARALLEL - unify with the rest
         ml_algo = deepcopy(ml_algo)
-        ml_algo.performance_params = {"parallelism_mode": "no_parallelism"}
+        ml_algo.computations_manager = SequentialComputationsManager()
 
         self.study.optimize(
             func=self._get_objective(
@@ -133,12 +133,7 @@ class SlotBasedParallelOptunaTuner(ParallelOptunaTuner):
                                           parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
             allocator: SlotAllocator = allocator
             ml_algo = deepcopy(ml_algo)
-            # TODO: PARALLEL - Describe Performance Params as a special dataclass that is respected by all algorithms
-            ml_algo.performance_params = {
-                "num_tasks": allocator.slot_size.num_tasks,
-                "num_threads": allocator.slot_size.num_threads_per_executor,
-                "parallelism_mode": "no_parallelism"
-            }
+            ml_algo.computations_manager = SequentialComputationsManager()
 
             self.study.optimize(
                 func=self._get_objective(

@@ -20,7 +20,7 @@ from pyspark.sql.types import IntegerType
 
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
-from sparklightautoml.computations.manager import compute_tasks
+from sparklightautoml.computations.manager import compute_tasks, ComputationsManager, SequentialComputationsManager
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import SparkDataFrame, log_exception
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
@@ -41,7 +41,8 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
         default_params: Optional[dict] = None,
         freeze_defaults: bool = True,
         timer: Optional[TaskTimer] = None,
-        optimization_search_space: Optional[dict] = None
+        optimization_search_space: Optional[dict] = None,
+        computations_manager: Optional[ComputationsManager] = None
     ):
         optimization_search_space = optimization_search_space if optimization_search_space else dict()
         super().__init__(default_params, freeze_defaults, timer, optimization_search_space)
@@ -52,6 +53,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
         self._prediction_role: Optional[Union[NumericRole, NumericVectorOrArrayRole]] = None
         self._input_roles: Optional[RolesDict] = None
         self._service_columns: Optional[List[str]] = None
+        self._computations_manager = computations_manager or SequentialComputationsManager()
 
     @property
     def features(self) -> Optional[List[str]]:
@@ -85,14 +87,12 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
         return self._default_validation_col_name
 
     @property
-    @abstractmethod
-    def performance_params(self) -> Dict[str, Any]:
-        ...
+    def computations_manager(self) -> Optional[ComputationsManager]:
+        return self._computations_manager
 
-    @performance_params.setter
-    @abstractmethod
-    def performance_params(self, value: Dict[str, Any]):
-        ...
+    @computations_manager.setter
+    def computations_manager(self, value: ComputationsManager):
+        self._computations_manager = value
 
     @log_exception(logger=logger)
     def fit_predict(self, train_valid_iterator: SparkBaseTrainValidIterator) -> SparkDataset:
@@ -285,8 +285,9 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
             for i, (train, valid) in enumerate(train_valid_iterator)
         ]
 
-        results = compute_tasks(fit_tasks)
+        results = self.computations_manager.compute(fit_tasks)
 
+        # TODO: PARALLEL - refactoring
         models = [model for _, model, _, _ in results]
         val_preds = [val_pred for _, _, val_pred, _ in results]
         model_prediction_cols = [model_prediction_col for _, _, _, model_prediction_col in results]
