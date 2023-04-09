@@ -23,7 +23,7 @@ from pyspark.sql.session import SparkSession
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
-from ..computations.manager import compute_tasks, PoolType, build_named_parallelism_settings
+from ..computations.manager import compute_tasks, PoolType, build_named_parallelism_settings, init_computations_manager
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline
@@ -209,6 +209,8 @@ class SparkAutoML(TransformerInputOutputRoles):
         self.skip_conn = skip_conn
         self.return_all_predictions = return_all_predictions
 
+        init_computations_manager(self._parallelism_settings)
+
     def fit_predict(
         self,
         train_data: Any,
@@ -274,7 +276,6 @@ class SparkAutoML(TransformerInputOutputRoles):
 
             with train_valid.frozen() as frozen_train_valid:
                 pipes, all_pipes_predictions, flg_last_level = self._parallel_level(
-                    parallelism=self._parallelism_settings['mlpipes_parallelism'],
                     level=level,
                     train_valid_iterator=frozen_train_valid
                 )
@@ -502,7 +503,6 @@ class SparkAutoML(TransformerInputOutputRoles):
         return {}
 
     def _parallel_level(self,
-                        parallelism: int,
                         level: Sequence[SparkMLPipeline],
                         train_valid_iterator: SparkBaseTrainValidIterator) \
             -> Tuple[List[SparkMLPipeline], List[SparkDataset], bool]:
@@ -514,7 +514,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         # TODO: PARALLEL - ADD compute tasks sequentially if parallelism == 1
         # TODO: INITIALIZE computations_manager properly?
-        results = compute_tasks(fit_tasks, pool_type=PoolType.ML_PIPELINES)
+        results = compute_tasks(fit_tasks, pool_type=PoolType.ml_pipelines)
 
         ml_pipes = [ml_pipe for ml_pipe, _ in results]
         ml_pipes_preds = [pipe_preds for _, pipe_preds in results]

@@ -636,7 +636,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             # TODO: blocking other threads here
             manager = computations_manager()
             with manager.slots(train_valid_iterator.train_val_single_dataset,
-                               parallelism=parallelism, pool_type=PoolType.DEFAULT) as allocator:
+                               parallelism=parallelism, pool_type=PoolType.job) as allocator:
                 allocator: SlotAllocator = allocator
 
                 def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset, val: SparkDataset):
@@ -671,7 +671,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                     for i, (train, val) in enumerate(train_valid_iterator)
                 ]
 
-                results = manager.compute(fit_tasks, pool_type=PoolType.DEFAULT)
+                results = manager.compute(fit_tasks, pool_type=PoolType.job)
 
             models = [model for _, model, _, _ in results]
             val_preds = [val_pred for _, _, val_pred, _ in results]

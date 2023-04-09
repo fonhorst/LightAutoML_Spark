@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing.pool import ThreadPool
-from typing import Callable, Optional, Iterator, Iterable, ContextManager
+from typing import Callable, Optional, Iterator, Iterable, ContextManager, Any, Dict
 from typing import TypeVar, List, Iterator
 
 from pyspark import inheritable_thread_target
@@ -25,6 +25,12 @@ T = TypeVar("T")
 S = TypeVar("S", bound='Slot')
 
 
+class PoolType(Enum):
+    ml_pipelines = "ml_pipelines"
+    ml_algos = "ml_algos"
+    job = "job"
+
+
 def _compute_sequential(tasks: List[Callable[[], T]]) -> List[T]:
     return [task() for task in tasks]
 
@@ -32,94 +38,69 @@ def _compute_sequential(tasks: List[Callable[[], T]]) -> List[T]:
 def build_named_parallelism_settings(config_name: str, parallelism: int):
     parallelism_config = {
         "no_parallelism": {
-            "feature_selector_parallelism": 1,
-            "mlpipes_parallelism": 1,
-            "mlalgos_parallelism": 1,
+            PoolType.ml_pipelines.name: 1,
+            PoolType.ml_algos.name: 1,
+            PoolType.job.name: 1,
+            "tuner": 1,
             "linear_l2": {},
-            "lgb": {},
-            "lgb_tuned": {}
+            "lgb": {}
         },
         "intra_mlpipe_parallelism": {
-            "feature_selector_parallelism": parallelism,
-            "mlpipes_parallelism": 1,
-            "mlalgos_parallelism": 1,
+            PoolType.ml_pipelines.name: 1,
+            PoolType.ml_algos.name: 1,
+            PoolType.job.name: parallelism,
+            "tuner": parallelism,
             "linear_l2": {
                 "coeff_opt_parallelism": 1
             },
             "lgb": {
-                "folds_parallelism": parallelism,
-                "use_barrier_execution_mode": True,
-                "use_slot_based_parallelism": False
-            },
-            "lgb_tuned": {
-                "optimization_parallelism": parallelism,
-                "folds_parallelism": parallelism,
                 "use_barrier_execution_mode": True,
                 "use_slot_based_parallelism": False
             }
         },
         "intra_mlpipe_parallelism_with_experimental_features": {
-            "feature_selector_parallelism": parallelism,
-            "mlpipes_parallelism": 1,
-            "mlalgos_parallelism": 1,
+            PoolType.ml_pipelines.name: 1,
+            PoolType.ml_algos.name: 1,
+            PoolType.job.name: parallelism,
+            "tuner": parallelism,
             "linear_l2": {
                 "coeff_opt_parallelism": 1
             },
             "lgb": {
-                "folds_parallelism": parallelism,
-                "use_barrier_execution_mode": True,
-                "use_slot_based_parallelism": True
-            },
-            "lgb_tuned": {
-                "optimization_parallelism": parallelism,
-                "folds_parallelism": parallelism,
                 "use_barrier_execution_mode": True,
                 "use_slot_based_parallelism": True
             }
         },
         "mlpipe_level_parallelism": {
-            "feature_selector_parallelism": 1,
-            "mlpipes_parallelism": parallelism,
-            "mlalgos_parallelism": 1,
+            PoolType.ml_pipelines.name: parallelism,
+            PoolType.ml_algos.name: 1,
+            PoolType.job.name: 1,
+            "tuner": parallelism,
             "linear_l2": {},
-            "lgb": {},
-            "lgb_tuned": {}
-
+            "lgb": {}
         },
         "all_levels_parallelism_with_experimental_features": {
-            "feature_selector_parallelism": parallelism,
-            "mlpipes_parallelism": parallelism,
-            "mlalgos_parallelism": parallelism,
+            PoolType.ml_pipelines.name: parallelism,
+            PoolType.ml_algos.name: parallelism,
+            PoolType.job.name: parallelism,
+            "tuner": parallelism,
             "linear_l2": {
                 "coeff_opt_parallelism": parallelism
             },
             "lgb": {
-                "folds_parallelism": parallelism,
-                "use_barrier_execution_mode": True,
-                "use_slot_based_parallelism": False
-            },
-            "lgb_tuned": {
-                "optimization_parallelism": parallelism,
-                "folds_parallelism": parallelism,
                 "use_barrier_execution_mode": True,
                 "use_slot_based_parallelism": False
             }
         },
         "all_levels_parallelism": {
-            "feature_selector_parallelism": parallelism,
-            "mlpipes_parallelism": parallelism,
-            "mlalgos_parallelism": parallelism,
+            PoolType.ml_pipelines.name: parallelism,
+            PoolType.ml_algos.name: parallelism,
+            PoolType.job.name: parallelism,
+            "tuner": parallelism,
             "linear_l2": {
                 "coeff_opt_parallelism": parallelism
             },
             "lgb": {
-                "folds_parallelism": parallelism,
-                "use_barrier_execution_mode": True,
-                "use_slot_based_parallelism": False
-            },
-            "lgb_tuned": {
-                "optimization_parallelism": parallelism,
-                "folds_parallelism": parallelism,
                 "use_barrier_execution_mode": True,
                 "use_slot_based_parallelism": False
             }
@@ -140,12 +121,6 @@ class DatasetSlot:
 class SlotSize:
     num_tasks: int
     num_threads_per_executor: int
-
-
-class PoolType(Enum):
-    ML_PIPELINES = "ML_PIPELINES"
-    ML_ALGOS = "ML_ALGOS"
-    DEFAULT = "DEFAULT"
 
 
 class SlotAllocator(ABC):
@@ -200,11 +175,11 @@ class ComputationsManager(ABC):
 
 
 class ParallelComputationsManager(ComputationsManager):
-    def __init__(self, ml_pipes_pool_size: int = 10, ml_algos_pool_size: int = 20, default_pool_size: int = 10):
+    def __init__(self, ml_pipes_pool_size: int = 1, ml_algos_pool_size: int = 1, job_pool_size: int = 1):
         self._pools ={
-            PoolType.ML_PIPELINES: ThreadPool(processes=ml_pipes_pool_size) if ml_pipes_pool_size > 0 else None,
-            PoolType.ML_ALGOS: ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 0 else None,
-            PoolType.DEFAULT: ThreadPool(processes=default_pool_size) if default_pool_size > 0 else None
+            PoolType.ml_pipelines: ThreadPool(processes=ml_pipes_pool_size) if ml_pipes_pool_size > 1 else None,
+            PoolType.ml_algos: ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 1 else None,
+            PoolType.job: ThreadPool(processes=job_pool_size) if job_pool_size > 1 else None
         }
 
         self._pools_lock = threading.Lock()
@@ -255,7 +230,7 @@ class ParallelComputationsManager(ComputationsManager):
 
             f_tasks = [_func(task) for task in tasks]
 
-            return self.compute(f_tasks, pool_type.DEFAULT)
+            return self.compute(f_tasks, pool_type.job)
 
     @contextmanager
     def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
@@ -357,6 +332,9 @@ class ParallelComputationsManager(ComputationsManager):
 
 
 class SequentialComputationsManager(ComputationsManager):
+    def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
+        raise NotImplementedError("Not supported by this computational manager")
+
     def compute_with_slots(self, name: str, prepare_slots: Callable[[], List[S]], tasks: List[Callable[[S], T]],
                            pool_type: PoolType) -> List[T]:
         raise NotImplementedError()
@@ -365,26 +343,28 @@ class SequentialComputationsManager(ComputationsManager):
         return _compute_sequential(tasks)
 
 
+def init_computations_manager(parallelism_settings: Optional[Dict[str, Any]] = None):
+    global __computations_manager__
+    if parallelism_settings is None:
+        comp_manager = SequentialComputationsManager()
+    else:
+        comp_manager = ParallelComputationsManager(
+            ml_pipes_pool_size=parallelism_settings[PoolType.ml_pipelines.name],
+            ml_algos_pool_size=parallelism_settings[PoolType.ml_algos.name],
+            job_pool_size=parallelism_settings[PoolType.job.name]
+        )
+    __computations_manager__ = comp_manager
+
+
 def computations_manager() -> ComputationsManager:
     global __computations_manager__
     if not __computations_manager__:
-        comp_manager_type = os.environ.get(ENV_VAR_SLAMA_COMPUTATIONS_MANAGER, "sequential")
-        logger.info(f"Initializing computations manager with type and params: {comp_manager_type}")
-        if comp_manager_type.startswith("parallel"):
-            comp_manager_args = comp_manager_type[comp_manager_type.index('[') + 1: comp_manager_type.index(']')]
-            comp_manager_args = [int(arg.strip()) for arg in comp_manager_args.split(',')]
-            comp_manager = ParallelComputationsManager(*comp_manager_args)
-        elif comp_manager_type.startswith("sequential"):
-            comp_manager = SequentialComputationsManager()
-        else:
-            raise Exception(f"Incorrect computations manager type: {comp_manager_type}. "
-                            f"Supported values: [parallel, sequential]")
-        __computations_manager__ = comp_manager
+        __computations_manager__ = SequentialComputationsManager()
 
     return __computations_manager__
 
 
-def compute_tasks(tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.DEFAULT) -> List[T]:
+def compute_tasks(tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.job) -> List[T]:
     return computations_manager().compute(tasks, pool_type)
 
 

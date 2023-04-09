@@ -255,7 +255,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         # linear model with l2
         time_score = self.get_time_score(n_level, "linear_l2")
         linear_l2_timer = self.timer.get_task_timer("reg_l2", time_score)
-        linear_l2_model = SparkLinearLBFGS(timer=linear_l2_timer, **self.linear_l2_params)
+        linear_l2_params = {**self.linear_l2_params, **self._parallelism_settings['linear_l2']}
+        linear_l2_model = SparkLinearLBFGS(timer=linear_l2_timer, **linear_l2_params)
         linear_l2_feats = SparkLinearFeatures(
             output_categories=True, **self.linear_pipeline_params
         )
@@ -286,7 +287,8 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             time_score = self.get_time_score(n_level, key)
             gbm_timer = self.timer.get_task_timer(algo_key, time_score)
             if algo_key == "lgb":
-                gbm_model = SparkBoostLGBM(timer=gbm_timer, **self.lgb_params)
+                lgb_params = {**self.lgb_params, **self._parallelism_settings["lgb"]}
+                gbm_model = SparkBoostLGBM(timer=gbm_timer, **lgb_params)
             elif algo_key == "cb":
                 raise NotImplementedError("Not supported yet")
             else:
@@ -300,7 +302,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                     n_trials=self.tuning_params["max_tuning_iter"],
                     timeout=self.tuning_params["max_tuning_time"],
                     fit_on_holdout=self.tuning_params["fit_on_holdout"],
-                    max_parallelism=
+                    parallelism=self._parallelism_settings["tuner"]
                 )
                 gbm_model = (gbm_model, gbm_tuner)
             ml_algos.append(gbm_model)
