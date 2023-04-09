@@ -1,9 +1,8 @@
 import functools
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from copy import copy
-from dataclasses import dataclass
-from typing import Tuple, cast, List, Optional, Sequence, Union, Any, Dict
+from typing import Tuple, cast, List, Optional, Sequence, Union
 
 import numpy as np
 from lightautoml.dataset.base import RolesDict
@@ -18,9 +17,9 @@ from pyspark.ml.util import DefaultParamsWritable, DefaultParamsReadable
 from pyspark.sql import functions as sf
 from pyspark.sql.types import IntegerType
 
+from sparklightautoml.computations.manager import ComputationsManager, default_computations_manager
 from sparklightautoml.dataset.base import SparkDataset, PersistenceLevel
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
-from sparklightautoml.computations.manager import compute_tasks, ComputationsManager, SequentialComputationsManager
 from sparklightautoml.pipelines.base import TransformerInputOutputRoles
 from sparklightautoml.utils import SparkDataFrame, log_exception
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
@@ -53,7 +52,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
         self._prediction_role: Optional[Union[NumericRole, NumericVectorOrArrayRole]] = None
         self._input_roles: Optional[RolesDict] = None
         self._service_columns: Optional[List[str]] = None
-        self._computations_manager = computations_manager or SequentialComputationsManager()
+        self._computations_manager = computations_manager or default_computations_manager()
 
     @property
     def features(self) -> Optional[List[str]]:

@@ -6,7 +6,6 @@ from typing import List, cast, Sequence, Union, Tuple, Optional
 
 from lightautoml.dataset.base import RolesDict
 from lightautoml.ml_algo.tuning.base import ParamsTuner
-from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.ml_algo.utils import tune_and_fit_predict
 from lightautoml.pipelines.ml.base import MLPipeline as LAMAMLPipeline
 from lightautoml.pipelines.selection.base import EmptySelector
@@ -15,10 +14,9 @@ from pyspark.ml import Transformer, PipelineModel
 from ..base import TransformerInputOutputRoles
 from ..features.base import SparkFeaturesPipeline, SparkEmptyFeaturePipeline
 from ..selection.base import SparkSelectionPipelineWrapper
-from ...dataset.base import LAMLDataset, SparkDataset, PersistenceLevel, PersistenceManager
+from ...computations.manager import PoolType, ComputationsManager, default_computations_manager
+from ...dataset.base import SparkDataset
 from ...ml_algo.base import SparkTabularMLAlgo
-from ...computations.manager import compute_tasks, PoolType
-from ...utils import ColumnsSelectorTransformer
 from ...validation.base import SparkBaseTrainValidIterator
 
 
@@ -54,7 +52,8 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         features_pipeline: Optional[SparkFeaturesPipeline] = None,
         post_selection: Optional[SparkSelectionPipelineWrapper] = None,
         name: Optional[str] = None,
-        persist_before_ml_algo: bool = False
+        persist_before_ml_algo: bool = False,
+        computations_manager: Optional[ComputationsManager] = None
     ):
         if features_pipeline is None:
             features_pipeline = SparkEmptyFeaturePipeline()
@@ -80,6 +79,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
         self._output_roles: Optional[RolesDict] = None
         self._persist_before_ml_algo = persist_before_ml_algo
         self._service_columns: Optional[List[str]] = None
+        self._computations_manager = computations_manager or default_computations_manager()
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
@@ -141,8 +141,7 @@ class SparkMLPipeline(LAMAMLPipeline, TransformerInputOutputRoles):
                 for ml_algo, param_tuner, force_calc in zip(self._ml_algos, self.params_tuners, self.force_calc)
             ]
 
-            # TODO: PARALLEL - replace with computation manager
-            results = compute_tasks(fit_tasks, pool_type=PoolType.ml_algos)
+            results = self._computations_manager.compute(fit_tasks, pool_type=PoolType.ml_algos)
 
             self.ml_algos.extend([ml_algo for ml_algo, _ in results])
             preds = [pred for _, pred in results]

@@ -3,8 +3,6 @@ import functools
 import logging
 import os
 from copy import copy
-from dataclasses import dataclass
-from multiprocessing.pool import ThreadPool
 from typing import Any, Callable, Tuple, cast, Union
 from typing import Dict
 from typing import Iterable
@@ -16,14 +14,14 @@ from lightautoml.dataset.base import RolesDict
 from lightautoml.reader.base import RolesDict
 from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
 from lightautoml.utils.timer import PipelineTimer
-from pyspark import inheritable_thread_target
 from pyspark.ml import PipelineModel, Transformer
 from pyspark.sql.session import SparkSession
 
 from .blend import SparkBlender, SparkBestModelSelector
+from ..computations.manager import PoolType, build_named_parallelism_settings, \
+    build_computations_manager, ComputationsManager
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
-from ..computations.manager import compute_tasks, PoolType, build_named_parallelism_settings, init_computations_manager
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline
@@ -123,6 +121,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
         self._parallelism_settings = self._parse_parallelism_mode(parallelism_mode)
+        self._computations_manager: Optional[ComputationsManager] = None
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
@@ -208,8 +207,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         self.skip_conn = skip_conn
         self.return_all_predictions = return_all_predictions
-
-        init_computations_manager(self._parallelism_settings)
+        self._computations_manager = build_computations_manager(self._parallelism_settings)
 
     def fit_predict(
         self,
@@ -509,8 +507,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             for k, ml_pipe in enumerate(level)
         ]
 
-        # TODO: PARALLEL - replace with computation manager
-        results = compute_tasks(fit_tasks, pool_type=PoolType.ml_pipelines)
+        results = self._computations_manager.compute(fit_tasks, pool_type=PoolType.ml_pipelines)
 
         ml_pipes = [ml_pipe for ml_pipe, _ in results]
         ml_pipes_preds = [pipe_preds for _, pipe_preds in results]

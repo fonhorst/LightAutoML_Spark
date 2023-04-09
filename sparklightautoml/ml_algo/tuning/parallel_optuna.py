@@ -6,8 +6,9 @@ import optuna
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.validation.base import HoldoutIterator
 
-from sparklightautoml.computations.manager import computations_manager, _SlotInitiatedTVIter, SlotAllocator, PoolType, \
-    SequentialComputationsManager
+from sparklightautoml.computations.manager import default_computations_manager, _SlotInitiatedTVIter, SlotAllocator, \
+    PoolType, \
+    SequentialComputationsManager, ComputationsManager
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
@@ -124,13 +125,26 @@ class ParallelOptunaTuner(OptunaTuner):
 
 
 class SlotBasedParallelOptunaTuner(ParallelOptunaTuner):
+    def __init__(self,
+                 computations_manager: ComputationsManager,
+                 timeout: Optional[int] = 1000,
+                 n_trials: Optional[int] = 100,
+                 direction: Optional[str] = "maximize",
+                 fit_on_holdout: bool = True,
+                 random_state: int = 42,
+                 parallelism: int = 1):
+        super().__init__(timeout, n_trials, direction, fit_on_holdout, random_state, parallelism)
+        self._computations_manager = computations_manager
+
+        assert self._computations_manager.can_support_slots, "The computation manager should support slots allocation!"
+
     def _optimize(self, ml_algo: SparkTabularMLAlgo, train_valid_iterator: SparkBaseTrainValidIterator,
                   update_trial_time: Callable[[optuna.study.Study, optuna.trial.FrozenTrial], None]):
         sampler = optuna.samplers.TPESampler(seed=self.random_state)
         self.study = optuna.create_study(direction=self.direction, sampler=sampler)
 
-        with computations_manager().slots(train_valid_iterator.train,
-                                          parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
+        with self._computations_manager.slots(train_valid_iterator.train,
+                                                  parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
             allocator: SlotAllocator = allocator
             ml_algo = deepcopy(ml_algo)
             ml_algo.computations_manager = SequentialComputationsManager()

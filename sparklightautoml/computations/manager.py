@@ -202,11 +202,6 @@ class ComputationsManager(ABC):
     def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.job) -> List[T]:
         ...
 
-    @abstractmethod
-    def compute_with_slots(self, name: str, slots: List[S],
-                           tasks: List[Callable[[S], T]], pool_type: PoolType) -> List[T]:
-        ...
-
     @property
     @abstractmethod
     def default_slot_size(self) -> Optional[SlotSize]:
@@ -263,35 +258,6 @@ class ParallelComputationsManager(ComputationsManager):
             )
 
         return results
-
-    def compute_with_slots(self, name: str, slots: List[S],
-                           tasks: List[Callable[[S], T]], pool_type: PoolType) -> List[T]:
-        with self._block_all_pools(pool_type):
-            # check pools
-            assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
-                f"All thread pools except {pool_type} should be None"
-            pool = self._get_pool(pool_type)
-            # TODO: PARALLEL - check the pool is empty or check threads by name?
-            slots_lock = threading.Lock()
-
-            @contextmanager
-            def _use_train() -> Iterator[S]:
-                with slots_lock:
-                    free_slot = next((slot for slot in slots if slot.free))
-                    free_slot.free = False
-
-                yield free_slot
-
-                with slots_lock:
-                    free_slot.free = True
-
-            def _func(task):
-                with _use_train() as slot:
-                    return task(slot)
-
-            f_tasks = [_func(task) for task in tasks]
-
-            return self.compute(f_tasks)
 
     @contextmanager
     def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
@@ -365,16 +331,11 @@ class SequentialComputationsManager(ComputationsManager):
     def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
         raise NotImplementedError("Not supported by this computational manager")
 
-    def compute_with_slots(self, name: str, prepare_slots: Callable[[], List[S]], tasks: List[Callable[[S], T]],
-                           pool_type: PoolType) -> List[T]:
-        raise NotImplementedError()
-
     def compute(self, tasks: list[Callable[[], T]], pool_type: PoolType = PoolType.job) -> List[T]:
         return _compute_sequential(tasks)
 
 
-def init_computations_manager(parallelism_settings: Optional[Dict[str, Any]] = None):
-    global __computations_manager__
+def build_computations_manager(parallelism_settings: Optional[Dict[str, Any]] = None):
     if parallelism_settings is None:
         comp_manager = SequentialComputationsManager()
     else:
@@ -383,19 +344,15 @@ def init_computations_manager(parallelism_settings: Optional[Dict[str, Any]] = N
             ml_algos_pool_size=parallelism_settings[PoolType.ml_algos.name],
             job_pool_size=parallelism_settings[PoolType.job.name]
         )
-    __computations_manager__ = comp_manager
+    return comp_manager
 
 
-def computations_manager() -> ComputationsManager:
-    global __computations_manager__
-    if not __computations_manager__:
-        __computations_manager__ = SequentialComputationsManager()
-
-    return __computations_manager__
+def default_computations_manager() -> ComputationsManager:
+    return SequentialComputationsManager()
 
 
 def compute_tasks(tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.job) -> List[T]:
-    return computations_manager().compute(tasks, pool_type)
+    return default_computations_manager().compute(tasks, pool_type)
 
 
 class _SlotBasedTVIter(SparkBaseTrainValidIterator):

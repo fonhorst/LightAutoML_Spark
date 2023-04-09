@@ -24,7 +24,7 @@ from synapse.ml.lightgbm import (
 )
 from synapse.ml.onnx import ONNXModel
 
-from sparklightautoml.computations.manager import computations_manager, PoolType, SlotAllocator, ComputationsManager
+from sparklightautoml.computations.manager import default_computations_manager, PoolType, SlotAllocator, ComputationsManager
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
