@@ -98,31 +98,36 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
             "linear_l2": {},
             "lgb": {}
         },
-        "all_levels_parallelism_with_experimental_features": {
-            PoolType.ml_pipelines.name: parallelism,
-            PoolType.ml_algos.name: parallelism,
-            PoolType.job.name: parallelism,
-            "tuner": parallelism,
-            "linear_l2": {},
-            "lgb": {
-                "parallelism": parallelism,
-                "use_barrier_execution_mode": True,
-                "experimental_parallel_mode": False
-            }
-        },
-        "all_levels_parallelism": {
-            PoolType.ml_pipelines.name: parallelism,
-            PoolType.ml_algos.name: parallelism,
-            PoolType.job.name: parallelism,
-            "tuner": parallelism,
-            "linear_l2": {},
-            "lgb": {
-                "parallelism": parallelism,
-                "use_barrier_execution_mode": True,
-                "experimental_parallel_mode": False
-            }
-        }
+        # NOT SUPPORTED RIGHT NOW
+        # "all_levels_parallelism_with_experimental_features": {
+        #     PoolType.ml_pipelines.name: parallelism,
+        #     PoolType.ml_algos.name: parallelism,
+        #     PoolType.job.name: parallelism,
+        #     "tuner": parallelism,
+        #     "linear_l2": {},
+        #     "lgb": {
+        #         "parallelism": parallelism,
+        #         "use_barrier_execution_mode": True,
+        #         "experimental_parallel_mode": False
+        #     }
+        # },
+        # "all_levels_parallelism": {
+        #     PoolType.ml_pipelines.name: parallelism,
+        #     PoolType.ml_algos.name: parallelism,
+        #     PoolType.job.name: parallelism,
+        #     "tuner": parallelism,
+        #     "linear_l2": {},
+        #     "lgb": {
+        #         "parallelism": parallelism,
+        #         "use_barrier_execution_mode": True,
+        #         "experimental_parallel_mode": False
+        #     }
+        # }
     }
+
+    assert config_name in parallelism_config, \
+        f"Not supported parallelism mode: {config_name}. " \
+        f"Only the following ones are supoorted at the moment: {list(parallelism_config.keys())}"
 
     return parallelism_config[config_name]
 
