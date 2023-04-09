@@ -286,7 +286,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
 
         results = self.computations_manager.compute(fit_tasks)
 
-        # TODO: PARALLEL - refactoring
+        # TODO: PARALLEL minor - refactoring
         models = [model for _, model, _, _ in results]
         val_preds = [val_pred for _, _, val_pred, _ in results]
         model_prediction_cols = [model_prediction_col for _, _, _, model_prediction_col in results]

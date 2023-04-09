@@ -221,7 +221,6 @@ class ParallelComputationsManager(ComputationsManager):
             PoolType.ml_algos: ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 1 else None,
             PoolType.job: ThreadPool(processes=job_pool_size) if job_pool_size > 1 else None
         }
-        self._pools_lock = threading.Lock()
         self._default_slot_size = default_slot_size
 
     def _get_pool(self, pool_type: PoolType) -> Optional[ThreadPool]:
@@ -236,41 +235,33 @@ class ParallelComputationsManager(ComputationsManager):
         return self._default_slot_size
 
     def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType = PoolType.job) -> List[T]:
-        # TODO: PARALLEL - wouldn't be it a problem
         pool = self._get_pool(pool_type)
 
         if not pool:
             return _compute_sequential(tasks)
 
-        with self._pools_lock:
-            ptasks = map(inheritable_thread_target, tasks)
-            results = sorted(
-                (result for result in pool.imap_unordered(lambda f: f(), ptasks) if result),
-                key=lambda x: x[0]
-            )
+        ptasks = map(inheritable_thread_target, tasks)
+        results = sorted(
+            (result for result in pool.imap_unordered(lambda f: f(), ptasks) if result),
+            key=lambda x: x[0]
+        )
 
         return results
 
     @contextmanager
     def slots(self, dataset: SparkDataset, parallelism: int, pool_type: PoolType) -> SlotAllocator:
-        with self._block_all_pools(pool_type):
-            assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
-                f"All thread pools except {pool_type} should be None"
+        logger.warning("Beaware for correct functioning slot-based computations "
+                       "there should noy be any parallel computations from "
+                       "different entities (other MLPipes, MLAlgo, etc).")
 
-            pool = self._get_pool(pool_type)
-            slot_size, slots = self._prepare_trains(dataset=dataset, parallelism=parallelism)
+        pool = self._get_pool(pool_type)
+        slot_size, slots = self._prepare_trains(dataset=dataset, parallelism=parallelism)
 
-            yield ParallelSlotAllocator(slot_size, slots, pool)
+        yield ParallelSlotAllocator(slot_size, slots, pool)
 
-            logger.info("Clear cache of dataset copies (slots) for the coalesced dataset")
-            for slot in slots:
-                slot.dataset.data.unpersist()
-
-    @contextmanager
-    def _block_all_pools(self, pool_type: PoolType):
-        # need to block pool
-        with self._pools_lock:
-            yield self._get_pool(pool_type)
+        logger.info("Clear cache of dataset copies (slots) for the coalesced dataset")
+        for slot in slots:
+            slot.dataset.data.unpersist()
 
     @staticmethod
     def _prepare_trains(dataset: SparkDataset, parallelism: int) -> Tuple[SlotSize, List[DatasetSlot]]:
