@@ -23,7 +23,7 @@ from pyspark.sql.session import SparkSession
 from .blend import SparkBlender, SparkBestModelSelector
 from ..dataset.base import SparkDataset, PersistenceLevel, PersistenceManager
 from ..dataset.persistence import PlainCachePersistenceManager
-from ..computations.manager import compute_tasks, PoolType
+from ..computations.manager import compute_tasks, PoolType, build_named_parallelism_settings
 from ..pipelines.base import TransformerInputOutputRoles
 from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline
@@ -36,14 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Either path/full url, or pyspark.sql.DataFrame
 ReadableIntoSparkDf = Union[str, SparkDataFrame]
-
-
-@dataclass
-class ParallelismParams:
-    ml_algo_parallelism: int
-    feature_selector_parallelism: int
-    optuna_parallelism: int
-    mlpipe_parallelism: int
+ParallelismMode = Union[Tuple[str, int], Dict[str, Any]]
 
 
 class SparkAutoML(TransformerInputOutputRoles):
@@ -92,7 +85,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         blender: Optional[SparkBlender] = None,
         skip_conn: bool = False,
         return_all_predictions: bool = False,
-        parallelism_mode: Union[str, Dict[str, Any]] = "no_parallelism"
+        parallelism_mode: ParallelismMode = "no_parallelism"
     ):
         """
 
@@ -129,9 +122,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         if reader and levels:
             self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
-
-
-        self._parallelism_mode = parallelism
+        self._parallelism_settings = self._parse_parallelism_mode(parallelism_mode)
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
@@ -283,7 +274,7 @@ class SparkAutoML(TransformerInputOutputRoles):
 
             with train_valid.frozen() as frozen_train_valid:
                 pipes, all_pipes_predictions, flg_last_level = self._parallel_level(
-                    parallelism=self._parallelism,
+                    parallelism=self._parallelism_settings['mlpipes_parallelism'],
                     level=level,
                     train_valid_iterator=frozen_train_valid
                 )
@@ -521,6 +512,8 @@ class SparkAutoML(TransformerInputOutputRoles):
             for k, ml_pipe in enumerate(level)
         ]
 
+        # TODO: PARALLEL - ADD compute tasks sequentially if parallelism == 1
+        # TODO: INITIALIZE computations_manager properly?
         results = compute_tasks(fit_tasks, pool_type=PoolType.ML_PIPELINES)
 
         ml_pipes = [ml_pipe for ml_pipe, _ in results]
@@ -535,6 +528,14 @@ class SparkAutoML(TransformerInputOutputRoles):
             flg_last_level = False
 
         return ml_pipes, ml_pipes_preds, flg_last_level
+
+    @staticmethod
+    def _parse_parallelism_mode(parallelism_mode: ParallelismMode):
+        if isinstance(parallelism_mode, Tuple):
+            mode, parallelism = parallelism_mode
+            return build_named_parallelism_settings(mode, parallelism)
+
+        return parallelism_mode
 
 
 def _do_fit(ml_pipe: SparkMLPipeline, iterator: SparkBaseTrainValidIterator) \

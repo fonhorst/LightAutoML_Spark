@@ -29,6 +29,105 @@ def _compute_sequential(tasks: List[Callable[[], T]]) -> List[T]:
     return [task() for task in tasks]
 
 
+def build_named_parallelism_settings(config_name: str, parallelism: int):
+    parallelism_config = {
+        "no_parallelism": {
+            "feature_selector_parallelism": 1,
+            "mlpipes_parallelism": 1,
+            "mlalgos_parallelism": 1,
+            "linear_l2": {},
+            "lgb": {},
+            "lgb_tuned": {}
+        },
+        "intra_mlpipe_parallelism": {
+            "feature_selector_parallelism": parallelism,
+            "mlpipes_parallelism": 1,
+            "mlalgos_parallelism": 1,
+            "linear_l2": {
+                "coeff_opt_parallelism": 1
+            },
+            "lgb": {
+                "folds_parallelism": parallelism,
+                "use_barrier_execution_mode": True,
+                "use_slot_based_parallelism": False
+            },
+            "lgb_tuned": {
+                "optimization_parallelism": parallelism,
+                "folds_parallelism": parallelism,
+                "use_barrier_execution_mode": True,
+                "use_slot_based_parallelism": False
+            }
+        },
+        "intra_mlpipe_parallelism_with_experimental_features": {
+            "feature_selector_parallelism": parallelism,
+            "mlpipes_parallelism": 1,
+            "mlalgos_parallelism": 1,
+            "linear_l2": {
+                "coeff_opt_parallelism": 1
+            },
+            "lgb": {
+                "folds_parallelism": parallelism,
+                "use_barrier_execution_mode": True,
+                "use_slot_based_parallelism": True
+            },
+            "lgb_tuned": {
+                "optimization_parallelism": parallelism,
+                "folds_parallelism": parallelism,
+                "use_barrier_execution_mode": True,
+                "use_slot_based_parallelism": True
+            }
+        },
+        "mlpipe_level_parallelism": {
+            "feature_selector_parallelism": 1,
+            "mlpipes_parallelism": parallelism,
+            "mlalgos_parallelism": 1,
+            "linear_l2": {},
+            "lgb": {},
+            "lgb_tuned": {}
+
+        },
+        "all_levels_parallelism_with_experimental_features": {
+            "feature_selector_parallelism": parallelism,
+            "mlpipes_parallelism": parallelism,
+            "mlalgos_parallelism": parallelism,
+            "linear_l2": {
+                "coeff_opt_parallelism": parallelism
+            },
+            "lgb": {
+                "folds_parallelism": parallelism,
+                "use_barrier_execution_mode": True,
+                "use_slot_based_parallelism": False
+            },
+            "lgb_tuned": {
+                "optimization_parallelism": parallelism,
+                "folds_parallelism": parallelism,
+                "use_barrier_execution_mode": True,
+                "use_slot_based_parallelism": False
+            }
+        },
+        "all_levels_parallelism": {
+            "feature_selector_parallelism": parallelism,
+            "mlpipes_parallelism": parallelism,
+            "mlalgos_parallelism": parallelism,
+            "linear_l2": {
+                "coeff_opt_parallelism": parallelism
+            },
+            "lgb": {
+                "folds_parallelism": parallelism,
+                "use_barrier_execution_mode": True,
+                "use_slot_based_parallelism": False
+            },
+            "lgb_tuned": {
+                "optimization_parallelism": parallelism,
+                "folds_parallelism": parallelism,
+                "use_barrier_execution_mode": True,
+                "use_slot_based_parallelism": False
+            }
+        }
+    }
+
+    return parallelism_config[config_name]
+
 
 
 @dataclass
