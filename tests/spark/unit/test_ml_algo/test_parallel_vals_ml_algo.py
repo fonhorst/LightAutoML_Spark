@@ -75,7 +75,7 @@ def test_parallel_crossval(spark: SparkSession,
 
 @pytest.mark.skip(reason="Not implemented yet")
 def test_parallel_timer_exceeded(spark: SparkSession):
-    # TODO: SLAMA - check for correct handling of the situation when timer is execeeded
+    # TODO: PARALLEL - check for correct handling of the situation when timer is execeeded
     # 1. after the first fold (parallelism=1)
     # 2. after several folds (parallelism > 1)
     pass

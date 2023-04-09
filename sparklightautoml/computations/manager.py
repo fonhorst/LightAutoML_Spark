@@ -227,7 +227,7 @@ class ParallelComputationsManager(ComputationsManager):
         return self._pools.get(pool_type, None)
 
     def compute(self, tasks: List[Callable[[], T]], pool_type: PoolType) -> List[T]:
-        # TODO: wouldn't be it a problem
+        # TODO: PARALLEL - wouldn't be it a problem
         pool = self._get_pool(pool_type)
 
         if not pool:
@@ -249,7 +249,7 @@ class ParallelComputationsManager(ComputationsManager):
             assert all((pool is None) for _pool_type, pool in self._pools.items() if _pool_type != pool_type), \
                 f"All thread pools except {pool_type} should be None"
             pool = self._get_pool(pool_type)
-            # TODO: check the pool is empty or check threads by name?
+            # TODO: PARALLEL - check the pool is empty or check threads by name?
             slots_lock = threading.Lock()
 
             @contextmanager

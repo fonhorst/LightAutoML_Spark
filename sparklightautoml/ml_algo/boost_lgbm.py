@@ -467,15 +467,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         else:
             train_data = train.data
             assert self.validation_column in train_data.columns
-            # TODO: make filtering of excessive valid dataset
+            # TODO: PARALLEL - make filtering of excessive valid dataset
             full_data = train_data
-
-        # if slot is not None:
-        #     params["numTasks"] = slot.num_tasks
-        #     params["numThreads"] = slot.num_threads
-        #     params["useBarrierExecutionMode"] = slot.use_barrier_execution_mode
-        # else:
-        #     params["numThreads"] = self._get_num_threads(train.data)
 
         # prepare assembler
         if self._assembler is None:
@@ -631,12 +624,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     def _parallel_fit(self, parallelism: int, train_valid_iterator: SparkBaseTrainValidIterator) -> Tuple[
         List[Model], List[SparkDataFrame], List[str]]:
         if self._experimental_parallel_mode:
-            # TODO: 1. locking by the same lock
-            # TODO: is it possible to run exclusively or not?
-            # TODO: 2. create slot-based train_val_iterator
-            # TODO: 3. Redefine params through setInternalParallelismParams(...) which is added with redefined infer_params(...)
-
-            # TODO: blocking other threads here
             manager = computations_manager()
             with manager.slots(train_valid_iterator.train_val_single_dataset,
                                parallelism=parallelism, pool_type=PoolType.job) as allocator:

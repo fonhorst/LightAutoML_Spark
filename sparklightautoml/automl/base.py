@@ -405,12 +405,9 @@ class SparkAutoML(TransformerInputOutputRoles):
     def _create_validation_iterator(
         self, train: SparkDataset, valid: Optional[SparkDataset], n_folds: Optional[int], cv_iter: Optional[Callable]
     ) -> SparkBaseTrainValidIterator:
-        # TODO: SLAMA - set level
         train = train.persist(level=PersistenceLevel.REGULAR)
         if valid:
-            # TODO: SLAMA - set level
             valid = valid.persist(level=PersistenceLevel.REGULAR)
-            # dataset = self._merge_train_and_valid_datasets(train, valid)
             iterator = SparkHoldoutIterator(train, valid)
         elif cv_iter:
             raise NotImplementedError("Not supported now")
@@ -512,8 +509,6 @@ class SparkAutoML(TransformerInputOutputRoles):
             for k, ml_pipe in enumerate(level)
         ]
 
-        # TODO: PARALLEL - ADD compute tasks sequentially if parallelism == 1
-        # TODO: INITIALIZE computations_manager properly?
         results = compute_tasks(fit_tasks, pool_type=PoolType.ml_pipelines)
 
         ml_pipes = [ml_pipe for ml_pipe, _ in results]

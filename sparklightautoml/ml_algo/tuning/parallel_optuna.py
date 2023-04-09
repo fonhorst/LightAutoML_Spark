@@ -45,7 +45,6 @@ class ParallelOptunaTuner(OptunaTuner):
         # upd timeout according to ml_algo timer
         estimated_tuning_time = ml_algo.timer.estimate_tuner_time(len(train_valid_iterator))
         if estimated_tuning_time:
-            # TODO: Check for minimal runtime!
             estimated_tuning_time = max(estimated_tuning_time, 1)
             self._upd_timeout(estimated_tuning_time)
 
@@ -61,7 +60,6 @@ class ParallelOptunaTuner(OptunaTuner):
             train_valid_iterator = train_valid_iterator.convert_to_holdout_iterator()
             flg_new_iterator = True
 
-        # TODO: Check if time estimation will be ok with multiprocessing
         def update_trial_time(study: optuna.study.Study, trial: optuna.trial.FrozenTrial):
             """Callback for number of iteration with time cut-off.
 
@@ -108,7 +106,7 @@ class ParallelOptunaTuner(OptunaTuner):
         sampler = optuna.samplers.TPESampler(seed=self.random_state)
         self.study = optuna.create_study(direction=self.direction, sampler=sampler)
 
-        # TODO: unify with the rest
+        # TODO: PARALLEL - unify with the rest
         ml_algo = deepcopy(ml_algo)
         ml_algo.performance_params = {"parallelism_mode": "no_parallelism"}
 
@@ -135,7 +133,7 @@ class SlotBasedParallelOptunaTuner(ParallelOptunaTuner):
                                           parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
             allocator: SlotAllocator = allocator
             ml_algo = deepcopy(ml_algo)
-            # TODO: Describe Performance Params as a special dataclass that is respected by all algorithms
+            # TODO: PARALLEL - Describe Performance Params as a special dataclass that is respected by all algorithms
             ml_algo.performance_params = {
                 "num_tasks": allocator.slot_size.num_tasks,
                 "num_threads": allocator.slot_size.num_threads_per_executor,
