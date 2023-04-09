@@ -1,18 +1,23 @@
 import logging
-import os
+import math
+import multiprocessing
 import threading
+import warnings
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing.pool import ThreadPool
-from typing import Callable, Optional, Iterator, Iterable, ContextManager, Any, Dict
+from typing import Callable, Optional, Iterable, Any, Dict, Tuple, cast
 from typing import TypeVar, List, Iterator
 
-from pyspark import inheritable_thread_target
+from pyspark import inheritable_thread_target, SparkContext, keyword_only
+from pyspark.ml.common import inherit_doc
+from pyspark.ml.wrapper import JavaTransformer
 
 from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator, TrainVal
 
 logger = logging.getLogger(__name__)
@@ -29,6 +34,29 @@ class PoolType(Enum):
     ml_pipelines = "ml_pipelines"
     ml_algos = "ml_algos"
     job = "job"
+
+
+# noinspection PyUnresolvedReferences
+def get_executors() -> List[str]:
+    sc = SparkContext._active_spark_context
+    return sc._jvm.org.apache.spark.lightautoml.utils.SomeFunctions.get_executors()
+
+
+def get_executors_core(train: SparkDataFrame):
+    master_addr = train.spark_session.conf.get("spark.master")
+    if master_addr.startswith("local-cluster"):
+        # exec_str, cores_str, mem_mb_str
+        _, cores_str, _ = master_addr[len("local-cluster["): -1].split(",")
+        cores = int(cores_str)
+        num_threads = max(cores - 1, 1)
+    elif master_addr.startswith("local"):
+        cores_str = master_addr[len("local["): -1]
+        cores = int(cores_str) if cores_str != "*" else multiprocessing.cpu_count()
+        num_threads = max(cores - 1, 1)
+    else:
+        num_threads = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
+
+    return num_threads
 
 
 def _compute_sequential(tasks: List[Callable[[], T]]) -> List[T]:
@@ -106,6 +134,20 @@ def build_named_parallelism_settings(config_name: str, parallelism: int):
 
     return parallelism_config[config_name]
 
+
+@inherit_doc
+class PrefferedLocsPartitionCoalescerTransformer(JavaTransformer):
+    """
+    Custom implementation of PySpark BalancedUnionPartitionsCoalescerTransformer wrapper
+    """
+
+    @keyword_only
+    def __init__(self, pref_locs: List[str], do_shuffle: bool = True):
+        super(PrefferedLocsPartitionCoalescerTransformer, self).__init__()
+        self._java_obj = self._new_java_obj(
+            "org.apache.spark.lightautoml.utils.PrefferedLocsPartitionCoalescerTransformer",
+            self.uid, pref_locs, do_shuffle
+        )
 
 
 @dataclass
@@ -236,11 +278,13 @@ class ParallelComputationsManager(ComputationsManager):
                 f"All thread pools except {pool_type} should be None"
 
             pool = self._get_pool(pool_type)
-            # TODO: parallel
-            slot_size = SlotSize(num_tasks=, num_threads_per_executor=)
-            slots = self._prepare_trains(paralellism_mode=, train_df=dataset.data, max_job_parallelism=)
+            slot_size, slots = self._prepare_trains(dataset=dataset, parallelism=parallelism)
 
             yield ParallelSlotAllocator(slot_size, slots, pool)
+
+            logger.info("Clear cache of dataset copies (slots) for the coalesced dataset")
+            for slot in slots:
+                slot.dataset.data.unpersist()
 
     @contextmanager
     def _block_all_pools(self, pool_type: PoolType):
@@ -248,84 +292,39 @@ class ParallelComputationsManager(ComputationsManager):
         with self._pools_lock:
             yield self._get_pool(pool_type)
 
-    def _prepare_trains(self, paralellism_mode, train_df, max_job_parallelism: int) -> List[DatasetSlot]:
-        if self.parallelism_mode == ParallelismMode.pref_locs:
-            execs_per_job = max(1, math.floor(len(self._executors) / max_job_parallelism))
+    @staticmethod
+    def _prepare_trains(dataset: SparkDataset, parallelism: int) -> Tuple[SlotSize, List[DatasetSlot]]:
+        execs = get_executors()
+        exec_cores = get_executors_core(dataset.data)
+        execs_per_slot = max(1, math.floor(len(execs) / parallelism))
+        slots_num = int(len(execs) / execs_per_slot)
+        slot_size = SlotSize(num_tasks=execs_per_slot * exec_cores, num_threads_per_executor=exec_cores)
 
-            if len(self._executors) % max_job_parallelism != 0:
-                warnings.warn(f"Uneven number of executors per job. Setting execs per job: {execs_per_job}.")
+        if len(execs) % parallelism != 0:
+            warnings.warn(f"Uneven number of executors per job. "
+                          f"Setting execs per slot: {execs_per_slot}, slots num: {slots_num}.")
 
-            slots_num = int(len(self._executors) / execs_per_job)
+        logger.info(f"Coalescing dataset into multiple copies (num copies: {slots_num}) "
+                    f"with specified preffered locations")
 
-            _train_slots = []
+        _train_slots = []
 
-            def _coalesce_df_to_locs(df: SparkDataFrame, pref_locs: List[str]):
-                df = PrefferedLocsPartitionCoalescerTransformer(pref_locs=pref_locs).transform(df)
-                df = df.cache()
-                df.write.mode('overwrite').format('noop').save()
-                return df
+        for i in range(slots_num):
+            pref_locs = execs[i * execs_per_slot: (i + 1) * execs_per_slot]
 
-            for i in range(slots_num):
-                pref_locs = self._executors[i * execs_per_job: (i + 1) * execs_per_job]
+            coalesced_data = PrefferedLocsPartitionCoalescerTransformer(pref_locs=pref_locs)\
+                .transform(dataset.data).cache()
+            coalesced_data.write.mode('overwrite').format('noop').save()
 
-                # prepare train
-                train_df = _coalesce_df_to_locs(train_df, pref_locs)
+            coalesced_dataset = dataset.empty()
+            coalesced_dataset.set_data(coalesced_data, coalesced_dataset.features, coalesced_dataset.roles,
+                                       name=f"CoalescedForPrefLocs_{dataset.name}")
 
-                # prepare test
-                test_df = _coalesce_df_to_locs(test_df, pref_locs)
+            _train_slots.append(DatasetSlot(dataset=coalesced_dataset,free=True))
 
-                _train_slots.append(DatasetSlot(
-                    train_df=train_df,
-                    test_df=test_df,
-                    pref_locs=pref_locs,
-                    num_tasks=len(pref_locs) * self._cores_per_exec,
-                    num_threads=-1,
-                    use_single_dataset_mode=True,
-                    free=True
-                ))
+            logger.info(f"Preffered locations for slot #{i}: {pref_locs}")
 
-                print(f"Pref lcos for slot #{i}: {pref_locs}")
-        elif self.parallelism_mode == ParallelismMode.no_single_dataset_mode:
-            num_tasks_per_job = max(1, math.floor(len(self._executors) * self._cores_per_exec / max_job_parallelism))
-            _train_slots = [DatasetSlot(
-                train_df=self.train_dataset,
-                test_df=self.test_dataset,
-                pref_locs=None,
-                num_tasks=num_tasks_per_job,
-                num_threads=-1,
-                use_single_dataset_mode=False,
-                free=False
-            )]
-        elif self.parallelism_mode == ParallelismMode.single_dataset_mode:
-            num_tasks_per_job = max(1, math.floor(len(self._executors) * self._cores_per_exec / max_job_parallelism))
-            num_threads_per_exec = max(1, math.floor(num_tasks_per_job / len(self._executors)))
-
-            if num_threads_per_exec != 1:
-                warnings.warn(f"Num threads per exec {num_threads_per_exec} != 1. "
-                              f"Overcommitting or undercommiting may happen due to "
-                              f"uneven allocations of cores between executors for a job")
-
-            _train_slots = [DatasetSlot(
-                train_df=self.train_dataset,
-                test_df=self.test_dataset,
-                pref_locs=None,
-                num_tasks=num_tasks_per_job,
-                num_threads=num_threads_per_exec,
-                use_single_dataset_mode=True,
-                free=False
-            )]
-        else:
-            _train_slots = [DatasetSlot(
-                train_df=self.train_dataset,
-                test_df=self.test_dataset,
-                pref_locs=None,
-                num_tasks=self.train_dataset.rdd.getNumPartitions(),
-                num_threads=-1,
-                use_single_dataset_mode=True,
-                free=False
-            )]
-
-        return _train_slots
+        return slot_size, _train_slots
 
 
 class SequentialComputationsManager(ComputationsManager):
@@ -376,6 +375,9 @@ class _SlotBasedTVIter(SparkBaseTrainValidIterator):
         self._curr_pos = 0
         return self
 
+    def __len__(self) -> Optional[int]:
+        return len(self._tviter)
+
     def __next__(self) -> TrainVal:
         with self._slots() as slot:
             tviter = deepcopy(self._tviter)
@@ -392,6 +394,12 @@ class _SlotBasedTVIter(SparkBaseTrainValidIterator):
                 raise StopIteration()
 
         return curr_tv
+
+    def convert_to_holdout_iterator(self):
+        return _SlotBasedTVIter(
+            self._slots,
+            cast(SparkBaseTrainValidIterator, self._tviter.convert_to_holdout_iterator())
+        )
 
     def freeze(self) -> 'SparkBaseTrainValidIterator':
         raise NotImplementedError()

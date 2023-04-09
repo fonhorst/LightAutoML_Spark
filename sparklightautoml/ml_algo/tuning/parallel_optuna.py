@@ -6,7 +6,7 @@ import optuna
 from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.validation.base import HoldoutIterator
 
-from sparklightautoml.computations.manager import computations_manager, _SlotInitiatedTVIter, SlotAllocator
+from sparklightautoml.computations.manager import computations_manager, _SlotInitiatedTVIter, SlotAllocator, PoolType
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo
 from sparklightautoml.validation.base import SparkBaseTrainValidIterator
@@ -132,7 +132,7 @@ class SlotBasedParallelOptunaTuner(ParallelOptunaTuner):
         self.study = optuna.create_study(direction=self.direction, sampler=sampler)
 
         with computations_manager().slots(train_valid_iterator.train,
-                                          parallelism=self._parallelism, pool_type=) as allocator:
+                                          parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
             allocator: SlotAllocator = allocator
             ml_algo = deepcopy(ml_algo)
             # TODO: Describe Performance Params as a special dataclass that is respected by all algorithms
