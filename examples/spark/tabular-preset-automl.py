@@ -58,7 +58,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
             },
             linear_l2_params={'default_params': {'regParam': [1e-5], "maxIter": 2,}},
             reader_params={"cv": cv, "advanced_roles": False},
-            parallelism_mode=("intra_mlpipe_parallelism", 3)
+            parallelism_mode=("no_parallelism", -1)
+            # parallelism_mode=("intra_mlpipe_parallelism", 3)
         )
 
         oof_predictions = automl.fit_predict(
