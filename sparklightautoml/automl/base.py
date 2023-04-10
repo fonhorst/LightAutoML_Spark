@@ -27,7 +27,7 @@ from ..pipelines.features.base import SparkPipelineModel
 from ..pipelines.ml.base import SparkMLPipeline
 from ..reader.base import SparkToSparkReader
 from ..utils import ColumnsSelectorTransformer, SparkDataFrame
-from ..validation.base import SparkBaseTrainValidIterator
+from ..validation.base import SparkBaseTrainValidIterator, mark_as_train, mark_as_val
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
 
 logger = logging.getLogger(__name__)
@@ -403,15 +403,22 @@ class SparkAutoML(TransformerInputOutputRoles):
     def _create_validation_iterator(
         self, train: SparkDataset, valid: Optional[SparkDataset], n_folds: Optional[int], cv_iter: Optional[Callable]
     ) -> SparkBaseTrainValidIterator:
-        train = train.persist(level=PersistenceLevel.REGULAR)
         if valid:
-            valid = valid.persist(level=PersistenceLevel.REGULAR)
-            iterator = SparkHoldoutIterator(train, valid)
+            sdf = mark_as_train(train.data, SparkBaseTrainValidIterator.TRAIN_VAL_COLUMN)\
+                .unionByName(mark_as_val(valid.data, SparkBaseTrainValidIterator.TRAIN_VAL_COLUMN))
+
+            new_train = train.empty()
+            new_train.set_data(sdf, train.features, train.roles, dependencies=[train, valid])
+            new_train = new_train.persist(level=PersistenceLevel.REGULAR)
+
+            iterator = SparkHoldoutIterator(new_train)
         elif cv_iter:
             raise NotImplementedError("Not supported now")
         elif train.folds:
+            train = train.persist(level=PersistenceLevel.REGULAR)
             iterator = SparkFoldsIterator(train, n_folds)
         else:
+            train = train.persist(level=PersistenceLevel.REGULAR)
             iterator = SparkDummyIterator(train)
 
         logger.info(f"Using train valid iterator of type: {type(iterator)}")

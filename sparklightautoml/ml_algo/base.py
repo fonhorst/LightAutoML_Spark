@@ -162,14 +162,14 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
 
         return pred_ds
 
-    def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset) \
+    def fit_predict_single_fold(self, fold_prediction_column: str, validation_column: str, train: SparkDataset) \
             -> Tuple[SparkMLModel, SparkDataFrame, str]:
         """Train on train dataset and predict on holdout dataset.
 
         Args:
             fold_prediction_column: column name for predictions made for this fold
-            train: Train Dataset.
-            valid: Validation Dataset.
+            validation_column: name of the column that signals if this row is from train or val
+            train: dataset containing both train and val rows.
 
         Returns:
             Target predictions for valid dataset.
@@ -256,7 +256,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
             -> Tuple[List[Model], List[SparkDataFrame], List[str]]:
         num_folds = len(train_valid_iterator)
 
-        def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset, valid: SparkDataset):
+        def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset):
             def func() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
                 if num_folds > 1:
                     logger.info2(
@@ -270,7 +270,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
 
                 print(f"DURING: {mdl_pred_col}")
 
-                mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, train, valid)
+                mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, self.validation_column, train)
                 vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, mdl_pred_col)
 
                 timer.write_run_info()
@@ -279,8 +279,8 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
             return func
 
         fit_tasks = [
-            build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}", train, valid)
-            for i, (train, valid) in enumerate(train_valid_iterator)
+            build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}", train)
+            for i, train in enumerate(train_valid_iterator)
         ]
 
         results = self.computations_manager.compute(fit_tasks)

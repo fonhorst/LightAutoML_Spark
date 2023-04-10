@@ -111,16 +111,6 @@ class SparkHoldoutIterator(SparkBaseTrainValidIterator):
     def convert_to_holdout_iterator(self) -> "SparkHoldoutIterator":
         return self
 
-    def apply_selector(self, selector: SparkSelectionPipeline) -> "SparkBaseTrainValidIterator":
-        train_valid = super().apply_selector(selector)
-        train_valid._valid = selector.select(train_valid._valid)
-        return train_valid
-
-    def apply_feature_pipeline(self, features_pipeline: SparkFeaturesPipeline) -> "SparkBaseTrainValidIterator":
-        train_valid = super().apply_feature_pipeline(features_pipeline)
-        train_valid._valid = features_pipeline.transform(train_valid._valid)
-        return train_valid
-
 
 class SparkFoldsIterator(SparkBaseTrainValidIterator):
     """Classic cv iterator.

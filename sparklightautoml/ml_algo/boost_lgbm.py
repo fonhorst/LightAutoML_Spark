@@ -41,7 +41,7 @@ from sparklightautoml.transformers.base import (
 from sparklightautoml.transformers.scala_wrappers.balanced_union_partitions_coalescer import \
     BalancedUnionPartitionsCoalescerTransformer
 from sparklightautoml.utils import SparkDataFrame
-from sparklightautoml.validation.base import SparkBaseTrainValidIterator
+from sparklightautoml.validation.base import SparkBaseTrainValidIterator, split_out_val
 
 logger = logging.getLogger(__name__)
 
@@ -387,39 +387,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         return onnx_ml
 
-    def _merge_train_val(self, train: SparkDataset, valid: SparkDataset) -> SparkDataFrame:
-        train_data = train.data
-        valid_data = valid.data
-        valid_size = valid.data.count()
-        max_val_size = self._max_validation_size
-        if valid_size > max_val_size:
-            warnings.warn(
-                f"Maximum validation size for SparkBoostLGBM is exceeded: {valid_size} > {max_val_size}. "
-                f"Reducing validation size down to maximum.",
-                category=RuntimeWarning,
-            )
-
-            valid_data = valid_data.sample(fraction=max_val_size / valid_size, seed=self._seed)
-
-        td = train_data.select('*', sf.lit(False).alias(self.validation_column))
-        vd = valid_data.select('*', sf.lit(True).alias(self.validation_column))
-        full_data = td.unionByName(vd)
-
-        if train_data.rdd.getNumPartitions() == valid_data.rdd.getNumPartitions():
-            full_data = BalancedUnionPartitionsCoalescerTransformer().transform(full_data)
-        else:
-            message = f"Cannot apply BalancedUnionPartitionsCoalescer " \
-                      f"due to train and val datasets doesn't have the same number of partitions. " \
-                      f"The train dataset has {train_data.rdd.getNumPartitions()} partitions " \
-                      f"while the val dataset has {valid_data.rdd.getNumPartitions()} partitions." \
-                      f"Continue with plain union." \
-                      f"In some situations it may negatively affect behavior of SynapseML LightGBM " \
-                      f"due to empty partitions"
-            warnings.warn(message, RuntimeWarning)
-
-        return full_data
-
-    def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset) \
+    def fit_predict_single_fold(self, fold_prediction_column: str, validation_column: str, train: SparkDataset) \
             -> Tuple[SparkMLModel, SparkDataFrame, str]:
         if self.task is None:
             self.task = train.task
@@ -437,16 +405,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         else:
             params["predictionCol"] = fold_prediction_column
 
-        assert self.validation_column in train.data.columns
-        full_data = train.data
+        assert validation_column in train.data.columns, \
+            f"Validation column {validation_column} should be present in the data"
 
-        # if valid is not None:
-        #     full_data = self._merge_train_val(train, valid)
-        # else:
-        #     train_data = train.data
-        #     assert self.validation_column in train_data.columns
-        #     # TODO: PARALLEL - make filtering of excessive valid dataset
-        #     full_data = train_data
+        full_data = train.data
 
         # prepare assembler
         if self._assembler is None:
@@ -463,7 +425,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             **params,
             featuresCol=self._assembler.getOutputCol(),
             labelCol=train.target_column,
-            validationIndicatorCol=self.validation_column,
+            validationIndicatorCol=validation_column,
             verbosity=verbose_eval,
             useSingleDatasetMode=self._use_single_dataset_mode,
             isProvideTrainingMetric=True,
@@ -482,8 +444,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         ml_model = self._do_convert_to_onnx(train, ml_model) if self._convert_to_onnx else ml_model
         self._models_feature_importances.append(ml_model.getFeatureImportances(importance_type="gain"))
 
-        # TODO: PARALLEL - unify this function call
-        valid_data = full_data.where(sf.col(self.validation_column) == 1).drop(self.validation_column)
+        valid_data = split_out_val(full_data, validation_column)
         # predict validation
         val_pred = ml_model.transform(self._assembler.transform(valid_data))
         val_pred = DropColumnsTransformer(
@@ -501,9 +462,9 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
     def get_features_score(self) -> Series:
         imp = 0
         for model_feature_impotances in self._models_feature_importances:
-            imp = imp + pd.Series(model_feature_impotances)
+            imp += pd.Series(model_feature_impotances)
 
-        imp = imp / len(self._models_feature_importances)
+        imp /= len(self._models_feature_importances)
 
         def flatten_features(feat: str):
             role = self.input_roles[feat]
@@ -617,9 +578,11 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                             tviter = deepcopy(train_valid_iterator)
                             tviter.train = slot.dataset
                             for _ in range(i + 1):
-                                slot_train, slot_val = next(tviter)
+                                slot_train = next(tviter)
 
-                            mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, slot_train, slot_val)
+                            mdl, vpred, _ = self.fit_predict_single_fold(
+                                mdl_pred_col, self.validation_column, slot_train
+                            )
                             vpred = vpred.select(SparkDataset.ID_COLUMN, slot.dataset.target_column, mdl_pred_col)
 
                             timer.write_run_info()
