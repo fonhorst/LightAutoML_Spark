@@ -15,6 +15,7 @@ from typing import TypeVar, List, Iterator
 from pyspark import inheritable_thread_target, SparkContext, keyword_only
 from pyspark.ml.common import inherit_doc
 from pyspark.ml.wrapper import JavaTransformer
+from pyspark.sql import SparkSession
 
 from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.utils import SparkDataFrame
@@ -59,8 +60,8 @@ def get_executors() -> List[str]:
     return sc._jvm.org.apache.spark.lightautoml.utils.SomeFunctions.get_executors()
 
 
-def get_executors_cores(train: SparkDataFrame):
-    master_addr = train.spark_session.conf.get("spark.master")
+def get_executors_cores() -> int:
+    master_addr = SparkSession.getActiveSession().conf.get("spark.master")
     if master_addr.startswith("local-cluster"):
         # exec_str, cores_str, mem_mb_str
         _, cores_str, _ = master_addr[len("local-cluster["): -1].split(",")
@@ -71,7 +72,7 @@ def get_executors_cores(train: SparkDataFrame):
         cores = int(cores_str) if cores_str != "*" else multiprocessing.cpu_count()
         num_threads = max(cores - 1, 1)
     else:
-        num_threads = max(int(train.spark_session.conf.get("spark.executor.cores", "1")) - 1, 1)
+        num_threads = max(int(SparkSession.getActiveSession().conf.get("spark.executor.cores", "1")) - 1, 1)
 
     return num_threads
 
@@ -236,18 +237,19 @@ class ParallelComputationsManager(ComputationsManager):
     def __init__(self,
                  ml_pipes_pool_size: int = 1,
                  ml_algos_pool_size: int = 1,
-                 job_pool_size: int = 1,
-                 default_slot_size: Optional[SlotSize] = None):
+                 job_pool_size: int = 1):
+        # doing it, because ParallelComputations Manager should be deepcopy-able
         create_pools(ml_pipes_pool_size, ml_algos_pool_size, job_pool_size)
-        #
-        #
-        # self._pools = {
-        #     PoolType.ml_pipelines: ThreadPool(processes=ml_pipes_pool_size) if ml_pipes_pool_size > 1 else None,
-        #     PoolType.ml_algos: ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 1 else None,
-        #     PoolType.job: ThreadPool(processes=job_pool_size) if job_pool_size > 1 else None
-        # }
-        #
-        self._default_slot_size = default_slot_size
+
+        # execs_count = len(get_executors())
+        # exec_cores = get_executors_cores()
+        # num_tasks = int(min(1, int((execs_count * exec_cores) / job_pool_size)))
+        # num_threads = int(min(1, int(num_tasks / execs_count)))
+        # self._default_slot_size = SlotSize(
+        #     num_tasks=num_tasks,
+        #     num_threads_per_executor=num_threads
+        # )
+        self._default_slot_size = None
 
     def _get_pool(self, pool_type: PoolType) -> Optional[ThreadPool]:
         return get_pool(pool_type)

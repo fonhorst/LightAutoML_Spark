@@ -212,7 +212,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
             selection_gbm = SparkBoostLGBM(
                 timer=sel_timer_0,
-                computations_manager=self._computations_manager,
                 **lgb_params
             )
             selection_gbm.set_prefix("Selector")
@@ -236,7 +235,6 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                 selection_feats = SparkLGBSimpleFeatures()
                 selection_gbm = SparkBoostLGBM(
                     timer=sel_timer_1,
-                    computations_manager=self._computations_manager,
                     **lgb_params
                 )
                 selection_gbm.set_prefix("Selector")

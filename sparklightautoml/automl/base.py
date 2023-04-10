@@ -124,8 +124,6 @@ class SparkAutoML(TransformerInputOutputRoles):
         self._computations_manager: Optional[ComputationsManager] =  \
             build_computations_manager(self._parallelism_settings)
 
-        k = 0
-
     @property
     def input_roles(self) -> Optional[RolesDict]:
         return self._input_roles
