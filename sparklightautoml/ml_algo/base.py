@@ -275,7 +275,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
             return func
 
         fit_tasks = [
-            build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}", train)
+            build_fit_func(i, f"{self.prediction_feature}_{i}", train)
             for i, train in enumerate(train_valid_iterator)
         ]
 

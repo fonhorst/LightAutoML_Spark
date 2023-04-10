@@ -16,7 +16,7 @@ from pyspark.sql import functions as sf, Window
 from pyspark.sql.types import DateType, StringType
 from tqdm import tqdm
 
-from sparklightautoml.automl.base import ReadableIntoSparkDf
+from sparklightautoml.automl.base import ReadableIntoSparkDf, ParallelismMode
 from sparklightautoml.automl.blend import SparkWeightedBlender
 from sparklightautoml.automl.presets.base import SparkAutoMLPreset
 from sparklightautoml.automl.presets.utils import (
@@ -98,11 +98,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         gbm_pipeline_params: Optional[dict] = None,
         linear_pipeline_params: Optional[dict] = None,
         persistence_manager: Optional[PersistenceManager] = None,
-        parallelism: int = 1
+        parallelism_mode: ParallelismMode = ("no_parallelism", -1)
     ):
         if config_path is None:
             config_path = os.path.join(base_dir, self._default_config_path)
-        super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path, parallelism)
+        super().__init__(task, timeout, memory_limit, cpu_limit, gpu_ids, timing_params, config_path, parallelism_mode)
 
         self._persistence_manager = persistence_manager or PlainCachePersistenceManager()
 

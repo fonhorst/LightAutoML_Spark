@@ -83,7 +83,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         blender: Optional[SparkBlender] = None,
         skip_conn: bool = False,
         return_all_predictions: bool = False,
-        parallelism_mode: ParallelismMode = "no_parallelism"
+        parallelism_mode: ParallelismMode = ("no_parallelism", -1)
     ):
         """
 
