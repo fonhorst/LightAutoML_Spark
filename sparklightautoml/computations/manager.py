@@ -386,10 +386,6 @@ class _SlotBasedTVIter(SparkBaseTrainValidIterator):
     def unpersist(self, skip_val: bool = False):
         raise NotImplementedError()
 
-    @property
-    def train_val_single_dataset(self) -> 'SparkDataset':
-        return self._tviter.train_val_single_dataset
-
     def get_validation_data(self) -> SparkDataset:
         return self._tviter.get_validation_data()
 
@@ -424,10 +420,6 @@ class _SlotInitiatedTVIter(SparkBaseTrainValidIterator):
 
     def unpersist(self, skip_val: bool = False):
         raise NotImplementedError("NotSupportedMethod")
-
-    @property
-    def train_val_single_dataset(self) -> 'SparkDataset':
-        return self._tviter.train_val_single_dataset
 
     def get_validation_data(self) -> SparkDataset:
         return self._tviter.get_validation_data()

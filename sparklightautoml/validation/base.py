@@ -17,7 +17,8 @@ from sparklightautoml.dataset.base import SparkDataset, Unpersistable
 from sparklightautoml.pipelines.features.base import SparkFeaturesPipeline
 from sparklightautoml.utils import SparkDataFrame
 
-TrainVal = Tuple[SparkDataset, SparkDataset]
+# TrainVal = Tuple[SparkDataset, SparkDataset]
+TrainVal = SparkDataset
 
 
 class SparkSelectionPipeline(SelectionPipeline, ABC):
@@ -63,11 +64,6 @@ class SparkBaseTrainValidIterator(TrainValidIterator, Unpersistable, ABC):
 
     @abstractmethod
     def unpersist(self, skip_val: bool = False):
-        ...
-
-    @property
-    @abstractmethod
-    def train_val_single_dataset(self) -> 'SparkDataset':
         ...
 
     @contextmanager

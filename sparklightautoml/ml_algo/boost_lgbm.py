@@ -419,12 +419,8 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
 
         return full_data
 
-    def fit_predict_single_fold(
-        self,
-            fold_prediction_column: str,
-            train: SparkDataset,
-            valid: Optional[SparkDataset] = None
-    ) -> Tuple[SparkMLModel, SparkDataFrame, str]:
+    def fit_predict_single_fold(self, fold_prediction_column: str, train: SparkDataset) \
+            -> Tuple[SparkMLModel, SparkDataFrame, str]:
         if self.task is None:
             self.task = train.task
 
@@ -441,13 +437,16 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         else:
             params["predictionCol"] = fold_prediction_column
 
-        if valid is not None:
-            full_data = self._merge_train_val(train, valid)
-        else:
-            train_data = train.data
-            assert self.validation_column in train_data.columns
-            # TODO: PARALLEL - make filtering of excessive valid dataset
-            full_data = train_data
+        assert self.validation_column in train.data.columns
+        full_data = train.data
+
+        # if valid is not None:
+        #     full_data = self._merge_train_val(train, valid)
+        # else:
+        #     train_data = train.data
+        #     assert self.validation_column in train_data.columns
+        #     # TODO: PARALLEL - make filtering of excessive valid dataset
+        #     full_data = train_data
 
         # prepare assembler
         if self._assembler is None:
@@ -483,8 +482,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
         ml_model = self._do_convert_to_onnx(train, ml_model) if self._convert_to_onnx else ml_model
         self._models_feature_importances.append(ml_model.getFeatureImportances(importance_type="gain"))
 
+        # TODO: PARALLEL - unify this function call
+        valid_data = full_data.where(sf.col(self.validation_column) == 1).drop(self.validation_column)
         # predict validation
-        val_pred = ml_model.transform(self._assembler.transform(valid.data))
+        val_pred = ml_model.transform(self._assembler.transform(valid_data))
         val_pred = DropColumnsTransformer(
             remove_cols=[],
             optional_remove_cols=[self._prediction_col_name, self._probability_col_name, self._raw_prediction_col_name],
@@ -606,7 +607,7 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
             warnings.warn("Experimental parallel mode is set, "
                           "but computations manager doesn't support slots allocation")
         elif self._experimental_parallel_mode:
-            with self.computations_manager.slots(train_valid_iterator.train_val_single_dataset,
+            with self.computations_manager.slots(train_valid_iterator.train,
                                                  parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
                 allocator: SlotAllocator = allocator
 
