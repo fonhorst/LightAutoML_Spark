@@ -210,7 +210,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             sel_timer_0 = self.timer.get_task_timer("lgb", time_score)
             selection_feats = SparkLGBSimpleFeatures()
 
-            selection_gbm = SparkBoostLGBM(timer=sel_timer_0, **lgb_params)
+            selection_gbm = SparkBoostLGBM(
+                timer=sel_timer_0,
+                computations_manager=self._computations_manager,
+                **lgb_params
+            )
             selection_gbm.set_prefix("Selector")
 
             if selection_params["importance_type"] == "permutation":
@@ -230,10 +234,14 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
                 sel_timer_1 = self.timer.get_task_timer("lgb", time_score)
                 selection_feats = SparkLGBSimpleFeatures()
-                selection_gbm = SparkBoostLGBM(timer=sel_timer_1, **lgb_params)
+                selection_gbm = SparkBoostLGBM(
+                    timer=sel_timer_1,
+                    computations_manager=self._computations_manager,
+                    **lgb_params
+                )
                 selection_gbm.set_prefix("Selector")
 
-                importance = SparkNpPermutationImportanceEstimator()
+                importance = SparkNpPermutationImportanceEstimator(computations_manager=self._computations_manager)
 
                 extra_selector = NpIterativeFeatureSelector(
                     selection_feats,
@@ -259,7 +267,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             **self.linear_l2_params,
             **(self._parallelism_settings.get('linear_l2', dict()) if self._parallelism_settings else dict())
         }
-        linear_l2_model = SparkLinearLBFGS(timer=linear_l2_timer, **linear_l2_params)
+        linear_l2_model = SparkLinearLBFGS(
+            timer=linear_l2_timer,
+            computations_manager=self._computations_manager,
+            **linear_l2_params
+        )
         linear_l2_feats = SparkLinearFeatures(
             output_categories=True, **self.linear_pipeline_params
         )
@@ -294,7 +306,11 @@ class SparkTabularAutoML(SparkAutoMLPreset):
                     **self.lgb_params,
                     **(self._parallelism_settings.get("lgb", dict()) if self._parallelism_settings else dict())
                 }
-                gbm_model = SparkBoostLGBM(timer=gbm_timer, **lgb_params)
+                gbm_model = SparkBoostLGBM(
+                    timer=gbm_timer,
+                    computations_manager=self._computations_manager,
+                    **lgb_params
+                )
             elif algo_key == "cb":
                 raise NotImplementedError("Not supported yet")
             else:

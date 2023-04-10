@@ -121,7 +121,10 @@ class SparkAutoML(TransformerInputOutputRoles):
             self._initialize(reader, levels, timer, blender, skip_conn, return_all_predictions)
 
         self._parallelism_settings = self._parse_parallelism_mode(parallelism_mode)
-        self._computations_manager: Optional[ComputationsManager] = None
+        self._computations_manager: Optional[ComputationsManager] =  \
+            build_computations_manager(self._parallelism_settings)
+
+        k = 0
 
     @property
     def input_roles(self) -> Optional[RolesDict]:
@@ -207,7 +210,6 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         self.skip_conn = skip_conn
         self.return_all_predictions = return_all_predictions
-        self._computations_manager = build_computations_manager(self._parallelism_settings)
 
     def fit_predict(
         self,

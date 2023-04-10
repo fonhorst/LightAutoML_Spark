@@ -24,8 +24,6 @@ logger = logging.getLogger(__name__)
 
 ENV_VAR_SLAMA_COMPUTATIONS_MANAGER = "SLAMA_COMPUTATIONS_MANAGER"
 
-__computations_manager__: Optional['ComputationsManager'] = None
-
 T = TypeVar("T")
 S = TypeVar("S", bound='Slot')
 
@@ -34,6 +32,25 @@ class PoolType(Enum):
     ml_pipelines = "ml_pipelines"
     ml_algos = "ml_algos"
     job = "job"
+
+
+__pools__: Optional[Dict[PoolType, ThreadPool]] = None
+
+
+def create_pools(ml_pipes_pool_size: int = 1, ml_algos_pool_size: int = 1, job_pool_size: int = 1):
+    global __pools__
+
+    assert __pools__ is None, "Cannot recreate already existing thread pools"
+
+    __pools__ = {
+        PoolType.ml_pipelines: ThreadPool(processes=ml_pipes_pool_size) if ml_pipes_pool_size > 1 else None,
+        PoolType.ml_algos: ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 1 else None,
+        PoolType.job: ThreadPool(processes=job_pool_size) if job_pool_size > 1 else None
+    }
+
+
+def get_pool(pool_type: PoolType) -> Optional[ThreadPool]:
+    return __pools__.get(pool_type, None)
 
 
 # noinspection PyUnresolvedReferences
@@ -221,15 +238,19 @@ class ParallelComputationsManager(ComputationsManager):
                  ml_algos_pool_size: int = 1,
                  job_pool_size: int = 1,
                  default_slot_size: Optional[SlotSize] = None):
-        self._pools ={
-            PoolType.ml_pipelines: ThreadPool(processes=ml_pipes_pool_size) if ml_pipes_pool_size > 1 else None,
-            PoolType.ml_algos: ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 1 else None,
-            PoolType.job: ThreadPool(processes=job_pool_size) if job_pool_size > 1 else None
-        }
+        create_pools(ml_pipes_pool_size, ml_algos_pool_size, job_pool_size)
+        #
+        #
+        # self._pools = {
+        #     PoolType.ml_pipelines: ThreadPool(processes=ml_pipes_pool_size) if ml_pipes_pool_size > 1 else None,
+        #     PoolType.ml_algos: ThreadPool(processes=ml_algos_pool_size) if ml_algos_pool_size > 1 else None,
+        #     PoolType.job: ThreadPool(processes=job_pool_size) if job_pool_size > 1 else None
+        # }
+        #
         self._default_slot_size = default_slot_size
 
     def _get_pool(self, pool_type: PoolType) -> Optional[ThreadPool]:
-        return self._pools.get(pool_type, None)
+        return get_pool(pool_type)
 
     @property
     def can_support_slots(self) -> bool:
