@@ -256,7 +256,7 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
             -> Tuple[List[Model], List[SparkDataFrame], List[str]]:
         num_folds = len(train_valid_iterator)
 
-        def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset):
+        def build_fit_func(i: int, mdl_pred_col: str, train: SparkDataset):
             def func() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
                 if num_folds > 1:
                     logger.info2(
@@ -264,16 +264,12 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
                         "=====".format(i, self._name)
                     )
 
-                # if timer.time_limit_exceeded():
-                #     logger.info(f"No time to calculate fold {i}/{num_folds} (Time limit is already exceeded)")
-                #     return None
-
-                print(f"DURING: {mdl_pred_col}")
+                if self.timer.time_limit_exceeded():
+                    logger.info(f"No time to calculate fold {i}/{num_folds} (Time limit is already exceeded)")
+                    return None
 
                 mdl, vpred, _ = self.fit_predict_single_fold(mdl_pred_col, self.validation_column, train)
                 vpred = vpred.select(SparkDataset.ID_COLUMN, train.target_column, mdl_pred_col)
-
-                timer.write_run_info()
 
                 return i, mdl, vpred, mdl_pred_col
             return func
@@ -285,6 +281,10 @@ class SparkTabularMLAlgo(MLAlgo, TransformerInputOutputRoles, ABC):
 
         results = self.computations_manager.compute(fit_tasks)
 
+        # TODO: PARALLEL - is it a correct place for running? incorrect functioning in the sequential case
+        self.timer.write_run_info()
+
+        # TODO: PARALLEL - no processing for None
         # TODO: PARALLEL minor - refactoring
         models = [model for _, model, _, _ in results]
         val_preds = [val_pred for _, _, val_pred, _ in results]

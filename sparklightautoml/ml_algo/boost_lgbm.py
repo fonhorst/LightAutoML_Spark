@@ -572,8 +572,10 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                                                  parallelism=self._parallelism, pool_type=PoolType.job) as allocator:
                 allocator: SlotAllocator = allocator
 
-                def build_fit_func(i: int, timer: TaskTimer, mdl_pred_col: str, train: SparkDataset, val: SparkDataset):
+                def build_fit_func(i: int, mdl_pred_col: str):
                     def func() -> Optional[Tuple[int, Model, SparkDataFrame, str]]:
+                        # TODO: PARALLEL - no stopping of time_limit_exceeded
+
                         with allocator.allocate() as slot:
                             tviter = deepcopy(train_valid_iterator)
                             tviter.train = slot.dataset
@@ -584,8 +586,6 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                                 mdl_pred_col, self.validation_column, slot_train
                             )
                             vpred = vpred.select(SparkDataset.ID_COLUMN, slot.dataset.target_column, mdl_pred_col)
-
-                            timer.write_run_info()
 
                         # The previous way also should be ok, because:
                         # - fold based computations often happen in the end of MLPipeline
@@ -602,11 +602,14 @@ class SparkBoostLGBM(SparkTabularMLAlgo, ImportanceEstimator):
                     return func
 
                 fit_tasks = [
-                    build_fit_func(i, copy(self.timer), f"{self.prediction_feature}_{i}", train, val)
-                    for i, (train, val) in enumerate(train_valid_iterator)
+                    build_fit_func(i, f"{self.prediction_feature}_{i}")
+                    for i, _ in enumerate(train_valid_iterator)
                 ]
 
                 results = self.computations_manager.compute(fit_tasks, pool_type=PoolType.job)
+
+                # TODO: PARALLEL - incorrect handling of the sequential case
+                self.timer.write_run_info()
 
             models = [model for _, model, _, _ in results]
             val_preds = [val_pred for _, _, val_pred, _ in results]
