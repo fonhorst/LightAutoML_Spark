@@ -31,7 +31,6 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 3. use_algos = [["linear_l2"]]
     # 4. use_algos = [["lgb", "linear_l2"], ["lgb"]]
     use_algos = [["lgb", "linear_l2"], ["lgb"]]
-    # use_algos = [["lgb"]]
     cv = 3
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
@@ -58,8 +57,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
             },
             linear_l2_params={'default_params': {'regParam': [1e-5]}},
             reader_params={"cv": cv, "advanced_roles": False},
-            # parallelism_mode=("no_parallelism", -1)
-            parallelism_mode=("intra_mlpipe_parallelism", 3)
+            parallelism_mode=("no_parallelism", -1)
+            # parallelism_mode=("intra_mlpipe_parallelism", 3)
         )
 
         oof_predictions = automl.fit_predict(
