@@ -308,7 +308,8 @@ class SparkToSparkReader(Reader, SparkReaderHelper):
             else:
                 fraction = self.samples / total_number
             subsample = train_data.sample(fraction=fraction, seed=self.random_state).cache()
-            with JobGroup("Reader: Subsampling materailization", "Reader: Subsampling materailization"):
+            with JobGroup("Reader: Subsampling materailization", "Reader: Subsampling materailization",
+                          train_data.sql_ctx.sparkSession):
                 subsample.count()
             unpersist_subsample = True
         else:

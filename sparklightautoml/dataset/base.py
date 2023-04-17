@@ -156,8 +156,8 @@ class SparkDataset(LAMLDataset, Unpersistable):
         # in the pipeline
         base_service_columns = {self.ID_COLUMN, self.target_column, self.folds_column, VALIDATION_COLUMN}
         self._service_columns: Set[str] = base_service_columns
-        
-	roles = roles if roles else dict()
+
+        roles = roles if roles else dict()
 
         # currently only target is supported
         # adapted from PandasDataset
