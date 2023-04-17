@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
-from typing import Tuple, cast, Optional, Union, Any
+from typing import Tuple, cast, Sequence, Optional, Union, Any
 
+from lightautoml.dataset.base import LAMLDataset
 from lightautoml.ml_algo.base import MLAlgo
 from lightautoml.ml_algo.tuning.base import ParamsTuner
 from lightautoml.pipelines.features.base import FeaturesPipeline
@@ -167,3 +168,4 @@ class SparkBaseTrainValidIterator(TrainValidIterator, Unpersistable, ABC):
     @abstractmethod
     def get_validation_data(self) -> SparkDataset:
         ...
+

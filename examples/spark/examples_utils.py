@@ -1,9 +1,14 @@
 import os
 import inspect
-from typing import Tuple, Optional
+import pickle
+from dataclasses import dataclass
+from enum import Enum
+from typing import Tuple, Optional, cast
 
+from pyspark import SparkContext
 from pyspark.sql import SparkSession
 
+from sparklightautoml.dataset.base import SparkDataset
 from sparklightautoml.utils import SparkDataFrame
 from sparklightautoml.dataset import persistence
 
@@ -92,11 +97,15 @@ def get_dataset_attrs(name: str):
     )
 
 
-def prepare_test_and_train(spark: SparkSession, path: str, seed: int) -> Tuple[SparkDataFrame, SparkDataFrame]:
+def prepare_test_and_train(spark: SparkSession, path: str, seed: int, is_csv: bool = True) -> Tuple[SparkDataFrame, SparkDataFrame]:
     execs = int(spark.conf.get('spark.executor.instances', '1'))
     cores = int(spark.conf.get('spark.executor.cores', '8'))
 
-    data = spark.read.csv(path, header=True, escape="\"")
+    if is_csv:
+        data = spark.read.csv(path, header=True, escape="\"")
+    else:
+        data = spark.read.parquet(path)
+
     data = data.repartition(execs * cores).cache()
     data.write.mode('overwrite').format('noop').save()
 
@@ -120,13 +129,11 @@ def get_spark_session(partitions_num: Optional[int] = None):
         spark_sess = (
             SparkSession
             .builder
-            .master(f"local[{partitions_num}]")
+            .master("local[{partitions_num}]")
             # .config("spark.jars.packages",
-            #         "com.microsoft.azure:synapseml_2.12:0.9.5,io.github.fonhorst:spark-lightautoml_2.12:0.1")
-            # .config("spark.scheduler.mode", "FAIR")
-            .config("spark.scheduler.mode", "FIFO")
+            #         "com.microsoft.azure:synapseml_2.12:0.9.5,io.github.fonhorst:spark-lightautoml_2.12:0.1.1")
             .config("spark.jars.packages", "com.microsoft.azure:synapseml_2.12:0.9.5")
-            .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.jar")
+            .config("spark.jars", "jars/spark-lightautoml_2.12-0.1.1.jar")
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven")
             .config("spark.driver.extraJavaOptions", "-Dio.netty.tryReflectionSetAccessible=true")
             .config("spark.executor.extraJavaOptions", "-Dio.netty.tryReflectionSetAccessible=true")
@@ -141,7 +148,6 @@ def get_spark_session(partitions_num: Optional[int] = None):
             .config("spark.executor.memory", "4g")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
             .config("spark.sql.autoBroadcastJoinThreshold", "-1")
-            # .config("spark.task.cpus", "6")
             .getOrCreate()
         )
 
@@ -172,3 +178,107 @@ def get_persistence_manager(name: Optional[str] = None):
                                     f"Values for the following arguments have not been found: {none_val_args}"
 
     return clazz(**ctr_arg_vals)
+
+
+class FSOps:
+    """
+        Set of typical fs operations independent of the fs implementation
+        see docs at: https://hadoop.apache.org/docs/current/api/org/apache/hadoop/fs/FileSystem.html
+    """
+    @staticmethod
+    def get_sc() -> SparkContext:
+        spark = SparkSession.getActiveSession()
+        sc = spark.sparkContext
+        return sc
+
+    @staticmethod
+    def get_default_fs() -> str:
+        spark = SparkSession.getActiveSession()
+        hadoop_conf = spark._jsc.hadoopConfiguration()
+        default_fs = hadoop_conf.get("fs.defaultFS")
+        return default_fs
+
+    @classmethod
+    def get_fs(cls, path: str):
+        sc = cls.get_sc()
+
+        URI = sc._jvm.java.net.URI
+        FileSystem = sc._jvm.org.apache.hadoop.fs.FileSystem
+        Configuration = sc._jvm.org.apache.hadoop.conf.Configuration
+
+        path_uri = URI(path)
+        scheme = path_uri.getScheme()
+        if scheme:
+            authority = path_uri.getAuthority() or ''
+            fs_uri = f'{scheme}:/{authority}'
+        else:
+            fs_uri = cls.get_default_fs()
+
+        fs = FileSystem.get(URI(fs_uri), Configuration())
+
+        return fs
+
+    @classmethod
+    def exists(cls, path: str) -> bool:
+        sc = cls.get_sc()
+        Path = sc._jvm.org.apache.hadoop.fs.Path
+        fs = cls.get_fs(path)
+        return fs.exists(Path(path))
+
+    @classmethod
+    def create_dir(cls, path: str):
+        sc = cls.get_sc()
+        Path = sc._jvm.org.apache.hadoop.fs.Path
+        fs = cls.get_fs(path)
+        fs.mkdirs(Path(path))
+
+    @classmethod
+    def delete_dir(cls, path: str) -> bool:
+        sc = cls.get_sc()
+        Path = sc._jvm.org.apache.hadoop.fs.Path
+        fs = cls.get_fs(path)
+        return fs.delete(Path('/tmp/just_a_test'))
+
+    # status = fs.listStatus(Path(path))
+    #
+    # for fileStatus in status:
+    #     print(fileStatus.getPath())
+
+
+def save_dataset(path: str, ds: SparkDataset, overwrite: bool = False):
+    dataset_internal_df_path = os.path.join(path, "dataset_internal_df.parquet")
+    dataset_metadata_path = os.path.join(path, "dataset_metadata.parquet")
+    spark = SparkSession.getActiveSession()
+    mode = 'overwrite' if overwrite else 'error'
+
+    if FSOps.exists(path):
+        if overwrite:
+            FSOps.delete_dir(path)
+        else:
+            raise Exception(f"The directory already exists: {path}")
+
+    ds._dependencies = []
+    # noinspection PyProtectedMember
+    internal_df = ds._data
+    ds._data = None
+
+    internal_df.write.parquet(dataset_internal_df_path, mode=mode)
+    spark.createDataFrame([{"data": pickle.dumps(ds)}]).write.parquet(dataset_metadata_path, mode=mode)
+
+
+def load_dataset(path: str) -> SparkDataset:
+    dataset_internal_df_path = os.path.join(path, "dataset_internal_df.parquet")
+    dataset_metadata_path = os.path.join(path, "dataset_metadata.parquet")
+    spark = SparkSession.getActiveSession()
+
+    internal_df = spark.read.parquet(dataset_internal_df_path)
+    data = spark.read.parquet(dataset_metadata_path).first().asDict()['data']
+    ds = cast(SparkDataset, pickle.loads(data))
+    ds._data = internal_df
+    return ds
+
+
+def check_columns(original_df: SparkDataFrame, predicts_df: SparkDataFrame):
+    absent_columns = set(original_df.columns).difference(predicts_df.columns)
+    assert len(absent_columns) == 0, \
+        f"Some columns of the original dataframe is absent from the processed dataset: {absent_columns}"

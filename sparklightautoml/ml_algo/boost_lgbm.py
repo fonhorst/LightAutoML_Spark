@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import warnings
 from copy import copy, deepcopy
 from typing import Dict, Optional, Tuple, Union, cast, List
@@ -6,6 +7,7 @@ from typing import Dict, Optional, Tuple, Union, cast, List
 import lightgbm as lgb
 import pandas as pd
 import pyspark.sql.functions as sf
+from lightautoml.dataset.roles import ColumnRole
 from lightautoml.ml_algo.tuning.base import Distribution, SearchSpace
 from lightautoml.pipelines.selection.base import ImportanceEstimator
 from lightautoml.utils.timer import TaskTimer
@@ -24,7 +26,7 @@ from synapse.ml.lightgbm import (
 from synapse.ml.onnx import ONNXModel
 
 from sparklightautoml.computations.manager import PoolType, SlotAllocator, ComputationsManager
-from sparklightautoml.dataset.base import SparkDataset
+from sparklightautoml.dataset.base import SparkDataset, PersistenceManager
 from sparklightautoml.dataset.roles import NumericVectorOrArrayRole
 from sparklightautoml.ml_algo.base import SparkTabularMLAlgo, SparkMLModel, AveragingTransformer
 from sparklightautoml.mlwriters import (

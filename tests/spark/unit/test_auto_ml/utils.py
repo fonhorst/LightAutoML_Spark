@@ -93,6 +93,7 @@ class DummyReader(SparkToSparkReader):
 
 
 class DummyMLAlgo(SparkTabularMLAlgo):
+
     def __init__(self, n_classes: int, name: str):
         self._name = name
         super().__init__()

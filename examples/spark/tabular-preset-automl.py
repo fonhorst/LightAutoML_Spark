@@ -1,13 +1,14 @@
 import logging.config
 import os
 import uuid
+from typing import cast
 
 import pandas as pd
 import pyspark.sql.functions as sf
 from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 
-from examples_utils import get_persistence_manager, BUCKET_NUMS
+from examples_utils import get_persistence_manager, BUCKET_NUMS, check_columns
 from examples_utils import get_dataset_attrs, prepare_test_and_train, get_spark_session
 from sparklightautoml.automl.presets.tabular_presets import SparkTabularAutoML
 from sparklightautoml.dataset.base import SparkDataset
@@ -31,7 +32,7 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # 4. use_algos = [["lgb", "linear_l2"], ["lgb"]]
     # use_algos = [["lgb", "linear_l2"], ["lgb"]]
     use_algos = [["lgb"]]
-    cv = 3
+    cv = 5
     path, task_type, roles, dtype = get_dataset_attrs(dataset_name)
 
     persistence_manager = get_persistence_manager()
@@ -53,10 +54,9 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
             lgb_params={
                 'use_single_dataset_mode': True,
                 'convert_to_onnx': False,
-                'mini_batch_size': 1000,
-                'default_params': {"numIterations": 10}
+                'mini_batch_size': 1000
             },
-            linear_l2_params={'default_params': {'regParam': [1e-5], "maxIter": 2,}},
+            linear_l2_params={'default_params': {'regParam': [1e-5]}},
             reader_params={"cv": cv, "advanced_roles": False},
             parallelism_mode=("no_parallelism", -1)
             # parallelism_mode=("intra_mlpipe_parallelism", 3)
@@ -82,6 +82,9 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     # it may not be possible to obtain oof_predictions (predictions from fit_predict) after calling unpersist_all
     automl.persistence_manager.unpersist_all()
 
+    test_column = "some_external_column"
+    test_data_dropped = test_data_dropped.withColumn(test_column, sf.lit(42.0))
+
     with log_exec_timer("spark-lama predicting on test (#1 way)") as predict_timer:
         te_pred = automl.predict(test_data_dropped, add_reader_attrs=True)
 
@@ -92,6 +95,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
 
     with log_exec_timer("spark-lama predicting on test (#2 way)"):
         te_pred = automl.transformer().transform(test_data_dropped)
+
+        check_columns(test_data_dropped, te_pred)
 
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
         score = task.get_dataset_metric()
@@ -116,6 +121,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
     with log_exec_timer("spark-lama predicting on test (#3 way)"):
         te_pred = pipeline_model.transform(test_data_dropped)
 
+        check_columns(test_data_dropped, te_pred)
+
         pred_column = next(c for c in te_pred.columns if c.startswith('prediction'))
         score = task.get_dataset_metric()
         test_metric_value = score(te_pred.select(
@@ -136,8 +143,8 @@ def main(spark: SparkSession, dataset_name: str, seed: int):
         "test_metric_value": test_metric_value,
         "train_duration_secs": train_timer.duration,
         "predict_duration_secs": predict_timer.duration,
-        # "saving_duration_secs": saving_timer.duration,
-        # "loading_duration_secs": loading_timer.duration
+        "saving_duration_secs": saving_timer.duration,
+        "loading_duration_secs": loading_timer.duration
     }
 
     print(f"EXP-RESULT: {result}")

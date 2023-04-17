@@ -29,6 +29,9 @@ from ..reader.base import SparkToSparkReader
 from ..utils import ColumnsSelectorTransformer, SparkDataFrame
 from ..validation.base import SparkBaseTrainValidIterator, mark_as_train, mark_as_val
 from ..validation.iterators import SparkFoldsIterator, SparkHoldoutIterator, SparkDummyIterator
+from lightautoml.reader.base import RolesDict
+from lightautoml.utils.logging import set_stdout_level, verbosity_to_loglevel
+from lightautoml.utils.timer import PipelineTimer
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +78,7 @@ class SparkAutoML(TransformerInputOutputRoles):
         >>> automl.fit_predict(data, roles={'target': 'TARGET'})
 
     """
+
     def __init__(
         self,
         reader: Optional[SparkToSparkReader] = None,
@@ -136,7 +140,11 @@ class SparkAutoML(TransformerInputOutputRoles):
     def persistence_manager(self) -> Optional[PersistenceManager]:
         return self._persistence_manager
 
-    def transformer(self, return_all_predictions: bool = False, add_array_attrs: bool = True, **reader_args) \
+    def transformer(self,
+                    return_all_predictions: bool = False,
+                    add_array_attrs: bool = True,
+                    leave_only_predict_cols: bool = False,
+                    **reader_args) \
             -> SparkPipelineModel:
         if not return_all_predictions:
             blender = [self.blender.transformer()]
@@ -155,7 +163,7 @@ class SparkAutoML(TransformerInputOutputRoles):
             self.reader.transformer(add_array_attrs=add_array_attrs, **reader_args),
             *(ml_pipe.transformer() for level in self.levels for ml_pipe in level),
             *blender,
-            sel_tr
+            *([sel_tr] if leave_only_predict_cols else [])
         ]
 
         return SparkPipelineModel(stages, input_roles=self.input_roles, output_roles=output_roles)
@@ -268,6 +276,9 @@ class SparkAutoML(TransformerInputOutputRoles):
         self.levels = []
         level_ds: Optional[SparkDataset] = None
         for leven_number, level in enumerate(self._levels, 1):
+            pipes = []
+            flg_last_level = leven_number == len(self._levels)
+
             logger.info(
                 f"Layer \x1b[1m{leven_number}\x1b[0m train process start. Time left {self.timer.time_left:.2f} secs"
             )
@@ -352,7 +363,11 @@ class SparkAutoML(TransformerInputOutputRoles):
 
         """
         persistence_manager = persistence_manager or PlainCachePersistenceManager()
-        transformer = self.transformer(return_all_predictions=return_all_predictions, add_array_attrs=add_reader_attrs)
+        transformer = self.transformer(
+            return_all_predictions=return_all_predictions,
+            add_array_attrs=add_reader_attrs,
+            leave_only_predict_cols=True
+        )
 
         data = self._read_data(data)
         predictions = transformer.transform(data)

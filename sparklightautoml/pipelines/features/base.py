@@ -41,7 +41,7 @@ from sparklightautoml.transformers.categorical import (
     SparkMulticlassTargetEncoderEstimator,
 )
 from sparklightautoml.transformers.categorical import SparkTargetEncoderEstimator
-from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsTransformer
+from sparklightautoml.transformers.datetime import SparkBaseDiffTransformer, SparkDateSeasonsEstimator
 from sparklightautoml.transformers.numeric import SparkQuantileBinningEstimator
 from sparklightautoml.utils import Cacher, warn_if_not_cached, SparkDataFrame, ColumnsSelectorTransformer
 
@@ -237,16 +237,23 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
             found_exit_nodes = all_nodes.difference(parents)
             return found_exit_nodes
 
+        def out_cols(est: SparkColumnsAndRoles) -> List[str]:
+            cols = est.getOutputCols()
+            if len(cols) > 0:
+                return cols
+            return [f'{est.get_prefix()}*']
+
         def cum_outputs_layers(external_input: Set[str], layers):
             available_inputs = [external_input]
             for layer in layers:
-                outs = {col for est in layer for col in est.getOutputCols()}
+                outs = {col for est in layer for col in out_cols(est)}
                 available_inputs.append(available_inputs[-1].union(outs))
+
             return available_inputs
 
         def cum_inputs_layers(layers):
             layers = list(reversed(layers))
-            available_inputs = [{col for est in layers[0] for col in est.getOutputCols()}]
+            available_inputs = [{col for est in layers[0] for col in out_cols(est)}]
             for layer in layers[1:]:
                 outs = {col for est in layer for col in est.getInputCols()}
                 available_inputs.append(available_inputs[-1].union(outs))
@@ -262,10 +269,10 @@ class SparkFeaturesPipeline(FeaturesPipeline, TransformerInputOutputRoles):
 
         dag_pipeline = Pipeline(stages=[
             stage
-            for layer, cols in zip(tr_layers, cols_to_select_in_layers)
+            for i, (layer, cols) in enumerate(zip(tr_layers, cols_to_select_in_layers))
             for stage in itertools.chain(layer, [
                 ColumnsSelectorTransformer(
-                    name=type(self).__name__,
+                    name=f"{type(self).__name__} Layer: {i}",
                     input_cols=[SparkDataset.ID_COLUMN, *cols],
                     optional_cols=[c for c in train.service_columns if c != SparkDataset.ID_COLUMN],
                     transform_only_first_time=True
@@ -363,7 +370,7 @@ class SparkTabularDataFeatures:
 
     def get_datetime_seasons(
         self, train: SparkDataset, outp_role: Optional[ColumnRole] = None
-    ) -> Optional[SparkBaseTransformer]:
+    ) -> Optional[SparkBaseEstimator]:
         """Get season params from dates.
 
         Args:
@@ -388,7 +395,7 @@ class SparkTabularDataFeatures:
 
         roles = {f: train.roles[f] for f in datetimes}
 
-        date_as_cat = SparkDateSeasonsTransformer(input_cols=datetimes, input_roles=roles, output_role=outp_role)
+        date_as_cat = SparkDateSeasonsEstimator(input_cols=datetimes, input_roles=roles, output_role=outp_role)
 
         return date_as_cat
 

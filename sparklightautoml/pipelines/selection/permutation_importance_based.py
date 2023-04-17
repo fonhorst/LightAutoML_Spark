@@ -5,14 +5,15 @@ from typing import Optional, cast, Iterator
 
 import numpy as np
 import pandas as pd
+from lightautoml.validation.base import TrainValidIterator
 from pandas import Series
 from pyspark.sql.pandas.functions import pandas_udf
 from pyspark.sql.types import StructField
 
 from sparklightautoml.pipelines.selection.base import SparkImportanceEstimator
 from ...computations.manager import ComputationsManager, default_computations_manager
-from ...dataset.base import SparkDataset
-from ...ml_algo.base import SparkTabularMLAlgo
+from ...dataset.base import LAMLDataset, SparkDataset
+from ...ml_algo.base import MLAlgo, SparkTabularMLAlgo
 from ...validation.base import SparkBaseTrainValidIterator
 
 logger = logging.getLogger(__name__)

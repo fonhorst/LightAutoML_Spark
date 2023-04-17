@@ -6,6 +6,7 @@ from typing import Optional, Sequence, Iterable, Tuple, List
 import numpy as np
 from lightautoml.automl.presets.base import upd_params
 from lightautoml.automl.presets.utils import plot_pdp_with_distribution
+from lightautoml.ml_algo.tuning.optuna import OptunaTuner
 from lightautoml.pipelines.selection.base import ComposedSelector
 from lightautoml.pipelines.selection.importance_based import ModelBasedImportanceEstimator, ImportanceCutoffSelector
 from lightautoml.pipelines.selection.permutation_importance_based import NpIterativeFeatureSelector
@@ -33,8 +34,8 @@ from sparklightautoml.ml_algo.tuning.parallel_optuna import SlotBasedParallelOpt
 from sparklightautoml.pipelines.features.lgb_pipeline import SparkLGBSimpleFeatures, SparkLGBAdvancedPipeline
 from sparklightautoml.pipelines.features.linear_pipeline import SparkLinearFeatures
 from sparklightautoml.pipelines.ml.nested_ml_pipe import SparkNestedTabularMLPipeline
-from sparklightautoml.pipelines.selection.base import BugFixSelectionPipelineWrapper
 from sparklightautoml.pipelines.selection.base import SparkSelectionPipelineWrapper
+from sparklightautoml.pipelines.selection.base import BugFixSelectionPipelineWrapper
 from sparklightautoml.pipelines.selection.permutation_importance_based import SparkNpPermutationImportanceEstimator
 from sparklightautoml.reader.base import SparkToSparkReader
 from sparklightautoml.tasks.base import SparkTask
@@ -210,10 +211,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
             sel_timer_0 = self.timer.get_task_timer("lgb", time_score)
             selection_feats = SparkLGBSimpleFeatures()
 
-            selection_gbm = SparkBoostLGBM(
-                timer=sel_timer_0,
-                **lgb_params
-            )
+            selection_gbm = SparkBoostLGBM(timer=sel_timer_0, **lgb_params)
             selection_gbm.set_prefix("Selector")
 
             if selection_params["importance_type"] == "permutation":
@@ -233,10 +231,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
 
                 sel_timer_1 = self.timer.get_task_timer("lgb", time_score)
                 selection_feats = SparkLGBSimpleFeatures()
-                selection_gbm = SparkBoostLGBM(
-                    timer=sel_timer_1,
-                    **lgb_params
-                )
+                selection_gbm = SparkBoostLGBM(timer=sel_timer_1, **lgb_params)
                 selection_gbm.set_prefix("Selector")
 
                 importance = SparkNpPermutationImportanceEstimator(computations_manager=self._computations_manager)
@@ -795,7 +790,7 @@ class SparkTabularAutoML(SparkAutoMLPreset):
         assert datetime_level in ["year", "month", "dayofweek"]
         assert 0 < ice_fraction <= 1.0
 
-        pipeline_model = self.transformer()
+        pipeline_model = self.transformer(leave_only_predict_cols=True)
 
         # Numerical features
         if self.reader._roles[feature_name].name == "Numeric":
